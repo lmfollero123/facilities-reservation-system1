@@ -3,6 +3,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const mobileMenu = document.querySelector(".guest-nav-mobile");
     const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
     const sidebar = document.querySelector(".sidebar");
+    const sidebarClose = document.querySelector("[data-sidebar-close]");
+    // Create / fetch backdrop for mobile sidebar
+    let sidebarBackdrop = document.querySelector(".sidebar-backdrop");
+    if (!sidebarBackdrop) {
+        sidebarBackdrop = document.createElement("div");
+        sidebarBackdrop.className = "sidebar-backdrop";
+        document.body.appendChild(sidebarBackdrop);
+    }
+
+    const closeSidebar = () => {
+        if (!sidebar) return;
+        sidebar.classList.add("collapsed");
+        sidebarToggle?.setAttribute("aria-expanded", "false");
+        sidebarBackdrop.classList.remove("active");
+    };
+
+    const openSidebar = () => {
+        if (!sidebar) return;
+        sidebar.classList.remove("collapsed");
+        sidebarToggle?.setAttribute("aria-expanded", "true");
+        sidebarBackdrop.classList.add("active");
+    };
+
+    const syncSidebarInitial = () => {
+        if (!sidebar) return;
+        if (window.innerWidth <= 960) {
+            closeSidebar();
+        } else {
+            sidebar.classList.remove("collapsed");
+            sidebarBackdrop.classList.remove("active");
+            sidebarToggle?.setAttribute("aria-expanded", "true");
+        }
+    };
 
     if (navToggle && mobileMenu) {
         navToggle.addEventListener("click", () => {
@@ -15,14 +48,43 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener("click", () => {
-            sidebar.classList.toggle("collapsed");
-            sidebarToggle.setAttribute(
-                "aria-expanded",
-                !sidebar.classList.contains("collapsed")
-            );
+        sidebarToggle.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isCollapsed = sidebar.classList.contains("collapsed");
+            if (isCollapsed) {
+                openSidebar();
+            } else {
+                closeSidebar();
+            }
         });
     }
+
+    if (sidebarClose) {
+        sidebarClose.addEventListener("click", (e) => {
+            e.stopPropagation();
+            closeSidebar();
+        });
+    }
+
+    // Close sidebar when clicking the backdrop
+    sidebarBackdrop.addEventListener("click", () => {
+        closeSidebar();
+    });
+
+    // Close when clicking anywhere outside sidebar while open
+    document.addEventListener("click", (event) => {
+        if (!sidebar) return;
+        const clickInsideSidebar = sidebar.contains(event.target);
+        const clickToggle = sidebarToggle?.contains(event.target);
+        const isOpen = !sidebar.classList.contains("collapsed");
+        if (isOpen && !clickInsideSidebar && !clickToggle && window.innerWidth <= 960) {
+            closeSidebar();
+        }
+    });
+
+    // Ensure correct state on load and resize
+    syncSidebarInitial();
+    window.addEventListener("resize", syncSidebarInitial);
 
     const notifToggle = document.querySelector("[data-toggle='notif-panel']");
     const notifPanel = document.getElementById("notifPanel");

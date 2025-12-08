@@ -3,8 +3,8 @@
 ## Document Information
 - **System Name**: Public Facilities Reservation System
 - **Document Type**: Data Flow Diagram (DFD)
-- **Version**: 1.0
-- **Date**: 2024
+- **Version**: 1.1
+- **Date**: 2025
 - **Author**: System Documentation
 
 ---
@@ -227,8 +227,8 @@
 
 | Process | Name | Description |
 |--------|------|-------------|
-| **1.0** | User Registration | Handles new user registration with document upload |
-| **2.0** | Authenticate User | Validates credentials and creates session |
+| **1.0** | User Registration | Handles new user registration with Barangay Culiat address validation and required document upload (Birth Cert, Valid ID, Barangay ID, Resident ID) |
+| **2.0** | Authenticate User | Validates credentials, sends email OTP, verifies OTP, then creates session |
 | **3.0** | Book Facility | Processes facility reservation requests |
 | **4.0** | Approve Reservations | Admin/Staff reviews and approves/denies reservations |
 | **5.0** | Manage Facilities | Add, edit, and update facility information |
@@ -246,6 +246,11 @@
 | **D3** | Reservations | Stores reservation requests and status |
 | **D4** | Facilities | Stores facility information |
 | **D5** | Notifications | Stores user notifications |
+| **D6** | User Documents | Stores uploaded resident documents for verification |
+
+### Additional Notes (Level 1)
+- OTP email flow: Authenticate User sends OTP to the user’s email, stores OTP hash/expiry in Users, and only then creates a session.
+- Registration enforces Barangay Culiat residency (address check) and at least one supporting document uploaded to User Documents.
 
 ---
 

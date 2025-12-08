@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/mail_helper.php';
 
 $pageTitle = 'Login | LGU Facilities Reservation';
 $error = '';
@@ -46,31 +47,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $error = 'Your account is not active. Please contact an administrator.';
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
-                                    // Successful login
-                                    // Reset failed login attempts
-                                    $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW(), last_login_ip = ? WHERE id = ?");
-                                    $updateStmt->execute([getClientIP(), $user['id']]);
-                                    
-                                    // Log successful login
-                                    $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
-                                    $logStmt->execute([$email, getClientIP()]);
-                                    
-                                    // Regenerate session ID for security
-                                    session_regenerate_id(true);
-                                    
-                                    // Set session variables
-                                    $_SESSION['user_authenticated'] = true;
-                                    $_SESSION['user_id'] = $user['id'];
-                                    $_SESSION['user_name'] = $user['name'];
-                                    $_SESSION['user_email'] = $user['email'];
-                                    $_SESSION['role'] = $user['role'];
-                                    $_SESSION['user_org'] = $user['role'];
-                                    $_SESSION['last_activity'] = time();
-                                    
-                                    logSecurityEvent('login_success', "User logged in: $email", 'info');
-                                    
-                                    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
-                                    exit;
+                                // Successful password check -> proceed to OTP
+                                $otp = random_int(100000, 999999);
+                                $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
+                                $otpExpiry = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+
+                                // Store OTP details
+                                $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, otp_code_hash = ?, otp_expires_at = ?, otp_attempts = 0, otp_last_sent_at = NOW(), last_login_ip = ? WHERE id = ?");
+                                $updateStmt->execute([$otpHash, $otpExpiry, getClientIP(), $user['id']]);
+
+                                // Log successful password stage
+                                $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
+                                $logStmt->execute([$email, getClientIP()]);
+
+                                // Send OTP email
+                                $otpBody = "<p>Hi " . htmlspecialchars($user['name']) . ",</p><p>Your one-time passcode is <strong>$otp</strong>.</p><p>This code expires in 10 minutes.</p>";
+                                sendEmail($user['email'], $user['name'], 'Your login OTP', $otpBody);
+
+                                // Save pending OTP session
+                                session_regenerate_id(true);
+                                $_SESSION['pending_otp_user_id'] = $user['id'];
+                                $_SESSION['pending_otp_email'] = $user['email'];
+                                $_SESSION['pending_otp_name'] = $user['name'];
+
+                                header('Location: ' . base_path() . '/resources/views/pages/auth/login_otp.php');
+                                exit;
                                 }
                             } else {
                                 // Failed login

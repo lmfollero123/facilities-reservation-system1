@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = sanitizeInput($_POST['name'] ?? '');
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
         $mobile = sanitizeInput($_POST['mobile'] ?? '');
+        $address = sanitizeInput($_POST['address'] ?? '');
         $password = $_POST['password'] ?? '';
         
         // Validate inputs
@@ -26,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = 'Please enter a valid email address.';
+            $messageType = 'error';
+        } elseif (stripos($address, 'culiat') === false) {
+            $message = 'Registration is limited to Barangay Culiat residents. Please include Barangay Culiat in your address.';
             $messageType = 'error';
         } else {
             // Check rate limiting (by IP)
@@ -52,20 +56,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $messageType = 'error';
                             logSecurityEvent('registration_attempt_existing_email', "Registration attempt with existing email: $email", 'info');
                         } else {
-                            // Insert new user with pending status
-                            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-                            $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, password_hash, role, status) VALUES (?, ?, ?, ?, 'Resident', 'pending')");
-                            $stmt->execute([
-                                $name,
-                                $email,
-                                $mobile ?: null,
-                                $passwordHash
-                            ]);
-                            
-                            logSecurityEvent('registration_success', "New user registered: $email", 'info');
-                            
-                            $message = 'Registration successful! Your account is pending approval.';
-                            $messageType = 'success';
+                            // Validate at least one document
+                            $docFields = [
+                                'birth_certificate' => $_FILES['doc_birth_certificate'] ?? null,
+                                'valid_id' => $_FILES['doc_valid_id'] ?? null,
+                                'brgy_id' => $_FILES['doc_brgy_id'] ?? null,
+                                'resident_id' => $_FILES['doc_resident_id'] ?? null,
+                            ];
+
+                            $uploads = [];
+                            foreach ($docFields as $type => $file) {
+                                if ($file && isset($file['tmp_name']) && $file['error'] === UPLOAD_ERR_OK && $file['size'] > 0) {
+                                    $uploads[$type] = $file;
+                                }
+                            }
+
+                            if (empty($uploads)) {
+                                $message = 'Please upload at least one supporting document (Birth Certificate, Valid ID, Barangay ID, or Resident ID).';
+                                $messageType = 'error';
+                            } else {
+                                // Insert new user with pending status
+                                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                                $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, address, password_hash, role, status) VALUES (?, ?, ?, ?, ?, 'Resident', 'pending')");
+                                $stmt->execute([
+                                    $name,
+                                    $email,
+                                    $mobile ?: null,
+                                    $address ?: null,
+                                    $passwordHash
+                                ]);
+
+                                $userId = (int)$pdo->lastInsertId();
+
+                                // Store documents
+                                // Save documents under public/uploads/documents/{userId}
+                                $docDir = base_path(true) . '/public/uploads/documents/' . $userId;
+                                if (!is_dir($docDir)) {
+                                    mkdir($docDir, 0775, true);
+                                }
+
+                                foreach ($uploads as $type => $file) {
+                                    $errors = validateFileUpload($file, ['image/jpeg','image/png','image/gif','image/webp','application/pdf']);
+                                    if (!empty($errors)) {
+                                        $message = implode(' ', $errors);
+                                        $messageType = 'error';
+                                        break;
+                                    }
+
+                                    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                                    $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($file['name'], PATHINFO_FILENAME));
+                                    $filename = $safeName . '_' . time() . '.' . $ext;
+                                    $destPath = $docDir . '/' . $filename;
+
+                                    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+                                        $message = 'Failed to save uploaded document.';
+                                        $messageType = 'error';
+                                        break;
+                                    }
+
+                                    $relPath = base_path() . '/public/uploads/documents/' . $userId . '/' . $filename;
+                                    $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
+                                    $docStmt->execute([
+                                        $userId,
+                                        $type,
+                                        $relPath,
+                                        $filename,
+                                        (int)$file['size']
+                                    ]);
+                                }
+
+                                if ($messageType !== 'error') {
+                                    logSecurityEvent('registration_success', "New user registered: $email", 'info');
+                                    $message = 'Registration successful! Your account is pending document verification.';
+                                    $messageType = 'success';
+                                }
+                            }
                         }
                     } catch (Exception $e) {
                         $message = 'Registration failed. Please try again.';
@@ -94,7 +159,7 @@ ob_start();
             </div>
         <?php endif; ?>
         
-        <form method="POST" class="auth-form">
+        <form method="POST" class="auth-form" enctype="multipart/form-data">
             <?= csrf_field(); ?>
             <label>
                 Full Name
@@ -102,6 +167,17 @@ ob_start();
                     <span class="input-icon">👤</span>
                     <input name="name" type="text" placeholder="Juan Dela Cruz" required autofocus value="<?= isset($_POST['name']) ? e($_POST['name']) : ''; ?>" minlength="2">
                 </div>
+            </label>
+
+            <label>
+                Address (must be in Barangay Culiat)
+                <div class="input-wrapper">
+                    <span class="input-icon">🏠</span>
+                    <input name="address" type="text" placeholder="e.g., Street, Barangay Culiat, Quezon City" required value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
+                </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                    Registration is limited to residents of Barangay Culiat.
+                </small>
             </label>
             
             <label>
@@ -130,6 +206,26 @@ ob_start();
                     Must be at least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.
                 </small>
             </label>
+
+            <div style="padding:0.75rem 0; border-top:1px solid #e8ecf5; margin-top:1rem;">
+                <p style="margin:0 0 0.5rem; font-weight:600;">Upload supporting documents (at least one)</p>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-bottom:0.75rem;">
+                    Accepted: PDF, JPG, PNG. Max 5MB each.
+                </small>
+
+                <label>Birth Certificate (optional)
+                    <input type="file" name="doc_birth_certificate" accept=".pdf,image/*">
+                </label>
+                <label>Valid ID (optional)
+                    <input type="file" name="doc_valid_id" accept=".pdf,image/*">
+                </label>
+                <label>Barangay ID (optional)
+                    <input type="file" name="doc_brgy_id" accept=".pdf,image/*">
+                </label>
+                <label>Resident ID (optional)
+                    <input type="file" name="doc_resident_id" accept=".pdf,image/*">
+                </label>
+            </div>
             
             <button class="btn-primary" type="submit">Register</button>
         </form>

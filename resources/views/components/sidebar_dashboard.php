@@ -35,6 +35,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
     <div class="brand">
         <span class="logo">LGU</span>
         <span>Facilities</span>
+        <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close sidebar">✕</button>
     </div>
     <nav aria-label="Dashboard navigation">
         <div class="sidebar-section">

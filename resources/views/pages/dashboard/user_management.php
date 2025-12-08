@@ -11,6 +11,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/mail_helper.php';
 $pdo = db();
 $pageTitle = 'User Management | LGU Facilities Reservation';
 
@@ -41,6 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     
                     logAudit('Approved user account', 'User Management', $userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId);
                     $message = 'User account approved successfully.';
+                    
+                    // Send approval email
+                    if ($userInfo && !empty($userInfo['email'])) {
+                        $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p><p>Your account has been approved. You can now sign in and book facilities.</p>";
+                        sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been approved', $body);
+                    }
                     break;
                     
                 case 'deny':
@@ -181,6 +188,19 @@ $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Fetch documents for listed users
+$docsByUser = [];
+if (!empty($users)) {
+    $ids = array_column($users, 'id');
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $docStmt = $pdo->prepare("SELECT user_id, document_type, file_name, file_path FROM user_documents WHERE user_id IN ($placeholders)");
+    $docStmt->execute($ids);
+    $docs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($docs as $doc) {
+        $docsByUser[$doc['user_id']][] = $doc;
+    }
+}
+
 // Get approval queue stats
 $pendingCountStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE status = "pending"');
 $pendingCount = (int)$pendingCountStmt->fetchColumn();
@@ -237,6 +257,7 @@ ob_start();
         <?php if (empty($users)): ?>
             <p>No users found matching the selected filters.</p>
         <?php else: ?>
+            <div class="table-responsive">
             <table class="table">
                 <thead>
                 <tr>
@@ -244,6 +265,7 @@ ob_start();
                     <th>Email</th>
                     <th>Role</th>
                     <th>Status</th>
+                    <th>Documents</th>
                     <th>Actions</th>
                 </tr>
                 </thead>
@@ -278,6 +300,19 @@ ob_start();
                             <span class="status-badge <?= $statusClass; ?>"><?= $statusDisplay; ?></span>
                         </td>
                         <td>
+                            <?php if (!empty($docsByUser[$user['id']])): ?>
+                                <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                                    <?php foreach ($docsByUser[$user['id']] as $doc): ?>
+                                        <a href="<?= htmlspecialchars($doc['file_path']); ?>" target="_blank" rel="noopener" class="btn-outline" style="padding:0.35rem 0.5rem; font-size:0.85rem;">
+                                            <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <span class="status-badge maintenance">No docs</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
                             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                 <?php if ($user['status'] === 'pending'): ?>
                                     <form method="POST" style="display:inline;">
@@ -309,7 +344,8 @@ ob_start();
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            
+            </div>
+
             <?php if ($totalPages > 1): ?>
                 <div class="pagination" style="margin-top:1rem;">
                     <?php if ($page > 1): ?>

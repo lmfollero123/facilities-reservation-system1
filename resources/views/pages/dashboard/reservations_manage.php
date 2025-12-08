@@ -210,38 +210,40 @@ ob_start();
         <?php if (empty($pendingReservations)): ?>
             <p>No reservations awaiting approval.</p>
         <?php else: ?>
-            <table class="table">
-                <thead>
-                <tr>
-                    <th>Requester</th>
-                    <th>Facility</th>
-                    <th>Schedule</th>
-                    <th>Purpose</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($pendingReservations as $reservation): ?>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
                     <tr>
-                        <td><?= htmlspecialchars($reservation['requester']); ?></td>
-                        <td><?= htmlspecialchars($reservation['facility']); ?></td>
-                        <td><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></td>
-                        <td><?= htmlspecialchars($reservation['purpose']); ?></td>
-                        <td>
-                            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
-                                <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
-                                    <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
-                                    <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
-                                    <button class="btn-primary confirm-action" data-message="Approve this reservation?" name="action" value="approved" type="submit">Approve</button>
-                                    <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
-                                </form>
-                            </div>
-                        </td>
+                        <th>Requester</th>
+                        <th>Facility</th>
+                        <th>Schedule</th>
+                        <th>Purpose</th>
+                        <th>Actions</th>
                     </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($pendingReservations as $reservation): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($reservation['requester']); ?></td>
+                            <td><?= htmlspecialchars($reservation['facility']); ?></td>
+                            <td><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></td>
+                            <td><?= htmlspecialchars($reservation['purpose']); ?></td>
+                            <td>
+                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                    <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                        <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
+                                        <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
+                                        <button class="btn-primary confirm-action" data-message="Approve this reservation?" name="action" value="approved" type="submit">Approve</button>
+                                        <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         <?php endif; ?>
     </section>
 

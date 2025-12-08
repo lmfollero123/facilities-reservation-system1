@@ -142,28 +142,30 @@ ob_start();
         <?php if (empty($entries)): ?>
             <p>No audit entries found matching the selected filters.</p>
         <?php else: ?>
-            <table class="table">
-                <thead>
-                <tr>
-                    <th>Date &amp; Time</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Module</th>
-                    <th>Details</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($entries as $row): ?>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
                     <tr>
-                        <td><?= date('M d, Y H:i', strtotime($row['created_at'])); ?></td>
-                        <td><?= $row['user_name'] ? htmlspecialchars($row['user_name']) : '<em>System</em>'; ?></td>
-                        <td><?= htmlspecialchars($row['action']); ?></td>
-                        <td><?= htmlspecialchars($row['module']); ?></td>
-                        <td><?= $row['details'] ? htmlspecialchars($row['details']) : '-'; ?></td>
+                        <th>Date &amp; Time</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Module</th>
+                        <th>Details</th>
                     </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($entries as $row): ?>
+                        <tr>
+                            <td><?= date('M d, Y H:i', strtotime($row['created_at'])); ?></td>
+                            <td><?= $row['user_name'] ? htmlspecialchars($row['user_name']) : '<em>System</em>'; ?></td>
+                            <td><?= htmlspecialchars($row['action']); ?></td>
+                            <td><?= htmlspecialchars($row['module']); ?></td>
+                            <td><?= $row['details'] ? htmlspecialchars($row['details']) : '-'; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
             
             <?php if ($totalPages > 1): ?>
                 <div class="pagination" style="margin-top:1rem;">

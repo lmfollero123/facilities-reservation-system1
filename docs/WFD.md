@@ -3,8 +3,8 @@
 ## Document Information
 - **System Name**: Public Facilities Reservation System
 - **Document Type**: Work Flow Diagram (WFD)
-- **Version**: 1.0
-- **Date**: 2024
+- **Version**: 1.1
+- **Date**: 2025
 - **Author**: System Documentation
 
 ---
@@ -39,6 +39,7 @@
 5. Profile Updates
 6. Auto-Decline of Expired Reservations
 7. AI-Powered Conflict Detection & Recommendations
+8. Login with Email OTP (2-step)
 
 ---
 
@@ -58,13 +59,16 @@
 │ - Email                     │
 │ - Password                  │
 │ - Confirm Password          │
-│ - Mobile (Optional)          │
+│ - Mobile (Optional)         │
+│ - Address (must include     │
+│   Barangay Culiat)          │
 └──────┬──────────────────────┘
        │
-       │ 2. Upload Documents:
+       │ 2. Upload Documents (≥1):
        │    - Birth Certificate
        │    - Valid ID
        │    - Barangay ID
+       │    - Resident ID
        │    - Other Documents
        │
        ▼
@@ -74,7 +78,9 @@
 │ - Email format              │
 │ - Password match            │
 │ - Required fields           │
-│ - Document file types       │
+│ - Address includes Culiat   │
+│ - At least 1 document       │
+│ - Document file types/size  │
 └──────┬──────────────────────┘
        │
        │ 3. Hash Password
@@ -85,6 +91,7 @@
 │ INSERT INTO users:          │
 │ - role: 'Resident'          │
 │ - status: 'pending'         │
+│ - address                   │
 │ INSERT INTO user_documents  │
 └──────┬──────────────────────┘
        │
@@ -127,6 +134,7 @@
 ┌─────────────────────────────┐
 │   SYSTEM                    │
 │ Creates Notification        │
+│ Sends Approval Email        │
 │ Logs Audit Event            │
 └──────┬──────────────────────┘
        │
@@ -135,14 +143,14 @@
        ▼
 ┌─────────────────────────────┐
 │   RESIDENT                  │
-│ Receives Notification       │
+│ Receives Notification/Email │
 │ Can Now Login Successfully  │
 └─────────────────────────────┘
 ```
 
 ### Workflow Steps:
 1. **Resident** fills registration form and uploads required documents
-2. **System** validates all inputs and file types
+2. **System** validates all inputs (email, password, Barangay Culiat address, at least one document, file type/size)
 3. **System** hashes password and saves user with status 'pending'
 4. **System** saves uploaded documents to database
 5. **Resident** receives confirmation but cannot login yet
@@ -150,8 +158,17 @@
 7. **Admin/Staff** makes decision:
    - **Approve**: User status → 'active' (can login)
    - **Deny/Lock**: User status → 'locked' (cannot login)
-8. **System** creates notification and logs audit event
-9. **Resident** receives notification and can login if approved
+8. **System** creates notification, sends approval email, and logs audit event
+9. **Resident** receives notification/email and can login if approved
+
+---
+
+## (New) Login & OTP Workflow (summary)
+
+1. User enters email/password.
+2. System validates credentials; if valid and account is active, system generates 6-digit OTP, stores hash/expiry, and emails the OTP.
+3. User enters OTP; system verifies OTP (expiry/attempt limits).
+4. On success, session is created; on failure/expiry, user is prompted to retry or re-login.
 
 ---
 
