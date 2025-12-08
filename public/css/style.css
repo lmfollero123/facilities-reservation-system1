@@ -1,0 +1,2277 @@
+/* VISUAL CHANGE ONLY - Updated to match NewTemplate design */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+/* Core palette - Updated to match NewTemplate */
+:root {
+    --gov-blue: #6384d2;
+    --gov-blue-dark: #285ccd;
+    --gov-blue-light: #6e84b7;
+    --gov-blue-dark-alt: #40598f;
+    --gov-gray: #f4f4f7;
+    --gov-gray-dark: #4c5b7c;
+    --gov-text: #1b1b1f;
+    --gov-white: #ffffff;
+    --sidebar-bg: #0c2249;
+    --sidebar-active: #1f3b73;
+    --card-bg: rgba(255, 255, 255, 0.25);
+    --card-blur: blur(15px);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: 'Poppins', "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--gov-text);
+    line-height: 1.6;
+}
+
+body:not(.dashboard) {
+    background: linear-gradient(145deg, var(--gov-blue-light), var(--gov-blue-dark-alt));
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* VISUAL CHANGE ONLY - Landing page background with cityhall.jpeg */
+body.landing-page {
+    background: url('../img/cityhall.jpeg') center/cover no-repeat fixed;
+    position: relative;
+    overflow-x: hidden;
+}
+
+body.landing-page::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 0;
+}
+
+body.landing-page .guest-content,
+body.landing-page .guest-navbar,
+body.landing-page .footer {
+    position: relative;
+    z-index: 1;
+}
+
+.guest-content {
+    flex: 1;
+    animation: fadeInUp 0.35s ease-out;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+/* VISUAL CHANGE ONLY - Guest navigation updated to match template */
+.guest-navbar {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.guest-navbar .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.guest-navbar .brand {
+    font-weight: 600;
+    color: #fff;
+    font-size: 1.1rem;
+    letter-spacing: 0.5px;
+}
+
+.guest-nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.guest-nav-links a {
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    opacity: 0.85;
+    transition: opacity 0.2s;
+}
+
+.guest-nav-links a:hover {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.guest-nav-links a.cta {
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    opacity: 1;
+    box-shadow: 0 4px 12px rgba(43, 91, 222, 0.3);
+    transition: all 0.25s ease;
+}
+
+.guest-nav-links a.cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
+}
+
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.nav-toggle span {
+    width: 24px;
+    height: 2px;
+    background: var(--gov-blue);
+}
+
+.guest-nav-mobile {
+    display: none;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1.25rem 1rem;
+}
+
+.guest-nav-mobile a {
+    color: var(--gov-gray-dark);
+    font-weight: 500;
+}
+
+/* VISUAL CHANGE ONLY - Hero section updated */
+.hero {
+    background: transparent;
+    color: var(--gov-white);
+    padding: 4rem 1.25rem;
+    text-align: center;
+}
+
+.hero h1 {
+    margin-bottom: 1rem;
+    font-size: 2.5rem;
+}
+
+.hero p {
+    max-width: 640px;
+    margin: 0 auto 1.5rem;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Hero with slideshow */
+.hero-with-slider {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.3fr);
+    gap: 2rem;
+    align-items: center;
+    text-align: left;
+}
+
+.hero-media {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+}
+
+.hero-slider {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 260px;
+}
+
+.hero-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: scale(1.02);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.hero-slide.active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.hero-slide-image {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: brightness(0.7);
+}
+
+.hero-slide-overlay {
+    position: relative;
+    z-index: 1;
+    padding: 1.5rem 1.75rem;
+    color: #f5f7ff;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100%;
+}
+
+.hero-slide-overlay h2 {
+    margin: 0 0 0.35rem;
+}
+
+.hero-slide-overlay p {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+}
+
+.hero-dots {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0.75rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    z-index: 2;
+}
+
+.hero-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.hero-dot.active {
+    background: #fff;
+    transform: scale(1.2);
+}
+
+.hero-content {
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.hero-with-slider .hero-actions {
+    justify-content: flex-start;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* VISUAL CHANGE ONLY - Buttons updated to match template */
+.btn-primary {
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    border: none;
+    border-radius: 12px;
+    transition: 0.25s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #4d76d6, #1651d0);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
+}
+
+.btn-outline {
+    border: 2px solid var(--gov-blue);
+    color: var(--gov-blue);
+    background: rgba(99, 132, 210, 0.1);
+    cursor: pointer;
+    border-radius: 12px;
+    transition: 0.25s ease;
+}
+
+.btn-outline:hover {
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
+}
+
+/* VISUAL CHANGE ONLY - Section cards updated to match template */
+.section {
+    padding: 3rem 1.25rem;
+    background: transparent;
+}
+
+/* Ensure public pages have proper background */
+body:not(.dashboard) .section {
+    background: transparent;
+}
+
+.section + .section {
+    border-top: none;
+}
+
+.section .container {
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    padding: 2rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.section .container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.section-header p {
+    margin: 0;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+}
+
+.section h2 {
+    margin-bottom: 1.5rem;
+    color: #fff;
+}
+
+.section-muted {
+    background: transparent;
+}
+
+.home-intro {
+    display: flex;
+    justify-content: space-between;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.home-intro h2 {
+    margin-top: 0;
+    color: #fff;
+}
+
+.home-intro p {
+    color: #e0e0e0;
+}
+
+.home-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* VISUAL CHANGE ONLY - Home stats updated */
+.home-stat {
+    min-width: 140px;
+    padding: 0.9rem 1.1rem;
+    border-radius: 18px;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border: none;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    color: #fff;
+}
+
+.home-stat .label {
+    display: block;
+    font-size: 0.8rem;
+    color: #e0e0e0;
+    margin-bottom: 0.25rem;
+}
+
+.home-stat .value {
+    font-weight: 700;
+    color: #fff;
+}
+
+.home-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr);
+    gap: 2rem;
+}
+
+.home-steps {
+    margin: 0;
+    padding-left: 1.3rem;
+    color: #fff;
+}
+
+.home-steps li {
+    margin-bottom: 0.6rem;
+}
+
+.home-benefits {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: #fff;
+}
+
+.home-benefits li {
+    margin-bottom: 0.5rem;
+}
+
+.home-featured-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+.home-featured-card {
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    transition: 0.2s;
+}
+
+.home-featured-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.home-featured-card img {
+    height: 140px;
+}
+
+.home-featured-card h3,
+.home-featured-card p {
+    color: #fff;
+}
+
+.facility-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+/* VISUAL CHANGE ONLY - Facility cards updated */
+.facility-card {
+    border: none;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    transition: 0.2s;
+}
+
+.facility-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.facility-card img {
+    height: 160px;
+    object-fit: cover;
+}
+
+.facility-card .card-body {
+    padding: 1.25rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    color: #fff;
+}
+
+.facility-card h3 {
+    color: #fff;
+}
+
+.facility-card p {
+    color: #e0e0e0;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-available {
+    background: #e3f8ef;
+    color: #0d7a43;
+}
+
+.status-booked {
+    background: #fdecee;
+    color: #b23030;
+}
+
+.pricing-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+}
+
+.pricing-table th,
+.pricing-table td {
+    border: 1px solid #e1e7f0;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.rules-list {
+    list-style: decimal;
+    padding-left: 1.25rem;
+    color: #fff;
+    line-height: 1.8;
+}
+
+.rules-list li {
+    margin-bottom: 0.5rem;
+}
+
+/* Facility details */
+.facility-detail-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.2fr);
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.facility-hero-card {
+    background: linear-gradient(135deg, #0c4fad, #003b80);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+    color: #f5f7ff;
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr);
+}
+
+.facility-hero-image,
+.facility-hero-placeholder {
+    min-height: 220px;
+}
+
+.facility-hero-image {
+    background-size: cover;
+    background-position: center;
+    filter: brightness(0.8);
+}
+
+.facility-hero-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at top left, #1b74d8, #003b80);
+}
+
+.facility-hero-placeholder .icon {
+    font-size: 3rem;
+}
+
+.facility-hero-body {
+    padding: 1.75rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.facility-hero-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.facility-hero-header h2 {
+    margin: 0;
+    color: #ffffff;
+}
+
+/* VISUAL CHANGE ONLY - Improved contrast for facility details */
+.facility-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    margin: 0;
+    color: #fff;
+    font-weight: 500;
+}
+
+.facility-meta strong {
+    color: #fff;
+    font-weight: 600;
+}
+
+.facility-description {
+    margin: 0.75rem 0 0;
+    color: #fff;
+    line-height: 1.7;
+    font-weight: 400;
+}
+
+.facility-detail-sections {
+    margin-top: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.facility-section h3 {
+    margin-bottom: 0.5rem;
+    color: #fff;
+    font-weight: 600;
+}
+
+.facility-section p {
+    margin: 0;
+    color: #fff;
+    line-height: 1.7;
+}
+
+.facility-section .rate-text {
+    color: #fff;
+    font-weight: 600;
+}
+
+.facility-section .rate-text {
+    font-size: 1.1rem;
+}
+
+.facility-detail-sidebar {
+    position: sticky;
+    top: 5.5rem;
+}
+
+/* VISUAL CHANGE ONLY - Facility availability card updated */
+.facility-availability-card {
+    border-radius: 18px;
+    border: none;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    padding: 1.5rem 1.75rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.facility-availability-card h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #fff;
+}
+
+.facility-availability-card .calendar {
+    margin-top: 0.5rem;
+    width: 100%;
+}
+
+.availability-note {
+    margin-top: 0.85rem;
+    font-size: 0.85rem;
+    color: #e0e0e0;
+}
+
+@media (max-width: 900px) {
+    .facility-detail-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .facility-detail-sidebar {
+        position: static;
+    }
+
+    .calendar {
+        grid-template-columns: repeat(4, minmax(48px, 1fr));
+    }
+    
+    .home-intro {
+        flex-direction: column;
+    }
+
+    .home-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-with-slider {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-media {
+        order: -1;
+        min-height: 220px;
+    }
+}
+
+.calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(48px, 1fr));
+    gap: 0.5rem;
+}
+
+.calendar .day {
+    padding: 0.75rem;
+    text-align: center;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.calendar .available {
+    background: #e6f4ff;
+    color: var(--gov-blue-dark);
+}
+
+.calendar .unavailable {
+    background: #fbe9e7;
+    color: #b23c17;
+}
+
+.legal-content p {
+    margin-bottom: 1rem;
+    color: #e0e0e0;
+}
+
+/* VISUAL CHANGE ONLY - Contact card updated */
+.contact-card {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    border: none;
+    padding: 2rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    color: #fff;
+}
+
+.contact-card form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.contact-card input,
+.contact-card textarea {
+    padding: 0.75rem;
+    border: 1px solid #cdd5e4;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+/* Auth form styling */
+/* VISUAL CHANGE ONLY - Auth pages updated to match template */
+.auth-container,
+.contact-section {
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.25rem;
+    background: url('../img/cityhall.jpeg') center/cover no-repeat fixed;
+    position: relative;
+}
+
+.auth-container::before,
+.contact-section::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 0;
+}
+
+.auth-container > *,
+.contact-section > * {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-card {
+    max-width: 440px;
+    width: 100%;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    padding: 2.5rem;
+    border: none;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.auth-header .auth-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    box-shadow: 0 4px 12px rgba(0, 71, 171, 0.2);
+}
+
+.auth-header h1 {
+    margin: 0 0 0.5rem;
+    color: #fff;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.auth-header p {
+    margin: 0;
+    color: #f0f0f0;
+    font-size: 0.95rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* VISUAL CHANGE ONLY - Auth form labels and inputs updated for glass-morphism */
+.auth-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.auth-form .input-wrapper {
+    position: relative;
+}
+
+.auth-form .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.auth-form input,
+.auth-form textarea {
+    width: 100%;
+    padding: 0.9rem 1rem 0.9rem 2.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.auth-form input:focus,
+.auth-form textarea:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.auth-form input::placeholder,
+.auth-form textarea::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.auth-form .btn-primary {
+    margin-top: 0.5rem;
+    padding: 0.95rem;
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 71, 171, 0.25);
+}
+
+.auth-form .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 71, 171, 0.3);
+}
+
+.auth-form .btn-primary:active {
+    transform: translateY(0);
+}
+
+.auth-footer {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    font-size: 0.9rem;
+    color: #ffffffcc;
+}
+
+.auth-footer a {
+    color: #2864ef;
+    font-weight: 500;
+    text-decoration: none;
+    transition: 0.2s;
+}
+
+.auth-footer a:hover {
+    color: #004ef6;
+    text-decoration: underline;
+}
+
+.footer {
+    background: #05122b;
+    color: var(--gov-white);
+    padding: 2rem 1.25rem;
+}
+
+.footer .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.footer small {
+    color: #98a4c4;
+}
+
+/* Dashboard layout */
+.dashboard {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background: var(--sidebar-bg);
+    color: var(--gov-white);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+}
+
+.sidebar .brand {
+    padding: 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1.5rem;
+}
+
+.sidebar-section-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 0 1.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar a {
+    padding: 0.85rem 1.5rem;
+    color: #d5dcf0;
+    font-weight: 500;
+}
+
+.sidebar a.active,
+.sidebar a:hover {
+    background: var(--sidebar-active);
+    color: var(--gov-white);
+}
+
+/* VISUAL CHANGE ONLY - Dashboard main updated to match template */
+.dashboard-main {
+    flex: 1;
+    background: linear-gradient(145deg, #f5f7fd, #e8ecf7);
+    display: flex;
+    flex-direction: column;
+}
+
+/* VISUAL CHANGE ONLY - Dashboard header updated */
+.dashboard-header {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-content {
+    padding: 2rem;
+    flex: 1;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.notif-bell {
+    position: relative;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+
+.notif-dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff4b5c;
+    border: 2px solid var(--gov-white);
+}
+
+.page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    margin: 0;
+}
+
+.page-header small {
+    color: #65739a;
+}
+
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: #8b95b5;
+    margin-bottom: 0.5rem;
+}
+
+.breadcrumb span {
+    opacity: 0.9;
+}
+
+.breadcrumb .sep {
+    opacity: 0.5;
+}
+
+.dashboard-main {
+    box-shadow: -6px 0 18px rgba(4, 16, 40, 0.15);
+}
+
+.dashboard-header {
+    backdrop-filter: blur(8px);
+}
+
+.sidebar {
+    background: linear-gradient(180deg, #101a3c, #050b1e);
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.4);
+}
+
+.sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sidebar .brand span.logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--gov-blue), #1f8bff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+}
+
+.sidebar nav a {
+    position: relative;
+    padding-left: 2.2rem;
+    font-size: 0.93rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.sidebar nav a::before {
+    content: attr(data-icon);
+    position: absolute;
+    left: 1rem;
+    font-size: 1rem;
+    opacity: 0.85;
+}
+
+.sidebar a.active,
+.sidebar a:hover {
+    background: radial-gradient(circle at left, #1f3b73, transparent 70%);
+    box-shadow: inset 3px 0 0 #4aa8ff;
+}
+
+/* VISUAL CHANGE ONLY - Dashboard cards updated */
+.card-elevated {
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    border: none;
+    color: #fff;
+}
+
+.card-elevated h3,
+.card-elevated p {
+    color: #fff;
+}
+
+/* VISUAL CHANGE ONLY - Dashboard cards updated to match template */
+.stat-card,
+.profile-card {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.booking-card,
+.facility-card-admin {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    border: none;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    background: var(--gov-white);
+    border-radius: 8px;
+    padding: 1.25rem;
+    border: 1px solid #e3e7f2;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--gov-white);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table th,
+.table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #edf0f6;
+    text-align: left;
+}
+
+.pagination {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pagination a,
+.pagination span {
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid #d5ddf0;
+    font-size: 0.85rem;
+    color: #425072;
+    text-decoration: none;
+}
+
+.pagination a:hover {
+    border-color: var(--gov-blue);
+    color: var(--gov-blue);
+}
+
+.pagination .current {
+    background: var(--gov-blue);
+    border-color: var(--gov-blue);
+    color: var(--gov-white);
+}
+
+.profile-card {
+    max-width: 520px;
+    background: var(--gov-white);
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid #dfe4f1;
+}
+
+.booking-wrapper {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+}
+
+/* VISUAL CHANGE ONLY - Booking card updated */
+.booking-card {
+    background: var(--gov-white);
+    border: none;
+    border-radius: 18px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.booking-card h2 {
+    margin-top: 0;
+    color: var(--gov-blue);
+}
+
+.booking-form {
+    display: grid;
+    gap: 1.25rem;
+}
+
+/* Profile form styling */
+.profile-form-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.profile-label-text {
+    font-weight: 600;
+    color: #1b1b1f;
+    font-size: 0.9rem;
+}
+
+.profile-input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 2px solid #e1e7f0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: 'Poppins', sans-serif;
+    transition: all 0.2s ease;
+    background: #fff;
+    color: #1b1b1f;
+}
+
+.profile-input:focus {
+    outline: none;
+    border-color: var(--gov-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.profile-input:disabled {
+    background: #f4f4f7;
+    color: #8b95b5;
+    cursor: not-allowed;
+}
+
+.profile-help-text {
+    color: #8b95b5;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+    line-height: 1.4;
+}
+
+.booking-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--gov-blue-dark);
+    font-size: 0.9rem;
+}
+
+.booking-form .input-wrapper {
+    position: relative;
+}
+
+.booking-form .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b95b5;
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.booking-form select,
+.booking-form input,
+.booking-form textarea {
+    width: 100%;
+    padding: 0.9rem 1rem 0.9rem 2.75rem;
+    border: 2px solid #e1e6f3;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    background: #fafbfd;
+}
+
+.booking-form select:focus,
+.booking-form input:focus,
+.booking-form textarea:focus {
+    outline: none;
+    border-color: var(--gov-blue);
+    background: var(--gov-white);
+    box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
+}
+
+.booking-form select {
+    padding-left: 2.75rem;
+    cursor: pointer;
+}
+
+.booking-form textarea {
+    padding-left: 1rem;
+    min-height: 100px;
+    resize: vertical;
+}
+
+.booking-form .btn-primary {
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    border: none;
+    padding: 0.95rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 71, 171, 0.25);
+    margin-top: 0.5rem;
+}
+
+.booking-form .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 71, 171, 0.3);
+}
+
+.schedule-board {
+    margin-top: 1.5rem;
+}
+
+.schedule-board header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(80px, 1fr));
+    gap: 0.5rem;
+}
+
+.schedule-cell {
+    border-radius: 6px;
+    padding: 0.75rem;
+    text-align: center;
+    background: #f6f8fc;
+    border: 1px solid #e3e9f5;
+    font-weight: 600;
+    color: var(--gov-blue-dark);
+}
+
+.schedule-cell.unavailable {
+    background: #fde9ec;
+    color: #a53030;
+}
+
+.schedule-cell.requested {
+    background: #fff4e5;
+    color: #8a4f00;
+}
+
+.legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.legend .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.timeline {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-left: 2px solid #d9e1f2;
+}
+
+.timeline li {
+    margin-left: 1rem;
+    padding-left: 1rem;
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.timeline li::before {
+    content: '';
+    position: absolute;
+    left: -1.2rem;
+    top: 0.2rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--gov-blue);
+}
+
+.notification-card {
+    background: #f3f6ff;
+    border: 1px dashed #b8c6ea;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.facility-admin {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+}
+
+/* VISUAL CHANGE ONLY - Facility card admin updated */
+.facility-card-admin {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: none;
+    border-radius: 18px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.facility-card-admin header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.facility-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.facility-tag {
+    padding: 0.2rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #eef2ff;
+    color: var(--gov-blue-dark);
+}
+
+.availability-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.availability-toggle input {
+    accent-color: var(--gov-blue);
+}
+
+.facility-form {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.facility-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--gov-blue-dark);
+    font-size: 0.9rem;
+}
+
+.facility-form .input-wrapper {
+    position: relative;
+}
+
+.facility-form .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b95b5;
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+.facility-form input,
+.facility-form textarea,
+.facility-form select {
+    width: 100%;
+    padding: 0.9rem 1rem 0.9rem 2.75rem;
+    border: 2px solid #e1e6f3;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    background: #fafbfd;
+}
+
+.facility-form input:focus,
+.facility-form textarea:focus,
+.facility-form select:focus {
+    outline: none;
+    border-color: var(--gov-blue);
+    background: var(--gov-white);
+    box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
+}
+
+.facility-form textarea {
+    padding-left: 1rem;
+    min-height: 120px;
+    resize: vertical;
+}
+
+.facility-form select {
+    padding-left: 2.75rem;
+    cursor: pointer;
+}
+
+.facility-form .btn-primary {
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: var(--gov-white);
+    border: none;
+    padding: 0.95rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 71, 171, 0.25);
+    margin-top: 0.5rem;
+}
+
+.facility-form .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 71, 171, 0.3);
+}
+
+.facility-form .btn-outline {
+    background: transparent;
+    border: 2px solid var(--gov-blue);
+    color: var(--gov-blue);
+    padding: 0.95rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+}
+
+.facility-form .btn-outline:hover {
+    background: var(--gov-blue);
+    color: var(--gov-white);
+    transform: translateY(-2px);
+}
+
+.resource-meta {
+    font-size: 0.9rem;
+    color: #5c6a8c;
+}
+
+.status-badge {
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    display: inline-block;
+}
+
+.status-badge.active,
+.status-badge.approved,
+.status-approved {
+    background: #28a745;
+    color: #fff;
+}
+
+.status-badge.pending,
+.status-pending {
+    background: #ffc107;
+    color: #856404;
+}
+
+.status-badge.denied,
+.status-badge.declined,
+.status-denied {
+    background: #dc3545;
+    color: #fff;
+}
+
+.status-badge.cancelled,
+.status-cancelled {
+    background: #6c757d;
+    color: #fff;
+}
+
+.status-badge.maintenance {
+    background: #ff9800;
+    color: #fff;
+}
+
+.status-badge.offline {
+    background: #e53935;
+    color: #fff;
+}
+
+/* Role badges */
+.status-badge.resident {
+    background: #1976d2 !important;
+    color: #fff !important;
+    border: 1px solid #1565c0;
+}
+
+.status-badge.admin {
+    background: #e65100 !important;
+    color: #fff !important;
+    border: 1px solid #bf360c;
+}
+
+.status-badge.staff {
+    background: #7b1fa2 !important;
+    color: #fff !important;
+    border: 1px solid #6a1b9a;
+}
+
+/* Image citation - hover only display */
+.facility-hero-image-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.image-citation {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    left: auto;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    max-width: min(300px, calc(100% - 16px));
+    width: auto;
+    min-width: 120px;
+    opacity: 0.6;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    z-index: 10;
+    box-sizing: border-box;
+}
+
+.image-citation:hover {
+    opacity: 1;
+    max-width: min(400px, calc(100% - 16px));
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 6px 10px;
+    right: 8px;
+    left: auto;
+}
+
+.image-citation small {
+    display: block;
+}
+
+.audit-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* VISUAL CHANGE ONLY - Audit list updated */
+.audit-list li {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+    padding: 1rem;
+    font-size: 0.9rem;
+    transition: 0.2s;
+}
+
+.audit-list li:hover {
+    background: rgba(255, 255, 255, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-shell {
+    background: var(--gov-white);
+    border-radius: 12px;
+    border: 1px solid #e0e5f2;
+    padding: 1.5rem;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.calendar-header h2 {
+    margin: 0;
+}
+
+.calendar-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.calendar-controls button {
+    border: 1px solid #d0d7e9;
+    background: #f5f7fd;
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.calendar-controls button:hover {
+    background: #e3e8fb;
+}
+
+.calendar-tabs {
+    display: inline-flex;
+    border-radius: 999px;
+    border: 1px solid #d3dbf0;
+    overflow: hidden;
+    background: #fff;
+    gap: 0;
+    margin-top: 1rem;
+}
+
+.calendar-tabs a,
+.calendar-tabs button {
+    border: none;
+    background: transparent;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #6a7597;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s ease;
+    border-right: 1px solid #d3dbf0;
+    font-weight: 500;
+}
+
+.calendar-tabs a:last-child,
+.calendar-tabs button:last-child {
+    border-right: none;
+}
+
+.calendar-tabs a:hover,
+.calendar-tabs button:hover {
+    background: #f0f4ff;
+    color: #1f3b73;
+}
+
+.calendar-tabs a.active,
+.calendar-tabs button.active {
+    background: #1f3b73;
+    color: #fff;
+    font-weight: 600;
+}
+
+.calendar-tabs a.active:hover,
+.calendar-tabs button.active:hover {
+    background: #1a3261;
+    color: #fff;
+}
+
+.calendar-grid-month {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(80px, 1fr));
+    gap: 0.5rem;
+}
+
+.calendar-grid-month .day-name {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: #8b95b5;
+}
+
+.calendar-grid-month .day-cell {
+    min-height: 70px;
+    background: #f7f8fd;
+    border-radius: 8px;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    border: 1px solid #e1e6f3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.calendar-grid-month .day-number {
+    font-weight: 600;
+    color: var(--gov-blue-dark);
+}
+
+.pill-event {
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    font-size: 0.75rem;
+    display: inline-block;
+}
+
+.pill-event.available {
+    background: #e3f8ef;
+    color: #0d7a43;
+}
+
+.pill-event.blocked {
+    background: #fdecee;
+    color: #b23030;
+}
+
+.pill-event.request {
+    background: #fff4e5;
+    color: #8a4f00;
+}
+
+.calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+}
+
+.calendar-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.calendar-legend .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+}
+
+.calendar-view {
+    display: none;
+    margin-top: 1rem;
+}
+
+.calendar-view.active {
+    display: block;
+}
+
+.calendar-grid-week,
+.calendar-grid-day {
+    border-radius: 10px;
+    border: 1px solid #dde3f3;
+    overflow: hidden;
+    background: #f9fafc;
+}
+
+.calendar-grid-week table,
+.calendar-grid-day table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.calendar-grid-week th,
+.calendar-grid-week td,
+.calendar-grid-day th,
+.calendar-grid-day td {
+    border-bottom: 1px solid #e5e9f7;
+    padding: 0.5rem 0.75rem;
+}
+
+.calendar-grid-week th,
+.calendar-grid-day th {
+    background: #edf1fb;
+    text-align: left;
+    color: #5d6a8f;
+}
+
+.reports-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+}
+
+/* VISUAL CHANGE ONLY - Report card updated */
+.report-card {
+    background: var(--gov-white);
+    border-radius: 18px;
+    border: none;
+    padding: 1.25rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.report-card h2 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    color: var(--gov-blue);
+}
+
+.bar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.bar-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: #edf1fb;
+    margin-left: 0.75rem;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #1f8bff, #0047ab);
+}
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.kpi {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: #f5f7fd;
+    border: 1px solid #e1e6f5;
+    font-size: 0.9rem;
+}
+
+.kpi strong {
+    display: block;
+    font-size: 1.1rem;
+}
+
+.ai-panel {
+    background: #071632;
+    color: #e4ecff;
+    border-radius: 12px;
+    padding: 1.25rem;
+}
+
+.ai-panel h3 {
+    margin-top: 0;
+}
+
+.ai-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    margin-bottom: 0.5rem;
+}
+
+.ai-chip span {
+    font-size: 0.8rem;
+}
+
+.ai-panel ul {
+    padding-left: 1.15rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+}
+
+.modal-confirm {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 18, 43, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    z-index: 2000;
+}
+
+.modal-confirm.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-dialog {
+    background: var(--gov-white);
+    border-radius: 16px;
+    padding: 2rem;
+    width: min(420px, 92%);
+    box-shadow: 0 20px 60px rgba(5, 18, 43, 0.25);
+    border: 1px solid #e4e8f3;
+}
+
+.modal-dialog h3 {
+    margin: 0 0 0.5rem;
+    color: var(--gov-blue-dark);
+}
+
+.modal-dialog p {
+    margin: 0 0 1.25rem;
+    color: #4c5b7c;
+    font-size: 0.95rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.notif-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 360px;
+    background: var(--gov-white);
+    border: 1px solid #dfe4f1;
+    box-shadow: 0 20px 40px rgba(5, 18, 43, 0.18);
+    border-radius: 16px;
+    padding: 1rem;
+    margin-top: 0.75rem;
+    display: none;
+    z-index: 1500;
+}
+
+.notif-panel.open {
+    display: block;
+}
+
+.notif-panel h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    color: var(--gov-blue-dark);
+}
+
+.notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.notif-item {
+    border-radius: 10px;
+    border: 1px solid #edf0f6;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.notif-item strong {
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.notif-footer {
+    margin-top: 0.75rem;
+    text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+    .guest-nav-links {
+        display: none;
+    }
+
+    .nav-toggle {
+        display: flex;
+    }
+
+    .guest-nav-mobile.active {
+        display: flex;
+    }
+
+    .dashboard {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        position: relative;
+        max-height: none;
+    }
+
+    .sidebar.collapsed {
+        display: none;
+    }
+
+    .booking-wrapper {
+        grid-template-columns: 1fr;
+    }
+
+    .facility-admin {
+        grid-template-columns: 1fr;
+    }
+
+    .reports-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .hero h1 {
+        font-size: 2rem;
+    }
+
+    .hero-actions .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .section {
+        padding: 2rem 1rem;
+    }
+}
+

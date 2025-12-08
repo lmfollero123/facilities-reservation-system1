@@ -1,0 +1,96 @@
+# Security Headers and Protections
+# Apache Configuration for Facilities Reservation System
+
+# Enable Rewrite Engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Force HTTPS in production (uncomment when deploying)
+    # RewriteCond %{HTTPS} off
+    # RewriteCond %{HTTP_HOST} !^localhost [NC]
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+    
+    # XSS Protection
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Content Security Policy (adjust as needed)
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net;"
+    
+    # Permissions Policy
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    
+    # Remove server signature
+    Header unset Server
+    Header unset X-Powered-By
+</IfModule>
+
+# Protect sensitive files
+<FilesMatch "\.(sql|log|ini|conf|env)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect config directory
+<IfModule mod_rewrite.c>
+    RewriteRule ^config/ - [F,L]
+</IfModule>
+
+# Protect database directory
+<IfModule mod_rewrite.c>
+    RewriteRule ^database/ - [F,L]
+</IfModule>
+
+# Disable directory browsing
+Options -Indexes
+
+# Prevent access to hidden files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# File upload size limits (adjust as needed)
+php_value upload_max_filesize 5M
+php_value post_max_size 6M
+
+# Session security
+php_value session.cookie_httponly 1
+php_value session.cookie_secure 0
+php_value session.use_strict_mode 1
+php_value session.cookie_samesite Strict
+
+# Error handling (hide errors in production)
+# php_flag display_errors Off
+# php_flag log_errors On
+
+# Character encoding
+AddDefaultCharset UTF-8
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Browser caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+

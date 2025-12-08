@@ -1,0 +1,222 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    background: linear-gradient(145deg, #6e84b7, #40598f);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* NAVIGATION */
+.nav {
+    width: 100%;
+    padding: 18px 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    background: rgba(255, 255, 255, 0.15);     /* softer glass */
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25);  /* glowing border */
+    box-shadow: 0 4px 25px rgba(0,0,0,0.25);
+
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+}
+
+.nav-links a {
+    margin-left: 25px;
+    text-decoration: none;   /* ⛔ Removes underline */
+    cursor: pointer;
+    color: #fff;
+    opacity: .8;
+    transition: .2s;
+}
+
+.nav-logo {
+    text-decoration: none;   /* ⛔ Removes underline */
+    cursor: pointer;
+    color: #fff;
+    opacity: .8;
+    transition: .2s;
+}
+
+.nav-links a:hover,
+.nav-links .active {
+    opacity: 1;
+    text-decoration: none;   /* ⛔ Removes underline */
+    font-weight: 600;
+}
+
+/* CENTER WRAPPER */
+.wrapper {
+    width: 100%;
+    height: calc(100vh - 80px); /* subtract header height */
+    display: flex;
+    justify-content: center;
+    align-items: center;  /* THIS centers it vertically */
+    padding-bottom: 0;    /* remove extra spacing */
+}
+
+/* CARD */
+.card {
+    width: 350px;                /* slightly narrower background: rgba(255, 255, 255, 0.25); */
+    background: rgba(255, 255, 255, 0.795);
+    padding: 28px 32px;          /* reduced padding */
+    border-radius: 18px;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    text-align: center;
+}
+
+.icon-top {
+    width: 60px;
+    margin-bottom: 10px;
+}
+
+.title {
+    font-size: 26px;            /* slightly smaller */
+    margin-bottom: 6px;
+    color: #000000;
+}
+
+.subtitle {
+    margin-bottom: 18px;        /* reduce gap */
+    color: #000000;
+}
+
+/* INPUT BOX */
+.input-box {
+    position: relative;
+    text-align: left;
+    margin-bottom: 14px;        /* reduce spacing */
+    color: #000000;
+}
+
+.input-box label {
+    font-size: 13px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.input-box input {
+    width: 100%;
+    padding: 10px 38px 10px 12px; /* slightly smaller */
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.7);
+    outline: none;
+}
+
+.icon {
+    position: absolute;
+    right: 12px;
+    top: 45px;
+    transform: translateY(-50%);
+    font-size: 18px;
+    opacity: 0.6;
+}
+
+/* BUTTON */
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #6384d2, #285ccd);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+
+    /* smoother, premium feel */
+    transition: 0.25s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #4d76d6, #1651d0);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
+}
+
+/* FOOTER TEXT */
+.small-text {
+    margin-top: 15px;
+    font-size: 13px;
+    color: #000000cc; /* slightly softer white */
+}
+
+/* LINKS */
+.link {
+    color: #2864ef;
+    text-decoration: none;
+    font-weight: 500;
+    transition: 0.2s;
+}
+
+.link:hover {
+    color: #004ef6;
+    text-decoration: underline;
+}
+
+/* FOOTER — same design as NAVBAR */
+.footer {
+    width: 100%;
+    padding: 18px 45px;
+
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 -4px 25px rgba(0,0,0,0.25);
+
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+
+    animation: fadeUp 0.4s ease-out; /* smooth reveal */
+}
+
+/* Left-aligned links */
+.footer-links {
+    position: absolute;
+    left: 60px;  /* same padding as header */
+}
+
+.footer-links a {
+    margin-right: 25px;
+    text-decoration: none;   /* ⛔ Removes underline */
+    cursor: pointer;
+    color: #fff;
+    opacity: .8;
+    transition: .2s;
+}
+
+.footer-links a:hover {
+    opacity: 1;
+    text-decoration: none;   /* ⛔ Removes underline */
+    font-weight: 600;
+}
+
+/* Center copyright */
+.footer-logo {
+    text-align: center;
+    font-weight: 500;
+    color: #fff;
+}
+
+
