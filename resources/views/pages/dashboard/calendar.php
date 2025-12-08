@@ -313,7 +313,7 @@ ob_start();
 
     <?php if ($view === 'week'): ?>
         <div class="calendar-view <?= $view === 'week' ? 'active' : ''; ?>" data-calendar-container="week">
-            <div class="calendar-grid-week">
+            <div class="calendar-grid-week table-responsive">
                 <table>
                     <thead>
                     <tr>
@@ -363,7 +363,7 @@ ob_start();
 
     <?php if ($view === 'day'): ?>
         <div class="calendar-view <?= $view === 'day' ? 'active' : ''; ?>" data-calendar-container="day">
-            <div class="calendar-grid-day">
+            <div class="calendar-grid-day table-responsive">
                 <table>
                     <thead>
                     <tr>

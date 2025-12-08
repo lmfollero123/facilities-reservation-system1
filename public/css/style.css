@@ -145,12 +145,17 @@ img {
     flex-direction: column;
     gap: 5px;
     cursor: pointer;
+    background: rgba(255, 255, 255, 0.18);
+    padding: 0.4rem 0.5rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .nav-toggle span {
     width: 24px;
     height: 2px;
-    background: var(--gov-blue);
+    background: #fff;
+    transition: background 0.2s ease;
 }
 
 .guest-nav-mobile {
@@ -2214,9 +2219,58 @@ body:not(.dashboard) .section {
     margin-bottom: 0.3rem;
 }
 
-.notif-footer {
+ .notif-footer {
     margin-top: 0.75rem;
     text-align: right;
+}
+
+/* Collapsible sections */
+.collapsible-card {
+    border: 1px solid #e5e9f2;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    background: rgba(37, 99, 235, 0.06);
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-weight: 600;
+    color: #1b1b1f;
+}
+
+.collapsible-header .chevron {
+    transition: transform 0.2s ease;
+}
+
+.collapsible-body {
+    padding: 1rem;
+    display: block;
+}
+
+.collapsible-body.is-collapsed {
+    display: none;
+}
+
+/* Responsive tables */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.table-responsive table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
 }
 
 /* Responsive */
@@ -2233,18 +2287,45 @@ body:not(.dashboard) .section {
         display: flex;
     }
 
+    .guest-navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1300;
+    }
+
+    body:not(.dashboard) {
+        padding-top: 72px;
+    }
+
     .dashboard {
         flex-direction: column;
     }
 
     .sidebar {
         width: 100%;
-        position: relative;
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
         max-height: none;
+        width: 260px;
+        max-width: 80%;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        z-index: 1200;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        background: rgba(255,255,255,0.96);
     }
 
     .sidebar.collapsed {
-        display: none;
+        transform: translateX(-100%);
+        box-shadow: none;
+    }
+
+    .sidebar:not(.collapsed) {
+        transform: translateX(0);
     }
 
     .booking-wrapper {

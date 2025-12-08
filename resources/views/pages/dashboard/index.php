@@ -239,8 +239,13 @@ ob_start();
 </div>
 
 <div class="booking-wrapper" style="margin-top: 2rem;">
-    <section class="booking-card">
-        <h2>Upcoming Reservations</h2>
+    <section class="booking-card collapsible-card">
+        <button class="collapsible-header" data-collapse-target="upcoming-reservations">
+            <span>Upcoming Reservations</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapsible-body" id="upcoming-reservations">
+        <div class="table-responsive">
         <?php if (empty($upcomingReservations)): ?>
             <p style="color: #8b95b5; padding: 1rem 0;">No upcoming reservations. <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" style="color: var(--gov-blue);">Book a facility</a> to get started.</p>
         <?php else: ?>
@@ -276,12 +281,18 @@ ob_start();
                 <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="btn-primary" style="text-decoration: none; display: inline-block;">View All Reservations</a>
             </div>
         <?php endif; ?>
+        </div>
+        </div>
     </section>
     
     <?php if (in_array($userRole, ['Admin', 'Staff']) && !empty($pendingReservations)): ?>
-    <aside class="booking-card">
-        <h2>Recent Pending Requests</h2>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    <aside class="booking-card collapsible-card">
+        <button class="collapsible-header" data-collapse-target="pending-requests">
+            <span>Recent Pending Requests</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapsible-body" id="pending-requests">
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;" class="table-responsive" aria-label="Pending requests">
             <?php foreach ($pendingReservations as $pending): ?>
                 <div style="padding: 0.75rem; background: #f9fafc; border-radius: 8px; border: 1px solid #e8ecf4;">
                     <strong style="display: block; margin-bottom: 0.25rem; color: var(--gov-blue-dark);">
@@ -304,6 +315,7 @@ ob_start();
                 <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-block; padding: 0.5rem 1rem;">View All (<?= $pendingCount; ?>)</a>
             </div>
         <?php endif; ?>
+        </div>
     </aside>
     <?php endif; ?>
 </div>
@@ -361,6 +373,35 @@ ob_start();
 </div>
 
 <script>
+// Collapsible helper with localStorage persistence (dashboard)
+(function() {
+    const STORAGE_KEY = 'collapse-state-dashboard';
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { state = {}; }
+
+    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    function init() {
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            const targetId = header.getAttribute('data-collapse-target');
+            const body = document.getElementById(targetId);
+            if (!body) return;
+            const chevron = header.querySelector('.chevron');
+            if (state[targetId]) {
+                body.classList.add('is-collapsed');
+                if (chevron) chevron.style.transform = 'rotate(-90deg)';
+            }
+            header.addEventListener('click', () => {
+                const isCollapsed = body.classList.toggle('is-collapsed');
+                if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                state[targetId] = isCollapsed;
+                save();
+            });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', init);
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
     // Monthly Trends Chart
     const monthlyCtx = document.getElementById('monthlyChart');

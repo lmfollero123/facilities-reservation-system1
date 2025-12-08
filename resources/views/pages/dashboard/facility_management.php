@@ -185,7 +185,12 @@ ob_start();
 <?php endif; ?>
 
 <div class="facility-admin">
-    <section>
+<section class="collapsible-card">
+    <button class="collapsible-header" data-collapse-target="facilities-list">
+        <span>Facilities</span>
+        <span class="chevron">▼</span>
+    </button>
+    <div class="collapsible-body" id="facilities-list">
         <?php if (empty($facilities)): ?>
             <article class="facility-card-admin">
                 <p>No facilities added yet. Use the form to add your first facility.</p>
@@ -228,12 +233,17 @@ ob_start();
                 </div>
             <?php endif; ?>
         <?php endif; ?>
-    </section>
+    </div>
+</section>
 
-    <aside>
-        <div class="facility-card-admin">
-            <h3 id="form-title">Add Facility</h3>
-            <form class="facility-form" method="POST" enctype="multipart/form-data">
+<aside>
+    <div class="collapsible-card">
+        <button class="collapsible-header" data-collapse-target="add-facility">
+            <span id="form-title">Add Facility</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapsible-body" id="add-facility">
+        <form class="facility-form" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="facility_id" id="facility_id">
                 <label>
                     Facility Name
@@ -319,55 +329,61 @@ ob_start();
                 <button class="btn-outline" type="button" onclick="resetFacilityForm()" style="margin-top:0.5rem;">Cancel / New Facility</button>
             </form>
         </div>
+    </div>
 
-        <div class="facility-card-admin">
-            <h3>Recent Activity</h3>
-            <?php if (empty($auditTrail)): ?>
-                <p style="color:#8b95b5; font-size:0.9rem; margin:0;">No activity recorded yet.</p>
-            <?php else: ?>
-                <ul class="audit-list">
-                    <?php foreach ($auditTrail as $entry): ?>
-                        <li>
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                                <div style="flex:1;">
-                                    <strong style="display:block; color:#1b1b1f; font-size:0.9rem; margin-bottom:0.25rem;">
-                                        <?= htmlspecialchars($entry['action']); ?>
-                                    </strong>
-                                    <?php if ($entry['details']): ?>
-                                        <p style="margin:0; color:#5b6888; font-size:0.85rem; line-height:1.4;">
-                                            <?= htmlspecialchars($entry['details']); ?>
-                                        </p>
-                                    <?php endif; ?>
-                                    <?php if ($entry['user_name']): ?>
-                                        <small style="color:#8b95b5; font-size:0.8rem; display:block; margin-top:0.25rem;">
-                                            by <?= htmlspecialchars($entry['user_name']); ?>
-                                        </small>
-                                    <?php endif; ?>
-                                </div>
-                                <small style="color:#8b95b5; font-size:0.75rem; white-space:nowrap;">
-                                    <?= date('M j, Y g:i A', strtotime($entry['created_at'])); ?>
-                                </small>
+    <div class="collapsible-card">
+        <button class="collapsible-header" data-collapse-target="recent-activity">
+            <span>Recent Activity</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapsible-body" id="recent-activity">
+        <?php if (empty($auditTrail)): ?>
+            <p style="color:#8b95b5; font-size:0.9rem; margin:0;">No activity recorded yet.</p>
+        <?php else: ?>
+            <ul class="audit-list">
+                <?php foreach ($auditTrail as $entry): ?>
+                    <li>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                            <div style="flex:1;">
+                                <strong style="display:block; color:#1b1b1f; font-size:0.9rem; margin-bottom:0.25rem;">
+                                    <?= htmlspecialchars($entry['action']); ?>
+                                </strong>
+                                <?php if ($entry['details']): ?>
+                                    <p style="margin:0; color:#5b6888; font-size:0.85rem; line-height:1.4;">
+                                        <?= htmlspecialchars($entry['details']); ?>
+                                    </p>
+                                <?php endif; ?>
+                                <?php if ($entry['user_name']): ?>
+                                    <small style="color:#8b95b5; font-size:0.8rem; display:block; margin-top:0.25rem;">
+                                        by <?= htmlspecialchars($entry['user_name']); ?>
+                                    </small>
+                                <?php endif; ?>
                             </div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <?php if ($auditTotalPages > 1): ?>
-                    <div class="pagination" style="margin-top:0.75rem; justify-content:center;">
-                        <?php if ($auditPage > 1): ?>
-                            <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage - 1])); ?>">&larr; Prev</a>
-                        <?php endif; ?>
-                        <span class="current">Page <?= $auditPage; ?> of <?= $auditTotalPages; ?></span>
-                        <?php if ($auditPage < $auditTotalPages): ?>
-                            <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage + 1])); ?>">Next &rarr;</a>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/audit_trail.php?module=Facility+Management" 
-                   style="display:block; text-align:center; margin-top:0.75rem; color:var(--gov-blue); font-size:0.85rem; font-weight:500;">
-                    View Full Audit Trail →
-                </a>
+                            <small style="color:#8b95b5; font-size:0.75rem; white-space:nowrap;">
+                                <?= date('M j, Y g:i A', strtotime($entry['created_at'])); ?>
+                            </small>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if ($auditTotalPages > 1): ?>
+                <div class="pagination" style="margin-top:0.75rem; justify-content:center;">
+                    <?php if ($auditPage > 1): ?>
+                        <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage - 1])); ?>">&larr; Prev</a>
+                    <?php endif; ?>
+                    <span class="current">Page <?= $auditPage; ?> of <?= $auditTotalPages; ?></span>
+                    <?php if ($auditPage < $auditTotalPages): ?>
+                        <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage + 1])); ?>">Next &rarr;</a>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
+            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/audit_trail.php?module=Facility+Management" 
+               style="display:block; text-align:center; margin-top:0.75rem; color:var(--gov-blue); font-size:0.85rem; font-weight:500;">
+                View Full Audit Trail →
+            </a>
+        <?php endif; ?>
         </div>
+    </div>
     </aside>
 </div>
 
@@ -406,6 +422,48 @@ function resetFacilityForm() {
     document.getElementById('form-status').value = 'available';
     document.getElementById('form-image').value = '';
 }
+
+// Collapsible helper with localStorage persistence
+(function() {
+    const STORAGE_KEY = 'collapse-state-facility-management';
+    let state = {};
+    try {
+        state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    } catch (e) {
+        state = {};
+    }
+
+    function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function toggle(targetId, header) {
+        const body = document.getElementById(targetId);
+        if (!body) return;
+        const chevron = header.querySelector('.chevron');
+        const isCollapsed = body.classList.toggle('is-collapsed');
+        if (chevron) {
+            chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+        }
+        state[targetId] = isCollapsed;
+        saveState();
+    }
+
+    document.querySelectorAll('.collapsible-header').forEach(header => {
+        const targetId = header.getAttribute('data-collapse-target');
+        const body = document.getElementById(targetId);
+        if (!body) return;
+
+        // Apply saved state
+        if (state[targetId]) {
+            body.classList.add('is-collapsed');
+            const chevron = header.querySelector('.chevron');
+            if (chevron) chevron.style.transform = 'rotate(-90deg)';
+        }
+
+        header.addEventListener('click', () => toggle(targetId, header));
+    });
+})();
 </script>
 <?php
 $content = ob_get_clean();
