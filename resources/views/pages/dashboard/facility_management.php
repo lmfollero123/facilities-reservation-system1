@@ -36,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $imagePath = null;
     if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         require_once __DIR__ . '/../../../../config/security.php';
+        require_once __DIR__ . '/../../../../config/upload_helper.php';
         $uploadErrors = validateFileUpload($_FILES['image'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], 5 * 1024 * 1024);
         
         if (!empty($uploadErrors)) {
@@ -50,14 +51,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $safeName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($name));
             $fileName = $safeName . '-' . time() . '.' . $ext;
             $targetPath = $uploadDir . '/' . $fileName;
-            
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-                // Additional security: Set proper file permissions
-                @chmod($targetPath, 0644);
-                $imagePath = '/public/img/facilities/' . $fileName;
+            [$ok, $err] = saveOptimizedImage($_FILES['image']['tmp_name'], $targetPath, 1600, 82);
+            if (!$ok) {
+                // Fallback to original move for GIFs/unsupported types
+                if (!move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
+                    $message = $err ?: 'Failed to upload image. Please try again.';
+                    $messageType = 'error';
+                } else {
+                    @chmod($targetPath, 0644);
+                    $imagePath = '/public/img/facilities/' . $fileName;
+                }
             } else {
-                $message = 'Failed to upload image. Please try again.';
-                $messageType = 'error';
+                $imagePath = '/public/img/facilities/' . $fileName;
             }
         }
     }

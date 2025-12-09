@@ -52,3 +52,4 @@
 - Current deployment is monolith with logical boundaries; “API gateway” is the web layer/controller tier acting as a single entry point.
 - Future: swap SMTP to Brevo + domain; add AI chatbot (new external integration).
 
+

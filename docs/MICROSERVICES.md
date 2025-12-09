@@ -39,3 +39,4 @@
 ## Notes
 - Current deployment is monolithic PHP with modular responsibilities; the “services” above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP. No message queue is present today. Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot is planned and not yet integrated.
 
+

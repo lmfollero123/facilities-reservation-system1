@@ -17,3 +17,4 @@ CREATE INDEX IF NOT EXISTS idx_users_coordinates ON users(latitude, longitude);
 CREATE INDEX IF NOT EXISTS idx_facilities_coordinates ON facilities(latitude, longitude);
 CREATE INDEX IF NOT EXISTS idx_facilities_status_location ON facilities(status, latitude, longitude);
 
+

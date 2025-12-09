@@ -15,6 +15,17 @@ $featuredStmt = $pdo->query(
 );
 $featuredFacilities = $featuredStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Public announcements (system-wide notifications with NULL user_id)
+$announcementsStmt = $pdo->prepare(
+    'SELECT title, message, created_at 
+     FROM notifications 
+     WHERE user_id IS NULL 
+     ORDER BY created_at DESC 
+     LIMIT 4'
+);
+$announcementsStmt->execute();
+$announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
+
 // Default fallback hero images when a facility has no uploaded image
 $heroImages = [
     $base . '/public/img/convention-hall.jpg',
@@ -24,7 +35,23 @@ $heroImages = [
 
 ob_start();
 ?>
-<section class="hero hero-with-slider">
+<section class="hero hero-with-slider hero-modern">
+    <div class="hero-content">
+        <p class="section-kicker">Barangay Culiat</p>
+        <h1>Barangay Culiat Public Facilities Reservation System</h1>
+        <p class="hero-lead">
+            Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.
+        </p>
+        <div class="hero-actions">
+            <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Browse facilities</a>
+            <a class="btn btn-outline" href="<?= $base; ?>/resources/views/pages/auth/register.php">Create account</a>
+        </div>
+        <div class="hero-badges">
+            <span class="pill">OTP-secured</span>
+            <span class="pill">Document-verified</span>
+            <span class="pill">AI recommendations</span>
+        </div>
+    </div>
     <div class="hero-media">
         <div class="hero-slider" id="heroSlider">
             <?php if (!empty($featuredFacilities)): ?>
@@ -58,84 +85,102 @@ ob_start();
             <div class="hero-dots" id="heroDots"></div>
         </div>
     </div>
-    <div class="hero-content">
-        <h1>Reserve LGU Facilities with Confidence</h1>
-        <p>Streamlined scheduling for multi-purpose halls, sports complexes, and community venues. Built for transparency and accessibility.</p>
-        <div class="hero-actions">
-            <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facilities.php">View Facilities</a>
-            <a class="btn btn-outline" href="<?= $base; ?>/resources/views/pages/public/contact.php">Contact Us</a>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="home-intro modern">
+            <div>
+                <p class="section-kicker">Why residents trust us</p>
+                <h2>Frictionless reservations, clear approvals</h2>
+                <p class="section-subtitle">
+                    End-to-end scheduling built for Barangay Culiat residents and LGU offices—secure, transparent, and mobile-friendly.
+                </p>
+                <div class="home-stats">
+                    <div class="home-stat">
+                        <span class="label">Facilities Managed</span>
+                        <span class="value"><?= count($featuredFacilities); ?>+</span>
+                    </div>
+                    <div class="home-stat">
+                        <span class="label">Approvals &amp; Audit</span>
+                        <span class="value">Tracked</span>
+                    </div>
+                    <div class="home-stat">
+                        <span class="label">Security</span>
+                        <span class="value">OTP + Docs</span>
+                    </div>
+                </div>
+            </div>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <h3>OTP-secured login</h3>
+                    <p>Multi-step auth with rate limits and account lockout for safer resident access.</p>
+                </article>
+                <article class="feature-card">
+                    <h3>Document verification</h3>
+                    <p>Barangay Culiat validation with required IDs and approvals before access.</p>
+                </article>
+                <article class="feature-card">
+                    <h3>Smart recommendations</h3>
+                    <p>Location-aware facility suggestions and conflict-aware booking guidance.</p>
+                </article>
+            </div>
         </div>
-        <p style="margin-top:1rem; color:#e0ecff; font-size:0.9rem;">
-            Powered by the LGU Facilities Reservation System for transparent and efficient bookings.
-        </p>
     </div>
 </section>
 
 <section class="section">
     <div class="container">
-        <div class="home-intro">
+        <div class="section-header">
             <div>
-                <h2>A simpler way to reserve public facilities</h2>
-                <p>The LGU Facilities Reservation System empowers citizens and local organizations to schedule public spaces online — with clear requirements, faster coordination, and transparent approval tracking.</p>
+                <p class="section-kicker">Start fast</p>
+                <h2>Quick access</h2>
+                <p class="section-subtitle">Jump straight into booking or learn the guidelines.</p>
             </div>
-            <div class="home-stats">
-                <div class="home-stat">
-                    <span class="label">Facilities Managed</span>
-                    <span class="value"><?= count($featuredFacilities); ?>+</span>
+        </div>
+        <div class="facility-grid quick-links">
+            <article class="facility-card card-elevated">
+                <div class="card-body">
+                    <h3>Search facilities</h3>
+                    <p>Browse halls, courts, and open spaces with live availability indicators.</p>
+                    <a class="btn btn-primary" href<?= "=\"$base/resources/views/pages/public/facilities.php\""; ?>>Explore facilities</a>
                 </div>
-                <div class="home-stat">
-                    <span class="label">Reservation Workflow</span>
-                    <span class="value">End-to-end</span>
+            </article>
+            <article class="facility-card card-elevated">
+                <div class="card-body">
+                    <h3>Reservation guide</h3>
+                    <p>Understand requirements, documents, and approval timelines before you submit.</p>
+                    <a class="btn btn-outline" href<?= "=\"$base/resources/views/pages/public/terms.php\""; ?>>Review guidelines</a>
                 </div>
-                <div class="home-stat">
-                    <span class="label">Built For</span>
-                    <span class="value">LGU & Residents</span>
-                </div>
-            </div>
+            </article>
         </div>
     </div>
 </section>
 
 <section class="section">
     <div class="container">
-        <h2>Quick Access</h2>
-        <div class="facility-grid">
-            <article class="facility-card card-elevated">
-                <div class="card-body">
-                    <h3>Search Facilities</h3>
-                    <p>Browse halls, courts, and open spaces with up-to-date availability and maintenance indicators.</p>
-                    <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Explore Facilities</a>
-                </div>
-            </article>
-            <article class="facility-card card-elevated">
-                <div class="card-body">
-                    <h3>Reservation Guide</h3>
-                    <p>Understand requirements, supporting documents, and LGU approval timelines.</p>
-                    <a class="btn btn-outline" href="<?= $base; ?>/resources/views/pages/public/terms.php">Review Guidelines</a>
-                </div>
-            </article>
-        </div>
-    </div>
-</section>
-
-<section class="section section-muted">
-    <div class="container">
-        <div class="home-columns">
-            <div>
+        <div class="process-steps">
+            <div class="process-header">
+                <p class="section-kicker">Simple steps</p>
                 <h2>How it works</h2>
-                <ol class="home-steps">
-                    <li><strong>Browse facilities</strong> and review guidelines and availability.</li>
-                    <li><strong>Submit a reservation request</strong> with your preferred schedule and purpose.</li>
-                    <li><strong>Track approvals and payments</strong> through the LGU dashboard and notifications.</li>
-                </ol>
+                <p class="section-subtitle">Submit, verify, and get approved with full transparency.</p>
             </div>
-            <div>
-                <h2>For LGU Offices</h2>
-                <ul class="home-benefits">
-                    <li>Centralized requests from barangays, departments, and citizens.</li>
-                    <li>Clear audit trail for approvals, changes, and cancellations.</li>
-                    <li>Reports and calendar views to manage busy days and peak seasons.</li>
-                </ul>
+            <div class="process-grid">
+                <div class="process-step">
+                    <span class="badge-number">1</span>
+                    <h3>Browse &amp; choose</h3>
+                    <p>Filter by availability and see facility details, amenities, and citations.</p>
+                </div>
+                <div class="process-step">
+                    <span class="badge-number">2</span>
+                    <h3>Request &amp; upload</h3>
+                    <p>Submit your schedule with required documents for Barangay Culiat verification.</p>
+                </div>
+                <div class="process-step">
+                    <span class="badge-number">3</span>
+                    <h3>OTP-secured updates</h3>
+                    <p>Track approvals, receive notifications, and access the calendar on any device.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -145,8 +190,12 @@ ob_start();
     <section class="section">
         <div class="container">
             <div class="section-header">
-                <h2>Recently added facilities</h2>
-                <p>New and updated venues that are now available for reservation.</p>
+                <div>
+                    <p class="section-kicker">Fresh arrivals</p>
+                    <h2>Recently added facilities</h2>
+                    <p class="section-subtitle">New and updated venues now open for reservation.</p>
+                </div>
+                <a class="btn btn-outline" href="<?= $base; ?>/resources/views/pages/public/facilities.php">See all facilities</a>
             </div>
             <div class="home-featured-grid">
                 <?php foreach (array_slice($featuredFacilities, 0, 3) as $facility): ?>
@@ -156,7 +205,7 @@ ob_start();
                         : $heroImages[array_rand($heroImages)];
                     ?>
                     <article class="facility-card home-featured-card">
-                        <img src="<?= htmlspecialchars($thumb); ?>" alt="<?= htmlspecialchars($facility['name']); ?>">
+                        <img src="<?= htmlspecialchars($thumb); ?>" alt="<?= htmlspecialchars($facility['name']); ?>" loading="lazy" decoding="async">
                         <div class="card-body">
                             <div class="status-pill <?= $facility['status'] === 'available' ? 'status-available' : 'status-booked'; ?>">
                                 <?= ucfirst(htmlspecialchars($facility['status'])); ?>
@@ -173,6 +222,31 @@ ob_start();
         </div>
     </section>
 <?php endif; ?>
+
+<section class="section section-muted">
+    <div class="container">
+        <div class="section-header">
+            <div>
+                <p class="section-kicker">Updates</p>
+                <h2>Announcements</h2>
+                <p class="section-subtitle">Latest advisories from Barangay Culiat.</p>
+            </div>
+        </div>
+        <?php if (!empty($announcements)): ?>
+            <div class="announcement-grid">
+                <?php foreach ($announcements as $item): ?>
+                    <article class="announcement-card">
+                        <p class="announcement-date"><?= date('M d, Y', strtotime($item['created_at'])); ?></p>
+                        <h3><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h3>
+                        <p class="announcement-body"><?= htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 180, '…')); ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <p style="margin:0; color:#4c5b7c;">No announcements yet. Check back soon.</p>
+        <?php endif; ?>
+    </div>
+</section>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

@@ -11,3 +11,4 @@ ALTER TABLE users
 ALTER TABLE user_documents
     MODIFY COLUMN document_type ENUM('birth_certificate', 'valid_id', 'brgy_id', 'resident_id', 'other') NOT NULL;
 
+

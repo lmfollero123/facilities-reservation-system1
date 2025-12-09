@@ -49,3 +49,4 @@ Tools (suggested):
 - Logs: CloudWatch Logs/ELK/OpenSearch; alerts via SNS/Email/Slack.
 - Error tracking (optional): Sentry/Rollbar for PHP.
 
+

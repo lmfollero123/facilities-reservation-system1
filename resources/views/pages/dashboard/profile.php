@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     $profilePicture = $user['profile_picture'] ?? null;
     if (!empty($_FILES['profile_picture']['name']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
         require_once __DIR__ . '/../../../../config/security.php';
+        require_once __DIR__ . '/../../../../config/upload_helper.php';
         $uploadErrors = validateFileUpload($_FILES['profile_picture'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], 2 * 1024 * 1024);
         
         if (!empty($uploadErrors)) {
@@ -74,17 +75,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
             $fileName = 'profile-' . $userId . '-' . time() . '.' . $ext;
             $targetPath = $uploadDir . '/' . $fileName;
             
-            if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $targetPath)) {
-                // Set secure file permissions
-                @chmod($targetPath, 0644);
-                
-                // Delete old profile picture if exists
-                if ($profilePicture && file_exists(__DIR__ . '/../../../../public' . $profilePicture)) {
-                    @unlink(__DIR__ . '/../../../../public' . $profilePicture);
+            [$ok, $err] = saveOptimizedImage($_FILES['profile_picture']['tmp_name'], $targetPath, 900, 82);
+            if (!$ok) {
+                // Fallback to original move for GIFs/unsupported types
+                if (!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $targetPath)) {
+                    $error = $err ?: 'Failed to upload profile picture. Please try again.';
+                } else {
+                    @chmod($targetPath, 0644);
+                    $profilePicture = '/public/uploads/profile_pictures/' . $fileName;
                 }
-                $profilePicture = '/public/uploads/profile_pictures/' . $fileName;
             } else {
-                $error = 'Failed to upload profile picture. Please try again.';
+                @chmod($targetPath, 0644);
+                $profilePicture = '/public/uploads/profile_pictures/' . $fileName;
+            }
+            
+            if (empty($error)) {
+                // Delete old profile picture if exists
+                if ($profilePicture && file_exists(__DIR__ . '/../../../../public' . ($user['profile_picture'] ?? ''))) {
+                    @unlink(__DIR__ . '/../../../../public' . $user['profile_picture']);
+                }
             }
         }
     }
