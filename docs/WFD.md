@@ -3,7 +3,7 @@
 ## Document Information
 - **System Name**: Public Facilities Reservation System
 - **Document Type**: Work Flow Diagram (WFD)
-- **Version**: 1.1
+- **Version**: 1.2
 - **Date**: 2025
 - **Author**: System Documentation
 
@@ -982,6 +982,16 @@
 | Update Profile | ✓ | ✓ | ✓ |
 
 ---
+
+## Addenda (Dec 2025 updates)
+
+- Registration: Valid ID is the primary required upload; Terms & Conditions modal auto-opens and acceptance is required.
+- Authentication: Forgot Password flow issues tokenized reset links; lock reasons are captured and shown on login (with email notification).
+- Booking: Reservation controls enforce ≤3 active in 30 days, ≤60-day advance window, and ≤1 reservation per user per day.
+- Booking AI: Conflict/risk now tags PH holidays and Barangay Culiat events; calendar modal shows event pills.
+- Public: Facility detail calendar dates redirect to login and then the dashboard calendar to continue booking.
+- Contact: Public inquiries are stored to `contact_inquiries` and emailed to admins for follow-up.
+- UI/UX: Hero CTA buttons are side-by-side/equal width; buttons and confirmations are larger and consistent across modules.
 
 ## Workflow Summary
 

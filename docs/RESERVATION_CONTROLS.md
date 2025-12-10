@@ -40,3 +40,4 @@ In `book_facility.php`, tweak:
 - No-show/cancel penalties: reduce caps for frequent no-shows.
 - Admin override: allow staff to bypass caps for official events.
 
+

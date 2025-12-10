@@ -1113,6 +1113,15 @@
 
 ---
 
+## Addenda (Dec 2025 updates)
+
+- New Data Store: **D9 - Contact Inquiries** | fields: id, name, email, organization, message, created_at | populated from public contact form; consumed by admin inbox and email alerts.
+- Password Reset Flow: Forgot password creates reset token/expiry on the user record (D1) and emails a reset link; reset validates token before updating password.
+- Booking Controls: Reservation process enforces limits (≤3 active/30 days, ≤60-day advance, ≤1 per user per day) before create.
+- AI Risk: Conflict detection tags PH holidays and Barangay Culiat events; event pills surface in calendar modal/UI.
+- Facility Detail Calendar: Public calendar dates redirect to login and then to the dashboard calendar for booking continuity.
+- Contact Notifications: Contact submissions trigger admin email alongside D9 storage.
+
 ## DFD Summary
 
 ### System Boundaries

@@ -39,10 +39,12 @@ ob_start();
                 <h1 class="text-white font-weight-bold">Barangay Culiat Public Facilities Reservation System</h1>
                 <hr class="divider" />
             </div>
-            <div class="col-lg-8 align-self-baseline">
+            <div class="col-lg-8 align-self-baseline hero-cta">
                 <p class="text-white-75 mb-5">Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.</p>
-                <a class="btn btn-primary btn-xl" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Browse Facilities</a>
-                <a class="btn btn-light btn-xl" href="<?= $base; ?>/resources/views/pages/auth/register.php" style="margin-left: 1rem;">Create Account</a>
+                <div class="hero-btn-row">
+                    <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Browse Facilities</a>
+                    <a class="btn btn-light" href="<?= $base; ?>/resources/views/pages/auth/register.php">Create Account</a>
+                </div>
             </div>
         </div>
     </div>

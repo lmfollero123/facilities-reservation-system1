@@ -12,9 +12,9 @@
 - **Facility Service**  
   - Manages facilities (details, status, citations, lat/long), facility audit entries.
 - **Reservation Service**  
-  - Manages bookings, conflict checks, history/timeline, auto-decline of expired pending reservations.
+  - Manages bookings, conflict checks, history/timeline, auto-decline of expired pending reservations, booking limit enforcement (≤3 active/30 days, ≤60-day advance, ≤1/day).
 - **AI Recommendation Service**  
-  - Provides conflict detection and facility recommendations with distance scoring (Haversine), purpose-based ranking.
+  - Provides conflict detection and facility recommendations with distance scoring (Haversine), purpose-based ranking, and holiday/event risk tagging (PH holidays + Barangay Culiat events).
 - **Calendar Service**  
   - Exposes calendar views and reservation event data for Month/Week/Day.
 - **Notification Service**  
@@ -23,21 +23,28 @@
   - Generates CSV and HTML-for-PDF reports from quick actions.
 - **Email/OTP Service**  
   - Sends approval emails and OTP emails via SMTP (currently Gmail; target Brevo/domain).
+- **Password Reset Service**  
+  - Issues and validates reset tokens, updates passwords, and emails reset links.
 - **Audit & Security Service**  
   - Logs security events, audit trail entries, login attempts, rate limit records.
+- **Contact Inquiry Service**  
+  - Accepts public contact form submissions, stores them, and emails admins/dashboard inbox.
 
 ## Communication Patterns
 - **Gateway → Services:** REST/HTTP (PHP controllers) for auth, user, documents, facilities, reservations, calendar, notifications, exports, audit.
 - **Auth & Session → Email/OTP:** SMTP to send OTP and approval emails.
+- **Password Reset → Email/OTP:** SMTP to send reset links with tokens.
 - **Reservation → Notification:** Direct DB writes to notification store (polled via HTTP by the UI); no message queue.
-- **Reservation → AI Recommendation:** In-process/HTTP call for conflict detection and recommendations (purpose + distance).
+- **Reservation → AI Recommendation:** In-process/HTTP call for conflict detection, recommendations, and holiday/event risk tagging.
 - **Reservation → Calendar:** Shared DB view; calendar reads reservation data (HTTP/read-only queries).
 - **Facility → AI Recommendation:** Reads facility coordinates/status to compute scores (in-process/HTTP).
 - **User/Profile → Document Service:** HTTP/form upload; Document Service writes file + metadata.
 - **Audit & Security:** Synchronous DB writes on each critical action; no queue.
+- **Contact Form → Contact Inquiry Service:** HTTP/AJAX posts; service stores inquiry and triggers admin email.
 
 ## Notes
-- Current deployment is monolithic PHP with modular responsibilities; the “services” above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP. No message queue is present today. Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot is planned and not yet integrated.
+- Current deployment is monolithic PHP with modular responsibilities; the “services” above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today. Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot is planned and not yet integrated.
+
 
 
 

@@ -1262,6 +1262,16 @@
 
 ---
 
+## Addenda (Dec 2025 updates)
+
+- Forgot Password flow added: request reset link → token/expiry saved → email link → reset page validates token and updates password.
+- Registration: Valid ID is primary required upload; Terms & Conditions modal auto-opens and must be accepted.
+- Booking controls: enforce ≤3 active reservations in 30 days, ≤60-day advance window, and ≤1 reservation per user per day before insert.
+- AI risk: booking conflict check now tags PH holidays and Barangay Culiat events; warnings stay visible; calendar modal shows event pills.
+- Facility detail calendar dates now redirect to login and then to the dashboard calendar.
+- Contact form: submissions are stored to `contact_inquiries` and emailed to admins.
+- UI: Hero CTA buttons aligned side-by-side; buttons/confirmations enlarged and consistent.
+
 ## Notes
 
 1. **Session Management**: All authenticated flows require valid session variables
@@ -1276,6 +1286,7 @@
 ---
 
 ## End of Document
+
 
 
 

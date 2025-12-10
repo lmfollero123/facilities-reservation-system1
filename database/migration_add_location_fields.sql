@@ -19,3 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_facilities_status_location ON facilities(status, 
 
 
 
+

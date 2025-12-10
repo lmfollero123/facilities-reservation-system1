@@ -33,3 +33,4 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     INDEX idx_reset_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+

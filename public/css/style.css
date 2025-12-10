@@ -438,6 +438,42 @@ img {
     box-shadow: 0 10px 22px rgba(108,117,125,0.28);
 }
 
+/* Hero CTA buttons (public hero) */
+.hero-cta .btn-primary {
+    padding: 1rem 1.8rem;
+    border-radius: 16px;
+    font-size: 1rem;
+    box-shadow: 0 12px 28px rgba(43, 91, 222, 0.25);
+    min-width: 190px;
+    text-align: center;
+}
+.hero-cta .btn-primary:hover {
+    transform: translateY(-2px);
+}
+.hero-cta .btn-light {
+    padding: 1rem 1.8rem;
+    border-radius: 16px;
+    font-size: 1rem;
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+    min-width: 190px;
+    text-align: center;
+}
+.hero-cta .btn-light:hover {
+    background: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+.hero-cta .hero-btn-row {
+    display: inline-flex;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Form controls for dashboard filters */
 .booking-form-control {
     width: 100%;
