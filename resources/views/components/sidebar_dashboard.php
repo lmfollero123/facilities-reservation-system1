@@ -10,8 +10,6 @@ $current = $_SERVER['PHP_SELF'] ?? '';
 $primaryLinks = [
     ['label' => 'Dashboard', 'href' => $base . '/resources/views/pages/dashboard/index.php', 'icon' => '🏛'],
     ['label' => 'Book a Facility', 'href' => $base . '/resources/views/pages/dashboard/book_facility.php', 'icon' => '📝'],
-    ['label' => 'Calendar & Schedule', 'href' => $base . '/resources/views/pages/dashboard/calendar.php', 'icon' => '🗓'],
-    ['label' => 'Reports & Analytics', 'href' => $base . '/resources/views/pages/dashboard/reports.php', 'icon' => '📊'],
     ['label' => 'AI Scheduling', 'href' => $base . '/resources/views/pages/dashboard/ai_scheduling.php', 'icon' => '🤖'],
 ];
 
@@ -20,7 +18,9 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $opsLinks = [
         ['label' => 'Reservation Approvals', 'href' => $base . '/resources/views/pages/dashboard/reservations_manage.php', 'icon' => '✅'],
         ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => '🏟'],
+        ['label' => 'Reports & Analytics', 'href' => $base . '/resources/views/pages/dashboard/reports.php', 'icon' => '📊'],
         ['label' => 'User Management', 'href' => $base . '/resources/views/pages/dashboard/user_management.php', 'icon' => '👥'],
+        ['label' => 'Contact Inquiries', 'href' => $base . '/resources/views/pages/dashboard/contact_inquiries.php', 'icon' => '📧'],
     ];
 }
 

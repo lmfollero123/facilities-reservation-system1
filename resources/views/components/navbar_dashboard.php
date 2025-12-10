@@ -35,7 +35,7 @@ $unreadCount = $userId ? getUnreadNotificationCount($userId) : 0;
             </div>
         </div>
         <span>Welcome, <?= htmlspecialchars($username); ?></span>
-        <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/auth/logout.php">Logout</a>
+        <a class="btn btn-primary confirm-action" data-message="Are you sure you want to log out?" href="<?= $base; ?>/resources/views/pages/auth/logout.php">Logout</a>
     </div>
 </header>
 

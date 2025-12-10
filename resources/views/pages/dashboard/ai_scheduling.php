@@ -15,18 +15,58 @@ $pdo = db();
 $userRole = $_SESSION['role'] ?? 'Resident';
 $pageTitle = 'AI Predictive Scheduling | LGU Facilities Reservation';
 
+// Holiday / local event calendar (Philippines + Barangay Culiat) for current and next year
+$yearNow = (int)date('Y');
+$years = [$yearNow, $yearNow + 1];
+$holidayList = [];
+
+foreach ($years as $yr) {
+    $holidayList["$yr-01-01"] = 'New Year\'s Day';
+    $holidayList["$yr-02-25"] = 'EDSA People Power Anniversary';
+    $holidayList["$yr-04-09"] = 'Araw ng Kagitingan';
+    $holidayList[date('Y-m-d', strtotime("second sunday of May $yr"))] = 'Mother\'s Day';
+    $holidayList[date('Y-m-d', strtotime("second sunday of June $yr"))] = 'Father\'s Day';
+    $holidayList["$yr-06-12"] = 'Independence Day';
+    $holidayList["$yr-08-21"] = 'Ninoy Aquino Day';
+    $holidayList["$yr-08-26"] = 'National Heroes Day';
+    $holidayList["$yr-11-01"] = 'All Saints\' Day';
+    $holidayList["$yr-11-02"] = 'All Souls\' Day';
+    $holidayList["$yr-11-30"] = 'Bonifacio Day';
+    $holidayList["$yr-12-25"] = 'Christmas Day';
+    $holidayList["$yr-12-30"] = 'Rizal Day';
+
+    // Barangay Culiat local events (sample dates; adjust as needed)
+    $holidayList["$yr-09-08"] = 'Barangay Culiat Fiesta';
+    $holidayList["$yr-02-11"] = 'Barangay Culiat Founding Day';
+}
+
+// Look ahead window for tags
+$lookaheadDays = 120;
+$today = new DateTimeImmutable('today');
+$eventTags = [];
+for ($i = 0; $i <= $lookaheadDays; $i++) {
+    $d = $today->modify("+$i days")->format('Y-m-d');
+    if (isset($holidayList[$d])) {
+        $eventTags[] = [
+            'date' => $d,
+            'label' => $holidayList[$d],
+            'dow' => date('D', strtotime($d))
+        ];
+    }
+}
+
 // Look back over the last 6 months for patterns
 $windowStart = date('Y-m-01', strtotime('-5 months'));
 $windowEnd = date('Y-m-t');
 
 // Aggregate reservations by facility, day of week, and time slot
 $slotStmt = $pdo->prepare(
-    'SELECT f.name AS facility, DAYNAME(r.reservation_date) AS day_name, r.time_slot, COUNT(*) AS booking_count
+    'SELECT f.id AS facility_id, f.name AS facility, DAYNAME(r.reservation_date) AS day_name, r.time_slot, COUNT(*) AS booking_count
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      WHERE r.reservation_date BETWEEN :start AND :end
        AND r.status = "approved"
-     GROUP BY f.id, facility, day_name, r.time_slot
+     GROUP BY f.id, facility_id, facility, day_name, r.time_slot
      ORDER BY booking_count ASC, facility ASC'
 );
 $slotStmt->execute([
@@ -52,6 +92,7 @@ foreach ($rawSlots as $row) {
 
     $slots[] = [
         'facility' => $row['facility'],
+        'facility_id' => $row['facility_id'],
         'day' => $row['day_name'],
         'time' => $row['time_slot'],
         'reason' => $reason,
@@ -88,6 +129,17 @@ $peakTimeStmt = $pdo->prepare(
 $peakTimeStmt->execute(['start' => $windowStart, 'end' => $windowEnd]);
 $peakTime = $peakTimeStmt->fetch(PDO::FETCH_ASSOC);
 
+// Tag upcoming dates with holidays/events to elevate risk
+$eventRisk = [];
+foreach ($eventTags as $evt) {
+    $eventRisk[] = [
+        'date' => $evt['date'],
+        'label' => $evt['label'],
+        'dow' => $evt['dow'],
+        'risk' => 'High'
+    ];
+}
+
 ob_start();
 ?>
 <div class="page-header">
@@ -113,6 +165,7 @@ ob_start();
                         <th>Time Window</th>
                         <th>Recommendation</th>
                         <th>Past Bookings</th>
+                        <th>Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -127,6 +180,12 @@ ob_start();
                                 </span>
                             </td>
                             <td><?= (int)$slot['count']; ?></td>
+                            <td>
+                                <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
+                                   href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php?facility_id=<?= urlencode($slot['facility_id']); ?>&time_slot=<?= urlencode($slot['time']); ?>">
+                                    Book this slot
+                                </a>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -149,7 +208,7 @@ ob_start();
                     <li><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
                 <?php endif; ?>
                 <li>Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
-                <li>These insights are based on approved reservations from the last 6 months.</li>
+                <li>These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
             </ul>
         </div>
         <div class="report-card" style="margin-top: 1.5rem;">
@@ -160,6 +219,39 @@ ob_start();
             </p>
         </div>
     </aside>
+</div>
+
+<div class="reports-grid" style="margin-top:1.5rem;">
+    <section class="report-card">
+        <h2>Upcoming Holidays & Local Events (Next 120 Days)</h2>
+        <?php if (empty($eventRisk)): ?>
+            <p style="color:#8b95b5;">No tagged holidays/events in the next 120 days.</p>
+        <?php else: ?>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Event</th>
+                        <th>Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($eventRisk as $evt): ?>
+                        <tr>
+                            <td><?= date('M d, Y', strtotime($evt['date'])); ?></td>
+                            <td><?= htmlspecialchars($evt['dow']); ?></td>
+                            <td><?= htmlspecialchars($evt['label']); ?></td>
+                            <td><span class="status-badge status-pending">High</span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-top:0.75rem;">
+            Risk is elevated on holidays and Barangay Culiat events (e.g., Fiesta, Founding Day). Prefer alternate dates or earlier lead times.
+        </p>
+    </section>
 </div>
 <?php
 $content = ob_get_clean();

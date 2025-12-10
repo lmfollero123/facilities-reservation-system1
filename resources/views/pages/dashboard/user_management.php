@@ -83,12 +83,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
                     $userStmt->execute(['id' => $userId]);
                     $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+                    $lockReason = trim($_POST['lock_reason'] ?? '');
                     
-                    $stmt = $pdo->prepare('UPDATE users SET status = "locked", updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                    $stmt->execute(['id' => $userId]);
+                    $stmt = $pdo->prepare('UPDATE users SET status = "locked", lock_reason = :lock_reason, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['id' => $userId, 'lock_reason' => $lockReason !== '' ? $lockReason : null]);
                     
                     logAudit('Locked user account', 'User Management', $userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId);
                     $message = 'User account locked successfully.';
+
+                    // Notify user via email
+                    if ($userInfo && !empty($userInfo['email'])) {
+                        try {
+                            $reasonText = $lockReason !== '' ? "<p><strong>Reason:</strong> " . htmlspecialchars($lockReason) . "</p>" : '';
+                            $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p>"
+                                  . "<p>Your account has been locked by an administrator. You will be unable to sign in until it is reviewed and unlocked.</p>"
+                                  . $reasonText
+                                  . "<p>If you believe this is a mistake or need access restored, please reply to this email or contact the admin team.</p>";
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been locked', $body);
+                        } catch (Exception $e) {
+                            // ignore email failures here
+                        }
+                    }
                     break;
                     
                 case 'unlock':
@@ -97,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     $userStmt->execute(['id' => $userId]);
                     $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
                     
-                    $stmt = $pdo->prepare('UPDATE users SET status = "active", updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt = $pdo->prepare('UPDATE users SET status = "active", lock_reason = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                     $stmt->execute(['id' => $userId]);
                     
                     logAudit('Unlocked user account', 'User Management', $userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId);
@@ -329,6 +344,7 @@ ob_start();
                                     <form method="POST" style="display:inline;">
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="lock">
+                                        <input type="text" name="lock_reason" placeholder="Reason (optional)" style="width:180px; padding:0.35rem 0.5rem; border:1px solid #d7deed; border-radius:8px; font-size:0.85rem; margin-right:0.35rem;">
                                         <button class="btn-outline confirm-action" data-message="Lock this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Lock</button>
                                     </form>
                                 <?php elseif ($user['status'] === 'locked'): ?>

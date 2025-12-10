@@ -80,3 +80,4 @@
 These textual diagrams include all current modules: auth/OTP, registration with documents, user/profile, facilities, reservations, AI recommendations, calendar, notifications, exports, audit/security, and external email/SMTP. Pending integrations (Brevo/domain, AI chatbot provider) are noted as planned external components.
 
 
+

@@ -61,7 +61,14 @@ try {
 
             unset($_SESSION['pending_otp_user_id'], $_SESSION['pending_otp_email'], $_SESSION['pending_otp_name']);
 
-            header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+            // Redirect to requested page if provided and safe, otherwise dashboard
+            $redirect = $_SESSION['post_login_redirect'] ?? '';
+            unset($_SESSION['post_login_redirect']);
+            if ($redirect && str_starts_with($redirect, '/')) {
+                header('Location: ' . $redirect);
+            } else {
+                header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+            }
             exit;
         }
     }
@@ -136,6 +143,7 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
+
 
 
 

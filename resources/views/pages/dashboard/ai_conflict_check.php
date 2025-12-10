@@ -24,6 +24,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($facilityId && $date && $timeSlot) {
         $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
+        // Lightweight logging for future ML training
+        try {
+            $logLine = json_encode([
+                'ts' => date('c'),
+                'user_id' => $_SESSION['user_id'] ?? null,
+                'facility_id' => $facilityId,
+                'date' => $date,
+                'time_slot' => $timeSlot,
+                'has_conflict' => $conflictCheck['has_conflict'] ?? false,
+                'risk_score' => $conflictCheck['risk_score'] ?? null
+            ]) . PHP_EOL;
+            $logFile = __DIR__ . '/../../../../logs/conflict_checks.log';
+            @file_put_contents($logFile, $logLine, FILE_APPEND);
+        } catch (Throwable $e) {
+            // ignore logging errors
+        }
         echo json_encode($conflictCheck);
     } else {
         echo json_encode(['error' => 'Missing parameters']);
@@ -31,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     echo json_encode(['error' => 'Invalid request method']);
 }
+
 
 
 

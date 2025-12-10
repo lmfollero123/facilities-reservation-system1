@@ -49,7 +49,7 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
     $conflictStmt->execute($params);
     $conflicts = $conflictStmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Calculate risk score based on historical patterns
+    // Calculate risk score based on historical patterns + holiday/event tags
     $riskScore = calculateConflictRisk($facilityId, $date, $timeSlot);
     
     // Find alternative slots if conflict exists
@@ -123,14 +123,39 @@ function calculateConflictRisk($facilityId, $date, $timeSlot) {
     
     $pendingCount = (int)$pendingStmt->fetchColumn();
     
+    // Holiday / local event risk bump (Philippines + Barangay Culiat)
+    $year = (int)date('Y', strtotime($date));
+    $holidayList = [];
+    $holidayList["$year-01-01"] = 'New Year\'s Day';
+    $holidayList["$year-02-25"] = 'EDSA People Power Anniversary';
+    $holidayList["$year-04-09"] = 'Araw ng Kagitingan';
+    $holidayList[date('Y-m-d', strtotime("second sunday of May $year"))] = 'Mother\'s Day';
+    $holidayList[date('Y-m-d', strtotime("second sunday of June $year"))] = 'Father\'s Day';
+    $holidayList["$year-06-12"] = 'Independence Day';
+    $holidayList["$year-08-21"] = 'Ninoy Aquino Day';
+    $holidayList[date('Y-m-d', strtotime("last monday of August $year"))] = 'National Heroes Day';
+    $holidayList["$year-11-01"] = 'All Saints\' Day';
+    $holidayList["$year-11-02"] = 'All Souls\' Day';
+    $holidayList["$year-11-30"] = 'Bonifacio Day';
+    $holidayList["$year-12-25"] = 'Christmas Day';
+    $holidayList["$year-12-30"] = 'Rizal Day';
+    // Barangay Culiat local events
+    $holidayList["$year-09-08"] = 'Barangay Culiat Fiesta';
+    $holidayList["$year-02-11"] = 'Barangay Culiat Founding Day';
+    
+    $isHoliday = isset($holidayList[$date]);
+    
     // Calculate risk score
     // Base risk from historical frequency (0-60 points)
     $historicalRisk = min(60, $historicalCount * 10);
     
-    // Additional risk from pending bookings (0-40 points)
-    $pendingRisk = min(40, $pendingCount * 20);
+    // Additional risk from pending bookings (0-30 points)
+    $pendingRisk = min(30, $pendingCount * 15);
     
-    return min(100, $historicalRisk + $pendingRisk);
+    // Holiday/event bump (0 or 20 points)
+    $holidayRisk = $isHoliday ? 20 : 0;
+    
+    return min(100, $historicalRisk + $pendingRisk + $holidayRisk);
 }
 
 /**

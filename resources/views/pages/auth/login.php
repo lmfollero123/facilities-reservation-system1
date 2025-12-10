@@ -6,6 +6,17 @@ require_once __DIR__ . '/../../../../config/mail_helper.php';
 
 $pageTitle = 'Login | LGU Facilities Reservation';
 $error = '';
+$lockNotice = '';
+$next = '';
+
+// Capture redirect target (relative paths only)
+if (isset($_GET['next'])) {
+    $candidate = trim($_GET['next']);
+    if ($candidate !== '' && str_starts_with($candidate, '/')) {
+        $next = $candidate;
+        $_SESSION['post_login_redirect'] = $candidate;
+    }
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -29,15 +40,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $pdo = db();
                     
-                    // Check if account is locked
+                    // Check account record
                     $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
                     $stmt->execute([$email]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
                     if ($user) {
-                        // Check if account is locked
-                        if ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
-                            $error = 'Account is temporarily locked due to multiple failed login attempts. Please try again later.';
+                        // Admin-locked account
+                        if (isset($user['status']) && strtolower($user['status']) === 'locked') {
+                            $error = 'Your account has been locked by an administrator. Please contact support to restore access.';
+                            $lockNotice = 'Account locked by administrator.';
+                            logSecurityEvent('login_attempt_locked_admin', "Attempted login to admin-locked account: $email", 'warning');
+                        }
+                        // Temporary lock due to rate limits
+                        elseif ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
+                            $until = date('F j, Y g:i A', strtotime($user['locked_until']));
+                            $lockReason = 'Account locked due to multiple failed login attempts.';
+                            $error = "Your account is temporarily locked until $until. Please contact support if you need it unlocked.";
+                            $lockNotice = $lockReason;
                             logSecurityEvent('login_attempt_locked_account', "Attempted login to locked account: $email", 'warning');
                         } else {
                             // Verify password
@@ -69,6 +89,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $_SESSION['pending_otp_user_id'] = $user['id'];
                                 $_SESSION['pending_otp_email'] = $user['email'];
                                 $_SESSION['pending_otp_name'] = $user['name'];
+                                // Keep redirect target for post-OTP landing
+                                if ($next) {
+                                    $_SESSION['post_login_redirect'] = $next;
+                                }
 
                                 header('Location: ' . base_path() . '/resources/views/pages/auth/login_otp.php');
                                 exit;
@@ -82,7 +106,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 if ($failedAttempts >= 5) {
                                     $lockUntil = date('Y-m-d H:i:s', time() + 1800); // 30 minutes
                                     $error = 'Too many failed login attempts. Your account has been locked for 30 minutes.';
+                                    $lockReason = 'Account locked due to multiple failed login attempts.';
                                     logSecurityEvent('account_locked', "Account locked due to failed attempts: $email", 'warning');
+                                    // Send lock notification email (one-time per lock event)
+                                    try {
+                                        $body = "<p>Hi " . htmlspecialchars($user['name']) . ",</p>"
+                                              . "<p>Your account has been temporarily locked because of multiple failed login attempts.</p>"
+                                              . "<p>Lock duration: 30 minutes.<br>"
+                                              . "If this wasn't you, please reset your password or contact support.</p>"
+                                              . "<p>Reason: $lockReason</p>"
+                                              . "<p>Need help? Reply to this email or visit the contact page.</p>";
+                                        sendEmail($user['email'], $user['name'], 'Your account has been locked', $body);
+                                    } catch (Exception $e) {
+                                        // ignore email failures here
+                                    }
                                 } else {
                                     $error = 'Invalid email or password.';
                                 }
@@ -126,6 +163,13 @@ ob_start();
             <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
                 <?= htmlspecialchars($error); ?>
             </div>
+            <?php if ($lockNotice): ?>
+                <div style="background: #fff4e5; color: #856404; padding: 0.7rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.88rem;">
+                    <?= htmlspecialchars($lockNotice); ?>
+                    <br>
+                    Need help? Contact the admin team to review and unlock your account.
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
         
         <form method="POST" class="auth-form">
@@ -145,6 +189,12 @@ ob_start();
                     <input name="password" type="password" placeholder="Enter your password" required>
                 </div>
             </label>
+            
+            <div style="text-align: right; margin-bottom: 1rem;">
+                <a href="<?= base_path(); ?>/resources/views/pages/auth/forgot_password.php" style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem; text-decoration: none;">
+                    Forgot Password?
+                </a>
+            </div>
             
             <button class="btn-primary" type="submit">Sign In</button>
         </form>

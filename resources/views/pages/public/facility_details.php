@@ -144,7 +144,7 @@ ob_start();
                 <h3>Availability (Next 14 Days)</h3>
                 <div class="calendar" role="grid">
                     <?php foreach ($calendar as $slot): ?>
-                        <div class="day <?= $slot['status']; ?>">
+                        <div class="day <?= $slot['status']; ?>" data-label="<?= htmlspecialchars($slot['label']); ?>">
                             <?= htmlspecialchars($slot['label']); ?>
                         </div>
                     <?php endforeach; ?>
@@ -172,5 +172,18 @@ $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
 
 ?>
+
+<script>
+// Make calendar dates clickable: send user to login with redirect to booking calendar
+document.addEventListener('DOMContentLoaded', function() {
+    const loginUrl = '<?= $base; ?>/resources/views/pages/auth/login.php?next=<?= urlencode($base . '/resources/views/pages/dashboard/calendar.php'); ?>';
+    document.querySelectorAll('.calendar .day').forEach(day => {
+        day.style.cursor = 'pointer';
+        day.addEventListener('click', () => {
+            window.location.href = loginUrl;
+        });
+    });
+});
+</script>
 
 

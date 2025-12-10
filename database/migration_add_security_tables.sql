@@ -45,3 +45,4 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(45) NULL;
 
 
+

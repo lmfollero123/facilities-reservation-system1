@@ -17,24 +17,84 @@ $userId = $_SESSION['user_id'] ?? null;
 $userRole = $_SESSION['role'] ?? 'Resident';
 $pageTitle = 'Dashboard | LGU Facilities Reservation';
 
+$statusFilter = '';
+$facilityFilter = 0;
+$startDateFilter = '';
+$endDateFilter = '';
+
+// Helper: shared conditions for filters
+function applyFilters(array &$conditions, array &$params, string $statusFilter, int $facilityFilter, string $startDateFilter, string $endDateFilter, bool $requireDate = true, string $dateColumn = 'r.reservation_date'): void {
+    if ($statusFilter) {
+        $conditions[] = "LOWER(r.status) = :f_status";
+        $params['f_status'] = $statusFilter;
+    }
+    if ($facilityFilter > 0) {
+        $conditions[] = "r.facility_id = :f_facility";
+        $params['f_facility'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $conditions[] = "$dateColumn >= :f_start";
+        $params['f_start'] = $startDateFilter;
+    } elseif ($requireDate) {
+        // default lower bound today for some queries
+        $conditions[] = "$dateColumn >= :today";
+    }
+    if ($endDateFilter) {
+        $conditions[] = "$dateColumn <= :f_end";
+        $params['f_end'] = $endDateFilter;
+    }
+}
+
+// Filters (Recent/Upcoming)
+$allowedStatuses = ['approved','pending','denied','cancelled'];
+if (isset($_GET['status']) && in_array(strtolower($_GET['status']), $allowedStatuses, true)) {
+    $statusFilter = strtolower($_GET['status']);
+}
+if (isset($_GET['facility_id']) && ctype_digit((string)$_GET['facility_id'])) {
+    $facilityFilter = (int)$_GET['facility_id'];
+}
+if (!empty($_GET['start_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['start_date'])) {
+    $startDateFilter = $_GET['start_date'];
+}
+if (!empty($_GET['end_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end_date'])) {
+    $endDateFilter = $_GET['end_date'];
+}
+
 $today = date('Y-m-d');
 $weekFromNow = date('Y-m-d', strtotime('+7 days'));
 
-// Get upcoming reservations for this user
-$upcomingStmt = $pdo->prepare(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
-     FROM reservations r
-     JOIN facilities f ON r.facility_id = f.id
-     WHERE r.user_id = :user_id
-     AND r.reservation_date >= :today
-     AND r.status IN ("approved", "pending")
-     ORDER BY r.reservation_date ASC
-     LIMIT 5'
-);
-$upcomingStmt->execute([
-    'user_id' => $userId,
-    'today' => $today,
-]);
+// Facility options for filter
+$facilityOptionsStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
+$facilityOptions = $facilityOptionsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get upcoming/reservations (filtered, up to 20)
+$whereUpcoming = ['r.user_id = :user_id'];
+$paramsUpcoming = ['user_id' => $userId];
+
+applyFilters($whereUpcoming, $paramsUpcoming, $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, true);
+if (!$statusFilter) {
+    // default to approved/pending if no status filter set
+    $whereUpcoming[] = 'r.status IN ("approved","pending")';
+}
+// applyFilters added :today placeholder when no start date; ensure it's bound
+if (!isset($paramsUpcoming['today']) && !$startDateFilter) {
+    $paramsUpcoming['today'] = $today;
+}
+
+$upcomingSql = '
+    SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
+    FROM reservations r
+    JOIN facilities f ON r.facility_id = f.id
+    WHERE ' . implode(' AND ', $whereUpcoming) . '
+    ORDER BY r.reservation_date ASC
+    LIMIT 20';
+
+$upcomingStmt = $pdo->prepare($upcomingSql);
+foreach ($paramsUpcoming as $k => $v) {
+    $type = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
+    $upcomingStmt->bindValue(':' . $k, $v, $type);
+}
+$upcomingStmt->execute();
 $upcomingReservations = $upcomingStmt->fetchAll(PDO::FETCH_ASSOC);
 $upcomingCount = count($upcomingReservations);
 
@@ -114,32 +174,54 @@ for ($i = 5; $i >= 0; $i--) {
     
     $monthlyLabels[] = $monthLabel;
     
+    $cond = [];
+    $params = [];
     if (in_array($userRole, ['Admin', 'Staff'])) {
-        $monthStmt = $pdo->prepare(
-            'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
-        );
-        $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+        $cond[] = 'reservation_date >= :start AND reservation_date <= :end';
+        $params['start'] = $monthStart;
+        $params['end'] = $monthEnd;
+        if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_m'; $params['f_status_m'] = $statusFilter; }
+        if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_m'; $params['f_facility_m'] = $facilityFilter; }
     } else {
-        $monthStmt = $pdo->prepare(
-            'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id AND reservation_date >= :start AND reservation_date <= :end'
-        );
-        $monthStmt->execute(['user_id' => $userId, 'start' => $monthStart, 'end' => $monthEnd]);
+        $cond[] = 'user_id = :user_id';
+        $params['user_id'] = $userId;
+        $cond[] = 'reservation_date >= :start AND reservation_date <= :end';
+        $params['start'] = $monthStart;
+        $params['end'] = $monthEnd;
+        if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_m'; $params['f_status_m'] = $statusFilter; }
+        if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_m'; $params['f_facility_m'] = $facilityFilter; }
     }
+    $sql = 'SELECT COUNT(*) FROM reservations WHERE ' . implode(' AND ', $cond);
+    $monthStmt = $pdo->prepare($sql);
+    $monthStmt->execute($params);
     $monthlyData[] = (int)$monthStmt->fetchColumn();
 }
 
 // Chart data: Status breakdown
+$statusData = [];
 if (in_array($userRole, ['Admin', 'Staff'])) {
-    $statusStmt = $pdo->query(
-        'SELECT status, COUNT(*) as count FROM reservations GROUP BY status'
-    );
+    $cond = [];
+    $params = [];
+    if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_s'; $params['f_status_s'] = $statusFilter; }
+    if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_s'; $params['f_facility_s'] = $facilityFilter; }
+    if ($startDateFilter) { $cond[] = 'reservation_date >= :f_start_s'; $params['f_start_s'] = $startDateFilter; }
+    if ($endDateFilter)   { $cond[] = 'reservation_date <= :f_end_s';   $params['f_end_s'] = $endDateFilter; }
+    $sql = 'SELECT status, COUNT(*) as count FROM reservations' . (empty($cond) ? '' : ' WHERE ' . implode(' AND ', $cond)) . ' GROUP BY status';
+    $statusStmt = $pdo->prepare($sql);
+    $statusStmt->execute($params);
+    $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
-    $statusStmt = $pdo->prepare(
-        'SELECT status, COUNT(*) as count FROM reservations WHERE user_id = :user_id GROUP BY status'
-    );
-    $statusStmt->execute(['user_id' => $userId]);
+    $cond = ['user_id = :user_id'];
+    $params = ['user_id' => $userId];
+    if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_s'; $params['f_status_s'] = $statusFilter; }
+    if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_s'; $params['f_facility_s'] = $facilityFilter; }
+    if ($startDateFilter) { $cond[] = 'reservation_date >= :f_start_s'; $params['f_start_s'] = $startDateFilter; }
+    if ($endDateFilter)   { $cond[] = 'reservation_date <= :f_end_s';   $params['f_end_s'] = $endDateFilter; }
+    $sql = 'SELECT status, COUNT(*) as count FROM reservations WHERE ' . implode(' AND ', $cond) . ' GROUP BY status';
+    $statusStmt = $pdo->prepare($sql);
+    $statusStmt->execute($params);
+    $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 }
-$statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
 $statusLabels = [];
@@ -158,27 +240,39 @@ $statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['deni
 
 // Chart data: Facility utilization (Admin/Staff only or user's top facilities)
 if (in_array($userRole, ['Admin', 'Staff'])) {
-    $facilityStmt = $pdo->query(
-        'SELECT f.name, COUNT(r.id) as booking_count
-         FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"
-         GROUP BY f.id, f.name
-         ORDER BY booking_count DESC
-         LIMIT 5'
-    );
+    $cond = ['r.status = "approved"'];
+    $params = [];
+    if ($statusFilter) { $cond[] = 'LOWER(r.status) = :f_status_f'; $params['f_status_f'] = $statusFilter; }
+    if ($facilityFilter > 0) { $cond[] = 'r.facility_id = :f_facility_f'; $params['f_facility_f'] = $facilityFilter; }
+    if ($startDateFilter) { $cond[] = 'r.reservation_date >= :f_start_f'; $params['f_start_f'] = $startDateFilter; }
+    if ($endDateFilter)   { $cond[] = 'r.reservation_date <= :f_end_f';   $params['f_end_f'] = $endDateFilter; }
+    $sql = 'SELECT f.name, COUNT(r.id) as booking_count
+            FROM facilities f
+            LEFT JOIN reservations r ON f.id = r.facility_id' . (empty($cond) ? '' : ' AND ' . implode(' AND ', $cond)) . '
+            GROUP BY f.id, f.name
+            ORDER BY booking_count DESC
+            LIMIT 5';
+    $facilityStmt = $pdo->prepare($sql);
+    $facilityStmt->execute($params);
+    $facilityData = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
-    $facilityStmt = $pdo->prepare(
-        'SELECT f.name, COUNT(r.id) as booking_count
-         FROM facilities f
-         JOIN reservations r ON f.id = r.facility_id
-         WHERE r.user_id = :user_id
-         GROUP BY f.id, f.name
-         ORDER BY booking_count DESC
-         LIMIT 5'
-    );
-    $facilityStmt->execute(['user_id' => $userId]);
+    $cond = ['r.user_id = :user_id'];
+    $params = ['user_id' => $userId];
+    if ($statusFilter) { $cond[] = 'LOWER(r.status) = :f_status_f'; $params['f_status_f'] = $statusFilter; }
+    if ($facilityFilter > 0) { $cond[] = 'r.facility_id = :f_facility_f'; $params['f_facility_f'] = $facilityFilter; }
+    if ($startDateFilter) { $cond[] = 'r.reservation_date >= :f_start_f'; $params['f_start_f'] = $startDateFilter; }
+    if ($endDateFilter)   { $cond[] = 'r.reservation_date <= :f_end_f';   $params['f_end_f'] = $endDateFilter; }
+    $sql = 'SELECT f.name, COUNT(r.id) as booking_count
+            FROM facilities f
+            JOIN reservations r ON f.id = r.facility_id
+            WHERE ' . implode(' AND ', $cond) . '
+            GROUP BY f.id, f.name
+            ORDER BY booking_count DESC
+            LIMIT 5';
+    $facilityStmt = $pdo->prepare($sql);
+    $facilityStmt->execute($params);
+    $facilityData = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 }
-$facilityData = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $facilityLabels = [];
 $facilityCounts = [];
@@ -193,6 +287,41 @@ ob_start();
     <h1>Dashboard Overview</h1>
     <small>Welcome back, <?= htmlspecialchars($_SESSION['user_name'] ?? 'User'); ?>!</small>
 </div>
+
+<form method="GET" class="booking-card" style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end;">
+    <div>
+        <label for="status" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Status</label>
+        <select id="status" name="status" class="booking-form-control">
+            <option value="">All</option>
+            <?php foreach (['approved' => 'Approved','pending' => 'Pending','denied' => 'Denied','cancelled' => 'Cancelled'] as $key => $label): ?>
+                <option value="<?= $key; ?>" <?= $statusFilter === $key ? 'selected' : ''; ?>><?= $label; ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div>
+        <label for="facility_id" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Facility</label>
+        <select id="facility_id" name="facility_id" class="booking-form-control">
+            <option value="0">All</option>
+            <?php foreach ($facilityOptions as $facility): ?>
+                <option value="<?= (int)$facility['id']; ?>" <?= $facilityFilter === (int)$facility['id'] ? 'selected' : ''; ?>>
+                    <?= htmlspecialchars($facility['name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div>
+        <label for="start_date" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Start Date</label>
+        <input type="date" id="start_date" name="start_date" class="booking-form-control" value="<?= htmlspecialchars($startDateFilter); ?>">
+    </div>
+    <div>
+        <label for="end_date" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">End Date</label>
+        <input type="date" id="end_date" name="end_date" class="booking-form-control" value="<?= htmlspecialchars($endDateFilter); ?>">
+    </div>
+    <div style="display:flex; gap:0.5rem;">
+        <button type="submit" class="btn-primary" style="flex:1;">Apply Filters</button>
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/index.php" class="btn-outline" style="flex:1; text-align:center; text-decoration:none;">Reset</a>
+    </div>
+</form>
 
 <div class="stat-grid">
     <div class="stat-card">

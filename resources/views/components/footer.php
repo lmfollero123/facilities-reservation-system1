@@ -1,8 +1,7 @@
-<footer class="footer">
-    <div class="container">
-        <strong>Local Government Unit - Public Facilities Management Office</strong>
-        <p>Providing transparent, accessible reservation services for community facilities.</p>
-        <small>&copy; <?= date('Y'); ?> LGU Facilities Reservation System. All rights reserved.</small>
+<!-- Footer -->
+<footer class="bg-light py-5">
+    <div class="container px-4 px-lg-5">
+        <div class="small text-center text-muted">© <?= date('Y'); ?> Barangay Culiat Public Facilities Reservation System · All Rights Reserved</div>
     </div>
 </footer>
 

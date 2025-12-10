@@ -1,51 +1,3 @@
-.process-steps {
-    display: grid;
-    gap: 1rem;
-}
-
-.process-header h2 {
-    margin: 0;
-    color: var(--gov-text);
-}
-
-.process-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
-}
-
-.process-step {
-    background: #ffffff;
-    border: 1px solid #e5e9f5;
-    border-radius: 14px;
-    padding: 1.25rem;
-    color: var(--gov-text);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-}
-
-.badge-number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    background: var(--gov-blue);
-    border: 1px solid var(--gov-blue-dark);
-    border-radius: 50%;
-    color: #fff;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-}
-
-.process-step h3 {
-    margin: 0 0 0.35rem;
-    color: var(--gov-text);
-}
-
-.process-step p {
-    margin: 0;
-    color: #4c5b7c;
-}
 /* VISUAL CHANGE ONLY - Updated to match NewTemplate design */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
 
@@ -61,12 +13,6 @@
     --gov-white: #ffffff;
     --sidebar-bg: #0c2249;
     --sidebar-active: #1f3b73;
-    --card-bg: #ffffff;
-    --card-blur: none;
-}
-
-/* Keep dashboard cards semi-translucent while public pages use white */
-body.dashboard {
     --card-bg: rgba(255, 255, 255, 0.25);
     --card-blur: blur(15px);
 }
@@ -92,9 +38,10 @@ body:not(.dashboard) {
     position: relative;
 }
 
-/* VISUAL CHANGE ONLY - Landing page background with cityhall.jpeg */
+/* VISUAL CHANGE ONLY - Landing page background - Professional government style */
 body.landing-page {
-    background: url('../img/cityhall.jpeg') center/cover no-repeat fixed;
+    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%);
+    background-attachment: fixed;
     position: relative;
     overflow-x: hidden;
 }
@@ -106,9 +53,13 @@ body.landing-page::before {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(6px);
-    background: rgba(0, 0, 0, 0.35);
+    background-image: 
+        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%;
     z-index: 0;
+    pointer-events: none;
 }
 
 body.landing-page .guest-content,
@@ -199,17 +150,12 @@ img {
     flex-direction: column;
     gap: 5px;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.18);
-    padding: 0.4rem 0.5rem;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .nav-toggle span {
     width: 24px;
     height: 2px;
-    background: #fff;
-    transition: background 0.2s ease;
+    background: var(--gov-blue);
 }
 
 .guest-nav-mobile {
@@ -252,44 +198,10 @@ img {
 /* Hero with slideshow */
 .hero-with-slider {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.3fr);
     gap: 2rem;
     align-items: center;
     text-align: left;
-}
-
-.hero-modern .hero-content h1 {
-    color: #fff;
-    font-size: 2.8rem;
-    line-height: 1.1;
-    margin-bottom: 1rem;
-}
-
-.hero-modern .hero-lead {
-    max-width: 620px;
-    color: #e8edff;
-    font-size: 1.05rem;
-    margin-bottom: 1.25rem;
-}
-
-.hero-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 1rem;
-}
-
-@media (max-width: 960px) {
-    .hero-with-slider {
-        grid-template-columns: 1fr;
-    }
-    .hero-modern .hero-content h1 {
-        font-size: 2.2rem;
-    }
-    .feature-grid,
-    .process-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 .hero-media {
@@ -383,10 +295,15 @@ img {
 
 .btn {
     display: inline-block;
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    font-weight: 600;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    padding: 0.9rem 1.6rem;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.98rem;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.25s ease;
+    white-space: normal;
+    text-align: center;
 }
 
 /* VISUAL CHANGE ONLY - Buttons updated to match template */
@@ -394,8 +311,9 @@ img {
     background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
     color: var(--gov-white);
     border: none;
-    border-radius: 12px;
+    border-radius: 14px;
     transition: 0.25s ease;
+    box-shadow: 0 10px 24px rgba(43, 91, 222, 0.22);
 }
 
 .btn-primary:hover {
@@ -407,10 +325,15 @@ img {
 .btn-outline {
     border: 2px solid var(--gov-blue);
     color: var(--gov-blue);
-    background: rgba(99, 132, 210, 0.1);
+    background: rgba(99, 132, 210, 0.08);
     cursor: pointer;
-    border-radius: 12px;
+    border-radius: 14px;
     transition: 0.25s ease;
+    box-shadow: 0 8px 18px rgba(43, 91, 222, 0.08);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-outline:hover {
@@ -425,15 +348,205 @@ img {
     box-shadow: 0 6px 15px rgba(43, 91, 222, 0.45);
 }
 
+.btn-secondary {
+    background: #6c757d;
+    color: var(--gov-white);
+    border: none;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(108,117,125,0.18);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Dashboard button sizing (make CTA buttons comfortably large) */
+.dashboard .btn {
+    padding: 0.9rem 1.35rem;
+    font-size: 0.95rem;
+    border-radius: 14px;
+    line-height: 1.3;
+}
+.dashboard .btn-primary,
+.dashboard .btn-outline,
+.dashboard .btn-secondary {
+    min-height: 44px;
+    box-shadow: 0 10px 24px rgba(43, 91, 222, 0.12);
+}
+
+/* Table action buttons (slightly compact but still clickable) */
+.dashboard table .btn,
+.dashboard table .btn-primary,
+.dashboard table .btn-outline {
+    padding: 0.65rem 1rem;
+    font-size: 0.9rem;
+    border-radius: 12px;
+    min-height: 38px;
+    line-height: 1.25;
+}
+
+/* Collapsible cards */
+.collapsible-card {
+    border: 1px solid #e8ecf4;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(4, 16, 40, 0.06);
+    overflow: hidden;
+}
+
+.collapsible-header {
+    width: 100%;
+    border: none;
+    background: linear-gradient(135deg, #f7f9ff, #eef3ff);
+    color: #0f172a;
+    padding: 0.85rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 14px;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.collapsible-header:hover {
+    background: linear-gradient(135deg, #edf2ff, #e3ebff);
+    box-shadow: 0 8px 18px rgba(4, 16, 40, 0.08);
+}
+
+.collapsible-header .chevron {
+    transition: transform 0.2s ease;
+    font-size: 0.95rem;
+    color: #64748b;
+}
+
+.collapsible-body {
+    padding: 1rem;
+    border-top: 1px solid #e8ecf4;
+    background: #fff;
+}
+
+.collapsible-body.is-collapsed {
+    display: none;
+}
+
+.btn-secondary:hover {
+    background: #5f676f;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(108,117,125,0.28);
+}
+
+/* Form controls for dashboard filters */
+.booking-form-control {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    border: 1.5px solid #d7deed;
+    background: #fff;
+    font-size: 0.95rem;
+    color: #334155;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.booking-form-control:focus {
+    outline: none;
+    border-color: #4d76d6;
+    box-shadow: 0 0 0 3px rgba(77,118,214,0.18);
+}
+
+/* Confirmation modal buttons */
+.modal-confirm .btn-primary,
+.modal-confirm .btn-outline,
+.modal-confirm .btn-secondary {
+    padding: 0.9rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 14px;
+    min-width: 140px;
+}
+
 /* VISUAL CHANGE ONLY - Section cards updated to match template */
 .section {
     padding: 3rem 1.25rem;
     background: transparent;
 }
 
-/* Ensure public pages have proper background */
-body:not(.dashboard) .section {
-    background: transparent;
+/* Contact section should not inherit section padding - it has its own styling */
+.contact-section {
+    padding: 0 !important;
+}
+
+/* Add top padding for sections on public pages to account for fixed navbar */
+body.landing-page .section:first-of-type:not(.contact-section) {
+    padding-top: 7rem;
+}
+
+/* Ensure sections have proper spacing on public pages */
+body.landing-page .section:not(.contact-section) {
+    padding-top: 4rem;
+    padding-bottom: 3rem;
+}
+
+/* Improve contrast for services section on dark background */
+#services {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 0;
+}
+
+#services h2,
+#services .h2,
+#services .h3,
+#services .h4 {
+    color: #1e3a5f !important;
+}
+
+#services p,
+#services .text-muted {
+    color: #4a5568 !important;
+}
+
+#services .text-primary {
+    color: #285ccd !important;
+}
+
+#services hr.divider {
+    background-color: #285ccd;
+}
+
+/* Improve contrast for announcements section on dark background */
+#announcements {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 0;
+}
+
+#announcements h2,
+#announcements .h2 {
+    color: #1e3a5f !important;
+}
+
+#announcements p,
+#announcements .text-muted {
+    color: #4a5568 !important;
+}
+
+#announcements hr.divider {
+    background-color: #285ccd;
+}
+
+#announcements .card {
+    background: #ffffff;
+    border: 1px solid #e5e9f5;
+}
+
+#announcements .card-title {
+    color: #1e3a5f !important;
+}
+
+#announcements .card-text {
+    color: #4a5568 !important;
 }
 
 .section + .section {
@@ -445,8 +558,16 @@ body:not(.dashboard) .section {
     backdrop-filter: var(--card-blur);
     border-radius: 18px;
     padding: 2rem;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    border: 1px solid #e5e9f5;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Remove duplicate container background in contact section - auth-card already has styling */
+.contact-section .container {
+    background: transparent;
+    backdrop-filter: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
 }
 
 .section .container {
@@ -464,69 +585,13 @@ body:not(.dashboard) .section {
 
 .section-header p {
     margin: 0;
-    color: #4c5b7c;
+    color: #e0e0e0;
     font-size: 0.95rem;
-}
-
-.section-kicker {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 700;
-    font-size: 0.78rem;
-    color: var(--gov-blue-dark);
-    margin: 0 0 0.35rem;
-}
-
-.section-subtitle {
-    color: #4c5b7c;
-    margin: 0.25rem 0 0;
-}
-
-.pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-
-.announcement-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
-}
-
-.announcement-card {
-    background: #ffffff;
-    border: 1px solid #e5e9f5;
-    border-radius: 14px;
-    padding: 1.1rem 1.2rem;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-}
-
-.announcement-date {
-    margin: 0 0 0.35rem;
-    color: #6b7897;
-    font-size: 0.9rem;
-}
-
-.announcement-card h3 {
-    margin: 0 0 0.35rem;
-    color: var(--gov-text);
-}
-
-.announcement-body {
-    margin: 0;
-    color: #4c5b7c;
 }
 
 .section h2 {
     margin-bottom: 1.5rem;
-    color: var(--gov-text);
+    color: #fff;
 }
 
 .section-muted {
@@ -540,18 +605,13 @@ body:not(.dashboard) .section {
     align-items: flex-start;
 }
 
-.home-intro.modern {
-    gap: 2.5rem;
-    align-items: stretch;
-}
-
 .home-intro h2 {
     margin-top: 0;
-    color: var(--gov-text);
+    color: #fff;
 }
 
 .home-intro p {
-    color: #4c5b7c;
+    color: #e0e0e0;
 }
 
 .home-stats {
@@ -565,22 +625,23 @@ body:not(.dashboard) .section {
     min-width: 140px;
     padding: 0.9rem 1.1rem;
     border-radius: 18px;
-    background: #ffffff;
-    border: 1px solid #e5e9f5;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    color: var(--gov-text);
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border: none;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    color: #fff;
 }
 
 .home-stat .label {
     display: block;
     font-size: 0.8rem;
-    color: #4c5b7c;
+    color: #e0e0e0;
     margin-bottom: 0.25rem;
 }
 
 .home-stat .value {
     font-weight: 700;
-    color: var(--gov-text);
+    color: #fff;
 }
 
 .home-columns {
@@ -592,7 +653,7 @@ body:not(.dashboard) .section {
 .home-steps {
     margin: 0;
     padding-left: 1.3rem;
-    color: #4c5b7c;
+    color: #fff;
 }
 
 .home-steps li {
@@ -602,36 +663,7 @@ body:not(.dashboard) .section {
 .home-benefits {
     margin: 0;
     padding-left: 1.1rem;
-    color: #4c5b7c;
-}
-
-.feature-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-}
-
-.feature-card {
-    background: #ffffff;
-    border: 1px solid #e5e9f5;
-    border-radius: 14px;
-    padding: 1.2rem;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-}
-
-.feature-card h3 {
-    margin-top: 0;
-    margin-bottom: 0.35rem;
-    color: var(--gov-text);
-}
-
-.feature-card p {
-    margin: 0;
-    color: #4c5b7c;
-}
-
-.quick-links .facility-card {
-    min-height: 100%;
+    color: #fff;
 }
 
 .home-benefits li {
@@ -645,12 +677,11 @@ body:not(.dashboard) .section {
 }
 
 .home-featured-card {
-    background: #ffffff;
-    backdrop-filter: none;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
     border-radius: 18px;
     overflow: hidden;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    border: 1px solid #e5e9f5;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     transition: 0.2s;
 }
 
@@ -665,7 +696,7 @@ body:not(.dashboard) .section {
 
 .home-featured-card h3,
 .home-featured-card p {
-    color: var(--gov-text);
+    color: #fff;
 }
 
 .facility-grid {
@@ -676,20 +707,20 @@ body:not(.dashboard) .section {
 
 /* VISUAL CHANGE ONLY - Facility cards updated */
 .facility-card {
-    border: 1px solid #e5e9f5;
+    border: none;
     border-radius: 18px;
     overflow: hidden;
     background: #ffffff;
     backdrop-filter: none;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     transition: 0.2s;
 }
 
 .facility-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3);
 }
 
 .facility-card img {
@@ -703,15 +734,26 @@ body:not(.dashboard) .section {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    color: var(--gov-text);
+    color: #1e3a5f;
+    background: #ffffff;
 }
 
 .facility-card h3 {
-    color: var(--gov-text);
+    color: #1e3a5f;
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .facility-card p {
-    color: #4c5b7c;
+    color: #4a5568;
+    margin: 0;
+    line-height: 1.6;
+}
+
+.facility-card small {
+    color: #5b6888 !important;
+    font-weight: 500;
 }
 
 .status-pill {
@@ -749,7 +791,7 @@ body:not(.dashboard) .section {
 .rules-list {
     list-style: decimal;
     padding-left: 1.25rem;
-    color: #4c5b7c;
+    color: #fff;
     line-height: 1.8;
 }
 
@@ -780,11 +822,45 @@ body:not(.dashboard) .section {
     min-height: 220px;
 }
 
+.facility-hero-image-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
 .facility-hero-image {
     background-size: cover;
     background-position: center;
     filter: brightness(0.8);
 }
+
+/* Image citation - small, unobtrusive corner badge */
+.image-citation {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 10;
+}
+
+.facility-hero-image-wrapper:hover .image-citation {
+    opacity: 0.7;
+}
+
+/* Hide citation completely if desired - uncomment to hide */
+/* .image-citation {
+    display: none !important;
+} */
 
 .facility-hero-placeholder {
     display: flex;
@@ -848,20 +924,18 @@ body:not(.dashboard) .section {
 
 .facility-section h3 {
     margin-bottom: 0.5rem;
-    color: var(--gov-text);
+    color: #fff;
     font-weight: 600;
 }
 
 .facility-section p {
     margin: 0;
-    color: #4c5b7c;
+    color: #fff;
     line-height: 1.7;
-    /* Override inline white text on public pages */
-    color: #4c5b7c !important;
 }
 
 .facility-section .rate-text {
-    color: var(--gov-text);
+    color: #fff;
     font-weight: 600;
 }
 
@@ -893,12 +967,25 @@ body:not(.dashboard) .section {
 .facility-availability-card .calendar {
     margin-top: 0.5rem;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.facility-availability-card .calendar .day {
+    min-width: 0;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+    word-break: break-word;
+    overflow: hidden;
 }
 
 .availability-note {
     margin-top: 0.85rem;
     font-size: 0.85rem;
-    color: #4c5b7c;
+    color: #ffffff;
+    opacity: 0.9;
+    line-height: 1.5;
 }
 
 @media (max-width: 900px) {
@@ -936,8 +1023,10 @@ body:not(.dashboard) .section {
 
 .calendar {
     display: grid;
-    grid-template-columns: repeat(7, minmax(48px, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0.5rem;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .calendar .day {
@@ -994,13 +1083,28 @@ body:not(.dashboard) .section {
 /* VISUAL CHANGE ONLY - Auth pages updated to match template */
 .auth-container,
 .contact-section {
-    min-height: calc(100vh - 200px);
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 3rem 1.25rem;
-    background: url('../img/cityhall.jpeg') center/cover no-repeat fixed;
+    padding-top: 7rem !important;
+    padding-bottom: 3rem !important;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important;
+    background-attachment: fixed;
     position: relative;
+}
+
+/* Ensure proper spacing on mobile */
+@media (max-width: 768px) {
+    .auth-container,
+    .contact-section {
+        padding-top: 6rem;
+        padding-bottom: 2rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
 }
 
 .auth-container::before,
@@ -1011,9 +1115,13 @@ body:not(.dashboard) .section {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(6px);
-    background: rgba(0, 0, 0, 0.35);
+    background-image: 
+        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%;
     z-index: 0;
+    pointer-events: none;
 }
 
 .auth-container > *,
@@ -1025,19 +1133,17 @@ body:not(.dashboard) .section {
 .auth-card {
     max-width: 440px;
     width: 100%;
-    background: #ffffff;
-    color: var(--gov-text);
-    border: 1px solid #e5e9f5;
-    backdrop-filter: none;
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
     border-radius: 18px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     padding: 2.5rem;
+    border: none;
 }
 
 .auth-header {
     text-align: center;
     margin-bottom: 2rem;
-    color: var(--gov-text);
 }
 
 .auth-header .auth-icon {
@@ -1055,14 +1161,14 @@ body:not(.dashboard) .section {
 
 .auth-header h1 {
     margin: 0 0 0.5rem;
-    color: var(--gov-text);
+    color: #fff;
     font-size: 1.75rem;
     font-weight: 700;
 }
 
 .auth-header p {
     margin: 0;
-    color: #4c5b7c;
+    color: #f0f0f0;
     font-size: 0.95rem;
 }
 
@@ -1078,7 +1184,7 @@ body:not(.dashboard) .section {
     flex-direction: column;
     gap: 0.5rem;
     font-weight: 600;
-    color: var(--gov-text);
+    color: #fff;
     font-size: 0.9rem;
 }
 
@@ -1091,7 +1197,7 @@ body:not(.dashboard) .section {
     left: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    color: #6b7897;
+    color: rgba(255, 255, 255, 0.7);
     font-size: 1.1rem;
     pointer-events: none;
 }
@@ -1100,27 +1206,26 @@ body:not(.dashboard) .section {
 .auth-form textarea {
     width: 100%;
     padding: 0.9rem 1rem 0.9rem 2.75rem;
-    border: 1px solid #dce2f3;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
     font-size: 1rem;
     font-family: inherit;
     transition: all 0.2s ease;
-    background: #ffffff;
-    color: var(--gov-text);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
 }
 
 .auth-form input:focus,
 .auth-form textarea:focus {
     outline: none;
-    border-color: var(--gov-blue);
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.15);
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 
 .auth-form input::placeholder,
 .auth-form textarea::placeholder {
-    color: #8892aa;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .auth-form .btn-primary {
@@ -1149,10 +1254,10 @@ body:not(.dashboard) .section {
 .auth-footer {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #e5e9f5;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
     font-size: 0.9rem;
-    color: #4c5b7c;
+    color: #ffffffcc;
 }
 
 .auth-footer a {
@@ -1207,21 +1312,6 @@ body:not(.dashboard) .section {
     font-size: 1.1rem;
     font-weight: 600;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    position: relative;
-}
-
-.sidebar-close {
-    display: none;
-    position: absolute;
-    right: 1rem;
-    top: 1rem;
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.35);
-    color: #fff;
-    border-radius: 10px;
-    padding: 0.35rem 0.6rem;
-    cursor: pointer;
-    font-size: 0.85rem;
 }
 
 .sidebar nav {
@@ -1420,19 +1510,6 @@ body:not(.dashboard) .section {
     color: #fff;
 }
 
-/* Public pages: use solid white cards and dark text */
-body:not(.dashboard) .card-elevated {
-    background: #ffffff;
-    color: var(--gov-text);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    border: 1px solid #e5e9f5;
-}
-
-body:not(.dashboard) .card-elevated h3,
-body:not(.dashboard) .card-elevated p {
-    color: var(--gov-text);
-}
-
 /* VISUAL CHANGE ONLY - Dashboard cards updated to match template */
 .stat-card,
 .profile-card {
@@ -1551,50 +1628,6 @@ body:not(.dashboard) .card-elevated p {
 .booking-form {
     display: grid;
     gap: 1.25rem;
-}
-
-/* Profile form styling */
-.profile-form-label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.profile-label-text {
-    font-weight: 600;
-    color: #1b1b1f;
-    font-size: 0.9rem;
-}
-
-.profile-input {
-    width: 100%;
-    padding: 0.75rem 1rem 0.75rem 2.5rem;
-    border: 2px solid #e1e7f0;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-family: 'Poppins', sans-serif;
-    transition: all 0.2s ease;
-    background: #fff;
-    color: #1b1b1f;
-}
-
-.profile-input:focus {
-    outline: none;
-    border-color: var(--gov-blue);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.profile-input:disabled {
-    background: #f4f4f7;
-    color: #8b95b5;
-    cursor: not-allowed;
-}
-
-.profile-help-text {
-    color: #8b95b5;
-    font-size: 0.85rem;
-    margin-top: 0.25rem;
-    line-height: 1.4;
 }
 
 .booking-form label {
@@ -1958,69 +1991,6 @@ body:not(.dashboard) .card-elevated p {
 .status-badge.offline {
     background: #e53935;
     color: #fff;
-}
-
-/* Role badges */
-.status-badge.resident {
-    background: #1976d2 !important;
-    color: #fff !important;
-    border: 1px solid #1565c0;
-}
-
-.status-badge.admin {
-    background: #e65100 !important;
-    color: #fff !important;
-    border: 1px solid #bf360c;
-}
-
-.status-badge.staff {
-    background: #7b1fa2 !important;
-    color: #fff !important;
-    border: 1px solid #6a1b9a;
-}
-
-/* Image citation - hover only display */
-.facility-hero-image-wrapper {
-    position: relative;
-    overflow: hidden;
-}
-
-.image-citation {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    left: auto;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    max-width: min(300px, calc(100% - 16px));
-    width: auto;
-    min-width: 120px;
-    opacity: 0.6;
-    transition: all 0.3s ease;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    z-index: 10;
-    box-sizing: border-box;
-}
-
-.image-citation:hover {
-    opacity: 1;
-    max-width: min(400px, calc(100% - 16px));
-    white-space: normal;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    background: rgba(0, 0, 0, 0.85);
-    padding: 6px 10px;
-    right: 8px;
-    left: auto;
-}
-
-.image-citation small {
-    display: block;
 }
 
 .audit-list {
@@ -2431,70 +2401,9 @@ body:not(.dashboard) .card-elevated p {
     margin-bottom: 0.3rem;
 }
 
- .notif-footer {
+.notif-footer {
     margin-top: 0.75rem;
     text-align: right;
-}
-
-/* Collapsible sections */
-.collapsible-card {
-    border: 1px solid #e5e9f2;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.72);
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
-    margin-bottom: 1rem;
-    overflow: hidden;
-}
-
-.collapsible-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.85rem 1rem;
-    cursor: pointer;
-    background: rgba(37, 99, 235, 0.06);
-    border: none;
-    width: 100%;
-    text-align: left;
-    font-weight: 600;
-    color: #1b1b1f;
-}
-
-.collapsible-header .chevron {
-    transition: transform 0.2s ease;
-}
-
-.collapsible-body {
-    padding: 1rem;
-    display: block;
-}
-
-.collapsible-body.is-collapsed {
-    display: none;
-}
-
-/* Responsive tables */
-.table-responsive {
-    width: 100%;
-    overflow-x: auto;
-}
-
-.table-responsive table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 640px;
-}
-
-.sidebar-backdrop {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.35);
-    z-index: 1190;
-}
-
-.sidebar-backdrop.active {
-    display: block;
 }
 
 /* Responsive */
@@ -2511,49 +2420,18 @@ body:not(.dashboard) .card-elevated p {
         display: flex;
     }
 
-    .guest-navbar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 1300;
-    }
-
-    body:not(.dashboard) {
-        padding-top: 72px;
-    }
-
     .dashboard {
         flex-direction: column;
     }
 
     .sidebar {
         width: 100%;
-        position: fixed;
-        left: 0;
-        top: 0;
-        height: 100vh;
+        position: relative;
         max-height: none;
-        width: 260px;
-        max-width: 80%;
-        transform: translateX(-100%);
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
-        z-index: 1200;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        background: var(--sidebar-bg);
     }
 
     .sidebar.collapsed {
-        transform: translateX(-100%);
-        box-shadow: none;
-    }
-
-    .sidebar:not(.collapsed) {
-        transform: translateX(0);
-    }
-
-    .sidebar-close {
-        display: inline-flex;
+        display: none;
     }
 
     .booking-wrapper {
@@ -2566,6 +2444,18 @@ body:not(.dashboard) .card-elevated p {
 
     .reports-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Mobile adjustments for section spacing */
+@media (max-width: 768px) {
+    body.landing-page .section:first-of-type {
+        padding-top: 6rem;
+    }
+    
+    body.landing-page .section {
+        padding-top: 3rem;
+        padding-bottom: 2rem;
     }
 }
 

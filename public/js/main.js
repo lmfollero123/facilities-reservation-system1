@@ -195,74 +195,115 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Collapsible helper with localStorage persistence (shared)
+    (function() {
+        const STORAGE_KEY = 'collapse-state-dashboard';
+        let state = {};
+        try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { state = {}; }
+        function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        function initCollapsibles() {
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                const targetId = header.getAttribute('data-collapse-target');
+                const body = document.getElementById(targetId);
+                if (!body) return;
+                const chevron = header.querySelector('.chevron');
+                if (state[targetId]) {
+                    body.classList.add('is-collapsed');
+                    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                }
+                header.addEventListener('click', () => {
+                    const isCollapsed = body.classList.toggle('is-collapsed');
+                    if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                    state[targetId] = isCollapsed;
+                    save();
+                });
+            });
+        }
+        document.addEventListener('DOMContentLoaded', initCollapsibles);
+    })();
+
+    // Generic confirmation handler for critical actions
+    document.addEventListener('click', function(e) {
+        const trigger = e.target.closest('.confirm-action');
+        if (!trigger) return;
+        const msg = trigger.getAttribute('data-message') || 'Are you sure you want to continue?';
+        if (!window.confirm(msg)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
+
     // AI Conflict Detection - Real-time checking on booking form
-    const facilitySelect = document.getElementById('facility-select');
-    const reservationDate = document.getElementById('reservation-date');
-    const timeSlot = document.getElementById('time-slot');
-    const conflictWarning = document.getElementById('conflict-warning');
-    const conflictMessage = document.getElementById('conflict-message');
-    const conflictAlternatives = document.getElementById('conflict-alternatives');
-    const alternativesList = document.getElementById('alternatives-list');
+    // Disabled when page defines window.DISABLE_CONFLICT_CHECK (booking page uses its own handler)
+    if (!window.DISABLE_CONFLICT_CHECK) {
+        const facilitySelect = document.getElementById('facility-select');
+        const reservationDate = document.getElementById('reservation-date');
+        const timeSlot = document.getElementById('time-slot');
+        const conflictWarning = document.getElementById('conflict-warning');
+        const conflictMessage = document.getElementById('conflict-message');
+        const conflictAlternatives = document.getElementById('conflict-alternatives');
+        const alternativesList = document.getElementById('alternatives-list');
 
-    function checkConflict() {
-        const facilityId = facilitySelect?.value;
-        const date = reservationDate?.value;
-        const slot = timeSlot?.value;
+        function checkConflict() {
+            const facilityId = facilitySelect?.value;
+            const date = reservationDate?.value;
+            const slot = timeSlot?.value;
 
-        if (!facilityId || !date || !slot) {
-            if (conflictWarning) conflictWarning.style.display = 'none';
-            return;
+            if (!facilityId || !date || !slot) {
+                if (conflictWarning) conflictWarning.style.display = 'none';
+                return;
+            }
+
+            // Check conflict via API
+            const basePath = window.APP_BASE_PATH || '';
+            fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `facility_id=${facilityId}&date=${date}&time_slot=${encodeURIComponent(slot)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!conflictWarning) return;
+
+                if (data.has_conflict) {
+                    conflictWarning.style.display = 'block';
+                    conflictWarning.style.background = '#fdecee';
+                    conflictWarning.style.borderColor = '#b23030';
+                    conflictMessage.textContent = data.message || 'This time slot is already booked.';
+                    conflictMessage.style.color = '#b23030';
+
+                    if (data.alternatives && data.alternatives.length > 0) {
+                        conflictAlternatives.style.display = 'block';
+                        alternativesList.innerHTML = data.alternatives
+                            .filter(alt => alt.available)
+                            .map(alt => `<li><strong>${alt.time_slot}</strong> - ${alt.recommendation}</li>`)
+                            .join('');
+                    } else {
+                        conflictAlternatives.style.display = 'none';
+                    }
+                } else if (data.risk_score > 70) {
+                    conflictWarning.style.display = 'block';
+                    conflictWarning.style.background = '#fff4e5';
+                    conflictWarning.style.borderColor = '#ffc107';
+                    conflictMessage.textContent = `High demand period detected (Risk Score: ${data.risk_score}%). Consider booking well in advance.`;
+                    conflictMessage.style.color = '#856404';
+                    conflictAlternatives.style.display = 'none';
+                } else {
+                    conflictWarning.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error checking conflict:', error);
+            });
         }
 
-        // Check conflict via API
-        const basePath = window.APP_BASE_PATH || '';
-        fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `facility_id=${facilityId}&date=${date}&time_slot=${encodeURIComponent(slot)}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!conflictWarning) return;
-
-            if (data.has_conflict) {
-                conflictWarning.style.display = 'block';
-                conflictWarning.style.background = '#fdecee';
-                conflictWarning.style.borderColor = '#b23030';
-                conflictMessage.textContent = data.message || 'This time slot is already booked.';
-                conflictMessage.style.color = '#b23030';
-
-                if (data.alternatives && data.alternatives.length > 0) {
-                    conflictAlternatives.style.display = 'block';
-                    alternativesList.innerHTML = data.alternatives
-                        .filter(alt => alt.available)
-                        .map(alt => `<li><strong>${alt.time_slot}</strong> - ${alt.recommendation}</li>`)
-                        .join('');
-                } else {
-                    conflictAlternatives.style.display = 'none';
-                }
-            } else if (data.risk_score > 70) {
-                conflictWarning.style.display = 'block';
-                conflictWarning.style.background = '#fff4e5';
-                conflictWarning.style.borderColor = '#ffc107';
-                conflictMessage.textContent = `High demand period detected (Risk Score: ${data.risk_score}%). Consider booking well in advance.`;
-                conflictMessage.style.color = '#856404';
-                conflictAlternatives.style.display = 'none';
-            } else {
-                conflictWarning.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('Error checking conflict:', error);
-        });
-    }
-
-    if (facilitySelect && reservationDate && timeSlot) {
-        facilitySelect.addEventListener('change', checkConflict);
-        reservationDate.addEventListener('change', checkConflict);
-        timeSlot.addEventListener('change', checkConflict);
+        if (facilitySelect && reservationDate && timeSlot) {
+            facilitySelect.addEventListener('change', checkConflict);
+            reservationDate.addEventListener('change', checkConflict);
+            timeSlot.addEventListener('change', checkConflict);
+        }
     }
 
     // AI Facility Recommendations - Real-time as user types

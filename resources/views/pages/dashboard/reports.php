@@ -364,6 +364,52 @@ foreach ($outcomesMap as $status => $count) {
     $outcomesShare[$status] = $share;
 }
 
+// Charts data (global)
+$monthlyLabels = [];
+$monthlyData = [];
+for ($i = 5; $i >= 0; $i--) {
+    $monthStart = date('Y-m-01', strtotime("-$i months"));
+    $monthEnd = date('Y-m-t', strtotime("-$i months"));
+    $monthLabel = date('M Y', strtotime("-$i months"));
+    $monthlyLabels[] = $monthLabel;
+    $monthStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
+    );
+    $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+    $monthlyData[] = (int)$monthStmt->fetchColumn();
+}
+
+// Status distribution
+$statusStmt = $pdo->query('SELECT status, COUNT(*) as count FROM reservations GROUP BY status');
+$statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
+$statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
+foreach ($statusData as $row) {
+    $k = strtolower($row['status']);
+    if (isset($statusMap[$k])) {
+        $statusMap[$k] = (int)$row['count'];
+    }
+}
+$statusLabels = ['Approved','Pending','Denied','Cancelled'];
+$statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['denied'], $statusMap['cancelled']];
+$statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
+
+// Top facilities by approved bookings
+$facilityStmt = $pdo->query(
+    'SELECT f.name, COUNT(r.id) as booking_count
+     FROM facilities f
+     LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"
+     GROUP BY f.id, f.name
+     ORDER BY booking_count DESC
+     LIMIT 5'
+);
+$facilityDataChart = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
+$facilityLabels = [];
+$facilityCounts = [];
+foreach ($facilityDataChart as $fac) {
+    $facilityLabels[] = $fac['name'];
+    $facilityCounts[] = (int)$fac['booking_count'];
+}
+
 ob_start();
 ?>
 <div class="page-header">
@@ -396,6 +442,27 @@ ob_start();
         </div>
     </div>
 </div>
+
+<div class="reports-grid" style="margin-bottom: 1.5rem;">
+    <section class="booking-card">
+        <h2>Reservation Trends (Last 6 Months)</h2>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Total reservations per month</p>
+        <canvas id="monthlyChart" style="max-height: 320px;"></canvas>
+    </section>
+    <section class="booking-card">
+        <h2>Status Breakdown</h2>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Distribution of reservation statuses</p>
+        <canvas id="statusChart" style="max-height: 320px;"></canvas>
+    </section>
+</div>
+
+<?php if (!empty($facilityLabels)): ?>
+<div class="booking-card" style="margin-bottom: 1.5rem;">
+    <h2>Top Facilities by Approved Bookings</h2>
+    <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Highest utilized facilities</p>
+    <canvas id="facilityChart" style="max-height: 320px;"></canvas>
+</div>
+<?php endif; ?>
 
 <div class="reports-grid">
     <section>
@@ -535,6 +602,104 @@ ob_start();
         </div>
     </aside>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const monthlyCtx = document.getElementById('monthlyChart');
+    if (monthlyCtx && window.Chart) {
+        new Chart(monthlyCtx, {
+            type: 'line',
+            data: {
+                labels: <?= json_encode($monthlyLabels); ?>,
+                datasets: [{
+                    label: 'Reservations',
+                    data: <?= json_encode($monthlyData); ?>,
+                    borderColor: '#0047ab',
+                    backgroundColor: 'rgba(0, 71, 171, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2,
+                    pointBackgroundColor: '#0047ab',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    const statusCtx = document.getElementById('statusChart');
+    if (statusCtx && window.Chart) {
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: <?= json_encode($statusLabels); ?>,
+                datasets: [{
+                    data: <?= json_encode($statusCounts); ?>,
+                    backgroundColor: <?= json_encode($statusColors); ?>,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, font: { size: 12 } }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+    }
+
+    const facilityCtx = document.getElementById('facilityChart');
+    if (facilityCtx && window.Chart) {
+        new Chart(facilityCtx, {
+            type: 'bar',
+            data: {
+                labels: <?= json_encode($facilityLabels); ?>,
+                datasets: [{
+                    label: 'Approved Bookings',
+                    data: <?= json_encode($facilityCounts); ?>,
+                    backgroundColor: 'rgba(0, 71, 171, 0.85)',
+                    borderColor: '#0047ab',
+                    borderWidth: 1.5,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+});
+</script>
+
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';

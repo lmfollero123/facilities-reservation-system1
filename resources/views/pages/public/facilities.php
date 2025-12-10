@@ -35,7 +35,7 @@ foreach ($rows as $idx => $row) {
 
 ob_start();
 ?>
-<section class="section">
+<section class="section" id="portfolio">
     <div class="container">
         <h2>Facilities Directory</h2>
         <?php if (empty($facilities)): ?>

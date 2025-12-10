@@ -265,11 +265,11 @@ function setSecurityHeaders(): void
     
     // Content Security Policy (adjust as needed)
     $csp = "default-src 'self'; " .
-           "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " .
-           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+           "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
+           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com; " .
            "img-src 'self' data: https:; " .
-           "font-src 'self' data: https://fonts.gstatic.com; " .
-           "connect-src 'self' https://cdn.jsdelivr.net;";
+           "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
+           "connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;";
     header("Content-Security-Policy: $csp");
     
     // Permissions Policy
