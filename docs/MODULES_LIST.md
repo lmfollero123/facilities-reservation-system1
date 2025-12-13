@@ -196,6 +196,21 @@ The Facilities Reservation System is organized into logical microservices (curre
 - **Files**:
   - `config/geocoding.php`
 
+### 1.16 AI Chatbot Assistant Service
+- **Purpose**: Conversational AI assistant for user queries and support
+- **Submodules**:
+  - Chat Interface (UI)
+  - Message Processing
+  - Context Retrieval (Facilities, Reservations)
+  - AI/ML Model Integration (API endpoint ready)
+  - Mock Response Generation (fallback)
+- **Files**:
+  - `resources/views/pages/dashboard/ai_chatbot.php`
+- **Integration**:
+  - API Endpoint: `POST /api/ai/chat` (to be implemented)
+  - Queries: Facilities (D4), Reservations (D3) for context
+  - Currently uses mock responses; ready for AI/ML model integration
+
 ---
 
 ## 2. Frontend Modules (Pages & Views)
@@ -231,6 +246,7 @@ The Facilities Reservation System is organized into logical microservices (curre
   - Recent reservations
 - **My Reservations** (`my_reservations.php`)
 - **AI Scheduling** (`ai_scheduling.php`)
+- **AI Assistant** (`ai_chatbot.php`)
 - **Profile** (`profile.php`)
 - **Notifications** (`notifications.php`)
 - **Calendar** (`calendar.php`)
@@ -358,9 +374,10 @@ The Facilities Reservation System is organized into logical microservices (curre
 12. Export/Reports Service
 13. Audit & Security Service
 14. Geocoding Service
-15. Gateway/Frontend Service
+15. AI Chatbot Assistant Service
+16. Gateway/Frontend Service
 
-### Total: 15 Core Microservices + Supporting Infrastructure
+### Total: 16 Core Microservices + Supporting Infrastructure
 
 ---
 
@@ -370,7 +387,7 @@ The Facilities Reservation System is organized into logical microservices (curre
 - SMTP is used for email/OTP/reset/inquiry alerts
 - No message queue is present today
 - Brevo/domain SMTP is planned to replace Gmail SMTP
-- AI chatbot is planned and not yet integrated
+- AI Chatbot Assistant: UI implemented, ready for AI/ML model integration via API endpoint (`POST /api/ai/chat`)
 
 
 

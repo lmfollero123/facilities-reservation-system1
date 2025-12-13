@@ -32,6 +32,7 @@ return [
         '/dashboard/calendar' => 'resources/views/pages/dashboard/calendar.php',
         '/dashboard/reports' => 'resources/views/pages/dashboard/reports.php',
         '/dashboard/ai' => 'resources/views/pages/dashboard/ai_scheduling.php',
+        '/dashboard/ai-chatbot' => 'resources/views/pages/dashboard/ai_chatbot.php',
         '/dashboard/notifications' => 'resources/views/pages/dashboard/notifications.php',
         '/dashboard/users' => 'resources/views/pages/dashboard/user_management.php',
         '/dashboard/audit' => 'resources/views/pages/dashboard/audit_trail.php',

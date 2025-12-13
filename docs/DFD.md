@@ -236,6 +236,7 @@
 | **7.0** | Auto-Decline Expired | Automatically declines expired pending reservations |
 | **8.0** | Generate Notifications | Creates notifications for status changes |
 | **9.0** | AI Conflict Detection & Recommendations | Real-time conflict checking and facility suggestions |
+| **10.0** | AI Chatbot Assistant | Conversational AI assistant for user queries and support |
 
 ### Level 1 DFD Data Stores
 
@@ -1047,6 +1048,49 @@
                     │ (See Top 5   │
                     │  Recommendations)│
                     └──────────────┘
+                           │
+                           │ User Query
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 9.3          │
+                    │ AI Chatbot   │
+                    │ Assistant    │
+                    └──────┬───────┘
+                           │
+                           │ Query Facilities
+                           │ Query Reservations
+                           │ Query Policies
+                           │
+                    ┌──────┴──────┐
+                    │             │
+                    ▼             ▼
+            ┌───────┐      ┌───────┐
+            │  D4   │      │  D3   │
+            │Facilities│     │Reservations│
+            └───┬───┘      └───┬───┘
+                │              │
+                │ Facility     │ Reservation
+                │ Data         │ Data
+                │              │
+                └──────┬───────┘
+                       │
+                       ▼
+            ┌──────────────┐
+            │ 9.3.1        │
+            │ Process      │
+            │ User Query    │
+            │ (AI Model)    │
+            └──────┬───────┘
+                   │
+                   │ AI Response
+                   │
+                   ▼
+            ┌──────────────┐
+            │   RESIDENT   │
+            │ (Chat        │
+            │  Response)   │
+            └──────────────┘
 ```
 
 ### AI Features Data Flows
@@ -1068,6 +1112,14 @@
   - 9.2.4: Calculate Popularity Score (query D3)
   - 9.2.5: Calculate Total Match Score
 - **Output**: Top 5 Recommended Facilities
+
+**Process 9.3 - AI Chatbot Assistant:**
+- **Input**: User Query (text message)
+- **Processes**:
+  - 9.3.1: Process User Query (AI/ML Model) - queries D3, D4 for context
+  - Generates contextual responses about facilities, bookings, policies
+- **Output**: AI Response (text message with helpful information)
+- **Note**: Currently uses mock responses; ready for AI/ML model integration via API endpoint
 
 ---
 
@@ -1121,6 +1173,7 @@
 - AI Risk: Conflict detection tags PH holidays and Barangay Culiat events; event pills surface in calendar modal/UI.
 - Facility Detail Calendar: Public calendar dates redirect to login and then to the dashboard calendar for booking continuity.
 - Contact Notifications: Contact submissions trigger admin email alongside D9 storage.
+- AI Chatbot: New process 9.3 for conversational AI assistant. Currently uses mock responses; ready for AI/ML model integration via API endpoint (POST /api/ai/chat). Queries D3 (Reservations) and D4 (Facilities) for contextual responses.
 
 ## DFD Summary
 
@@ -1134,6 +1187,7 @@
 3. **Booking Flow**: Resident → Booking Request → Reservation → Pending Status
 4. **Approval Flow**: Admin/Staff → Decision → Status Update → Notification
 5. **AI Flow**: User Input → Analysis → Recommendations/Warnings
+6. **Chatbot Flow**: User Query → AI Processing → Contextual Response
 
 ### Data Store Relationships
 - **Users (D1)** → **Reservations (D3)** (one-to-many)

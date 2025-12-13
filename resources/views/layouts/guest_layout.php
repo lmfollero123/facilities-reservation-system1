@@ -182,6 +182,7 @@ if ($isHomePage || $isPublicPage) {
 <script src="<?= htmlspecialchars($base); ?>/NewTemplate/js/scripts.js"></script>
 <!-- Custom JS -->
 <script src="<?= htmlspecialchars($base); ?>/public/js/main.js"></script>
+<?php include __DIR__ . '/../components/chatbot_widget.php'; ?>
 </body>
 </html>
 

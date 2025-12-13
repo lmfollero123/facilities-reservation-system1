@@ -43,6 +43,7 @@ $pageTitle = $pageTitle ?? 'LGU Dashboard';
     window.APP_BASE_PATH = "<?= base_path(); ?>";
 </script>
 <script src="<?= base_path(); ?>/public/js/main.js"></script>
+<?php include __DIR__ . '/../components/chatbot_widget.php'; ?>
 <script>
 (function () {
     const modal = document.getElementById('confirmModal');
