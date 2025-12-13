@@ -14,7 +14,7 @@
    - “View Full Calendar” button reserved for the Scheduling module.
    - Legend clarifies color coding.
 3. **Approval Flow Sidebar**
-   - Timeline outlining Request → Validation → Approval/Denial → Payment & OR release.
+   - Timeline outlining Request → Validation → Approval/Denial.
    - Notification cards describing email/SMS hooks and conflict detection trigger points.
 
 ## UI Behaviors
@@ -27,7 +27,6 @@
 - **Reservation Workflow:** wire the submit button to create reservation requests and update `My Reservations`.
 - **Calendar & Scheduling:** replace snapshot with interactive full calendar, feed conflict detection.
 - **Notifications Module:** trigger alerts based on timeline milestones.
-- **Payment Module:** enable payment instructions after approval and capture OR numbers.
 - **AI Predictive Scheduling:** leverage booking history to auto-suggest time slots before submission.
 
 ## Adding Logic Later

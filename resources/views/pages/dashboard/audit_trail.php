@@ -90,7 +90,7 @@ ob_start();
         <span>Governance</span><span class="sep">/</span><span>Audit Trail</span>
     </div>
     <h1>Audit Trail</h1>
-    <small>Trace key actions across reservations, facilities, payments, and user accounts.</small>
+    <small>Trace key actions across reservations, facilities, and user accounts.</small>
 </div>
 
 <div class="booking-wrapper">
@@ -186,7 +186,6 @@ ob_start();
         <ul class="audit-list">
             <li>Reservation lifecycle changes (create, approve/deny, cancel).</li>
             <li>Facility updates (capacity, availability, maintenance flags).</li>
-            <li>Payment recordings and verification status changes.</li>
             <li>User account approvals, role changes, and locks.</li>
             <li>Notification dispatches and system advisories.</li>
         </ul>

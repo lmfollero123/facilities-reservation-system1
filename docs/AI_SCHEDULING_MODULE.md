@@ -26,7 +26,7 @@
      - How suggestions should surface in the booking flow.
 
 ## Integration Points
-- **Data Sources:** Historical reservations, facility capacities, payments, and calendar utilization.
+- **Data Sources:** Historical reservations, facility capacities, and calendar utilization.
 - **Booking Module:** Offer recommended slots when a user selects a facility/date.
 - **Calendar Module:** Overlay predicted peaks/off-peaks on the calendar views.
 - **Reports & Analytics:** Feed AI summary stats into the Reports page.

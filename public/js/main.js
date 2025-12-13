@@ -206,17 +206,56 @@ document.addEventListener("DOMContentLoaded", () => {
                 const targetId = header.getAttribute('data-collapse-target');
                 const body = document.getElementById(targetId);
                 if (!body) return;
-                const chevron = header.querySelector('.chevron');
-                if (state[targetId]) {
-                    body.classList.add('is-collapsed');
-                    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                
+                // Check if it's a sidebar collapsible (uses data-collapsed attribute)
+                const isSidebarCollapsible = body.hasAttribute('data-collapsed');
+                
+                if (isSidebarCollapsible) {
+                    // Sidebar collapsible - use data-collapsed attribute
+                    const chevron = header.querySelector('.chevron-icon');
+                    const isCollapsed = state[targetId] === true;
+                    
+                    // Initialize state
+                    if (isCollapsed) {
+                        body.setAttribute('data-collapsed', 'true');
+                        header.setAttribute('data-collapsed', 'true');
+                        if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                    } else {
+                        body.setAttribute('data-collapsed', 'false');
+                        header.setAttribute('data-collapsed', 'false');
+                        if (chevron) chevron.style.transform = 'rotate(0deg)';
+                    }
+                    
+                    header.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        const currentState = body.getAttribute('data-collapsed') === 'true';
+                        const newState = !currentState;
+                        
+                        body.setAttribute('data-collapsed', newState ? 'true' : 'false');
+                        header.setAttribute('data-collapsed', newState ? 'true' : 'false');
+                        state[targetId] = newState;
+                        save();
+                        
+                        if (chevron) {
+                            chevron.style.transform = newState ? 'rotate(-90deg)' : 'rotate(0deg)';
+                        }
+                    });
+                } else {
+                    // Regular collapsible - use is-collapsed class
+                    const chevron = header.querySelector('.chevron');
+                    if (state[targetId]) {
+                        body.classList.add('is-collapsed');
+                        if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                    }
+                    header.addEventListener('click', () => {
+                        const isCollapsed = body.classList.toggle('is-collapsed');
+                        if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                        state[targetId] = isCollapsed;
+                        save();
+                    });
                 }
-                header.addEventListener('click', () => {
-                    const isCollapsed = body.classList.toggle('is-collapsed');
-                    if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-                    state[targetId] = isCollapsed;
-                    save();
-                });
             });
         }
         document.addEventListener('DOMContentLoaded', initCollapsibles);

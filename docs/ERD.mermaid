@@ -1,0 +1,160 @@
+erDiagram
+    users ||--o{ reservations : "makes"
+    users ||--o{ user_documents : "uploads"
+    users ||--o{ reservation_history : "creates"
+    users ||--o{ notifications : "receives"
+    users ||--o{ audit_log : "performs"
+    users ||--o{ contact_inquiries : "responds"
+    users ||--o{ password_reset_tokens : "has"
+    users ||--o{ security_logs : "generates"
+    
+    facilities ||--o{ reservations : "books"
+    
+    reservations ||--o{ reservation_history : "has"
+    
+    users {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR name "NOT NULL"
+        VARCHAR email "UNIQUE, NOT NULL"
+        VARCHAR password_hash "NOT NULL"
+        VARCHAR mobile "NULL"
+        VARCHAR profile_picture "NULL"
+        VARCHAR address "NULL"
+        DECIMAL latitude "NULL"
+        DECIMAL longitude "NULL"
+        ENUM role "Admin|Staff|Resident, DEFAULT Resident"
+        ENUM status "pending|active|locked, DEFAULT pending"
+        TEXT lock_reason "NULL"
+        INT failed_login_attempts "DEFAULT 0"
+        DATETIME locked_until "NULL"
+        DATETIME last_login_at "NULL"
+        VARCHAR last_login_ip "NULL"
+        VARCHAR otp_code_hash "NULL"
+        DATETIME otp_expires_at "NULL"
+        INT otp_attempts "DEFAULT 0"
+        DATETIME otp_last_sent_at "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
+    }
+    
+    facilities {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR name "NOT NULL"
+        TEXT description "NULL"
+        VARCHAR base_rate "NULL"
+        VARCHAR image_path "NULL"
+        VARCHAR image_citation "NULL"
+        VARCHAR location "NULL"
+        DECIMAL latitude "NULL"
+        DECIMAL longitude "NULL"
+        VARCHAR capacity "NULL"
+        TEXT amenities "NULL"
+        TEXT rules "NULL"
+        ENUM status "available|maintenance|offline, DEFAULT available"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
+    }
+    
+    reservations {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NOT NULL"
+        INT facility_id FK "NOT NULL"
+        DATE reservation_date "NOT NULL"
+        VARCHAR time_slot "NOT NULL"
+        TEXT purpose "NOT NULL"
+        ENUM status "pending|approved|denied|cancelled, DEFAULT pending"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
+    }
+    
+    reservation_history {
+        INT id PK "AUTO_INCREMENT"
+        INT reservation_id FK "NOT NULL, ON DELETE CASCADE"
+        ENUM status "pending|approved|denied|cancelled, NOT NULL"
+        VARCHAR note "NULL"
+        INT created_by FK "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    notifications {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NULL, ON DELETE CASCADE"
+        ENUM type "booking|system|reminder, DEFAULT system"
+        VARCHAR title "NOT NULL"
+        TEXT message "NOT NULL"
+        VARCHAR link "NULL"
+        BOOLEAN is_read "DEFAULT FALSE"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    audit_log {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NULL, ON DELETE SET NULL"
+        VARCHAR action "NOT NULL"
+        VARCHAR module "NOT NULL"
+        TEXT details "NULL"
+        VARCHAR ip_address "NULL"
+        VARCHAR user_agent "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    user_documents {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NOT NULL, ON DELETE CASCADE"
+        ENUM document_type "birth_certificate|valid_id|brgy_id|resident_id|other, NOT NULL"
+        VARCHAR file_path "NOT NULL"
+        VARCHAR file_name "NOT NULL"
+        INT file_size "NOT NULL"
+        TIMESTAMP uploaded_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    contact_inquiries {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR name "NOT NULL"
+        VARCHAR email "NOT NULL"
+        VARCHAR organization "NULL"
+        TEXT message "NOT NULL"
+        ENUM status "new|in_progress|resolved|closed, DEFAULT new"
+        TEXT admin_notes "NULL"
+        INT responded_by FK "NULL, ON DELETE SET NULL"
+        DATETIME responded_at "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
+    }
+    
+    password_reset_tokens {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NOT NULL, ON DELETE CASCADE"
+        VARCHAR token_hash "NOT NULL"
+        DATETIME expires_at "NOT NULL"
+        DATETIME used_at "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    rate_limits {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR action "NOT NULL"
+        VARCHAR identifier "NOT NULL"
+        DATETIME expires_at "NOT NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    security_logs {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR event "NOT NULL"
+        TEXT details "NULL"
+        ENUM severity "info|warning|error|critical, DEFAULT info"
+        VARCHAR ip_address "NULL"
+        VARCHAR user_agent "NULL"
+        INT user_id FK "NULL, ON DELETE SET NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    login_attempts {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR email "NOT NULL"
+        VARCHAR ip_address "NOT NULL"
+        TINYINT success "DEFAULT 0"
+        TIMESTAMP attempted_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+

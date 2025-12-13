@@ -34,7 +34,7 @@ When you are ready to move from mock login to real authentication:
    - Check `status` is `active`; if yes, set:
      - `$_SESSION['user_authenticated'] = true;`
      - `$_SESSION['user_name'], $_SESSION['user_email'], $_SESSION['user_mobile'], $_SESSION['user_org'], $_SESSION['role']`.
-2. Use `$_SESSION['role']` to guard sensitive pages (User Management, Payments, Audit Trail, etc.).
+2. Use `$_SESSION['role']` to guard sensitive pages (User Management, Audit Trail, etc.).
 
 The existing layout guard in `dashboard_layout.php` already checks `user_authenticated`, so once login is wired to the DB, the dashboards will automatically honor real sessions.
 

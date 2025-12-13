@@ -74,32 +74,10 @@ CREATE INDEX idx_audit_module ON audit_log(module);
 CREATE INDEX idx_audit_created ON audit_log(created_at);
 CREATE INDEX idx_audit_user ON audit_log(user_id);
 
-CREATE TABLE IF NOT EXISTS payments (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    reservation_id INT UNSIGNED NOT NULL,
-    or_number VARCHAR(50) NOT NULL UNIQUE,
-    amount DECIMAL(10, 2) NOT NULL,
-    payment_date DATE NOT NULL,
-    payment_channel ENUM('Cash', 'Check', 'Online Transfer') NOT NULL DEFAULT 'Cash',
-    status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
-    verified_by INT UNSIGNED NULL,
-    verified_at TIMESTAMP NULL,
-    notes TEXT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_payment_reservation FOREIGN KEY (reservation_id) REFERENCES reservations(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_payment_verifier FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_payment_reservation ON payments(reservation_id);
-CREATE INDEX idx_payment_or ON payments(or_number);
-CREATE INDEX idx_payment_status ON payments(status);
-CREATE INDEX idx_payment_date ON payments(payment_date);
-
 CREATE TABLE IF NOT EXISTS notifications (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NULL COMMENT 'NULL = system-wide notification',
-    type ENUM('booking', 'system', 'payment', 'reminder') NOT NULL DEFAULT 'system',
+    type ENUM('booking', 'system', 'reminder') NOT NULL DEFAULT 'system',
     title VARCHAR(150) NOT NULL,
     message TEXT NOT NULL,
     link VARCHAR(255) NULL COMMENT 'Optional link to related page',

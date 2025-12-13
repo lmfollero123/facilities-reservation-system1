@@ -23,7 +23,6 @@
    - List of the types of events expected to be logged:
      - Reservation lifecycle changes.
      - Facility updates.
-     - Payment recordings and verifications.
      - User account approvals and role changes.
      - Notification sends and system advisories.
 

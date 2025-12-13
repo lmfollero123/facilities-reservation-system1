@@ -39,7 +39,6 @@ facilities_reservation_system/
 │   ├── CALENDAR_MODULE.md         # Calendar & Scheduling module documentation
 │   ├── FACILITY_MODULE.md         # Facility Management module documentation
 │   ├── NOTIFICATION_MODULE.md     # Notification module documentation
-│   ├── PAYMENT_MODULE.md          # Payment module documentation
 │   ├── REPORTS_MODULE.md          # Reports & Analytics module documentation
 │   ├── SYSTEM_FLOW.md             # System workflow documentation
 │   └── USER_MODULE.md             # User Management module documentation
@@ -84,7 +83,6 @@ facilities_reservation_system/
 │           │   ├── my_reservations.php        # Resident's reservation history with status timeline
 │           │   ├── notifications.php          # Full notifications page with pagination
 │           │   ├── notifications_api.php      # Notifications API endpoint (list, mark as read)
-│           │   ├── payments.php               # Payment recording and OR tracking (hidden from sidebar - facilities are free)
 │           │   ├── profile.php                # User profile page (editable name, email, password change)
 │           │   ├── reports.php                # Reports & Analytics dashboard with charts
 │           │   ├── reservation_detail.php     # Staff/Admin detailed reservation view with auto-decline logic
@@ -123,7 +121,7 @@ facilities_reservation_system/
 ### `audit.php`
 - **Function**: `logAudit($action, $module, $details, $userId)`
 - **Purpose**: Logs all system actions for transparency and compliance
-- **Integration**: Used across all modules (reservations, facilities, users, payments)
+- **Integration**: Used across all modules (reservations, facilities, users)
 
 ### `notifications.php`
 - **Functions**: 
@@ -152,7 +150,6 @@ facilities_reservation_system/
   - **`reservations`**: Reservation records (id, user_id, facility_id, reservation_date, time_slot, purpose, status, timestamps)
   - **`reservation_history`**: Status change history (id, reservation_id, status, note, created_by, created_at)
   - **`audit_log`**: System action log (id, user_id, action, module, details, ip_address, user_agent, created_at)
-  - **`payments`**: Payment records (id, reservation_id, or_number, amount, payment_date, payment_channel, status, verified_by, verified_at, notes, timestamps)
   - **`notifications`**: User notifications (id, user_id, type, title, message, link, is_read, created_at)
 - **Foreign Keys**: Enforced relationships between tables
 - **Indexes**: Optimized for common queries
@@ -366,11 +363,6 @@ facilities_reservation_system/
 - **Auto-Decline Logic**: Checks and denies expired reservations on view
 - Emergency override disclaimer
 
-**`payments.php`**
-- Payment recording form
-- OR number tracking
-- Payment verification status
-- **Note**: Hidden from sidebar (facilities are free, but table remains for future use)
 
 **`calendar.php`**
 - Calendar view (month/week/day) for scheduling
@@ -465,7 +457,7 @@ facilities_reservation_system/
 - **Notification System**: Real-time notifications for booking events
 - **Auto-Decline System**: Expired reservations automatically denied
 - **Emergency Override Policy**: Clear disclaimer on booking and facility pages
-- **Free Facilities**: All facilities provided free of charge (payment module hidden)
+- **Free Facilities**: All facilities provided free of charge for residents of Barangay Culiat
 
 ---
 
@@ -570,7 +562,7 @@ facilities_reservation_system/
 - Auto-decline expired reservations
 - Past date validation
 - Emergency override policy disclaimers
-- Free facilities (payment module hidden)
+- Free facilities for Barangay Culiat residents
 - Comprehensive audit logging in Facility Management
 - Enhanced profile page (editable)
 

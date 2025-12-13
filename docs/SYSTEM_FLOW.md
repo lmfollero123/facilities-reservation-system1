@@ -528,7 +528,6 @@ If YES:
   - Reservation Approvals
   - User Management
   - Audit Trail
-  - Payments
   - Reports
   - AI Scheduling
 
@@ -608,33 +607,6 @@ Send notification:
 - `resources/views/pages/dashboard/notifications.php` (full page)
 
 ---
-
-## 11. Payment Flow (Planned)
-
-### 11.1 Payment Recording
-```
-Reservation approved → Payment required
-    ↓
-Admin/Staff → Payments Page → Record Payment
-    ↓
-Form fields:
-    - Reservation Reference
-    - OR Number
-    - Amount Paid
-    - Payment Date
-    - Payment Channel
-    ↓
-Save to payments table (to be created)
-    ↓
-Link payment to reservation
-    ↓
-Update reservation payment_status
-```
-
-**Current Status:** UI ready, database integration pending
-
-**Files Involved:**
-- `resources/views/pages/dashboard/payments.php`
 
 ---
 

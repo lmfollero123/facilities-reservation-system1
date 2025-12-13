@@ -215,7 +215,7 @@ ob_start();
             <h2>Integration Notes</h2>
             <p class="resource-meta">
                 This page currently uses simple historical patterns (no ML model yet). It can later be wired to a
-                dedicated AI service that factors in seasonality, event types, and payment data.
+                dedicated AI service that factors in seasonality and event types.
             </p>
         </div>
     </aside>

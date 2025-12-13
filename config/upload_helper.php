@@ -98,3 +98,6 @@ function saveOptimizedImage(string $tmpPath, string $destPath, int $maxWidth = 1
 
 
 
+
+
+

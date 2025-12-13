@@ -30,7 +30,7 @@
 - `.ai-panel`, `.ai-chip` — visual treatment for AI predictive insights.
 
 ## Integration Points
-- **Data Layer:** Replace hard-coded metrics with live data from reservations, facilities, and payments.
+- **Data Layer:** Replace hard-coded metrics with live data from reservations and facilities.
 - **AI Predictive Scheduling:** Feed model outputs directly into the AI panel, including confidence levels.
 - **Exports:** Wire export buttons to backend report generators (PDF/CSV).
 - **Filters:** Extend the page with date range, facility, and role filters as reporting needs grow.

@@ -9,7 +9,7 @@ require_once __DIR__ . '/database.php';
  * Create a notification for a user or all users
  * 
  * @param int|null $userId User ID (null for system-wide notifications)
- * @param string $type Notification type: 'booking', 'system', 'payment', 'reminder'
+ * @param string $type Notification type: 'booking', 'system', 'reminder'
  * @param string $title Notification title
  * @param string $message Notification message
  * @param string|null $link Optional link to related page
@@ -60,6 +60,8 @@ function getUnreadNotificationCount($userId = null) {
         return 0;
     }
 }
+
+
 
 
 
