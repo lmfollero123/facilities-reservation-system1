@@ -202,10 +202,20 @@ document.addEventListener("DOMContentLoaded", () => {
         try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { state = {}; }
         function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
         function initCollapsibles() {
+            // Skip if disabled by page-specific handler
+            if (window.DISABLE_GLOBAL_COLLAPSIBLE) {
+                return;
+            }
+            
             document.querySelectorAll('.collapsible-header').forEach(header => {
                 const targetId = header.getAttribute('data-collapse-target');
+                if (!targetId) return;
+                
                 const body = document.getElementById(targetId);
-                if (!body) return;
+                if (!body) {
+                    console.warn('Collapsible target not found:', targetId);
+                    return;
+                }
                 
                 // Check if it's a sidebar collapsible (uses data-collapsed attribute)
                 const isSidebarCollapsible = body.hasAttribute('data-collapsed');
@@ -213,10 +223,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isSidebarCollapsible) {
                     // Sidebar collapsible - use data-collapsed attribute
                     const chevron = header.querySelector('.chevron-icon');
-                    const isCollapsed = state[targetId] === true;
+                    const savedState = state[targetId];
+                    const shouldBeCollapsed = savedState === true;
                     
-                    // Initialize state
-                    if (isCollapsed) {
+                    // Initialize state - ensure it's set correctly
+                    if (shouldBeCollapsed) {
                         body.setAttribute('data-collapsed', 'true');
                         header.setAttribute('data-collapsed', 'true');
                         if (chevron) chevron.style.transform = 'rotate(-90deg)';
@@ -226,22 +237,35 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (chevron) chevron.style.transform = 'rotate(0deg)';
                     }
                     
-                    header.addEventListener('click', (e) => {
+                    // Add click handler - use once to prevent duplicates, then re-attach if needed
+                    header.style.cursor = 'pointer';
+                    
+                    // Remove existing listener if any (by cloning)
+                    const handler = (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         
                         const currentState = body.getAttribute('data-collapsed') === 'true';
                         const newState = !currentState;
                         
+                        // Update attributes immediately
                         body.setAttribute('data-collapsed', newState ? 'true' : 'false');
                         header.setAttribute('data-collapsed', newState ? 'true' : 'false');
+                        
+                        // Update state and save
                         state[targetId] = newState;
                         save();
                         
+                        // Update chevron
                         if (chevron) {
                             chevron.style.transform = newState ? 'rotate(-90deg)' : 'rotate(0deg)';
                         }
-                    });
+                        
+                        // Force reflow to ensure CSS applies
+                        void body.offsetHeight;
+                    };
+                    
+                    header.addEventListener('click', handler);
                 } else {
                     // Regular collapsible - use is-collapsed class
                     const chevron = header.querySelector('.chevron');
@@ -258,7 +282,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
         }
-        document.addEventListener('DOMContentLoaded', initCollapsibles);
+        // Initialize on DOM ready
+        function runInit() {
+            initCollapsibles();
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runInit);
+        } else {
+            // DOM is already ready
+            runInit();
+        }
+        
+        // Also try after a short delay to ensure sidebar is rendered (fallback)
+        setTimeout(runInit, 100);
+        setTimeout(runInit, 500);
     })();
 
     // Generic confirmation handler for critical actions

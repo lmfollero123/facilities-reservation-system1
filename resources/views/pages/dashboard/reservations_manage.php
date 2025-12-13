@@ -12,6 +12,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
+require_once __DIR__ . '/../../../../config/mail_helper.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 
@@ -100,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
     if ($reservationId && in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name, u.name AS requester_name, u.id AS requester_id
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -146,6 +147,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 $newDate = $_POST['new_date'];
                 $newTimeSlot = $_POST['new_time_slot'];
                 $reason = trim($_POST['reason'] ?? '');
+                
+                // Validate new date is not in the past
+                $newDateObj = new DateTime($newDate);
+                $today = new DateTime('today');
+                if ($newDateObj < $today) {
+                    throw new Exception('New reservation date cannot be in the past. Please select today or a future date.');
+                }
                 
                 if (empty($reason)) {
                     throw new Exception('Reason is required for modifying an approved reservation.');
@@ -202,6 +210,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 createNotification($reservation['requester_id'], 'booking', 'Reservation Modified', $notifMessage, 
                     base_path() . '/resources/views/pages/dashboard/my_reservations.php');
                 
+                // Send email notification
+                if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
+                    $emailSubject = 'Reservation Modified - ' . $reservation['facility_name'];
+                    $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>';
+                    $emailBody .= '<p>Your approved reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> has been modified.</p>';
+                    $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
+                    $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
+                    $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
+                    $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
+                }
+                
                 $message = 'Reservation modified successfully.';
                 
             } elseif ($action === 'postpone') {
@@ -237,6 +257,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 $newDate = $_POST['new_date'];
                 $newTimeSlot = $_POST['new_time_slot'];
                 $reason = trim($_POST['reason'] ?? '');
+                
+                // Validate new date is not in the past
+                $newDateObj = new DateTime($newDate);
+                $today = new DateTime('today');
+                if ($newDateObj < $today) {
+                    throw new Exception('New reservation date cannot be in the past. Please select today or a future date.');
+                }
                 
                 if (empty($reason)) {
                     throw new Exception('Reason is required for postponing an approved reservation.');
@@ -292,6 +319,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 
                 createNotification($reservation['requester_id'], 'booking', 'Reservation Postponed', $notifMessage, 
                     base_path() . '/resources/views/pages/dashboard/my_reservations.php');
+                
+                // Send email notification
+                if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
+                    $emailSubject = 'Reservation Postponed - ' . $reservation['facility_name'];
+                    $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>';
+                    $emailBody .= '<p>Your approved reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> has been postponed.</p>';
+                    $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
+                    $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
+                    $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
+                    $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
+                    $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
+                }
                 
                 $message = 'Reservation postponed successfully. It is now pending re-approval.';
                 
@@ -367,6 +407,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     
                     $notifLink = base_path() . '/resources/views/pages/dashboard/my_reservations.php';
                     createNotification($reservation['requester_id'], 'booking', $notifTitle, $notifMessage, $notifLink);
+                    
+                    // Send email notification
+                    if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
+                        $emailSubject = 'Reservation ' . ucfirst($action) . ' - ' . $reservation['facility_name'];
+                        $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>';
+                        $emailBody .= '<p>Your reservation request for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong>';
+                        $emailBody .= ' on <strong>' . date('F j, Y', strtotime($reservation['reservation_date'])) . '</strong> (' . htmlspecialchars($reservation['time_slot']) . ')';
+                        $emailBody .= ' has been <strong>' . $action . '</strong>.</p>';
+                        if (!empty($note)) {
+                            $emailBody .= '<p><strong>Note:</strong> ' . htmlspecialchars($note) . '</p>';
+                        }
+                        $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                        sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
+                    }
                 }
                 
                 $message = ucfirst($action) . ' reservation successfully.';
@@ -499,10 +553,22 @@ ob_start();
     <aside class="booking-card">
         <h2>Status Legend</h2>
         <ul class="audit-list">
-            <li><strong>Pending:</strong> Waiting for staff review.</li>
-            <li><strong>Approved:</strong> Facility is reserved for the requester.</li>
-            <li><strong>Denied:</strong> Request was declined; requester is notified.</li>
-            <li><strong>Cancelled:</strong> Reservation cancelled by staff or requester.</li>
+            <li>
+                <span class="status-badge pending">Pending</span>
+                <span style="margin-left: 0.5rem;">Waiting for staff review.</span>
+            </li>
+            <li>
+                <span class="status-badge approved">Approved</span>
+                <span style="margin-left: 0.5rem;">Facility is reserved for the requester.</span>
+            </li>
+            <li>
+                <span class="status-badge denied">Denied</span>
+                <span style="margin-left: 0.5rem;">Request was declined; requester is notified.</span>
+            </li>
+            <li>
+                <span class="status-badge cancelled">Cancelled</span>
+                <span style="margin-left: 0.5rem;">Reservation cancelled by staff or requester.</span>
+            </li>
         </ul>
     </aside>
 </div>
@@ -575,7 +641,7 @@ ob_start();
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 New Date <span style="color: #dc3545;">*</span>
             </label>
-            <input type="date" name="new_date" id="modify_new_date" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <input type="date" name="new_date" id="modify_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 New Time Slot <span style="color: #dc3545;">*</span>
@@ -623,7 +689,7 @@ ob_start();
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 New Date <span style="color: #dc3545;">*</span>
             </label>
-            <input type="date" name="new_date" id="postpone_new_date" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <input type="date" name="new_date" id="postpone_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 New Time Slot <span style="color: #dc3545;">*</span>

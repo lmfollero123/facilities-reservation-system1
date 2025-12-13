@@ -426,10 +426,16 @@ img {
     padding: 1rem;
     border-top: 1px solid #e8ecf4;
     background: #fff;
+    display: block;
+    transition: opacity 0.2s ease;
 }
 
 .collapsible-body.is-collapsed {
-    display: none;
+    display: none !important;
+    opacity: 0;
+    padding: 0;
+    height: 0;
+    overflow: hidden;
 }
 
 .btn-secondary:hover {
@@ -1450,6 +1456,7 @@ body.landing-page .section:not(.contact-section) {
     max-height: 2000px;
     opacity: 1;
     margin-bottom: 0.35rem;
+    display: block;
 }
 
 .collapsible-content[data-collapsed="true"] {
@@ -1460,14 +1467,36 @@ body.landing-page .section:not(.contact-section) {
     padding-bottom: 0 !important;
     overflow: hidden !important;
     height: 0 !important;
+    min-height: 0 !important;
+    pointer-events: none !important;
 }
 
-.collapsible-content[data-collapsed="true"] a {
-    display: none !important;
-    visibility: hidden !important;
+.sidebar .collapsible-content[data-collapsed="true"] a,
+.sidebar .collapsible-content[data-collapsed="true"] > *,
+.sidebar .collapsible-content[data-collapsed="true"] > a {
+    max-height: 0 !important;
     height: 0 !important;
+    min-height: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
+    opacity: 0 !important;
+    line-height: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    font-size: 0 !important;
+}
+
+.sidebar .collapsible-content[data-collapsed="true"] {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    pointer-events: none !important;
 }
 
 .sidebar-bottom {
@@ -2128,6 +2157,11 @@ body.landing-page .section:not(.contact-section) {
     color: #fff;
 }
 
+.status-badge.available {
+    background: #28a745;
+    color: #fff;
+}
+
 .status-badge.maintenance {
     background: #ff9800;
     color: #fff;
@@ -2135,6 +2169,21 @@ body.landing-page .section:not(.contact-section) {
 
 .status-badge.offline {
     background: #e53935;
+    color: #fff;
+}
+
+.status-badge.admin {
+    background: #6f42c1;
+    color: #fff;
+}
+
+.status-badge.staff {
+    background: #17a2b8;
+    color: #fff;
+}
+
+.status-badge.resident {
+    background: #28a745;
     color: #fff;
 }
 
@@ -2156,6 +2205,9 @@ body.landing-page .section:not(.contact-section) {
     padding: 1rem;
     font-size: 0.9rem;
     transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .audit-list li:hover {

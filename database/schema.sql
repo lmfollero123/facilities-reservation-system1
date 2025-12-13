@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS reservations (
     time_slot VARCHAR(50) NOT NULL,
     purpose TEXT NOT NULL,
     status ENUM('pending', 'approved', 'denied', 'cancelled') NOT NULL DEFAULT 'pending',
+    reschedule_count INT UNSIGNED NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_res_user FOREIGN KEY (user_id) REFERENCES users(id),

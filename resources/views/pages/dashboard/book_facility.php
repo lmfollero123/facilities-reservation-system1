@@ -737,20 +737,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const facilitySel = document.getElementById('facility-select');
     const dateInput = document.getElementById('reservation-date');
     const slotSel = document.getElementById('time-slot');
-
-    if (preFacility && facilitySel) {
-        facilitySel.value = preFacility;
-    }
-    if (preDate && dateInput) {
-        dateInput.value = preDate;
-    }
-    if (preSlot && slotSel) {
-        slotSel.value = preSlot;
-    }
-
-    const facilitySel = document.getElementById('facility-select');
-    const dateInput = document.getElementById('reservation-date');
-    const slotSel = document.getElementById('time-slot');
     const messageBox = document.getElementById('conflict-warning');
     const messageText = document.getElementById('conflict-message');
     const altWrap = document.getElementById('conflict-alternatives');
@@ -847,6 +833,33 @@ document.addEventListener('DOMContentLoaded', function() {
     facilitySel?.addEventListener('change', checkConflict);
     dateInput?.addEventListener('change', checkConflict);
     slotSel?.addEventListener('change', checkConflict);
+
+    // Prefill from query params (facility_id, reservation_date, time_slot)
+    const qp = new URLSearchParams(window.location.search);
+    const preFacility = qp.get('facility_id');
+    const preDate = qp.get('reservation_date');
+    const preSlot = qp.get('time_slot');
+
+    // Prefill values and trigger change events
+    if (preFacility && facilitySel) {
+        facilitySel.value = preFacility;
+        facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (preDate && dateInput) {
+        dateInput.value = preDate;
+        dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (preSlot && slotSel) {
+        slotSel.value = preSlot;
+        slotSel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // If all three fields are pre-filled, trigger conflict check after a short delay
+    if (preFacility && preDate && preSlot) {
+        setTimeout(() => {
+            checkConflict();
+        }, 200);
+    }
 });
 </script>
 <?php

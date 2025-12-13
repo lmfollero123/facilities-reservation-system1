@@ -191,7 +191,7 @@ ob_start();
 
 <div class="facility-admin">
 <section class="collapsible-card">
-    <button class="collapsible-header" data-collapse-target="facilities-list">
+    <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
         <span>Facilities</span>
         <span class="chevron">▼</span>
     </button>
@@ -243,7 +243,7 @@ ob_start();
 
 <aside>
     <div class="collapsible-card">
-        <button class="collapsible-header" data-collapse-target="add-facility">
+        <button type="button" class="collapsible-header" data-collapse-target="add-facility">
             <span id="form-title">Add Facility</span>
             <span class="chevron">▼</span>
         </button>
@@ -337,7 +337,7 @@ ob_start();
     </div>
 
     <div class="collapsible-card">
-        <button class="collapsible-header" data-collapse-target="recent-activity">
+        <button type="button" class="collapsible-header" data-collapse-target="recent-activity">
             <span>Recent Activity</span>
             <span class="chevron">▼</span>
         </button>
@@ -393,6 +393,9 @@ ob_start();
 </div>
 
 <script>
+// Disable global collapsible handler for this page to prevent conflicts
+window.DISABLE_GLOBAL_COLLAPSIBLE = true;
+
 function editFacility(payload) {
     const facility = JSON.parse(payload);
     document.getElementById('form-title').textContent = 'Update Facility';
@@ -432,6 +435,8 @@ function resetFacilityForm() {
 (function() {
     const STORAGE_KEY = 'collapse-state-facility-management';
     let state = {};
+    let initialized = false;
+    
     try {
         state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     } catch (e) {
@@ -442,32 +447,68 @@ function resetFacilityForm() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
 
-    function toggle(targetId, header) {
-        const body = document.getElementById(targetId);
-        if (!body) return;
-        const chevron = header.querySelector('.chevron');
-        const isCollapsed = body.classList.toggle('is-collapsed');
-        if (chevron) {
-            chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-        }
-        state[targetId] = isCollapsed;
-        saveState();
+    function initCollapsibles() {
+        if (initialized) return; // Prevent duplicate initialization
+        
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            const targetId = header.getAttribute('data-collapse-target');
+            if (!targetId) return;
+            
+            const body = document.getElementById(targetId);
+            if (!body) return;
+            const chevron = header.querySelector('.chevron');
+
+            // Remove any existing listeners by cloning
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+            const freshHeader = document.querySelector(`[data-collapse-target="${targetId}"]`);
+            const freshBody = document.getElementById(targetId);
+            const freshChevron = freshHeader.querySelector('.chevron');
+
+            // Apply saved state
+            if (state[targetId]) {
+                freshBody.classList.add('is-collapsed');
+                if (freshChevron) freshChevron.style.transform = 'rotate(-90deg)';
+            } else {
+                freshBody.classList.remove('is-collapsed');
+                if (freshChevron) freshChevron.style.transform = 'rotate(0deg)';
+            }
+
+            // Add click handler
+            freshHeader.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const currentCollapsed = freshBody.classList.contains('is-collapsed');
+                const newCollapsed = !currentCollapsed;
+                
+                if (newCollapsed) {
+                    freshBody.classList.add('is-collapsed');
+                } else {
+                    freshBody.classList.remove('is-collapsed');
+                }
+                
+                if (freshChevron) {
+                    freshChevron.style.transform = newCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                }
+                
+                state[targetId] = newCollapsed;
+                saveState();
+            });
+        });
+        
+        initialized = true;
     }
 
-    document.querySelectorAll('.collapsible-header').forEach(header => {
-        const targetId = header.getAttribute('data-collapse-target');
-        const body = document.getElementById(targetId);
-        if (!body) return;
-
-        // Apply saved state
-        if (state[targetId]) {
-            body.classList.add('is-collapsed');
-            const chevron = header.querySelector('.chevron');
-            if (chevron) chevron.style.transform = 'rotate(-90deg)';
-        }
-
-        header.addEventListener('click', () => toggle(targetId, header));
-    });
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCollapsibles);
+    } else {
+        initCollapsibles();
+    }
+    
+    // Fallback initialization
+    setTimeout(initCollapsibles, 300);
 })();
 </script>
 <?php
