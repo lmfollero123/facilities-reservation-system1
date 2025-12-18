@@ -32,7 +32,17 @@ if (!function_exists('base_path')) {
     }
 }
 
-
-
-
+if (!function_exists('app_root_path')) {
+    /**
+     * Returns the absolute filesystem root path of the application.
+     *
+     * Use this for filesystem operations (is_dir, mkdir, move_uploaded_file, etc.).
+     * base_path() is URL-relative and should only be used for generating links.
+     */
+    function app_root_path(): string
+    {
+        // config/app.php lives in the /config directory at the project root
+        return dirname(__DIR__);
+    }
+}
 

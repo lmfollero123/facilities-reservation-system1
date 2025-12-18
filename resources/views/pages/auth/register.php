@@ -83,7 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                 // Store documents
                                 // Save documents under public/uploads/documents/{userId}
-                                $docDir = base_path(true) . '/public/uploads/documents/' . $userId;
+                                // Use filesystem root for directory operations (not URL-relative base_path()).
+                                $docDir = app_root_path() . '/public/uploads/documents/' . $userId;
                                 if (!is_dir($docDir)) {
                                     mkdir($docDir, 0775, true);
                                 }
