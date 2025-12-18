@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
 
@@ -86,8 +87,40 @@ try {
 $message = '';
 $messageType = 'success';
 
+// Handle violation recording
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'record_violation') {
+    require_once __DIR__ . '/../../../../config/violations.php';
+    
+    $violationUserId = (int)($_POST['violation_user_id'] ?? 0);
+    $violationType = $_POST['violation_type'] ?? '';
+    $severity = $_POST['severity'] ?? 'medium';
+    $description = trim($_POST['violation_description'] ?? '');
+    $relatedReservationId = (int)($_POST['reservation_id'] ?? 0);
+    
+    if ($violationUserId && $violationType) {
+        $violationId = recordViolation(
+            $violationUserId,
+            $violationType,
+            $severity,
+            $description ?: null,
+            $relatedReservationId ?: null
+        );
+        
+        if ($violationId) {
+            $message = 'Violation recorded successfully.';
+            $messageType = 'success';
+        } else {
+            $message = 'Failed to record violation. Please try again.';
+            $messageType = 'error';
+        }
+    } else {
+        $message = 'Missing required information to record violation.';
+        $messageType = 'error';
+    }
+}
+
 // Handle status change and modifications
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] !== 'record_violation') {
     $action = $_POST['action'];
     $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone'];
 
@@ -521,6 +554,44 @@ ob_start();
                 <span class="status-badge <?= strtolower($reservation['requester_role']); ?>"><?= htmlspecialchars($reservation['requester_role']); ?></span>
             </div>
         </div>
+        
+        <?php
+        // Get user violation stats
+        require_once __DIR__ . '/../../../../config/violations.php';
+        $violationStats = getUserViolationStats((int)$reservation['user_id'], 365);
+        if ($violationStats['total'] > 0):
+        ?>
+        <div style="margin-top:1.5rem; padding:1rem; background:#fff4e5; border:1px solid #ffc107; border-radius:8px;">
+            <h3 style="margin:0 0 0.75rem; font-size:1rem; color:#856404; display:flex; align-items:center; gap:0.5rem;">
+                <span>⚠️</span> User Violation History
+            </h3>
+            <p style="margin:0 0 0.75rem; color:#856404; font-size:0.9rem;">
+                This user has <strong><?= $violationStats['total']; ?></strong> violation(s) in the last 365 days.
+            </p>
+            <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.85rem; color:#856404;">
+                <?php if ($violationStats['by_severity']['critical'] > 0): ?>
+                    <span><strong>Critical:</strong> <?= $violationStats['by_severity']['critical']; ?></span>
+                <?php endif; ?>
+                <?php if ($violationStats['by_severity']['high'] > 0): ?>
+                    <span><strong>High:</strong> <?= $violationStats['by_severity']['high']; ?></span>
+                <?php endif; ?>
+                <?php if ($violationStats['by_severity']['medium'] > 0): ?>
+                    <span><strong>Medium:</strong> <?= $violationStats['by_severity']['medium']; ?></span>
+                <?php endif; ?>
+            </div>
+            <?php if ($violationStats['by_severity']['high'] > 0 || $violationStats['by_severity']['critical'] > 0): ?>
+                <p style="margin:0.75rem 0 0; color:#dc3545; font-size:0.85rem; font-weight:600;">
+                    ⚠️ High-severity violations detected. Auto-approval is disabled for this user.
+                </p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        
+        <div style="margin-top:1.5rem;">
+            <button class="btn-outline" onclick="openViolationModal(<?= $reservation['user_id']; ?>, '<?= htmlspecialchars($reservation['requester_name']); ?>', <?= $reservationId; ?>, '<?= htmlspecialchars($reservation['facility_name']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.5rem 1rem; color: #dc3545; border-color: #dc3545;">
+                Record Violation
+            </button>
+        </div>
     </section>
 
     <section class="booking-card">
@@ -811,7 +882,79 @@ document.getElementById('postponeModal').addEventListener('click', function(e) {
 document.getElementById('cancelModal').addEventListener('click', function(e) {
     if (e.target === this) closeCancelModal();
 });
+
+// Violation Modal
+function openViolationModal(userId, userName, reservationId, facilityName, reservationDate, timeSlot) {
+    document.getElementById('violationModal').style.display = 'flex';
+    document.getElementById('violation-user-id').value = userId;
+    document.getElementById('violation-user-name').textContent = userName;
+    document.getElementById('violation-reservation-id').value = reservationId;
+    document.getElementById('violation-reservation-info').textContent = facilityName + ' on ' + reservationDate + ' (' + timeSlot + ')';
+}
+
+function closeViolationModal() {
+    document.getElementById('violationModal').style.display = 'none';
+}
+
+document.getElementById('violationModal').addEventListener('click', function(e) {
+    if (e.target === this) closeViolationModal();
+});
 </script>
+
+<!-- Violation Recording Modal -->
+<div id="violationModal" class="modal-overlay" style="display:none;">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3>Record Violation</h3>
+            <button type="button" class="btn-outline" onclick="closeViolationModal()">✕</button>
+        </div>
+        <form method="POST" class="modal-body">
+            <input type="hidden" name="action" value="record_violation">
+            <input type="hidden" name="violation_user_id" id="violation-user-id">
+            <input type="hidden" name="reservation_id" id="violation-reservation-id">
+            
+            <div style="margin-bottom:1rem; padding:0.75rem; background:#f8f9fa; border-radius:8px;">
+                <p style="margin:0 0 0.5rem; font-size:0.9rem; color:#5b6888;"><strong>User:</strong> <span id="violation-user-name"></span></p>
+                <p style="margin:0; font-size:0.85rem; color:#8b95b5;"><strong>Related Reservation:</strong> <span id="violation-reservation-info"></span></p>
+            </div>
+            
+            <label>
+                Violation Type *
+                <select name="violation_type" required style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:6px; margin-top:0.25rem;">
+                    <option value="">Select violation type...</option>
+                    <option value="no_show">No Show</option>
+                    <option value="late_cancellation">Late Cancellation</option>
+                    <option value="policy_violation">Policy Violation</option>
+                    <option value="damage">Damage to Facility</option>
+                    <option value="other">Other</option>
+                </select>
+            </label>
+            
+            <label style="margin-top:1rem;">
+                Severity *
+                <select name="severity" required style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:6px; margin-top:0.25rem;">
+                    <option value="low">Low - Minor infraction</option>
+                    <option value="medium" selected>Medium - Standard violation</option>
+                    <option value="high">High - Serious violation</option>
+                    <option value="critical">Critical - Severe violation</option>
+                </select>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                    High and Critical violations will disable auto-approval for this user.
+                </small>
+            </label>
+            
+            <label style="margin-top:1rem;">
+                Description (Optional)
+                <textarea name="violation_description" rows="4" placeholder="Provide details about the violation..." style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:6px; margin-top:0.25rem; font-family:inherit; resize:vertical;"></textarea>
+            </label>
+            
+            <div style="margin-top:1.5rem; display:flex; gap:0.75rem; justify-content:flex-end;">
+                <button type="button" class="btn-outline" onclick="closeViolationModal()">Cancel</button>
+                <button type="submit" class="btn-primary" style="background:#dc3545; border-color:#dc3545;">Record Violation</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <div style="margin-top:1.5rem;">
     <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-outline" style="display:inline-block;text-decoration:none;">← Back to Approvals</a>

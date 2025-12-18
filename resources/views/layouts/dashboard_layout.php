@@ -258,8 +258,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const message = input.value.trim();
         if (!message) return;
 
+        // Clear input but maintain minimum height
         input.value = '';
-        input.style.height = 'auto';
+        input.style.height = '38px'; // Ensure it stays visible (matches min-height from CSS)
 
         addMessage(message, 'user');
 

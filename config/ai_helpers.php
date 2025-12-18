@@ -8,6 +8,7 @@
  */
 
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/time_helpers.php';
 
 /**
  * Detect potential conflicts for a reservation
@@ -21,8 +22,8 @@ require_once __DIR__ . '/database.php';
 function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservationId = null) {
     $pdo = db();
     
-    // Check for exact conflicts (same facility, date, and time slot)
-    $conflictStmt = $pdo->prepare(
+    // Get all reservations for this facility and date
+    $allReservationsStmt = $pdo->prepare(
         'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose,
                 f.name AS facility_name, u.name AS requester_name
          FROM reservations r
@@ -30,7 +31,6 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
          JOIN users u ON r.user_id = u.id
          WHERE r.facility_id = :facility_id
            AND r.reservation_date = :date
-           AND r.time_slot = :time_slot
            AND r.status IN ("pending", "approved")
            ' . ($excludeReservationId ? 'AND r.id != :exclude_id' : '') . '
          ORDER BY r.created_at DESC'
@@ -39,15 +39,22 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
     $params = [
         'facility_id' => $facilityId,
         'date' => $date,
-        'time_slot' => $timeSlot,
     ];
     
     if ($excludeReservationId) {
         $params['exclude_id'] = $excludeReservationId;
     }
     
-    $conflictStmt->execute($params);
-    $conflicts = $conflictStmt->fetchAll(PDO::FETCH_ASSOC);
+    $allReservationsStmt->execute($params);
+    $allReservations = $allReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Check for overlapping time ranges
+    $conflicts = [];
+    foreach ($allReservations as $reservation) {
+        if (timeSlotsOverlap($timeSlot, $reservation['time_slot'])) {
+            $conflicts[] = $reservation;
+        }
+    }
     
     // Calculate risk score based on historical patterns + holiday/event tags
     $riskScore = calculateConflictRisk($facilityId, $date, $timeSlot);

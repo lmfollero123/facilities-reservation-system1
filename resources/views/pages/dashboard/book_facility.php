@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
+require_once __DIR__ . '/../../../../config/auto_approval.php';
 
 $pdo = db();
 $pageTitle = 'Book a Facility | LGU Facilities Reservation';
@@ -37,12 +38,44 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $date = $_POST['reservation_date'] ?? '';
-    $timeSlot = $_POST['time_slot'] ?? '';
+    $startTime = $_POST['start_time'] ?? '';
+    $endTime = $_POST['end_time'] ?? '';
     $purpose = trim($_POST['purpose'] ?? '');
     $docRef = trim($_POST['doc_ref'] ?? '');
+    $expectedAttendees = !empty($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : null;
+    $isCommercial = isset($_POST['is_commercial']) && $_POST['is_commercial'] === '1';
     $userId = $_SESSION['user_id'] ?? null;
+    
+    // Validate time inputs and create time slot string
+    if (!$startTime || !$endTime) {
+        $error = 'Please select both start and end times.';
+    } else {
+        // Validate time format and range
+        $startTimeObj = DateTime::createFromFormat('H:i', $startTime);
+        $endTimeObj = DateTime::createFromFormat('H:i', $endTime);
+        
+        if (!$startTimeObj || !$endTimeObj) {
+            $error = 'Invalid time format. Please use valid time values.';
+        } elseif ($endTimeObj <= $startTimeObj) {
+            $error = 'End time must be after start time.';
+        } else {
+            // Calculate duration in hours
+            $duration = $startTimeObj->diff($endTimeObj);
+            $durationHours = $duration->h + ($duration->i / 60);
+            
+            // Validate maximum duration (4 hours for auto-approval, but allow longer for manual approval)
+            if ($durationHours > 12) {
+                $error = 'Reservation duration cannot exceed 12 hours.';
+            } elseif ($durationHours < 0.5) {
+                $error = 'Reservation duration must be at least 30 minutes.';
+            } else {
+                // Format time slot as "HH:MM - HH:MM" for storage
+                $timeSlot = $startTime . ' - ' . $endTime;
+            }
+        }
+    }
 
-    if (!$facilityId || !$date || !$timeSlot || !$purpose || !$userId) {
+    if (!$facilityId || !$date || !$purpose || !$userId) {
         $error = 'Please complete all required fields.';
     } elseif ($date < date('Y-m-d')) {
         $error = 'Cannot book facilities for past dates. Please select a future date.';
@@ -100,14 +133,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Only proceed if no hard conflict
         if (!$conflictCheck['has_conflict']) {
         try {
-            $stmt = $pdo->prepare('INSERT INTO reservations (user_id, facility_id, reservation_date, time_slot, purpose, status) VALUES (:user, :facility, :date, :slot, :purpose, :status)');
+            // Evaluate auto-approval conditions
+            $autoApprovalResult = evaluateAutoApproval(
+                $facilityId,
+                $date,
+                $timeSlot,
+                $expectedAttendees,
+                $isCommercial,
+                $userId,
+                $BOOKING_ADVANCE_MAX_DAYS
+            );
+            
+            // Determine initial status based on auto-approval evaluation
+            $initialStatus = $autoApprovalResult['auto_approve'] ? 'approved' : 'pending';
+            $isAutoApproved = $autoApprovalResult['auto_approve'];
+            
+            // Insert reservation with determined status
+            $stmt = $pdo->prepare(
+                'INSERT INTO reservations (
+                    user_id, facility_id, reservation_date, time_slot, purpose, 
+                    status, expected_attendees, is_commercial, auto_approved
+                ) VALUES (
+                    :user, :facility, :date, :slot, :purpose, 
+                    :status, :attendees, :commercial, :auto_approved
+                )'
+            );
             $stmt->execute([
                 'user' => $userId,
                 'facility' => $facilityId,
                 'date' => $date,
                 'slot' => $timeSlot,
                 'purpose' => $purpose,
-                'status' => 'pending',
+                'status' => $initialStatus,
+                'attendees' => $expectedAttendees,
+                'commercial' => $isCommercial ? 1 : 0,
+                'auto_approved' => $isAutoApproved ? 1 : 0,
             ]);
             $newReservationId = $pdo->lastInsertId();
             
@@ -117,31 +177,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
             $facilityName = $facility ? $facility['name'] : 'Unknown Facility';
             
+            // Log reservation history entry
+            $historyStmt = $pdo->prepare(
+                'INSERT INTO reservation_history (reservation_id, status, note, created_by) 
+                 VALUES (:res_id, :status, :note, NULL)'
+            );
+            $historyNote = $isAutoApproved 
+                ? 'Automatically approved by system - all conditions met'
+                : 'Pending manual review by staff';
+            $historyStmt->execute([
+                'res_id' => $newReservationId,
+                'status' => $initialStatus,
+                'note' => $historyNote
+            ]);
+            
             // Log audit event
-            logAudit('Created reservation request', 'Reservations', 
-                'RES-' . $newReservationId . ' – ' . $facilityName . ' (' . $date . ' ' . $timeSlot . ')');
-            
-            // Create notification for admin/staff about new reservation
-            // Get all Admin and Staff users
-            $staffStmt = $pdo->query("SELECT id FROM users WHERE role IN ('Admin', 'Staff') AND status = 'active'");
-            $staffUsers = $staffStmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            $notifTitle = 'New Reservation Request';
-            $notifMessage = 'A new reservation request has been submitted for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $timeSlot . ').';
-            $notifLink = base_path() . '/resources/views/pages/dashboard/reservations_manage.php';
-            
-            foreach ($staffUsers as $staffId) {
-                createNotification($staffId, 'booking', $notifTitle, $notifMessage, $notifLink);
+            $auditDetails = 'RES-' . $newReservationId . ' – ' . $facilityName . ' (' . $date . ' ' . $timeSlot . ')';
+            if ($isAutoApproved) {
+                $auditDetails .= ' [Auto-approved]';
             }
+            logAudit('Created reservation request', 'Reservations', $auditDetails);
             
-            // Also notify the requester
-            createNotification($userId, 'booking', 'Reservation Submitted', 
-                'Your reservation request for ' . $facilityName . ' has been submitted and is pending review.', 
-                base_path() . '/resources/views/pages/dashboard/my_reservations.php');
-            
-            $success = 'Reservation submitted successfully. You will receive an update once it is reviewed.';
+            // Create notifications
+            if ($isAutoApproved) {
+                // Auto-approved: notify user only
+                createNotification(
+                    $userId, 
+                    'booking', 
+                    'Reservation Approved', 
+                    'Your reservation request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $timeSlot . ') has been automatically approved.', 
+                    base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                );
+                $success = 'Reservation automatically approved! Your booking has been confirmed.';
+            } else {
+                // Pending: notify admin/staff and user
+                $staffStmt = $pdo->query("SELECT id FROM users WHERE role IN ('Admin', 'Staff') AND status = 'active'");
+                $staffUsers = $staffStmt->fetchAll(PDO::FETCH_COLUMN);
+                
+                $notifTitle = 'New Reservation Request';
+                $notifMessage = 'A new reservation request has been submitted for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $timeSlot . ').';
+                $notifLink = base_path() . '/resources/views/pages/dashboard/reservations_manage.php';
+                
+                foreach ($staffUsers as $staffId) {
+                    createNotification($staffId, 'booking', $notifTitle, $notifMessage, $notifLink);
+                }
+                
+                createNotification(
+                    $userId, 
+                    'booking', 
+                    'Reservation Submitted', 
+                    'Your reservation request for ' . $facilityName . ' has been submitted and is pending review.', 
+                    base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                );
+                
+                $success = 'Reservation submitted successfully. You will receive an update once it is reviewed.';
+                
+                // Include reason if provided
+                if (!empty($autoApprovalResult['reason']) && $autoApprovalResult['reason'] !== 'All conditions met for auto-approval') {
+                    $success .= ' (Note: ' . htmlspecialchars($autoApprovalResult['reason']) . ')';
+                }
+            }
         } catch (Throwable $e) {
             $error = 'Unable to submit reservation. Please try again later.';
+            error_log('Reservation submission error: ' . $e->getMessage());
         }
         }
     }
@@ -304,16 +402,23 @@ ob_start();
             </label>
 
             <label>
-                Time Slot
+                Start Time
                 <div class="input-wrapper">
                     <span class="input-icon">⏰</span>
-                    <select name="time_slot" id="time-slot" required>
-                        <option value="">Select time slot...</option>
-                        <option value="Morning (8AM - 12PM)">Morning (8AM - 12PM)</option>
-                        <option value="Afternoon (1PM - 5PM)">Afternoon (1PM - 5PM)</option>
-                        <option value="Evening (5PM - 9PM)">Evening (5PM - 9PM)</option>
-                    </select>
+                    <input type="time" name="start_time" id="start-time" required min="08:00" max="21:00">
                 </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
+            </label>
+
+            <label>
+                End Time
+                <div class="input-wrapper">
+                    <span class="input-icon">⏰</span>
+                    <input type="time" name="end_time" id="end-time" required min="08:00" max="21:00">
+                </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                    Must be after start time. Maximum duration: 4 hours (if facility has auto-approval enabled).
+                </small>
             </label>
 
             <div id="conflict-warning" style="display:none; background:#fff4e5; border:1px solid #ffc107; border-radius:8px; padding:1rem; margin-top:1rem;">
@@ -333,6 +438,25 @@ ob_start();
                 Purpose of Use
                 <textarea name="purpose" id="purpose-input" rows="3" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required></textarea>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Describe your event - AI will suggest the best facilities for you.</small>
+            </label>
+
+            <label>
+                <input type="checkbox" name="is_commercial" value="1" id="is-commercial">
+                <span style="margin-left:0.5rem;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
+            </label>
+            <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem; margin-left:1.5rem;">
+                Commercial reservations require manual approval by LGU staff.
+            </small>
+
+            <label>
+                Expected Number of Attendees (Optional)
+                <div class="input-wrapper">
+                    <span class="input-icon">👥</span>
+                    <input type="number" name="expected_attendees" id="expected-attendees" min="1" placeholder="e.g., 50">
+                </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                    Helps ensure facility capacity is appropriate. Some facilities have capacity limits for auto-approval.
+                </small>
             </label>
 
             <div id="ai-recommendations" style="display:none; background:#e3f8ef; border:1px solid #0d7a43; border-radius:8px; padding:1rem; margin-top:1rem;">
@@ -733,10 +857,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const qp = new URLSearchParams(window.location.search);
     const preFacility = qp.get('facility_id');
     const preDate = qp.get('reservation_date');
-    const preSlot = qp.get('time_slot');
+    const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
     const facilitySel = document.getElementById('facility-select');
     const dateInput = document.getElementById('reservation-date');
-    const slotSel = document.getElementById('time-slot');
+    const startTimeInput = document.getElementById('start-time');
+    const endTimeInput = document.getElementById('end-time');
     const messageBox = document.getElementById('conflict-warning');
     const messageText = document.getElementById('conflict-message');
     const altWrap = document.getElementById('conflict-alternatives');
@@ -786,16 +911,22 @@ document.addEventListener('DOMContentLoaded', function() {
     async function checkConflict() {
         const fid = facilitySel.value;
         const date = dateInput.value;
-        const slot = slotSel.value;
-        if (!fid || !date || !slot) {
+        const startTime = startTimeInput?.value;
+        const endTime = endTimeInput?.value;
+        
+        if (!fid || !date || !startTime || !endTime) {
             clearMessage();
             return;
         }
+        
+        // Build time slot string in format "HH:MM - HH:MM"
+        const timeSlot = startTime + ' - ' + endTime;
+        
         try {
             const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(slot)}`
+                body: `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`
             });
             const data = await resp.json();
             if (data.error) {
@@ -832,7 +963,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
     facilitySel?.addEventListener('change', checkConflict);
     dateInput?.addEventListener('change', checkConflict);
-    slotSel?.addEventListener('change', checkConflict);
+    startTimeInput?.addEventListener('change', checkConflict);
+    endTimeInput?.addEventListener('change', checkConflict);
+    
+    // Time validation: ensure end time is after start time and within limits
+    function validateTimes() {
+        if (!startTimeInput || !endTimeInput) return true;
+        
+        const startTime = startTimeInput.value;
+        const endTime = endTimeInput.value;
+        
+        if (!startTime || !endTime) return true;
+        
+        const start = new Date('2000-01-01T' + startTime);
+        const end = new Date('2000-01-01T' + endTime);
+        
+        if (end <= start) {
+            endTimeInput.setCustomValidity('End time must be after start time');
+            return false;
+        }
+        
+        const durationMs = end - start;
+        const durationHours = durationMs / (1000 * 60 * 60);
+        
+        if (durationHours > 12) {
+            endTimeInput.setCustomValidity('Reservation duration cannot exceed 12 hours');
+            return false;
+        }
+        
+        if (durationHours < 0.5) {
+            endTimeInput.setCustomValidity('Reservation duration must be at least 30 minutes');
+            return false;
+        }
+        
+        endTimeInput.setCustomValidity('');
+        return true;
+    }
+    
+    startTimeInput?.addEventListener('change', validateTimes);
+    endTimeInput?.addEventListener('change', validateTimes);
+    endTimeInput?.addEventListener('input', validateTimes);
 
     // Prefill from query params (facility_id, reservation_date, time_slot)
     const qp = new URLSearchParams(window.location.search);
@@ -849,13 +1019,18 @@ document.addEventListener('DOMContentLoaded', function() {
         dateInput.value = preDate;
         dateInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    if (preSlot && slotSel) {
-        slotSel.value = preSlot;
-        slotSel.dispatchEvent(new Event('change', { bubbles: true }));
+    if (preSlot && startTimeInput && endTimeInput) {
+        // Parse time slot format "HH:MM - HH:MM" or legacy format
+        const timeMatch = preSlot.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+            startTimeInput.value = timeMatch[1] + ':' + timeMatch[2];
+            endTimeInput.value = timeMatch[3] + ':' + timeMatch[4];
+            startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
 
-    // If all three fields are pre-filled, trigger conflict check after a short delay
-    if (preFacility && preDate && preSlot) {
+    // If all fields are pre-filled, trigger conflict check after a short delay
+    if (preFacility && preDate && startTimeInput?.value && endTimeInput?.value) {
         setTimeout(() => {
             checkConflict();
         }, 200);

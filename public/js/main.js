@@ -299,16 +299,9 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(runInit, 500);
     })();
 
-    // Generic confirmation handler for critical actions
-    document.addEventListener('click', function(e) {
-        const trigger = e.target.closest('.confirm-action');
-        if (!trigger) return;
-        const msg = trigger.getAttribute('data-message') || 'Are you sure you want to continue?';
-        if (!window.confirm(msg)) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    });
+    // Note: Confirmation handling for .confirm-action elements is now handled by
+    // the custom modal in dashboard_layout.php. The generic window.confirm() handler
+    // was removed to prevent duplicate popups (custom modal + browser alert).
 
     // AI Conflict Detection - Real-time checking on booking form
     // Disabled when page defines window.DISABLE_CONFLICT_CHECK (booking page uses its own handler)

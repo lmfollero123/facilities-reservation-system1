@@ -31,6 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $latitude = !empty($_POST['latitude']) ? (float)$_POST['latitude'] : null;
     $longitude = !empty($_POST['longitude']) ? (float)$_POST['longitude'] : null;
     $status = $_POST['status'] ?? 'available';
+    $autoApprove = isset($_POST['auto_approve']) && $_POST['auto_approve'] === '1';
+    $capacityThreshold = !empty($_POST['capacity_threshold']) ? (int)$_POST['capacity_threshold'] : null;
+    $maxDurationHours = !empty($_POST['max_duration_hours']) ? (float)$_POST['max_duration_hours'] : null;
 
     // Handle image upload (optional) with enhanced security
     $imagePath = null;
@@ -97,8 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ? WHERE id = ?');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $facilityId]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ? WHERE id = ?');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $facilityId]);
                 
                 // Log audit event
                 $details = $name;
@@ -119,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status]);
+                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours]);
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
@@ -330,6 +333,41 @@ ob_start();
                         </select>
                     </div>
                 </label>
+
+                <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid #e5e7eb;">
+                    <h3 style="margin:0 0 1rem; font-size:1rem; color:#1b1b1f;">Auto-Approval Settings</h3>
+                    <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
+                        When enabled, reservations meeting all conditions will be automatically approved without staff review.
+                    </p>
+
+                    <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+                        <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve">
+                        <span>Enable auto-approval for this facility</span>
+                    </label>
+
+                    <label>
+                        Capacity Threshold (Optional)
+                        <div class="input-wrapper">
+                            <span class="input-icon">👥</span>
+                            <input type="number" name="capacity_threshold" id="form-capacity-threshold" min="1" placeholder="e.g., 100">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                            Maximum expected attendees allowed for auto-approval. Leave blank for no limit.
+                        </small>
+                    </label>
+
+                    <label>
+                        Maximum Duration (hours, Optional)
+                        <div class="input-wrapper">
+                            <span class="input-icon">⏰</span>
+                            <input type="number" step="0.5" name="max_duration_hours" id="form-max-duration" min="0.5" placeholder="e.g., 4.0">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                            Maximum reservation duration in hours for auto-approval. Leave blank for no limit. (Default time slots are 4 hours each)
+                        </small>
+                    </label>
+                </div>
+
                 <button class="btn-primary" type="submit">Save Facility</button>
                 <button class="btn-outline" type="button" onclick="resetFacilityForm()" style="margin-top:0.5rem;">Cancel / New Facility</button>
             </form>
@@ -411,6 +449,9 @@ function editFacility(payload) {
     document.getElementById('form-rules').value = facility.rules || '';
     document.getElementById('form-image-citation').value = facility.image_citation || '';
     document.getElementById('form-status').value = facility.status || 'available';
+    document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
+    document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
+    document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
     document.getElementById('form-name').focus();
 }
 
@@ -428,6 +469,9 @@ function resetFacilityForm() {
     document.getElementById('form-rules').value = '';
     document.getElementById('form-image-citation').value = '';
     document.getElementById('form-status').value = 'available';
+    document.getElementById('form-auto-approve').checked = false;
+    document.getElementById('form-capacity-threshold').value = '';
+    document.getElementById('form-max-duration').value = '';
     document.getElementById('form-image').value = '';
 }
 

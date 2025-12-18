@@ -291,10 +291,10 @@ ob_start();
                         <td><?= htmlspecialchars($user['email']); ?></td>
                         <td>
                             <?php if ($_SESSION['role'] === 'Admin'): ?>
-                                <form method="POST" style="display:inline;">
+                                <form method="POST" style="display:inline;" class="role-change-form">
                                     <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                     <input type="hidden" name="action" value="change_role">
-                                    <select name="new_role" onchange="if(confirm('Change role to ' + this.value + '?')) this.form.submit();" style="border:1px solid #dfe3ef; border-radius:6px; padding:0.25rem 0.5rem;">
+                                    <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" style="border:1px solid #dfe3ef; border-radius:6px; padding:0.25rem 0.5rem;">
                                         <option value="Admin" <?= $user['role'] === 'Admin' ? 'selected' : ''; ?>>Admin</option>
                                         <option value="Staff" <?= $user['role'] === 'Staff' ? 'selected' : ''; ?>>Staff</option>
                                         <option value="Resident" <?= $user['role'] === 'Resident' ? 'selected' : ''; ?>>Resident</option>
@@ -390,6 +390,60 @@ ob_start();
         </ul>
     </aside>
 </div>
+<script>
+// Role change dropdown confirmation using the modal system
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('confirmModal');
+    if (!modal) return;
+    
+    const messageEl = modal.querySelector('.confirm-message');
+    const cancelBtn = modal.querySelector('[data-confirm-cancel]');
+    const acceptBtn = modal.querySelector('[data-confirm-accept]');
+    let pendingSelect = null;
+    
+    document.querySelectorAll('.role-select').forEach(function(select) {
+        select.addEventListener('change', function(e) {
+            const newRole = this.value;
+            const originalRole = this.dataset.originalRole;
+            const userName = this.dataset.userName || 'this user';
+            
+            // If role hasn't actually changed, do nothing
+            if (newRole === originalRole) {
+                // Reset to original value
+                this.value = originalRole;
+                return;
+            }
+            
+            e.preventDefault();
+            pendingSelect = this;
+            messageEl.textContent = 'Change ' + userName + '\'s role from ' + originalRole + ' to ' + newRole + '?';
+            modal.classList.add('open');
+        });
+    });
+    
+    if (cancelBtn && acceptBtn) {
+        cancelBtn.addEventListener('click', function() {
+            if (pendingSelect) {
+                // Reset select to original value
+                pendingSelect.value = pendingSelect.dataset.originalRole;
+                pendingSelect = null;
+            }
+            modal.classList.remove('open');
+        });
+        
+        acceptBtn.addEventListener('click', function() {
+            if (pendingSelect) {
+                const form = pendingSelect.closest('.role-change-form');
+                if (form) {
+                    form.submit();
+                }
+                pendingSelect = null;
+            }
+            modal.classList.remove('open');
+        });
+    }
+});
+</script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';
