@@ -4,3 +4,10 @@ Stack trace:
 #1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
 #2 {main}
   thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+=== Auto-Decline Expired Reservations Script ===
+Started at: 2025-12-18 16:24:50
+Dry Run: No
+
+Found 0 expired pending reservations
+
+No expired reservations to decline.

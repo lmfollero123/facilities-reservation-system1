@@ -4,3 +4,18 @@ Stack trace:
 #1 E:\Capstone_project\facilities_reservation_system\scripts\cleanup_old_data.php(18): db()
 #2 {main}
   thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+=== Cleanup Old Data Script ===
+Started at: 2025-12-18 16:24:51
+Dry Run: No
+Type: all
+
+=== Cleaning up Old Login Attempts ===
+Found 0 login attempt entries older than 2025-09-19
+
+=== Cleaning up Expired Rate Limits ===
+Found 1 expired rate limit entries
+Deleted 1 rate limit entries
+
+=== Summary ===
+Total deleted: 1 entries
+Completed at: 2025-12-18 16:24:51
