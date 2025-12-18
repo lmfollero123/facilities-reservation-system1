@@ -1,0 +1,6 @@
+PHP Fatal error:  Uncaught PDOException: could not find driver in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct()
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27

@@ -1,0 +1,233 @@
+{
+    "export_type": "full",
+    "exported_at": "2025-12-18 15:19:25",
+    "user": {
+        "id": 1,
+        "name": "System Administrator",
+        "email": "folleroluismiguel@gmail.com",
+        "mobile": "+63 911 044 599",
+        "address": "Sanville Subdivision, Barangay Culiat, Quezon City, Metro Manila, Philippines",
+        "role": "Admin",
+        "status": "active",
+        "created_at": "2025-11-27 01:47:57",
+        "last_login_at": "2025-12-08 17:52:05",
+        "documents": [],
+        "reservations": [
+            {
+                "id": 7,
+                "user_id": 1,
+                "facility_id": 5,
+                "reservation_date": "2025-12-18",
+                "time_slot": "08:00 - 10:30",
+                "purpose": "Zumba",
+                "status": "approved",
+                "reschedule_count": 0,
+                "created_at": "2025-12-18 19:40:38",
+                "updated_at": "2025-12-18 19:40:38",
+                "expected_attendees": 10,
+                "is_commercial": 0,
+                "auto_approved": 1,
+                "facility_name": "Cassanova Multipurpose Building",
+                "facility_location": "Cassanova St. Culiat, QC"
+            },
+            {
+                "id": 6,
+                "user_id": 1,
+                "facility_id": 4,
+                "reservation_date": "2025-12-17",
+                "time_slot": "Morning (8:00 AM - 12:00 PM)",
+                "purpose": "Zumba",
+                "status": "approved",
+                "reschedule_count": 0,
+                "created_at": "2025-12-07 15:44:05",
+                "updated_at": "2025-12-13 22:35:23",
+                "expected_attendees": null,
+                "is_commercial": 0,
+                "auto_approved": 0,
+                "facility_name": "Bernardo Court",
+                "facility_location": "31 Central Ave Quezon City, Metro Manila"
+            },
+            {
+                "id": 3,
+                "user_id": 1,
+                "facility_id": 1,
+                "reservation_date": "2025-11-29",
+                "time_slot": "Morning (8AM - 12PM)",
+                "purpose": "Barangay General Assembly",
+                "status": "approved",
+                "reschedule_count": 0,
+                "created_at": "2025-11-29 00:18:58",
+                "updated_at": "2025-11-29 00:19:59",
+                "expected_attendees": null,
+                "is_commercial": 0,
+                "auto_approved": 0,
+                "facility_name": "Culiat Highschool",
+                "facility_location": "Culiat Quezon City"
+            },
+            {
+                "id": 2,
+                "user_id": 1,
+                "facility_id": 4,
+                "reservation_date": "2025-10-27",
+                "time_slot": "Afternoon (1PM - 5PM)",
+                "purpose": "gg",
+                "status": "denied",
+                "reschedule_count": 0,
+                "created_at": "2025-11-27 13:18:47",
+                "updated_at": "2025-11-28 22:19:53",
+                "expected_attendees": null,
+                "is_commercial": 0,
+                "auto_approved": 0,
+                "facility_name": "Bernardo Court",
+                "facility_location": "31 Central Ave Quezon City, Metro Manila"
+            },
+            {
+                "id": 1,
+                "user_id": 1,
+                "facility_id": 1,
+                "reservation_date": "2025-11-28",
+                "time_slot": "Morning (8AM - 12PM)",
+                "purpose": "Feeding Program",
+                "status": "denied",
+                "reschedule_count": 0,
+                "created_at": "2025-11-27 02:00:54",
+                "updated_at": "2025-11-28 22:19:51",
+                "expected_attendees": null,
+                "is_commercial": 0,
+                "auto_approved": 0,
+                "facility_name": "Culiat Highschool",
+                "facility_location": "Culiat Quezon City"
+            }
+        ],
+        "reservation_history": [
+            {
+                "id": 7,
+                "reservation_id": 7,
+                "status": "approved",
+                "note": "Automatically approved by system - all conditions met",
+                "created_at": "2025-12-18 19:40:38",
+                "created_by": null
+            },
+            {
+                "id": 6,
+                "reservation_id": 6,
+                "status": "approved",
+                "note": "Sge na nga hehehe",
+                "created_at": "2025-12-13 22:35:23",
+                "created_by": 1
+            },
+            {
+                "id": 5,
+                "reservation_id": 6,
+                "status": "pending",
+                "note": "Postponed from 2025-12-14 Morning (8AM - 12PM) to 2025-12-17 Morning (8:00 AM - 12:00 PM). Reason: Will be used as evacuation center",
+                "created_at": "2025-12-13 22:11:44",
+                "created_by": 1
+            },
+            {
+                "id": 4,
+                "reservation_id": 6,
+                "status": "approved",
+                "note": "",
+                "created_at": "2025-12-09 14:42:42",
+                "created_by": 1
+            },
+            {
+                "id": 1,
+                "reservation_id": 3,
+                "status": "approved",
+                "note": "Sige nga UwU",
+                "created_at": "2025-11-29 00:19:59",
+                "created_by": 1
+            }
+        ],
+        "profile": {
+            "latitude": "14.66803390",
+            "longitude": "121.05666160",
+            "profile_picture": "\/public\/uploads\/profile_pictures\/profile-1-1765168936.jpg"
+        },
+        "violations": [],
+        "notifications": [
+            {
+                "id": 12,
+                "user_id": 1,
+                "type": "booking",
+                "title": "Reservation Approved",
+                "message": "Your reservation request for Cassanova Multipurpose Building on December 18, 2025 (08:00 - 10:30) has been automatically approved.",
+                "link": "\/resources\/views\/pages\/dashboard\/my_reservations.php",
+                "is_read": 0,
+                "created_at": "2025-12-18 19:40:38"
+            },
+            {
+                "id": 11,
+                "user_id": 1,
+                "type": "booking",
+                "title": "Reservation Approved",
+                "message": "Your reservation request for Bernardo Court on December 17, 2025 (Morning (8:00 AM - 12:00 PM)) has been approved. Note: Sge na nga hehehe",
+                "link": "\/resources\/views\/pages\/dashboard\/my_reservations.php",
+                "is_read": 0,
+                "created_at": "2025-12-13 22:35:23"
+            },
+            {
+                "id": 10,
+                "user_id": 1,
+                "type": "booking",
+                "title": "Reservation Postponed",
+                "message": "Your approved reservation for Bernardo Court has been postponed from December 14, 2025 (Morning (8AM - 12PM)) to December 17, 2025 (Morning (8:00 AM - 12:00 PM)). The new date requires re-approval. Reason: Will be used as evacuation center",
+                "link": "\/resources\/views\/pages\/dashboard\/my_reservations.php",
+                "is_read": 0,
+                "created_at": "2025-12-13 22:11:44"
+            },
+            {
+                "id": 9,
+                "user_id": 1,
+                "type": "booking",
+                "title": "Reservation Approved",
+                "message": "Your reservation request for Bernardo Court on December 14, 2025 (Morning (8AM - 12PM)) has been approved.",
+                "link": "\/resources\/views\/pages\/dashboard\/my_reservations.php",
+                "is_read": 0,
+                "created_at": "2025-12-09 14:42:42"
+            },
+            {
+                "id": 8,
+                "user_id": 1,
+                "type": "booking",
+                "title": "Reservation Submitted",
+                "message": "Your reservation request for Covered Court has been submitted and is pending review.",
+                "link": "\/resources\/views\/pages\/dashboard\/my_reservations.php",
+                "is_read": 1,
+                "created_at": "2025-12-07 15:44:06"
+            },
+            {
+                "id": 7,
+                "user_id": 1,
+                "type": "booking",
+                "title": "New Reservation Request",
+                "message": "A new reservation request has been submitted for Covered Court on December 14, 2025 (Morning (8AM - 12PM)).",
+                "link": "\/resources\/views\/pages\/dashboard\/reservations_manage.php",
+                "is_read": 0,
+                "created_at": "2025-12-07 15:44:05"
+            },
+            {
+                "id": 3,
+                "user_id": 1,
+                "type": "booking",
+                "title": "New Reservation Request",
+                "message": "A new reservation request has been submitted for Covered Court on December 11, 2025 (Morning (8AM - 12PM)).",
+                "link": "\/resources\/views\/pages\/dashboard\/reservations_manage.php",
+                "is_read": 0,
+                "created_at": "2025-12-05 16:02:45"
+            },
+            {
+                "id": 1,
+                "user_id": 1,
+                "type": "booking",
+                "title": "New Reservation Request",
+                "message": "A new reservation request has been submitted for Community Convention Hall on December 4, 2025 (Morning (8AM - 12PM)).",
+                "link": "\/resources\/views\/pages\/dashboard\/reservations_manage.php",
+                "is_read": 1,
+                "created_at": "2025-12-03 21:26:25"
+            }
+        ]
+    }
+}

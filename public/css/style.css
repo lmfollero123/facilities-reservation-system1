@@ -2988,6 +2988,46 @@ body.landing-page .section:not(.contact-section) {
     }
 }
 
+/* Print styles - focus on main content, hide sidebar/chatbot */
+@media print {
+    body.dashboard {
+        background: #ffffff !important;
+    }
+
+    body.dashboard .sidebar,
+    body.dashboard .chatbot-fab,
+    body.dashboard .chatbot-panel,
+    body.dashboard .guest-navbar,
+    body.dashboard .modal-confirm {
+        display: none !important;
+    }
+
+    body.dashboard .dashboard-main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    body.dashboard .dashboard-content {
+        padding: 0 !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+    }
+
+    .booking-card {
+        box-shadow: none !important;
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        page-break-inside: avoid;
+    }
+
+    a.btn-primary,
+    a.btn-outline,
+    button.btn-primary,
+    button.btn-outline {
+        box-shadow: none !important;
+    }
+}
+
 /* Mobile adjustments for section spacing */
 @media (max-width: 768px) {
     body.landing-page .section:first-of-type {

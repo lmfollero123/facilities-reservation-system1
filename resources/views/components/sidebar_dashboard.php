@@ -26,6 +26,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         ['label' => 'Energy Efficiency', 'href' => $base . '/resources/views/pages/dashboard/energy_efficiency_integration.php', 'icon' => 'lightbulb'],
         ['label' => 'Reports & Analytics', 'href' => $base . '/resources/views/pages/dashboard/reports.php', 'icon' => 'chart-bar'],
         ['label' => 'User Management', 'href' => $base . '/resources/views/pages/dashboard/user_management.php', 'icon' => 'users'],
+        ['label' => 'Document Management', 'href' => $base . '/resources/views/pages/dashboard/document_management.php', 'icon' => 'folder'],
         ['label' => 'Contact Inquiries', 'href' => $base . '/resources/views/pages/dashboard/contact_inquiries.php', 'icon' => 'envelope'],
     ];
 }
@@ -93,6 +94,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
                                     'chart-bar' => '<path d="M3 3V21H21M7 16L12 11L16 15L21 10M21 10H16M21 10V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'users' => '<path d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M21 21V19C20.9993 17.1 20.1 15.3 18.6 14.1M3 21V19C3.00068 17.1 3.9 15.3 5.4 14.1M12 11C13.6569 11 15 9.65685 15 8C15 6.34315 13.6569 5 12 5C10.3431 5 9 6.34315 9 8C9 9.65685 10.3431 11 12 11ZM12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11ZM18 13C19.6569 13 21 11.6569 21 10C21 8.34315 19.6569 7 18 7M6 13C4.34315 13 3 11.6569 3 10C3 8.34315 4.34315 7 6 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'envelope' => '<path d="M3 8L12 13L21 8M3 8L3 16C3 17.1 3.9 18 5 18H19C20.1 18 21 17.1 21 16V8M3 8L12 3L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+                                    'folder' => '<path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                 ];
                                 echo $iconPaths[$link['icon']] ?? '';
                                 ?>

@@ -10,6 +10,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/data_export.php';
 
 $pdo = db();
 $pageTitle = 'Profile | LGU Facilities Reservation';
@@ -22,6 +23,25 @@ if (!$userId) {
 
 $success = '';
 $error = '';
+
+// Handle data export request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
+    $exportType = $_POST['export_type'] ?? 'full';
+    
+    try {
+        $filepath = exportUserData($userId, $exportType);
+        if ($filepath) {
+            $success = 'Your data export has been generated successfully. Check the "Data Export" section below to download it.';
+        } else {
+            $error = 'Failed to generate data export. Please try again.';
+        }
+    } catch (Exception $e) {
+        $error = 'Failed to generate data export: ' . $e->getMessage();
+    }
+}
+
+// Get export history
+$exportHistory = getUserExportHistory($userId);
 
 // Load current user data
 $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status FROM users WHERE id = :id LIMIT 1');
@@ -372,6 +392,70 @@ ob_start();
                     <button class="btn-outline" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">Update Password</button>
                 </div>
             </form>
+
+            <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
+                <h3 style="margin:0 0 1rem; color:#1b1b1f; font-size:1.1rem; font-weight:600;">Data Export</h3>
+                <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1rem; line-height:1.6;">
+                    Under the Data Privacy Act, you have the right to request a copy of your personal data. Export files expire after 7 days for security.
+                </p>
+                <form method="POST" style="display:flex; flex-direction:column; gap:0.75rem;">
+                    <input type="hidden" name="export_data" value="1">
+                    <label>
+                        <span style="display:block; margin-bottom:0.5rem; color:#1b1b1f; font-weight:500;">Export Type</span>
+                        <select name="export_type" required style="width:100%; padding:0.75rem; border:2px solid #e1e7f0; border-radius:6px; font-size:0.95rem;">
+                            <option value="full">Full Data Export (All Information)</option>
+                            <option value="profile">Profile Information Only</option>
+                            <option value="reservations">Reservations Only</option>
+                            <option value="documents">Documents List Only</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="btn-primary" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">Generate Export</button>
+                </form>
+                
+                <?php if (!empty($exportHistory)): ?>
+                    <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
+                        <h4 style="margin:0 0 0.75rem; color:#1b1b1f; font-size:1rem; font-weight:600;">Recent Exports</h4>
+                        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                            <?php foreach (array_slice($exportHistory, 0, 5) as $export): ?>
+                                <?php
+                                $isExpired = strtotime($export['expires_at']) < time();
+                                $fileExists = file_exists(app_root_path() . '/' . $export['file_path']);
+                                $canDownload = !$isExpired && $fileExists;
+                                ?>
+                                <div style="padding:0.75rem; background:#f8f9fa; border-radius:6px; font-size:0.85rem;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                                        <div>
+                                            <strong><?= ucfirst(htmlspecialchars($export['export_type'])); ?></strong>
+                                            <span style="color:#5b6888; margin-left:0.5rem;">
+                                                <?= date('M d, Y H:i', strtotime($export['created_at'])); ?>
+                                            </span>
+                                        </div>
+                                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                                            <?php if ($canDownload): ?>
+                                                <a href="<?= base_path() . '/resources/views/pages/dashboard/export_view.php?id=' . $export['id']; ?>" 
+                                                   class="btn-primary" 
+                                                   style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">View</a>
+                                                <a href="<?= base_path() . '/resources/views/pages/dashboard/download_export.php?id=' . $export['id']; ?>" 
+                                                   class="btn-outline" 
+                                                   style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Download JSON</a>
+                                            <?php else: ?>
+                                                <span style="color:#8b95b5; font-size:0.8rem;">
+                                                    <?= $isExpired ? 'Expired' : 'Unavailable'; ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <?php if (!$isExpired): ?>
+                                        <div style="margin-top:0.25rem; color:#5b6888; font-size:0.8rem;">
+                                            Expires: <?= date('M d, Y', strtotime($export['expires_at'])); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
 
             <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
                 <h3 style="font-size:0.95rem; color:#1b1b1f; margin-bottom:0.75rem;">Security Tips</h3>

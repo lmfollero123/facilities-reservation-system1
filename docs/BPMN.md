@@ -65,12 +65,42 @@ flowchart TD
     ShowRiskWarning --> ConfirmRisk{User Confirms?}
     ConfirmRisk -->|No| SelectDate
     ConfirmRisk -->|Yes| SubmitBooking
-    RiskCheck -->|No| SubmitBooking[Submit Booking Request]
-    SubmitBooking --> CreateReservation[Create Reservation Record]
-    CreateReservation --> SetStatusPending[Set Status: Pending]
-    SetStatusPending --> CreateHistory[Create Reservation History Entry]
-    CreateHistory --> SendNotification[Send Notification to Admin/Staff]
-    SendNotification --> End2([End - Booking Submitted])
+    RiskCheck -->|No|     SubmitBooking[Submit Booking Request]
+    SubmitBooking --> ValidateData[Validate Booking Data]
+    ValidateData --> CheckAutoApproval{Evaluate Auto-Approval Conditions}
+    
+    CheckAutoApproval -->|Check Facility| CheckFacility[Facility auto_approve = true?]
+    CheckAutoApproval -->|Check Blackout| CheckBlackout[Date not in blackout dates?]
+    CheckAutoApproval -->|Check Duration| CheckDuration[Duration ≤ max_duration_hours?]
+    CheckAutoApproval -->|Check Capacity| CheckCapacity[Attendees ≤ capacity_threshold?]
+    CheckAutoApproval -->|Check Commercial| CheckCommercial[Non-commercial purpose?]
+    CheckAutoApproval -->|Check Conflicts| CheckConflicts[No time conflicts?]
+    CheckAutoApproval -->|Check Violations| CheckViolations[User has no high-severity violations?]
+    CheckAutoApproval -->|Check Window| CheckWindow[Within advance booking window?]
+    
+    CheckFacility --> AllConditions{All Conditions Met?}
+    CheckBlackout --> AllConditions
+    CheckDuration --> AllConditions
+    CheckCapacity --> AllConditions
+    CheckCommercial --> AllConditions
+    CheckConflicts --> AllConditions
+    CheckViolations --> AllConditions
+    CheckWindow --> AllConditions
+    
+    AllConditions -->|Yes| AutoApprove[Set Status: Approved]
+    AllConditions -->|No| SetPending[Set Status: Pending]
+    
+    AutoApprove --> CreateReservationApproved[Create Reservation Record (approved, auto_approved=true)]
+    SetPending --> CreateReservationPending[Create Reservation Record (pending, auto_approved=false)]
+    
+    CreateReservationApproved --> CreateHistoryAuto[Create History: Auto-Approved]
+    CreateReservationPending --> CreateHistoryPending[Create History: Pending Review]
+    
+    CreateHistoryAuto --> NotifyUser[Send Notification to User: Approved]
+    CreateHistoryPending --> NotifyStaff[Send Notification to Admin/Staff: Pending Review]
+    
+    NotifyUser --> EndApproved([End - Booking Auto-Approved])
+    NotifyStaff --> EndPending([End - Booking Pending Review])
     
     style Start fill:#e1f5e1
     style End1 fill:#ffe1e1
@@ -239,6 +269,46 @@ flowchart TD
 
 ---
 
+## 7. Violation Recording Process
+
+```mermaid
+flowchart TD
+    Start([Admin/Staff Views Reservation]) --> CheckPast{Past Reservation?}
+    CheckPast -->|No| NoViolation[Cannot record violation for future reservations]
+    NoViolation --> End1([End])
+    
+    CheckPast -->|Yes| OpenViolationModal[Open Violation Recording Modal]
+    OpenViolationModal --> SelectType[Select Violation Type]
+    SelectType --> SelectSeverity[Select Severity Level]
+    SelectSeverity --> EnterDescription[Enter Description Optional]
+    EnterDescription --> SubmitViolation[Submit Violation Record]
+    
+    SubmitViolation --> ValidateData{Data Valid?}
+    ValidateData -->|No| ShowError[Show Validation Error]
+    ShowError --> SelectType
+    
+    ValidateData -->|Yes| RecordViolation[Record Violation in Database]
+    RecordViolation --> LinkReservation[Link to Reservation if Applicable]
+    LinkReservation --> CheckSeverity{High or Critical Severity?}
+    
+    CheckSeverity -->|Yes| DisableAutoApprove[Disable Auto-Approval for User]
+    CheckSeverity -->|No| KeepAutoApprove[Auto-Approval Still Available]
+    
+    DisableAutoApprove --> LogAudit[Log Audit Event]
+    KeepAutoApprove --> LogAudit
+    
+    LogAudit --> NotifyAdmin[Show Success Notification]
+    NotifyAdmin --> UpdateStats[Update User Violation Statistics]
+    UpdateStats --> End2([End - Violation Recorded])
+    
+    style Start fill:#e1f5e1
+    style End1 fill:#ffe1e1
+    style End2 fill:#e1f5e1
+    style CheckPast fill:#fff4e1
+    style ValidateData fill:#fff4e1
+    style CheckSeverity fill:#fff4e1
+```
+
 ## 6. AI Chatbot Interaction Process
 
 ```mermaid
@@ -277,10 +347,12 @@ flowchart TD
 7. **Loop**: Continue conversation until user closes chat
 
 ### Integration Points
-- **API Endpoint**: `POST /api/ai/chat`
+- **API Endpoint**: `POST /api/ai/chat` (ready for implementation)
 - **Request**: `{ "message": "user query", "user_id": 123, "context": {...} }`
 - **Response**: `{ "response": "AI generated response", "confidence": 0.95 }`
 - **Database Queries**: Facilities (D4), Reservations (D3) for context
+- **Status**: UI implemented with floating widget, mock responses active, AI/ML model integration pending
+- **Future**: Connect to OpenAI API, custom LLM, or hosted AI service with safety/allow-listing
 
 ---
 

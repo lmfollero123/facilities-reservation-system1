@@ -21,6 +21,9 @@
 9. [Auto-Decline Process Flowchart](#9-auto-decline-process-flowchart)
 10. [AI Conflict Detection Flowchart](#10-ai-conflict-detection-flowchart)
 11. [AI Facility Recommendation Flowchart](#11-ai-facility-recommendation-flowchart)
+12. [Auto-Approval Evaluation Flowchart](#12-auto-approval-evaluation-flowchart)
+13. [Resident Reschedule Flowchart](#13-resident-reschedule-flowchart)
+14. [Violation Recording Flowchart](#14-violation-recording-flowchart)
 
 ---
 
@@ -313,10 +316,13 @@
             │  User Enters:      │
             │  - Facility        │
             │  - Date            │
-            │  - Time Slot       │
+            │  - Start Time      │
+            │  - End Time        │
             │  - Purpose         │
             │  - Expected        │
-            │    Attendance      │
+            │    Attendees       │
+            │  - Commercial      │
+            │    Purpose (Y/N)   │
             └──────────┬──────────┘
                        │
                        ▼
@@ -861,7 +867,9 @@
                        ▼
             ┌─────────────────────┐
             │  Check Reservation  │
-            │  Date & Time Slot   │
+            │  Date & Time Range  │
+            │  (start_time -      │
+            │   end_time)         │
             └──────────┬──────────┘
                        │
         ┌───────────────┼───────────────┐
@@ -1011,9 +1019,12 @@
             │  Bookings          │
             │  WHERE facility_id  │
             │  AND date = ?      │
-            │  AND time_slot = ? │
-            │  AND status =      │
-            │  'approved'        │
+            │  AND status IN     │
+            │  ('pending',       │
+            │   'approved')      │
+            │  Check for         │
+            │  Overlapping Time  │
+            │  Ranges            │
             └──────────┬──────────┘
                        │
             ┌──────────┴──────────┐
@@ -1262,11 +1273,315 @@
 
 ---
 
+## 12. Auto-Approval Evaluation Flowchart
+
+```
+                    START
+                      │
+                      ▼
+            ┌─────────────────────┐
+            │  Reservation        │
+            │  Submitted          │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  System Evaluates   │
+            │  8 Conditions       │
+            └──────────┬──────────┘
+                       │
+        ┌───────────────┼───────────────┐
+        │               │               │
+        ▼               ▼               ▼
+┌───────────┐   ┌───────────┐   ┌───────────┐
+│Condition 1│   │Condition 2│   │Condition 3│
+│Facility   │   │Not in     │   │Duration ≤ │
+│auto_approve│  │blackout   │   │max_duration│
+│= true?    │   │dates?     │   │_hours?    │
+└─────┬─────┘   └─────┬─────┘   └─────┬─────┘
+      │               │               │
+      ▼               ▼               ▼
+┌───────────┐   ┌───────────┐   ┌───────────┐
+│Condition 4│   │Condition 5│   │Condition 6│
+│Attendees ≤│   │Non-       │   │No time    │
+│capacity_  │   │commercial?│   │conflicts? │
+│threshold? │   │           │   │           │
+└─────┬─────┘   └─────┬─────┘   └─────┬─────┘
+      │               │               │
+      ▼               ▼               ▼
+┌───────────┐   ┌───────────┐
+│Condition 7│   │Condition 8│
+│User has no│   │Within     │
+│high-severity│ │advance    │
+│violations?│   │booking    │
+│           │   │window?    │
+└─────┬─────┘   └─────┬─────┘
+      │               │
+      └───────┬───────┘
+              │
+              ▼
+      ┌───────────────┐
+      │  All Conditions│
+      │  Passed?       │
+      └───────┬───────┘
+              │
+      ┌───────┴───────┐
+      │               │
+      ▼               ▼
+┌───────────┐   ┌───────────┐
+│    YES    │   │    NO     │
+└─────┬─────┘   └─────┬─────┘
+      │               │
+      ▼               ▼
+┌───────────┐   ┌───────────┐
+│Set Status │   │Set Status │
+│'approved' │   │'pending'  │
+│auto_      │   │auto_      │
+│approved=  │   │approved=  │
+│true       │   │false      │
+└─────┬─────┘   └─────┬─────┘
+      │               │
+      │               │
+      └───────┬───────┘
+              │
+              ▼
+      ┌───────────────┐
+      │Create History │
+      │Entry          │
+      └───────┬───────┘
+              │
+              ▼
+      ┌───────────────┐
+      │Notify User    │
+      │(Auto-approved │
+      │or Pending)    │
+      └───────┬───────┘
+              │
+              ▼
+            END
+```
+
+---
+
+## 13. Resident Reschedule Flowchart
+
+```
+                    START
+                      │
+                      ▼
+            ┌─────────────────────┐
+            │  Resident Views     │
+            │  My Reservations    │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Click Reschedule   │
+            │  Button             │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Check Eligibility: │
+            │  - Event > 3 days   │
+            │    away?            │
+            │  - reschedule_count │
+            │    = 0?             │
+            │  - Status is        │
+            │    approved/pending?│
+            └──────────┬──────────┘
+                       │
+            ┌──────────┴──────────┐
+            │                     │
+            ▼                     ▼
+    ┌───────────────┐    ┌───────────────┐
+    │ Not Eligible  │    │  Eligible     │
+    │ Show Error    │    │               │
+    └───────┬───────┘    └───────┬───────┘
+            │                    │
+            │                    ▼
+            │         ┌─────────────────────┐
+            │         │  Select New Date &  │
+            │         │  Time               │
+            │         └──────────┬──────────┘
+            │                    │
+            │                    ▼
+            │         ┌─────────────────────┐
+            │         │  Validate:          │
+            │         │  - Date not in past │
+            │         │  - No conflicts     │
+            │         └──────────┬──────────┘
+            │                    │
+            │         ┌──────────┴──────────┐
+            │         │                     │
+            │         ▼                     ▼
+            │  ┌───────────────┐    ┌───────────────┐
+            │  │ Invalid       │    │ Valid         │
+            │  │ Show Error    │    │               │
+            │  └───────┬───────┘    └───────┬───────┘
+            │          │                    │
+            │          │                    ▼
+            │          │         ┌─────────────────────┐
+            │          │         │  Update Reservation │
+            │          │         │  - New date/time    │
+            │          │         │  - Increment        │
+            │          │         │    reschedule_count │
+            │          │         └──────────┬──────────┘
+            │          │                    │
+            │          │                    ▼
+            │          │         ┌─────────────────────┐
+            │          │         │  If Original Status │
+            │          │         │  was 'approved':    │
+            │          │         │  Set to 'pending'   │
+            │          │         └──────────┬──────────┘
+            │          │                    │
+            │          │                    ▼
+            │          │         ┌─────────────────────┐
+            │          │         │  Create History     │
+            │          │         │  Entry              │
+            │          │         └──────────┬──────────┘
+            │          │                    │
+            │          │                    ▼
+            │          │         ┌─────────────────────┐
+            │          │         │  Notify User &      │
+            │          │         │  Admin/Staff        │
+            │          │         └──────────┬──────────┘
+            │          │                    │
+            └──────────┴────────────────────┘
+                       │
+                       ▼
+                    END
+```
+
+---
+
+## 14. Violation Recording Flowchart
+
+```
+                    START
+                      │
+                      ▼
+            ┌─────────────────────┐
+            │  Admin/Staff Views  │
+            │  Reservation Detail │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Click "Record      │
+            │  Violation" Button  │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Open Violation     │
+            │  Modal Form         │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Select Violation   │
+            │  Type:              │
+            │  - No Show          │
+            │  - Late Cancellation│
+            │  - Policy Violation │
+            │  - Damage           │
+            │  - Other            │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Select Severity:   │
+            │  - Low              │
+            │  - Medium           │
+            │  - High             │
+            │  - Critical         │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Enter Description  │
+            │  (Optional)         │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Submit Violation   │
+            └──────────┬──────────┘
+                       │
+                       ▼
+            ┌─────────────────────┐
+            │  Validate Input     │
+            └──────────┬──────────┘
+                       │
+            ┌──────────┴──────────┐
+            │                     │
+            ▼                     ▼
+    ┌───────────────┐    ┌───────────────┐
+    │ Validation    │    │ Validation    │
+    │ Failed        │    │ Passed        │
+    └───────┬───────┘    └───────┬───────┘
+            │                    │
+            │                    ▼
+            │         ┌─────────────────────┐
+            │         │  INSERT INTO        │
+            │         │  user_violations    │
+            │         │  - user_id          │
+            │         │  - reservation_id   │
+            │         │  - violation_type   │
+            │         │  - severity         │
+            │         │  - description      │
+            │         │  - created_by       │
+            │         └──────────┬──────────┘
+            │                    │
+            │                    ▼
+            │         ┌─────────────────────┐
+            │         │  Check Severity     │
+            │         │  Level              │
+            │         └──────────┬──────────┘
+            │                    │
+            │         ┌──────────┴──────────┐
+            │         │                     │
+            │         ▼                     ▼
+            │  ┌───────────────┐    ┌───────────────┐
+            │  │ High or       │    │ Low or        │
+            │  │ Critical      │    │ Medium        │
+            │  └───────┬───────┘    └───────┬───────┘
+            │          │                    │
+            │          │ Disable Auto-      │ No Impact on
+            │          │ Approval for User  │ Auto-Approval
+            │          │                    │
+            │          └──────────┬─────────┘
+            │                     │
+            │                     ▼
+            │         ┌─────────────────────┐
+            │         │  Log Audit Event    │
+            │         └──────────┬──────────┘
+            │                    │
+            │                    ▼
+            │         ┌─────────────────────┐
+            │         │  Display Success    │
+            │         │  Message            │
+            │         │  Update Stats       │
+            │         └──────────┬──────────┘
+            │                    │
+            └────────────────────┘
+                       │
+                       ▼
+                    END
+```
+
+---
+
 ## Addenda (Dec 2025 updates)
 
 - Forgot Password flow added: request reset link → token/expiry saved → email link → reset page validates token and updates password.
 - Registration: Valid ID is primary required upload; Terms & Conditions modal auto-opens and must be accepted.
 - Booking controls: enforce ≤3 active reservations in 30 days, ≤60-day advance window, and ≤1 reservation per user per day before insert.
+- Auto-approval system: 8-condition evaluation for automatic approval (facility flag, blackout dates, duration, capacity, commercial purpose, conflicts, violations, advance window).
+- Flexible time slots: Changed from fixed 4-hour slots to flexible start/end time selection (HH:MM - HH:MM format).
+- Violation tracking: Record user violations (no-shows, policy violations, damage, etc.) with severity levels that affect auto-approval eligibility.
+- Resident reschedule: Allow residents to reschedule their own reservations (up to 3 days before, one reschedule per reservation, requires re-approval if originally approved).
 - AI risk: booking conflict check now tags PH holidays and Barangay Culiat events; warnings stay visible; calendar modal shows event pills.
 - Facility detail calendar dates now redirect to login and then to the dashboard calendar.
 - Contact form: submissions are stored to `contact_inquiries` and emailed to admins.

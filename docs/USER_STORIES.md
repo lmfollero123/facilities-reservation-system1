@@ -14,15 +14,20 @@
 - As a resident, I can update my profile (name, contact, address, coordinates, profile picture) so my information stays current.
 
 ## Booking & Recommendations
-- As a resident, I can book a facility by selecting date, time slot, and purpose so I can request usage of a venue.
+- As a resident, I can book a facility by selecting date, flexible time range (start_time - end_time), purpose, expected attendees, and commercial purpose flag so I can request usage of a venue with precise timing.
 - As a resident, I see AI conflict warnings and alternative time slots (including PH holiday/Barangay Culiat event risk) when a booking conflicts so I can adjust my request.
 - As a resident, I see AI facility recommendations (including distance) based on my purpose/location so I can pick suitable venues.
 - As a resident, I am prevented from overbooking (≤3 active within 30 days, ≤60-day advance, ≤1 per day) so the system avoids abuse.
+- As a resident, my reservation is automatically approved if all conditions are met (facility auto-approve enabled, not in blackout, within duration/capacity limits, non-commercial, no conflicts, no violations, within advance window) so I get immediate confirmation.
+- As a resident, I can reschedule my own reservations (up to 3 days before the event, one reschedule per reservation) so I can adjust my booking when needed.
 - As a resident, I can view my upcoming/pending reservations and their statuses so I can track my requests.
 - As an admin/staff, I can view pending reservations, open details, add notes, and approve/deny so I can manage requests.
+- As an admin/staff, I can modify/postpone/cancel approved reservations (with reasons, no past dates) so I can handle emergencies and changes.
+- As an admin/staff, I can record user violations (no-show, policy violation, damage, etc.) with severity levels so I can track problematic users and affect their auto-approval eligibility.
 - As an admin/staff, I see a history/timeline for reservations so I can audit what changed.
+- As an admin/staff, I can always override auto-approval decisions so I maintain full control over reservations.
 - As an admin/staff, I can auto-decline expired pending reservations so stale requests are cleaned up.
-- As a resident, I receive notifications when my reservation is approved/denied so I stay informed.
+- As a resident, I receive notifications when my reservation is auto-approved, approved, denied, modified, or postponed so I stay informed.
 
 ## Facility Management & Public View
 - As a resident, I can view public facility listings with images, citations (hover to see full link), and glass-morphism background so I can browse venues.
@@ -59,6 +64,30 @@
 ## Contact & Support
 - As a visitor, I can submit a contact inquiry that stores to the dashboard inbox and emails admins so issues are captured.
 - As a user, I can read responses or notifications related to my inquiries.
+
+## Future Features (Planned/UI Ready)
+
+### AI Chatbot (UI Implemented, Model Integration Pending)
+- As a resident, I can chat with an AI assistant that answers questions about facilities, bookings, and policies so I get instant help without contacting support.
+- As a resident, I can ask the chatbot about facility availability, booking procedures, and system policies so I understand how to use the system effectively.
+- As an admin, I can configure the chatbot to ground responses on system documentation and FAQs so users receive accurate, contextual information.
+- As a system, the chatbot can access reservation and facility data to provide context-aware responses so users get relevant answers.
+
+### Urban Planning Integration (UI Implemented, API Integration Pending)
+- As an urban planner, I can receive facility usage analytics and reservation trends from the system so I can make data-driven planning decisions.
+- As an urban planner, I can see facility location analytics and capacity utilization data so I can identify areas needing new facilities.
+- As an admin, I can receive new development plans from the Urban Planning system and automatically create facilities when projects are approved so the system stays current with new infrastructure.
+- As an admin, I can validate facility usage against zoning regulations so facilities comply with planning requirements.
+
+### Maintenance Management Integration (Design Complete, Not Implemented)
+- As a maintenance manager, I can schedule maintenance in the Maintenance Management system and have it automatically block facility bookings and notify affected users so maintenance is coordinated with reservations.
+- As a resident, I am automatically notified when a facility I've booked enters maintenance so I can plan accordingly.
+- As the system, I automatically update facility status to "maintenance" when maintenance is scheduled so availability is accurately reflected.
+
+### Project Management Integration (Design Complete, Not Implemented)
+- As a project manager, I can sync construction timelines with the reservation system so facilities are automatically blocked during construction periods.
+- As an admin, I can automatically add new facilities to the system when infrastructure projects are completed so new facilities are immediately available for booking.
+- As a resident, I am notified about facility closures due to construction projects so I can plan my bookings around construction timelines.
 # User Stories (Completed System)
 
 ## Registration & Access Control

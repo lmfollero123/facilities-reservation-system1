@@ -1,0 +1,22 @@
+PHP Fatal error:  Uncaught PDOException: could not find driver in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct()
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+=== Document Archival Script ===
+Started at: 2025-12-18 16:09:36
+Dry Run: No
+
+Found 0 users with documents to archive
+Processing limit: 50 users
+
+Processed: 0 users
+
+=== Summary ===
+Total archived: 0 documents
+Total failed: 0 documents
+Completed at: 2025-12-18 16:09:36
+
+=== Cleaning up expired export files ===
+Deleted 0 expired export files

@@ -18,7 +18,12 @@
 - Registration enforces Barangay Culiat + ≥1 required document
 - Documents stored under `public/uploads/documents/{userId}` and visible in User Management
 - Approval email on user approval
-- DFD/WFD updated to latest flows (OTP, docs, approval email)
+- Auto-approval system: 8-condition evaluation for automatic reservation approval
+- Flexible time slots: Changed from fixed 4-hour slots to flexible start/end time selection
+- Violation tracking: Record user violations with severity levels affecting auto-approval
+- Resident reschedule: Allow residents to reschedule their own reservations (constraints enforced)
+- Staff modify/postpone/cancel: Admins can modify approved reservations with date validation
+- DFD/WFD/BPMN/ERD/FLOWCHART updated to latest flows
 - Backlog documented in `docs/BACKLOG.md`
 
 ## Burndown (Textual Approximation)

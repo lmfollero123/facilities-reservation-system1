@@ -259,32 +259,82 @@
        │         │ - user_id                   │
        │         │ - facility_id               │
        │         │ - reservation_date          │
-       │         │ - time_slot                 │
+       │         │ - time_slot (flexible:      │
+       │         │   start_time - end_time)    │
        │         │ - purpose                   │
-       │         │ - status: 'pending'         │
+       │         │ - expected_attendees        │
+       │         │ - is_commercial             │
+       │         │ - status: (evaluated)       │
        │         └──────┬──────────────────────┘
        │                │
-       │                │ 5. Log Audit Event
+       │                │ 5. Auto-Approval Evaluation
        │                │
        │                ▼
        │         ┌─────────────────────────────┐
+       │         │   SYSTEM                    │
+       │         │ Evaluates Conditions:       │
+       │         │ ✓ Facility auto_approve=true│
+       │         │ ✓ Date not in blackout      │
+       │         │ ✓ Duration ≤ max_duration   │
+       │         │ ✓ Attendees ≤ threshold     │
+       │         │ ✓ Non-commercial purpose    │
+       │         │ ✓ No time conflicts         │
+       │         │ ✓ User has no violations    │
+       │         │ ✓ Within advance window     │
+       │         └──────┬──────────────────────┘
+       │                │
+       │                ├───────────────────────┐
+       │                │                       │
+       │                ▼                       ▼
+       │     ┌──────────────────┐   ┌──────────────────┐
+       │     │ ALL CONDITIONS   │   │ ANY CONDITION    │
+       │     │      MET         │   │      FAILED      │
+       │     └──────┬───────────┘   └──────┬───────────┘
+       │            │                      │
+       │            │ Set status:          │ Set status:
+       │            │ 'approved'           │ 'pending'
+       │            │ auto_approved: true  │ auto_approved: false
+       │            │                      │
+       │            ▼                      ▼
+       │     ┌──────────────────┐   ┌──────────────────┐
+       │     │ Create History   │   │ Create History   │
+       │     │ Entry (Auto-     │   │ Entry (Pending   │
+       │     │ Approved)        │   │ Review)          │
+       │     └──────┬───────────┘   └──────┬───────────┘
+       │            │                      │
+       │            │                      │
+       │            └──────────┬───────────┘
+       │                       │
+       │                       │ 6. Log Audit Event
+       │                       │
+       │                       ▼
+       │         ┌─────────────────────────────┐
        │         │   RESIDENT                  │
-       │         │ Receives Success Message    │
-       │         │ Reservation Status: PENDING │
+       │         │ Receives Notification:      │
+       │         │ - Auto-Approved: "Confirmed"│
+       │         │ - Pending: "Awaiting Review"│
        │         │ "My Reservations" Updated    │
        │         └──────┬──────────────────────┘
        │                │
-       │                │ 6. Wait for Admin Review
-       │                │
-       └────────────────┘
-                        │
-                        ▼
-              ┌─────────────────────────────┐
-              │   ADMIN/STAFF                │
-              │ Views Pending Reservations   │
-              │ (See Reservation Approval    │
-              │  Workflow)                   │
-              └─────────────────────────────┘
+       │                ├───────────────────────┐
+       │                │                       │
+       │                ▼                       ▼
+       │     ┌──────────────────┐   ┌──────────────────┐
+       │     │ AUTO-APPROVED    │   │ PENDING - WAIT   │
+       │     │ Reservation      │   │ FOR ADMIN REVIEW │
+       │     │ Confirmed        │   │                  │
+       │     └──────────────────┘   └──────┬───────────┘
+       │                                   │
+       │                                   │
+       └───────────────────────────────────┘
+                                           │
+                                           ▼
+                                 ┌─────────────────────────────┐
+                                 │   ADMIN/STAFF                │
+                                 │ Views Pending Reservations   │
+                                 │ (See Reservation Approval    │
+                                 │  Workflow)                   │
+                                 └─────────────────────────────┘
 ```
 
 ### Workflow Steps:
@@ -293,10 +343,13 @@
 3. **System** shows AI-powered facility recommendations based on purpose
 4. **Resident** fills form and submits
 5. **System** validates all inputs (date not in past, required fields)
-6. **System** creates reservation with status 'pending'
-7. **System** logs audit event and updates "My Reservations"
-8. **Resident** receives confirmation and waits for approval
-9. **Admin/Staff** reviews and approves/denies (see Reservation Approval Workflow)
+6. **System** validates all inputs (date not in past, required fields, time range, duration limits)
+7. **System** evaluates auto-approval conditions:
+   - If all 8 conditions pass → creates reservation with status **approved**, `auto_approved = true`
+   - If any condition fails → creates reservation with status **pending**, `auto_approved = false`
+8. **System** creates reservation history entry and logs audit event
+9. **Resident** receives confirmation (auto-approved or pending) and sees status in **My Reservations**
+10. **Admin/Staff** can review and override any pending/approved reservation (see Reservation Approval Workflow)
 
 ---
 
@@ -1026,6 +1079,58 @@
    - Auto-decline expired reservations
    - Input validation
    - Password hashing
+
+---
+
+## Future/Planned Workflows (UI Ready or Design Complete)
+
+### AI Chatbot Interaction Workflow (UI Implemented, Model Integration Pending)
+**Status**: Frontend complete, backend integration pending
+
+**Planned Flow**:
+1. User clicks floating chatbot icon on dashboard
+2. Chatbot panel opens with welcome message
+3. User types query or clicks quick action
+4. System processes query (currently mock, future: AI model API call)
+5. System retrieves context from reservations/facilities database if needed
+6. AI model generates contextual response
+7. Response displayed in chat interface
+8. Conversation continues until user closes chat
+
+**Future Features**:
+- Connect to AI/ML model API (OpenAI, custom LLM, hosted service)
+- FAQ grounding on system documentation
+- Safety filtering and allow-listing
+- Multi-turn conversation support
+- Context-aware responses using reservation data
+
+### Urban Planning Integration Workflow (UI Implemented, API Integration Pending)
+**Status**: Frontend complete, backend integration pending
+
+**Planned Flow**:
+1. Urban Planning system analyzes facility usage data
+2. Planning recommendations generated
+3. Recommendations sent via API to reservation system
+4. Admin/Staff views recommendations in dashboard
+5. Admin can approve/reject planning actions
+6. Approved actions trigger facility creation/updates
+
+**Future Features**:
+- Export reservation trends and usage statistics
+- Receive new development notifications
+- Auto-create facilities from approved developments
+- Validate facility usage against zoning regulations
+
+### Maintenance Management Integration Workflow (Design Complete, Not Implemented)
+**Status**: Design complete, implementation pending
+
+**Planned Flow**:
+1. Maintenance scheduled in Maintenance Management system
+2. Webhook/API notification sent to reservation system
+3. System automatically sets facility status to "maintenance"
+4. System blocks booking dates during maintenance window
+5. Affected users with reservations notified
+6. Maintenance completion triggers status update back to "available"
 
 ---
 

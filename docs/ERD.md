@@ -14,10 +14,15 @@ erDiagram
     users ||--o{ contact_inquiries : "responds"
     users ||--o{ password_reset_tokens : "has"
     users ||--o{ security_logs : "generates"
+    users ||--o{ user_violations : "commits"
+    users ||--o{ user_violations : "records"
+    users ||--o{ data_exports : "requests"
     
     facilities ||--o{ reservations : "books"
+    facilities ||--o{ facility_blackout_dates : "has"
     
     reservations ||--o{ reservation_history : "has"
+    reservations ||--o{ user_violations : "related_to"
     
     users {
         INT id PK "AUTO_INCREMENT"
@@ -58,6 +63,9 @@ erDiagram
         TEXT amenities "NULL"
         TEXT rules "NULL"
         ENUM status "available|maintenance|offline, DEFAULT available"
+        BOOLEAN auto_approve "NOT NULL, DEFAULT FALSE"
+        INT capacity_threshold "NULL"
+        DECIMAL max_duration_hours "NULL"
         TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
         TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
     }
@@ -67,9 +75,13 @@ erDiagram
         INT user_id FK "NOT NULL"
         INT facility_id FK "NOT NULL"
         DATE reservation_date "NOT NULL"
-        VARCHAR time_slot "NOT NULL"
+        VARCHAR time_slot "NOT NULL (format: HH:MM - HH:MM)"
         TEXT purpose "NOT NULL"
         ENUM status "pending|approved|denied|cancelled, DEFAULT pending"
+        INT reschedule_count "NOT NULL, DEFAULT 0"
+        INT expected_attendees "NULL"
+        BOOLEAN is_commercial "NOT NULL, DEFAULT FALSE"
+        BOOLEAN auto_approved "NOT NULL, DEFAULT FALSE"
         TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
         TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
     }
@@ -163,6 +175,46 @@ erDiagram
         VARCHAR ip_address "NOT NULL"
         TINYINT success "DEFAULT 0"
         TIMESTAMP attempted_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    user_violations {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NOT NULL, ON DELETE CASCADE"
+        INT reservation_id FK "NULL, ON DELETE SET NULL"
+        ENUM violation_type "no_show|late_cancellation|policy_violation|damage|other, NOT NULL"
+        TEXT description "NULL"
+        ENUM severity "low|medium|high|critical, NOT NULL, DEFAULT medium"
+        INT created_by FK "NULL, ON DELETE SET NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+    
+    data_exports {
+        INT id PK "AUTO_INCREMENT"
+        INT user_id FK "NOT NULL, ON DELETE CASCADE"
+        ENUM export_type "full|reservations|profile|documents, NOT NULL"
+        VARCHAR file_path "NOT NULL"
+        INT file_size "NOT NULL"
+        DATETIME created_at "NOT NULL"
+    }
+    
+    document_retention_policies {
+        INT id PK "AUTO_INCREMENT"
+        VARCHAR document_type "NOT NULL, UNIQUE"
+        INT retention_period_days "NOT NULL"
+        ENUM action_after_retention "archive|delete, NOT NULL, DEFAULT archive"
+        TEXT description "NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        TIMESTAMP updated_at "ON UPDATE CURRENT_TIMESTAMP"
+    }
+    
+    facility_blackout_dates {
+        INT id PK "AUTO_INCREMENT"
+        INT facility_id FK "NOT NULL, ON DELETE CASCADE"
+        DATE blackout_date "NOT NULL"
+        VARCHAR reason "NULL"
+        INT created_by FK "NULL, ON DELETE SET NULL"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+        UNIQUE KEY unique_facility_date "facility_id, blackout_date"
     }
 ```
 

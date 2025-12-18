@@ -236,7 +236,9 @@
 | **7.0** | Auto-Decline Expired | Automatically declines expired pending reservations |
 | **8.0** | Generate Notifications | Creates notifications for status changes |
 | **9.0** | AI Conflict Detection & Recommendations | Real-time conflict checking and facility suggestions |
+| **9.3** | Auto-Approval Evaluation | Evaluates reservations against auto-approval conditions and automatically approves eligible requests |
 | **10.0** | AI Chatbot Assistant | Conversational AI assistant for user queries and support |
+| **11.0** | Record Violations | Tracks user violations (no-shows, policy violations, damage, etc.) |
 
 ### Level 1 DFD Data Stores
 
@@ -244,14 +246,23 @@
 |------------|------|-------------|
 | **D1** | Users | Stores user account information |
 | **D2** | Sessions | Stores active user sessions |
-| **D3** | Reservations | Stores reservation requests and status |
-| **D4** | Facilities | Stores facility information |
+| **D3** | Reservations | Stores reservation requests and status (includes expected_attendees, is_commercial, auto_approved flags) |
+| **D4** | Facilities | Stores facility information (includes auto_approve, capacity_threshold, max_duration_hours) |
 | **D5** | Notifications | Stores user notifications |
 | **D6** | User Documents | Stores uploaded resident documents for verification |
+| **D7** | Audit Log | Stores system audit trail for all significant actions |
+| **D8** | User Violations | Stores user violation records (no-shows, policy violations, damage, etc.) |
+| **D9** | Facility Blackout Dates | Stores blackout dates when facilities cannot be auto-approved |
+| **D10** | Reservation History | Stores status change history for reservations |
 
 ### Additional Notes (Level 1)
-- OTP email flow: Authenticate User sends OTP to the user’s email, stores OTP hash/expiry in Users, and only then creates a session.
+- OTP email flow: Authenticate User sends OTP to the user's email, stores OTP hash/expiry in Users, and only then creates a session.
 - Registration enforces Barangay Culiat residency (address check) and at least one supporting document uploaded to User Documents.
+- **Future Integrations (Planned)**:
+  - **External Entity: AI Chatbot Provider** - Process 9.3 (AI Chatbot) will connect to external AI/ML model API (UI implemented, integration pending)
+  - **External Entity: Urban Planning System** - Data sharing for analytics and planning recommendations (UI implemented, API integration pending)
+  - **External Entity: Maintenance Management** - Facility status sync and maintenance scheduling (design complete, implementation pending)
+  - **External Entity: Project Management** - Project timeline sync and new facility creation (design complete, implementation pending)
 
 ---
 
@@ -642,13 +653,42 @@
 ### Reservation Management Data Flows
 
 **Process 3.0 - Book Facility:**
-- **Input**: Booking Request
+- **Input**: Booking Request (facility_id, date, start_time, end_time, purpose, expected_attendees, is_commercial)
 - **Processes**:
-  - 3.1: Validate Booking Data
-  - 9.1: Check Conflicts (from D3)
-  - 3.2: Create Reservation → D3
-  - 3.3: Log Audit Event → D7
-- **Output**: Reservation Record (status: pending)
+  - 3.1: Validate Booking Data (date not in past, time range valid, duration limits)
+  - 9.1: Check Conflicts (overlapping time ranges from D3)
+  - 9.3: Evaluate Auto-Approval (check all 8 conditions)
+  - 3.2: Create Reservation → D3 (status: approved if auto-approved, pending otherwise)
+  - 3.3: Create History Entry → D10
+  - 3.4: Log Audit Event → D7
+- **Output**: Reservation Record (status: approved or pending, auto_approved flag set)
+
+**Process 9.3 - Auto-Approval Evaluation:**
+- **Input**: Reservation Request Data
+- **Data Sources**:
+  - D4 (Facilities): auto_approve, capacity_threshold, max_duration_hours
+  - D9 (Blackout Dates): Check if date is blacked out
+  - D8 (User Violations): Check for high-severity violations
+  - D3 (Reservations): Check for time conflicts (overlapping ranges)
+- **Processes**:
+  - 9.3.1: Check facility auto_approve flag
+  - 9.3.2: Check blackout dates
+  - 9.3.3: Check duration vs max_duration_hours
+  - 9.3.4: Check expected_attendees vs capacity_threshold
+  - 9.3.5: Check is_commercial flag
+  - 9.3.6: Check for overlapping time conflicts
+  - 9.3.7: Check user violation history
+  - 9.3.8: Check advance booking window
+- **Output**: Auto-approval decision (true/false), condition results, reason if failed
+
+**Process 11.0 - Record Violations:**
+- **Input**: Violation Data (user_id, violation_type, severity, description, reservation_id)
+- **Processes**:
+  - 11.1: Validate Violation Data
+  - 11.2: Record Violation → D8
+  - 11.3: Log Audit Event → D7
+  - 11.4: Update User Violation Stats (if high/critical severity, affects auto-approval)
+- **Output**: Violation Record, Updated Stats
 
 **Process 4.0 - Approve Reservations:**
 - **Input**: Query Request, Approval Decision
@@ -898,7 +938,105 @@
 
 ---
 
-## 8. Level 2 DFD - AI Features
+## 8. Level 2 DFD - Violation Management
+
+```
+                    ┌──────────────┐
+                    │ ADMIN/STAFF   │
+                    └──────┬───────┘
+                           │
+                           │ Violation Data
+                           │ (user_id, type, severity,
+                           │  description, reservation_id)
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.1         │
+                    │ Validate     │
+                    │ Violation    │
+                    │ Data         │
+                    └──────┬───────┘
+                           │
+                           │ Validated Data
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.2         │
+                    │ Record       │
+                    │ Violation    │
+                    └──────┬───────┘
+                           │
+                           │ Violation Record
+                           │
+                           ▼
+                    ┌───────┐
+                    │  D8   │
+                    │User   │
+                    │Violations│
+                    └───┬───┘
+                        │
+                        │ User Violation Data
+                        │
+                        ▼
+                    ┌──────────────┐
+                    │ 11.3         │
+                    │ Check        │
+                    │ Severity     │
+                    └──────┬───────┘
+                           │
+                           ├───────────────────────┐
+                           │                       │
+                           ▼                       ▼
+                    ┌──────────────┐      ┌──────────────┐
+                    │ HIGH or      │      │ LOW or       │
+                    │ CRITICAL     │      │ MEDIUM       │
+                    └──────┬───────┘      └──────┬───────┘
+                           │                     │
+                           │ Note: Affects       │ No Impact on
+                           │ auto-approval       │ auto-approval
+                           │                     │
+                           ▼                     ▼
+                    ┌──────────────┐      ┌──────────────┐
+                    │ 11.4         │      │ 11.4         │
+                    │ Log Audit    │      │ Log Audit    │
+                    │ Event        │      │ Event        │
+                    └──────┬───────┘      └──────┬───────┘
+                           │                     │
+                           │ Audit Record        │
+                           │                     │
+                           └──────────┬──────────┘
+                                      │
+                                      ▼
+                               ┌───────┐
+                               │  D7   │
+                               │Audit  │
+                               │Log    │
+                               └───────┘
+                                      │
+                                      │
+                                      ▼
+                               ┌──────────────┐
+                               │ ADMIN/STAFF   │
+                               │ (View Updated │
+                               │  Violation    │
+                               │  Stats)       │
+                               └──────────────┘
+```
+
+### Violation Management Data Flows
+
+**Process 11.0 - Record Violations:**
+- **Input**: Violation Data (user_id, violation_type, severity, description, reservation_id)
+- **Processes**:
+  - 11.1: Validate Violation Data
+  - 11.2: Record Violation → D8
+  - 11.3: Check Severity (high/critical affects auto-approval eligibility)
+  - 11.4: Log Audit Event → D7
+- **Output**: Violation Record, Updated Stats
+
+---
+
+## 9. Level 2 DFD - AI Features
 
 ```
                     ┌──────────────┐
@@ -1094,6 +1232,152 @@
 ```
 
 ### AI Features Data Flows
+
+**Process 9.0 - AI Conflict Detection & Recommendations:**
+- **Input**: Facility ID, Date, Time Slot
+- **Processes**:
+  - 9.1: Check Conflicts (overlapping time ranges from D3)
+  - 9.1.1: Calculate Risk Score
+  - 9.1.2: Find Alternative Slots
+  - 9.2: Facility Recommendation (from D4, matches purpose/capacity/amenities)
+  - 9.3: AI Chatbot Assistant (queries D3, D4 for context)
+- **Output**: Conflict Warnings, Alternative Slots, Facility Recommendations, AI Responses
+
+---
+
+## 8. Level 2 DFD - Violation Management
+
+```
+                    ┌──────────────┐
+                    │ ADMIN/STAFF   │
+                    └──────┬───────┘
+                           │
+                           │ Violation Data
+                           │ (user_id, violation_type,
+                           │  severity, description,
+                           │  reservation_id)
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.1         │
+                    │ Validate     │
+                    │ Violation    │
+                    │ Data         │
+                    └──────┬───────┘
+                           │
+                           │ Validated Data
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.2         │
+                    │ Record       │
+                    │ Violation    │
+                    └──────┬───────┘
+                           │
+                           │ Violation Record
+                           │
+                           ▼
+                    ┌───────┐
+                    │  D8   │
+                    │User   │
+                    │Violations│
+                    └───┬───┘
+                        │
+                        │ User Violation Data
+                        │
+                        ▼
+                    ┌──────────────┐
+                    │ 11.3         │
+                    │ Check        │
+                    │ Severity     │
+                    │ Impact       │
+                    └──────┬───────┘
+                           │
+                           │ If High/Critical:
+                           │ Updates User
+                           │ Auto-Approval
+                           │ Eligibility
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.4         │
+                    │ Log Audit    │
+                    │ Event        │
+                    └──────┬───────┘
+                           │
+                           │ Audit Record
+                           │
+                           ▼
+                    ┌───────┐
+                    │  D7   │
+                    │Audit  │
+                    │Log    │
+                    └───────┘
+                           │
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ ADMIN/STAFF   │
+                    │ (Violation    │
+                    │  Recorded)    │
+                    └──────────────┘
+                           │
+                           │ Query Violations
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ 11.5         │
+                    │ Retrieve     │
+                    │ Violation    │
+                    │ Stats        │
+                    └──────┬───────┘
+                           │
+                           │ Query User Violations
+                           │
+                           ▼
+                    ┌───────┐
+                    │  D8   │
+                    │User   │
+                    │Violations│
+                    └───┬───┘
+                        │
+                        │ Violation Records
+                        │
+                        ▼
+                    ┌──────────────┐
+                    │ 11.6         │
+                    │ Calculate    │
+                    │ Statistics   │
+                    │ (counts by   │
+                    │  type,       │
+                    │  severity)   │
+                    └──────┬───────┘
+                           │
+                           │ Violation Stats
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ ADMIN/STAFF   │
+                    │ (View Stats) │
+                    └──────────────┘
+```
+
+### Violation Management Data Flows
+
+**Process 11.0 - Record Violations:**
+- **Input**: Violation Data (user_id, violation_type, severity, description, reservation_id)
+- **Processes**:
+  - 11.1: Validate Violation Data
+  - 11.2: Record Violation → D8
+  - 11.3: Check Severity Impact (high/critical affects auto-approval eligibility)
+  - 11.4: Log Audit Event → D7
+  - 11.5: Retrieve Violation Stats (from D8)
+  - 11.6: Calculate Statistics
+- **Output**: Violation Record, Updated Stats, Audit Log Entry
+
+---
+
+## 9. Level 2 DFD - AI Features
 
 **Process 9.1 - Conflict Detection:**
 - **Input**: Booking Input (facility_id, date, time_slot)
