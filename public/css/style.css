@@ -517,7 +517,6 @@ img {
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 0; /* Allow flex children to shrink */
 }
 
 .chatbot-panel-header {
@@ -579,42 +578,36 @@ img {
     transform: scale(1.03);
 }
 
-.chatbot-panel .chatbot-messages {
+.chatbot-messages {
     flex: 1;
     padding: 0.95rem 1rem;
     background: #f8fafc;
     overflow-y: auto;
-    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    min-height: 0; /* Critical: allows flexbox to constrain and enable scrolling */
 }
 
-.chatbot-panel .chatbot-messages::-webkit-scrollbar {
+.chatbot-messages::-webkit-scrollbar {
     width: 6px;
 }
 
-.chatbot-panel .chatbot-messages::-webkit-scrollbar-track {
+.chatbot-messages::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.chatbot-panel .chatbot-messages::-webkit-scrollbar-thumb {
+.chatbot-messages::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 999px;
 }
 
-.chatbot-panel .chatbot-messages::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-.chatbot-panel .message {
+.message {
     display: flex;
     gap: 0.55rem;
     animation: fadeIn 0.2s ease;
 }
 
-.chatbot-panel .message-avatar {
+.message-avatar {
     width: 28px;
     height: 28px;
     border-radius: 999px;
@@ -627,11 +620,11 @@ img {
     flex-shrink: 0;
 }
 
-.chatbot-panel .message-body {
+.message-body {
     max-width: 80%;
 }
 
-.chatbot-panel .message-content {
+.message-content {
     background: #ffffff;
     border-radius: 14px;
     padding: 0.6rem 0.8rem;
@@ -641,41 +634,41 @@ img {
     color: #0f172a;
 }
 
-.chatbot-panel .message-content ul {
+.message-content ul {
     padding-left: 1.2rem;
     margin: 0.35rem 0 0.1rem;
 }
 
-.chatbot-panel .message-note {
+.message-note {
     margin-top: 0.4rem;
     font-size: 0.78rem;
     color: #6b7280;
 }
 
-.chatbot-panel .message-meta {
+.message-meta {
     margin-top: 0.15rem;
     font-size: 0.72rem;
     color: #9ca3af;
 }
 
-.chatbot-panel .user-message {
+.user-message {
     justify-content: flex-end;
 }
 
-.chatbot-panel .user-message .message-body {
+.user-message .message-body {
     max-width: 80%;
 }
 
-.chatbot-panel .user-message .message-content {
+.user-message .message-content {
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: #ffffff;
 }
 
-.chatbot-panel .user-message .message-content p {
+.user-message .message-content p {
     color: #ffffff;
 }
 
-.chatbot-panel .user-body {
+.user-body {
     text-align: right;
     margin-left: auto;
 }
@@ -698,8 +691,7 @@ img {
 
 .chatbot-input-wrapper textarea {
     width: 100%;
-    min-height: 38px !important; /* Force minimum height to prevent disappearing */
-    height: 38px; /* Default height */
+    min-height: 38px;
     max-height: 110px;
     resize: none;
     border-radius: 999px;
@@ -709,7 +701,6 @@ img {
     line-height: 1.4;
     font-family: inherit;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    box-sizing: border-box;
 }
 
 .chatbot-input-wrapper textarea:focus {
@@ -2985,46 +2976,6 @@ body.landing-page .section:not(.contact-section) {
 
     .reports-grid {
         grid-template-columns: 1fr;
-    }
-}
-
-/* Print styles - focus on main content, hide sidebar/chatbot */
-@media print {
-    body.dashboard {
-        background: #ffffff !important;
-    }
-
-    body.dashboard .sidebar,
-    body.dashboard .chatbot-fab,
-    body.dashboard .chatbot-panel,
-    body.dashboard .guest-navbar,
-    body.dashboard .modal-confirm {
-        display: none !important;
-    }
-
-    body.dashboard .dashboard-main {
-        margin-left: 0 !important;
-        width: 100% !important;
-    }
-
-    body.dashboard .dashboard-content {
-        padding: 0 !important;
-        box-shadow: none !important;
-        background: #ffffff !important;
-    }
-
-    .booking-card {
-        box-shadow: none !important;
-        background: #ffffff !important;
-        border: 1px solid #e5e7eb !important;
-        page-break-inside: avoid;
-    }
-
-    a.btn-primary,
-    a.btn-outline,
-    button.btn-primary,
-    button.btn-outline {
-        box-shadow: none !important;
     }
 }
 

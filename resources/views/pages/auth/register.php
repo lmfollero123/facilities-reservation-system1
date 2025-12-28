@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/secure_documents.php';
 
 $pageTitle = 'Register | LGU Facilities Reservation';
 $message = '';
@@ -81,40 +82,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                 $userId = (int)$pdo->lastInsertId();
 
-                                // Store documents
-                                // Save documents under public/uploads/documents/{userId}
-                                // Use filesystem root for directory operations (not URL-relative base_path()).
-                                $docDir = app_root_path() . '/public/uploads/documents/' . $userId;
-                                if (!is_dir($docDir)) {
-                                    mkdir($docDir, 0775, true);
-                                }
-
+                                // Store documents in secure storage (outside public/)
                                 foreach ($uploads as $type => $file) {
-                                    $errors = validateFileUpload($file, ['image/jpeg','image/png','image/gif','image/webp','application/pdf']);
-                                    if (!empty($errors)) {
-                                        $message = implode(' ', $errors);
+                                    $result = saveDocumentToSecureStorage($file, $userId, $type);
+                                    
+                                    if (!$result['success']) {
+                                        $message = $result['error'] ?? 'Failed to save uploaded document.';
                                         $messageType = 'error';
                                         break;
                                     }
 
-                                    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                                    $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($file['name'], PATHINFO_FILENAME));
-                                    $filename = $safeName . '_' . time() . '.' . $ext;
-                                    $destPath = $docDir . '/' . $filename;
-
-                                    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
-                                        $message = 'Failed to save uploaded document.';
-                                        $messageType = 'error';
-                                        break;
-                                    }
-
-                                    $relPath = base_path() . '/public/uploads/documents/' . $userId . '/' . $filename;
+                                    // Store relative path (storage/private/documents/{userId}/{filename})
                                     $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
                                     $docStmt->execute([
                                         $userId,
                                         $type,
-                                        $relPath,
-                                        $filename,
+                                        $result['file_path'], // Relative path: storage/private/documents/{userId}/{filename}
+                                        basename($result['file_path']),
                                         (int)$file['size']
                                     ]);
                                 }

@@ -853,11 +853,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tell main.js to skip its legacy conflict handler on this page
     window.DISABLE_CONFLICT_CHECK = true;
 
-    // Prefill from query params (facility_id, reservation_date, time_slot)
-    const qp = new URLSearchParams(window.location.search);
-    const preFacility = qp.get('facility_id');
-    const preDate = qp.get('reservation_date');
-    const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
+    // Get form elements
     const facilitySel = document.getElementById('facility-select');
     const dateInput = document.getElementById('reservation-date');
     const startTimeInput = document.getElementById('start-time');
@@ -870,6 +866,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const eventMap = <?= json_encode($eventMap); ?>;
     const basePath = <?= json_encode(base_path()); ?>;
+
+    // Prefill from query params (facility_id, reservation_date, time_slot)
+    const qp = new URLSearchParams(window.location.search);
+    const preFacility = qp.get('facility_id');
+    const preDate = qp.get('reservation_date');
+    const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
 
     function clearMessage() {
         messageBox.style.display = 'none';
@@ -885,7 +887,14 @@ document.addEventListener('DOMContentLoaded', function() {
         messageText.textContent = text;
         if (alternatives && alternatives.length) {
             altWrap.style.display = 'block';
-            altList.innerHTML = alternatives.map(a => `<li>${a.time_slot} — ${a.recommendation}</li>`).join('');
+            // Use display field if available, otherwise use time_slot
+            altList.innerHTML = alternatives
+                .filter(a => a.available !== false) // Only show available slots
+                .map(a => {
+                    const slotDisplay = a.display || a.time_slot || '';
+                    return `<li><strong>${slotDisplay}</strong> — ${a.recommendation || 'Available'}</li>`;
+                })
+                .join('');
         } else {
             altWrap.style.display = 'none';
             altList.innerHTML = '';
@@ -907,10 +916,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     let lastShown = null;
+    let conflictCheckTimeout = null;
 
     async function checkConflict() {
-        const fid = facilitySel.value;
-        const date = dateInput.value;
+        // Clear any pending timeout
+        if (conflictCheckTimeout) {
+            clearTimeout(conflictCheckTimeout);
+            conflictCheckTimeout = null;
+        }
+
+        const fid = facilitySel?.value;
+        const date = dateInput?.value;
         const startTime = startTimeInput?.value;
         const endTime = endTimeInput?.value;
         
@@ -922,49 +938,96 @@ document.addEventListener('DOMContentLoaded', function() {
         // Build time slot string in format "HH:MM - HH:MM"
         const timeSlot = startTime + ' - ' + endTime;
         
+        // Show loading state (optional, but helpful for UX)
+        messageBox.style.display = 'block';
+        messageText.textContent = 'Checking for conflicts...';
+        
         try {
-            const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+            const url = basePath + '/resources/views/pages/dashboard/ai_conflict_check.php';
+            const body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+            
+            const resp = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`
+                body: body
             });
-            const data = await resp.json();
-            if (data.error) {
-                // Keep last state on error to avoid flicker
+            
+            if (!resp.ok) {
+                console.error('Conflict check failed:', resp.status, resp.statusText);
+                clearMessage();
                 return;
             }
+            
+            const text = await resp.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse response:', text);
+                clearMessage();
+                return;
+            }
+            
+            if (data.error) {
+                console.error('Conflict check error:', data.error);
+                clearMessage();
+                return;
+            }
+            
             const eventLabel = eventMap[date] || null;
-            const key = `${fid}|${date}|${slot}`;
+            const key = `${fid}|${date}|${timeSlot}`;
+            
             if (data.has_conflict) {
                 showMessage(data.message || 'This slot is already booked.', data.alternatives || [], data.risk_score ?? null, eventLabel);
-                lastShown = {fid, date, slot};
+                lastShown = {fid, date, timeSlot};
             } else if ((data.risk_score ?? 0) >= 50 || eventLabel) {
                 const msg = eventLabel
                     ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
                     : 'Higher demand expected. Consider alternative slots.';
                 showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel);
-                lastShown = {fid, date, slot};
+                lastShown = {fid, date, timeSlot};
             } else {
                 // Only clear if this is a different query; keep previous warning otherwise
-                if (!lastShown || `${lastShown.fid}|${lastShown.date}|${lastShown.slot}` !== key) {
+                if (!lastShown || `${lastShown.fid}|${lastShown.date}|${lastShown.timeSlot}` !== key) {
                     clearMessage();
                     lastShown = null;
                 }
             }
         } catch (e) {
-            // Keep last shown state on error
-            if (lastShown) {
-                messageBox.style.display = 'block';
-            } else {
-                clearMessage();
-            }
+            console.error('Conflict check exception:', e);
+            clearMessage();
         }
     }
 
-    facilitySel?.addEventListener('change', checkConflict);
-    dateInput?.addEventListener('change', checkConflict);
-    startTimeInput?.addEventListener('change', checkConflict);
-    endTimeInput?.addEventListener('change', checkConflict);
+    function debouncedCheckConflict() {
+        // Debounce: wait 300ms after user stops changing inputs before checking
+        if (conflictCheckTimeout) {
+            clearTimeout(conflictCheckTimeout);
+        }
+        conflictCheckTimeout = setTimeout(checkConflict, 300);
+    }
+
+    // Add event listeners for both 'change' and 'input' events
+    // 'change' fires on blur, 'input' fires as user types/selects
+    facilitySel?.addEventListener('change', debouncedCheckConflict);
+    dateInput?.addEventListener('change', debouncedCheckConflict);
+    dateInput?.addEventListener('input', debouncedCheckConflict);
+    startTimeInput?.addEventListener('change', debouncedCheckConflict);
+    startTimeInput?.addEventListener('input', debouncedCheckConflict);
+    endTimeInput?.addEventListener('change', debouncedCheckConflict);
+    endTimeInput?.addEventListener('input', debouncedCheckConflict);
+    
+    // Also trigger check when time inputs are updated via time picker
+    startTimeInput?.addEventListener('blur', function() {
+        if (facilitySel?.value && dateInput?.value && startTimeInput?.value && endTimeInput?.value) {
+            checkConflict();
+        }
+    });
+    endTimeInput?.addEventListener('blur', function() {
+        if (facilitySel?.value && dateInput?.value && startTimeInput?.value && endTimeInput?.value) {
+            checkConflict();
+        }
+    });
     
     // Time validation: ensure end time is after start time and within limits
     function validateTimes() {
@@ -997,18 +1060,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         endTimeInput.setCustomValidity('');
+        
+        // After validation passes, trigger conflict check if all fields are filled
+        if (facilitySel?.value && dateInput?.value) {
+            debouncedCheckConflict();
+        }
+        
         return true;
     }
     
     startTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('input', validateTimes);
-
-    // Prefill from query params (facility_id, reservation_date, time_slot)
-    const qp = new URLSearchParams(window.location.search);
-    const preFacility = qp.get('facility_id');
-    const preDate = qp.get('reservation_date');
-    const preSlot = qp.get('time_slot');
 
     // Prefill values and trigger change events
     if (preFacility && facilitySel) {

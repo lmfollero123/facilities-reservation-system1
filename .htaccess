@@ -5,9 +5,11 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
-    # Force HTTPS in production (uncomment when deploying)
+    # Force HTTPS in production (uncomment when deploying with SSL certificate)
+    # NOTE: Uncomment this after obtaining SSL certificate and configuring HTTPS
     # RewriteCond %{HTTPS} off
     # RewriteCond %{HTTP_HOST} !^localhost [NC]
+    # RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
     # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 </IfModule>
 

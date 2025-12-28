@@ -73,3 +73,4 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_module ON audit_log(created_at,
 -- Add index for security log archival queries
 CREATE INDEX IF NOT EXISTS idx_security_logs_created_severity ON security_logs(created_at, severity);
 
+

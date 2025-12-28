@@ -275,8 +275,9 @@ function setSecurityHeaders(): void
     // Permissions Policy
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
     
-    // Force HTTPS in production (uncomment when deploying)
-    // if (!isHTTPS() && $_SERVER['HTTP_HOST'] !== 'localhost') {
+    // Force HTTPS in production (uncomment when deploying with SSL certificate)
+    // NOTE: Uncomment this after obtaining SSL certificate and configuring HTTPS
+    // if (!isHTTPS() && $_SERVER['HTTP_HOST'] !== 'localhost' && $_SERVER['HTTP_HOST'] !== '127.0.0.1') {
     //     header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'], true, 301);
     //     exit;
     // }

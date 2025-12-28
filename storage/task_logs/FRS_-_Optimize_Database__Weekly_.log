@@ -22,3 +22,16 @@ Optimizing table: data_exports... ✗ Failed: SQLSTATE[HY000]: General error: 20
 Optimized: 1 tables
 Failed: 9 tables
 Completed at: 2025-12-18 16:24:53
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\optimize_database.php(11): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\optimize_database.php(11): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27

@@ -255,3 +255,4 @@ function recordNoShowViolation(int $reservationId, string $severity = 'medium'):
     ) !== false;
 }
 
+

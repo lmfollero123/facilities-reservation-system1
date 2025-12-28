@@ -20,3 +20,55 @@ Completed at: 2025-12-18 16:09:36
 
 === Cleaning up expired export files ===
 Deleted 0 expired export files
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\archive_documents.php(19): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27

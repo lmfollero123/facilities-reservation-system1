@@ -46,3 +46,4 @@ echo "Optimized: {$optimized} tables\n";
 echo "Failed: {$failed} tables\n";
 echo "Completed at: " . date('Y-m-d H:i:s') . "\n";
 
+

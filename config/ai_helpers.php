@@ -167,6 +167,7 @@ function calculateConflictRisk($facilityId, $date, $timeSlot) {
 
 /**
  * Find alternative time slots for a facility on a given date
+ * Calculates actual available time ranges based on existing bookings
  * 
  * @param int $facilityId Facility ID
  * @param string $date Reservation date
@@ -175,46 +176,102 @@ function calculateConflictRisk($facilityId, $date, $timeSlot) {
 function findAlternativeSlots($facilityId, $date) {
     $pdo = db();
     
-    $timeSlots = [
-        'Morning (8AM - 12PM)',
-        'Afternoon (1PM - 5PM)',
-        'Evening (5PM - 9PM)',
-    ];
+    // Facility operating hours (default: 8:00 AM - 9:00 PM)
+    $operatingStart = DateTime::createFromFormat('H:i', '08:00');
+    $operatingEnd = DateTime::createFromFormat('H:i', '21:00');
     
+    // Get all existing bookings for this facility and date
+    $bookingsStmt = $pdo->prepare(
+        'SELECT time_slot 
+         FROM reservations
+         WHERE facility_id = :facility_id
+           AND reservation_date = :date
+           AND status IN ("pending", "approved")
+         ORDER BY time_slot'
+    );
+    
+    $bookingsStmt->execute([
+        'facility_id' => $facilityId,
+        'date' => $date,
+    ]);
+    
+    $bookings = $bookingsStmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    // Parse all bookings into time ranges
+    $bookedRanges = [];
+    foreach ($bookings as $slot) {
+        $parsed = parseTimeSlot($slot);
+        if ($parsed) {
+            $bookedRanges[] = [
+                'start' => $parsed['start'],
+                'end' => $parsed['end'],
+            ];
+        }
+    }
+    
+    // Sort by start time
+    usort($bookedRanges, function($a, $b) {
+        return $a['start'] <=> $b['start'];
+    });
+    
+    // Find available gaps
     $alternatives = [];
+    $currentTime = clone $operatingStart;
     
-    foreach ($timeSlots as $slot) {
-        $checkStmt = $pdo->prepare(
-            'SELECT COUNT(*) AS conflict_count
-             FROM reservations
-             WHERE facility_id = :facility_id
-               AND reservation_date = :date
-               AND time_slot = :time_slot
-               AND status IN ("pending", "approved")'
-        );
+    foreach ($bookedRanges as $booking) {
+        // If there's a gap before this booking
+        if ($currentTime < $booking['start']) {
+            $gapStart = clone $currentTime;
+            $gapEnd = clone $booking['start'];
+            
+            // Only suggest gaps of at least 30 minutes
+            $duration = $gapStart->diff($gapEnd);
+            $durationMinutes = $duration->h * 60 + $duration->i;
+            
+            if ($durationMinutes >= 30) {
+                $alternatives[] = [
+                    'time_slot' => $gapStart->format('H:i') . ' - ' . $gapEnd->format('H:i'),
+                    'available' => true,
+                    'recommendation' => 'Available - No conflicts',
+                ];
+            }
+        }
         
-        $checkStmt->execute([
-            'facility_id' => $facilityId,
-            'date' => $date,
-            'time_slot' => $slot,
-        ]);
+        // Move current time to end of this booking (or keep it if booking ends later)
+        if ($booking['end'] > $currentTime) {
+            $currentTime = clone $booking['end'];
+        }
+    }
+    
+    // Check if there's available time after the last booking until closing
+    if ($currentTime < $operatingEnd) {
+        $gapStart = clone $currentTime;
+        $gapEnd = clone $operatingEnd;
         
-        $conflictCount = (int)$checkStmt->fetchColumn();
+        $duration = $gapStart->diff($gapEnd);
+        $durationMinutes = $duration->h * 60 + $duration->i;
         
-        if ($conflictCount === 0) {
+        if ($durationMinutes >= 30) {
             $alternatives[] = [
-                'time_slot' => $slot,
+                'time_slot' => $gapStart->format('H:i') . ' - ' . $gapEnd->format('H:i'),
                 'available' => true,
                 'recommendation' => 'Available - No conflicts',
             ];
-        } else {
-            $alternatives[] = [
-                'time_slot' => $slot,
-                'available' => false,
-                'conflict_count' => $conflictCount,
-                'recommendation' => $conflictCount . ' existing booking(s)',
-            ];
         }
+    }
+    
+    // If no bookings exist, show the full day as available
+    if (empty($bookedRanges)) {
+        $alternatives[] = [
+            'time_slot' => $operatingStart->format('H:i') . ' - ' . $operatingEnd->format('H:i'),
+            'available' => true,
+            'recommendation' => 'Available - No conflicts',
+        ];
+    }
+    
+    // Format time slots for display (convert 24h to 12h with AM/PM)
+    foreach ($alternatives as &$alt) {
+        $alt['display'] = formatTimeSlotForDisplay($alt['time_slot']);
     }
     
     return $alternatives;

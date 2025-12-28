@@ -203,12 +203,12 @@ $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch documents for listed users
+// Fetch documents for listed users (include document ID for secure URLs)
 $docsByUser = [];
 if (!empty($users)) {
     $ids = array_column($users, 'id');
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $docStmt = $pdo->prepare("SELECT user_id, document_type, file_name, file_path FROM user_documents WHERE user_id IN ($placeholders)");
+    $docStmt = $pdo->prepare("SELECT id, user_id, document_type, file_name, file_path FROM user_documents WHERE user_id IN ($placeholders)");
     $docStmt->execute($ids);
     $docs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($docs as $doc) {
@@ -317,11 +317,25 @@ ob_start();
                         <td>
                             <?php if (!empty($docsByUser[$user['id']])): ?>
                                 <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                    <?php foreach ($docsByUser[$user['id']] as $doc): ?>
-                                        <a href="<?= htmlspecialchars($doc['file_path']); ?>" target="_blank" rel="noopener" class="btn-outline" style="padding:0.35rem 0.5rem; font-size:0.85rem;">
+                                    <?php 
+                                    require_once __DIR__ . '/../../../../config/secure_documents.php';
+                                    foreach ($docsByUser[$user['id']] as $doc): 
+                                        $docId = $doc['id'] ?? null;
+                                        if ($docId):
+                                            $secureUrl = getSecureDocumentUrl($docId, 'view');
+                                    ?>
+                                        <a href="<?= htmlspecialchars($secureUrl); ?>" target="_blank" rel="noopener" class="btn-outline" style="padding:0.35rem 0.5rem; font-size:0.85rem;">
                                             <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
                                         </a>
-                                    <?php endforeach; ?>
+                                    <?php 
+                                        else:
+                                            // Fallback for documents without ID (shouldn't happen, but safety)
+                                    ?>
+                                        <span class="status-badge maintenance"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?></span>
+                                    <?php 
+                                        endif;
+                                    endforeach; 
+                                    ?>
                                 </div>
                             <?php else: ?>
                                 <span class="status-badge maintenance">No docs</span>

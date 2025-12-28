@@ -6,25 +6,13 @@
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/audit.php';
+require_once __DIR__ . '/secure_documents.php';
 
 // Retention periods (in days)
 define('DOCUMENT_ACTIVE_RETENTION_DAYS', 1095); // 3 years
 define('DOCUMENT_ARCHIVE_GRACE_PERIOD_DAYS', 30); // 30 days before archiving deleted users' docs
 
-// Archive storage path (relative to app root)
-define('ARCHIVE_STORAGE_PATH', 'storage/archive/documents/');
-
-/**
- * Get the absolute path to archive storage directory
- */
-function getArchiveStoragePath(): string
-{
-    $archivePath = app_root_path() . '/' . ARCHIVE_STORAGE_PATH;
-    if (!is_dir($archivePath)) {
-        mkdir($archivePath, 0775, true);
-    }
-    return $archivePath;
-}
+// getArchiveStoragePath() is now defined in secure_documents.php
 
 /**
  * Check if documents should be archived for a user
@@ -98,18 +86,28 @@ function archiveUserDocuments(int $userId, ?int $archivedBy = null): array
     $failed = [];
     
     foreach ($documents as $doc) {
-        // Extract relative path from file_path (e.g., /facilities-reservation-system/public/uploads/documents/123/file.pdf)
-        // We need the actual filesystem path
+        // Get actual filesystem path (handles both old public/uploads and new storage/private paths)
         $filePath = $doc['file_path'];
+        $actualPath = null;
         
-        // Convert URL path to filesystem path
-        $actualPath = str_replace(
-            base_path() . '/public/uploads/documents/',
-            app_root_path() . '/public/uploads/documents/',
-            $filePath
-        );
+        // Check if it's new secure storage path
+        if (strpos($filePath, 'storage/private/documents/') === 0) {
+            $actualPath = app_root_path() . '/' . $filePath;
+        } 
+        // Check if it's old public/uploads path
+        elseif (strpos($filePath, '/public/uploads/documents/') !== false) {
+            $actualPath = str_replace(
+                base_path() . '/public/uploads/documents/',
+                app_root_path() . '/public/uploads/documents/',
+                $filePath
+            );
+        }
+        // Try direct path
+        else {
+            $actualPath = app_root_path() . '/' . $filePath;
+        }
         
-        if (!file_exists($actualPath)) {
+        if (!$actualPath || !file_exists($actualPath)) {
             $failed[] = $doc['file_name'] . ' (file not found)';
             continue;
         }
@@ -130,7 +128,11 @@ function archiveUserDocuments(int $userId, ?int $archivedBy = null): array
                  WHERE id = ?'
             );
             $relativeArchivePath = ARCHIVE_STORAGE_PATH . $userId . '/' . $archiveFileName;
-            $updateStmt->execute([$archivedBy, $relativeArchivePath, $doc['id']]);
+            $updateStmt->execute([
+                $archivedBy,
+                $relativeArchivePath,
+                $doc['id']
+            ]);
             
             $archived[] = $doc['file_name'];
             
@@ -186,7 +188,8 @@ function restoreArchivedDocuments(int $userId, ?int $restoredBy = null): array
             continue;
         }
         
-        // Restore to active directory
+        // Restore to secure active directory (storage/private/documents/)
+        $activeDocDir = getUserDocumentStoragePath($userId);
         $restoreFileName = $doc['file_name'];
         $restoreFilePath = $activeDocDir . '/' . $restoreFileName;
         
@@ -199,10 +202,10 @@ function restoreArchivedDocuments(int $userId, ?int $restoredBy = null): array
             $counter++;
         }
         
-        // Move file back to active storage
+        // Move file back to secure active storage
         if (rename($archiveFilePath, $restoreFilePath)) {
-            // Update database record
-            $relativePath = base_path() . '/public/uploads/documents/' . $userId . '/' . $restoreFileName;
+            // Update database record with new secure path
+            $relativeRestorePath = SECURE_DOCUMENT_STORAGE_PATH . $userId . '/' . $restoreFileName;
             $updateStmt = $pdo->prepare(
                 'UPDATE user_documents 
                  SET is_archived = FALSE,
@@ -212,7 +215,7 @@ function restoreArchivedDocuments(int $userId, ?int $restoredBy = null): array
                      file_path = ?
                  WHERE id = ?'
             );
-            $updateStmt->execute([$relativePath, $doc['id']]);
+            $updateStmt->execute([$relativeRestorePath, $doc['id']]);
             
             $restored[] = $doc['file_name'];
             
@@ -322,16 +325,21 @@ function getStorageStatistics(): array
     $activeDirSize = 0;
     $archiveDirSize = 0;
     
-    $activeDir = app_root_path() . '/public/uploads/documents/';
+    // Check both old location (public/uploads) and new secure location (storage/private)
+    $activeDirOld = app_root_path() . '/public/uploads/documents/';
+    $activeDirNew = getSecureDocumentStoragePath();
     $archiveDir = getArchiveStoragePath();
     
-    if (is_dir($activeDir)) {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($activeDir, RecursiveDirectoryIterator::SKIP_DOTS)
-        );
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $activeDirSize += $file->getSize();
+    // Calculate size from both old and new locations
+    foreach ([$activeDirOld, $activeDirNew] as $dir) {
+        if (is_dir($dir)) {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $activeDirSize += $file->getSize();
+                }
             }
         }
     }
@@ -368,4 +376,5 @@ function getStorageStatistics(): array
         ]
     ];
 }
+
 
