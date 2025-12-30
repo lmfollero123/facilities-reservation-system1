@@ -20,3 +20,4 @@ CREATE TABLE IF NOT EXISTS document_access_log (
     INDEX idx_doc_access_time (accessed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+

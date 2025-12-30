@@ -1682,6 +1682,8 @@ body.landing-page .section:not(.contact-section) {
     position: sticky;
     top: 0;
     max-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
 }
 
 .sidebar .brand {
@@ -1690,6 +1692,7 @@ body.landing-page .section:not(.contact-section) {
     font-weight: 600;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     position: relative;
+    flex-shrink: 0;
 }
 
 .sidebar-close {
@@ -1720,6 +1723,11 @@ body.landing-page .section:not(.contact-section) {
     .sidebar-close {
         display: none !important;
     }
+    
+    /* Ensure sidebar is scrollable on desktop if content overflows */
+    .sidebar {
+        overflow: hidden;
+    }
 }
 
 @media (max-width: 960px) {
@@ -1732,6 +1740,29 @@ body.landing-page .section:not(.contact-section) {
     flex: 1;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    /* Custom scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.sidebar nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .sidebar-section {
@@ -1739,6 +1770,7 @@ body.landing-page .section:not(.contact-section) {
     flex-direction: column;
     gap: 0.35rem;
     margin-bottom: 1.5rem;
+    flex-shrink: 0;
 }
 
 .sidebar-section-title {
@@ -1838,6 +1870,7 @@ body.landing-page .section:not(.contact-section) {
     margin-top: auto;
     padding-top: 1rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
 }
 
 .sidebar a {
@@ -1878,6 +1911,21 @@ body.landing-page .section:not(.contact-section) {
     padding: 2rem;
     flex: 1;
     animation: fadeInUp 0.3s ease-out;
+    overflow-x: auto;
+    min-width: 0;
+}
+
+/* Prevent horizontal scroll on small screens */
+@media (max-width: 768px) {
+    .dashboard-content {
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-content {
+        padding: 1rem;
+    }
 }
 
 .header-right {
@@ -2939,6 +2987,30 @@ body.landing-page .section:not(.contact-section) {
 }
 
 /* Responsive */
+@media (max-width: 1400px) {
+    /* Medium-large screens: slightly narrower sidebar */
+    .sidebar {
+        width: 240px;
+    }
+}
+
+@media (max-width: 1200px) {
+    /* Smaller desktop screens: compact sidebar */
+    .sidebar {
+        width: 220px;
+    }
+    
+    .sidebar a {
+        padding: 0.75rem 1.25rem;
+        font-size: 0.9rem;
+    }
+    
+    .sidebar-section-title {
+        padding: 0 1.25rem;
+        font-size: 0.65rem;
+    }
+}
+
 @media (max-width: 960px) {
     .guest-nav-links {
         display: none;
@@ -2958,12 +3030,43 @@ body.landing-page .section:not(.contact-section) {
 
     .sidebar {
         width: 100%;
-        position: relative;
-        max-height: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        max-height: 100vh;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .sidebar:not(.collapsed) {
+        transform: translateX(0);
     }
 
     .sidebar.collapsed {
+        transform: translateX(-100%);
+    }
+    
+    .sidebar-backdrop {
         display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+    }
+    
+    .sidebar-backdrop.active {
+        display: block;
+        opacity: 1;
+        pointer-events: all;
     }
 
     .booking-wrapper {
@@ -2976,6 +3079,37 @@ body.landing-page .section:not(.contact-section) {
 
     .reports-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Tablet: ensure sidebar is fully scrollable */
+    .sidebar {
+        width: 280px;
+    }
+    
+    .sidebar nav {
+        padding-bottom: 1rem;
+    }
+    
+    .dashboard-content {
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Mobile: narrower sidebar */
+    .sidebar {
+        width: 100%;
+        max-width: 320px;
+    }
+    
+    .sidebar a {
+        padding: 0.85rem 1.5rem;
+    }
+    
+    .dashboard-content {
+        padding: 1rem;
     }
 }
 

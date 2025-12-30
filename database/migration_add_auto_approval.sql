@@ -49,3 +49,4 @@ CREATE INDEX idx_violations_user ON user_violations(user_id);
 CREATE INDEX idx_violations_created ON user_violations(created_at);
 
 
+

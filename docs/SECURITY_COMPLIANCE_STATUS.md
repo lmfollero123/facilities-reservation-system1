@@ -235,3 +235,4 @@
 
 **Bottom Line**: The system has **good foundations** for a capstone project, but **critical security gaps** exist that must be addressed before handling real sensitive documents in production.
 
+

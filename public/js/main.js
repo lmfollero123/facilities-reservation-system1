@@ -28,12 +28,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncSidebarInitial = () => {
         if (!sidebar) return;
-        if (window.innerWidth <= 960) {
+        const isMobile = window.innerWidth <= 960;
+        if (isMobile) {
+            // On mobile, sidebar should be hidden by default
             closeSidebar();
         } else {
+            // On desktop, sidebar should always be visible
             sidebar.classList.remove("collapsed");
             sidebarBackdrop.classList.remove("active");
             sidebarToggle?.setAttribute("aria-expanded", "true");
+        }
+        
+        // Ensure sidebar nav is scrollable if content overflows
+        const sidebarNav = sidebar.querySelector('nav');
+        if (sidebarNav) {
+            // Force scrollable if content height exceeds container
+            const navHeight = sidebarNav.scrollHeight;
+            const containerHeight = sidebarNav.clientHeight;
+            if (navHeight > containerHeight) {
+                sidebarNav.style.overflowY = 'auto';
+            }
         }
     };
 
@@ -84,7 +98,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Ensure correct state on load and resize
     syncSidebarInitial();
-    window.addEventListener("resize", syncSidebarInitial);
+    
+    // Debounce resize handler for better performance
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            syncSidebarInitial();
+        }, 150);
+    });
 
     const notifToggle = document.querySelector("[data-toggle='notif-panel']");
     const notifPanel = document.getElementById("notifPanel");
