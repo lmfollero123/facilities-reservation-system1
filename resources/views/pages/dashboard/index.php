@@ -68,8 +68,14 @@ $facilityOptionsStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY nam
 $facilityOptions = $facilityOptionsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get upcoming/reservations (filtered, up to 20)
-$whereUpcoming = ['r.user_id = :user_id'];
-$paramsUpcoming = ['user_id' => $userId];
+// For Admin/Staff: show all upcoming reservations; For Residents: show only their own
+if (in_array($userRole, ['Admin', 'Staff'])) {
+    $whereUpcoming = [];
+    $paramsUpcoming = [];
+} else {
+    $whereUpcoming = ['r.user_id = :user_id'];
+    $paramsUpcoming = ['user_id' => $userId];
+}
 
 applyFilters($whereUpcoming, $paramsUpcoming, $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, true);
 if (!$statusFilter) {
@@ -82,10 +88,12 @@ if (!isset($paramsUpcoming['today']) && !$startDateFilter) {
 }
 
 $upcomingSql = '
-    SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
+    SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name' . 
+    (in_array($userRole, ['Admin', 'Staff']) ? ', u.name AS requester_name' : '') . '
     FROM reservations r
-    JOIN facilities f ON r.facility_id = f.id
-    WHERE ' . implode(' AND ', $whereUpcoming) . '
+    JOIN facilities f ON r.facility_id = f.id' .
+    (in_array($userRole, ['Admin', 'Staff']) ? ' JOIN users u ON r.user_id = u.id' : '') . '
+    WHERE ' . (empty($whereUpcoming) ? '1=1' : implode(' AND ', $whereUpcoming)) . '
     ORDER BY r.reservation_date ASC
     LIMIT 20';
 
@@ -119,22 +127,88 @@ if (in_array($userRole, ['Admin', 'Staff'])) {
     $pendingReservations = $pendingListStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Get user's total reservations
-$totalResStmt = $pdo->prepare(
-    'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id'
-);
-$totalResStmt->execute(['user_id' => $userId]);
-$totalReservations = (int)$totalResStmt->fetchColumn();
-
-// Get user's approved reservations count
-$approvedResStmt = $pdo->prepare(
-    'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id AND status = "approved"'
-);
-$approvedResStmt->execute(['user_id' => $userId]);
-$approvedReservations = (int)$approvedResStmt->fetchColumn();
+// Get total reservations (global for Admin/Staff, user-specific for Residents)
+if (in_array($userRole, ['Admin', 'Staff'])) {
+    $totalResStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
+    $totalReservations = (int)$totalResStmt->fetchColumn();
+    
+    $approvedResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "approved"');
+    $approvedReservations = (int)$approvedResStmt->fetchColumn();
+    
+    $deniedResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "denied"');
+    $deniedReservations = (int)$deniedResStmt->fetchColumn();
+    
+    $cancelledResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "cancelled"');
+    $cancelledReservations = (int)$cancelledResStmt->fetchColumn();
+    
+    // Additional global statistics for Admin/Staff
+    $totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role = "Resident" AND status = "active"');
+    $totalUsers = (int)$totalUsersStmt->fetchColumn();
+    
+    $totalFacilitiesStmt = $pdo->query('SELECT COUNT(*) FROM facilities WHERE status = "available"');
+    $totalFacilities = (int)$totalFacilitiesStmt->fetchColumn();
+    
+    $activeUsersStmt = $pdo->query('SELECT COUNT(DISTINCT user_id) FROM reservations WHERE status IN ("approved", "pending")');
+    $activeUsers = (int)$activeUsersStmt->fetchColumn();
+    
+    // Today's reservations
+    $todayResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE reservation_date = CURDATE() AND status IN ("approved", "pending")');
+    $todayReservations = (int)$todayResStmt->fetchColumn();
+    
+    // This week's reservations
+    $weekStart = date('Y-m-d', strtotime('monday this week'));
+    $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+    $weekResStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE reservation_date BETWEEN :start AND :end AND status IN ("approved", "pending")');
+    $weekResStmt->execute(['start' => $weekStart, 'end' => $weekEnd]);
+    $weekReservations = (int)$weekResStmt->fetchColumn();
+    
+    // Approval rate calculation
+    $approvalRate = $totalReservations > 0 
+        ? round(($approvedReservations / $totalReservations) * 100, 1) 
+        : 0;
+    
+    // Average reservations per user
+    $avgReservationsPerUser = $totalUsers > 0 
+        ? round($totalReservations / $totalUsers, 1) 
+        : 0;
+    
+    // Expired pending (expiring soon - within 24 hours)
+    $expiringSoonStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "pending" AND expires_at IS NOT NULL AND expires_at <= DATE_ADD(NOW(), INTERVAL 24 HOUR)');
+    $expiringSoon = (int)$expiringSoonStmt->fetchColumn();
+} else {
+    // Resident view - user-specific data
+    $totalResStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id'
+    );
+    $totalResStmt->execute(['user_id' => $userId]);
+    $totalReservations = (int)$totalResStmt->fetchColumn();
+    
+    $approvedResStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id AND status = "approved"'
+    );
+    $approvedResStmt->execute(['user_id' => $userId]);
+    $approvedReservations = (int)$approvedResStmt->fetchColumn();
+    
+    // Set defaults for non-admin users
+    $deniedReservations = 0;
+    $cancelledReservations = 0;
+    $totalUsers = 0;
+    $totalFacilities = 0;
+    $activeUsers = 0;
+    $todayReservations = 0;
+    $weekReservations = 0;
+    $approvalRate = 0;
+    $avgReservationsPerUser = 0;
+    $expiringSoon = 0;
+}
 
 // Get unread notifications
 $unreadNotifications = getUnreadNotificationCount($userId);
+
+// Check if user is verified
+$userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+$userVerificationStmt->execute(['user_id' => $userId]);
+$isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
 
 // Get recent activity with pagination
 $perPage = 10;
@@ -288,6 +362,24 @@ ob_start();
     <small>Welcome back, <?= htmlspecialchars($_SESSION['user_name'] ?? 'User'); ?>!</small>
 </div>
 
+<?php if (!$isVerified && $userRole === 'Resident'): ?>
+<div class="booking-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: start; gap: 1rem;">
+        <div style="font-size: 2rem; flex-shrink: 0;">⚠️</div>
+        <div style="flex: 1;">
+            <h3 style="margin: 0 0 0.5rem 0; color: #856404;">Account Verification Required</h3>
+            <p style="margin: 0 0 0.75rem 0; color: #856404; line-height: 1.6;">
+                Your account is active, but you haven't submitted a valid ID yet. To enable <strong>auto-approval features</strong> for facility bookings, please upload a valid government-issued ID. You can still make reservations, but they will require manual approval and you'll need to submit an ID during the booking process.
+            </p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/profile.php#verification" class="btn-primary" style="text-decoration: none;">Upload Valid ID Now</a>
+                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="btn-outline" style="text-decoration: none;">Book Facility Anyway</a>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <form method="GET" class="booking-card" style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end;">
     <div>
         <label for="status" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Status</label>
@@ -324,63 +416,148 @@ ob_start();
 </form>
 
 <div class="stat-grid">
-    <div class="stat-card">
-        <h3>My Upcoming Reservations</h3>
-        <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue); margin: 0.5rem 0;">
-            <?= $upcomingCount; ?>
-        </p>
-        <small style="color: #8b95b5;">
-            <?= $upcomingCount === 1 ? 'reservation' : 'reservations'; ?> in the next 7 days
-        </small>
-    </div>
-    
     <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
-    <div class="stat-card">
-        <h3>Pending Approvals</h3>
-        <p style="font-size: 2rem; font-weight: 600; color: #ff9800; margin: 0.5rem 0;">
-            <?= $pendingCount; ?>
-        </p>
-        <small style="color: #8b95b5;">
-            <?= $pendingCount === 1 ? 'request' : 'requests'; ?> awaiting review
-        </small>
-    </div>
+        <!-- Admin/Staff Global Statistics -->
+        <div class="stat-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+            <h3>Total Reservations</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #1976d2; margin: 0.5rem 0;">
+                <?= number_format($totalReservations); ?>
+            </p>
+            <small style="color: #5b6888;">
+                <?= number_format($approvedReservations); ?> approved • 
+                <?= number_format($pendingCount); ?> pending
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);">
+            <h3>Pending Approvals</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #f57c00; margin: 0.5rem 0;">
+                <?= number_format($pendingCount); ?>
+            </p>
+            <small style="color: #5b6888;">
+                <?php if ($expiringSoon > 0): ?>
+                    <strong style="color: #d32f2f;"><?= $expiringSoon; ?></strong> expiring in 24h
+                <?php else: ?>
+                    Awaiting review
+                <?php endif; ?>
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+            <h3>Total Users</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #388e3c; margin: 0.5rem 0;">
+                <?= number_format($totalUsers); ?>
+            </p>
+            <small style="color: #5b6888;">
+                <?= number_format($activeUsers); ?> active users
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);">
+            <h3>Available Facilities</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #7b1fa2; margin: 0.5rem 0;">
+                <?= number_format($totalFacilities); ?>
+            </p>
+            <small style="color: #5b6888;">
+                Facilities in system
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);">
+            <h3>Today's Bookings</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #f9a825; margin: 0.5rem 0;">
+                <?= number_format($todayReservations); ?>
+            </p>
+            <small style="color: #5b6888;">
+                <?= number_format($weekReservations); ?> this week
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);">
+            <h3>Approval Rate</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #00796b; margin: 0.5rem 0;">
+                <?= $approvalRate; ?>%
+            </p>
+            <small style="color: #5b6888;">
+                <?= number_format($approvedReservations); ?> of <?= number_format($totalReservations); ?> approved
+            </small>
+        </div>
+        
+        <div class="stat-card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);">
+            <h3>Avg per User</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: #c2185b; margin: 0.5rem 0;">
+                <?= $avgReservationsPerUser; ?>
+            </p>
+            <small style="color: #5b6888;">
+                Reservations per user
+            </small>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Notifications</h3>
+            <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
+                <?= $unreadNotifications; ?>
+            </p>
+            <small style="color: #8b95b5;">
+                Unread notifications
+            </small>
+        </div>
+    <?php else: ?>
+        <!-- Resident Statistics -->
+        <div class="stat-card">
+            <h3>My Upcoming Reservations</h3>
+            <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue); margin: 0.5rem 0;">
+                <?= $upcomingCount; ?>
+            </p>
+            <small style="color: #8b95b5;">
+                <?= $upcomingCount === 1 ? 'reservation' : 'reservations'; ?> in the next 7 days
+            </small>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Reservations</h3>
+            <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.5rem 0;">
+                <?= $totalReservations; ?>
+            </p>
+            <small style="color: #8b95b5;">
+                <?= $approvedReservations; ?> approved
+            </small>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Notifications</h3>
+            <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
+                <?= $unreadNotifications; ?>
+            </p>
+            <small style="color: #8b95b5;">
+                <?= $unreadNotifications === 1 ? 'unread notification' : 'unread notifications'; ?>
+            </small>
+        </div>
     <?php endif; ?>
-    
-    <div class="stat-card">
-        <h3>Total Reservations</h3>
-        <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.5rem 0;">
-            <?= $totalReservations; ?>
-        </p>
-        <small style="color: #8b95b5;">
-            <?= $approvedReservations; ?> approved
-        </small>
-    </div>
-    
-    <div class="stat-card">
-        <h3>Notifications</h3>
-        <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
-            <?= $unreadNotifications; ?>
-        </p>
-        <small style="color: #8b95b5;">
-            <?= $unreadNotifications === 1 ? 'unread notification' : 'unread notifications'; ?>
-        </small>
-    </div>
 </div>
 
 <div class="booking-wrapper" style="margin-top: 2rem;">
     <section class="booking-card collapsible-card">
         <button class="collapsible-header" data-collapse-target="upcoming-reservations">
-            <span>Upcoming Reservations</span>
+            <span><?= in_array($userRole, ['Admin', 'Staff']) ? 'Upcoming Reservations (All Users)' : 'My Upcoming Reservations'; ?></span>
             <span class="chevron">▼</span>
         </button>
         <div class="collapsible-body" id="upcoming-reservations">
         <div class="table-responsive">
         <?php if (empty($upcomingReservations)): ?>
-            <p style="color: #8b95b5; padding: 1rem 0;">No upcoming reservations. <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" style="color: var(--gov-blue);">Book a facility</a> to get started.</p>
+            <p style="color: #8b95b5; padding: 1rem 0;">
+                No upcoming reservations.
+                <?php if (!in_array($userRole, ['Admin', 'Staff'])): ?>
+                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" style="color: var(--gov-blue);">Book a facility</a> to get started.
+                <?php endif; ?>
+            </p>
         <?php else: ?>
             <table class="table">
                 <thead>
                     <tr>
+                        <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
+                            <th>Requester</th>
+                        <?php endif; ?>
                         <th>Facility</th>
                         <th>Date</th>
                         <th>Time</th>
@@ -391,6 +568,9 @@ ob_start();
                 <tbody>
                     <?php foreach ($upcomingReservations as $res): ?>
                         <tr>
+                            <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
+                                <td><?= htmlspecialchars($res['requester_name'] ?? 'N/A'); ?></td>
+                            <?php endif; ?>
                             <td><?= htmlspecialchars($res['facility_name']); ?></td>
                             <td><?= date('M j, Y', strtotime($res['reservation_date'])); ?></td>
                             <td><?= htmlspecialchars($res['time_slot']); ?></td>
@@ -400,14 +580,18 @@ ob_start();
                                 </span>
                             </td>
                             <td>
-                                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">View</a>
+                                <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
+                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php?id=<?= (int)$res['id']; ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">Manage</a>
+                                <?php else: ?>
+                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">View</a>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
             <div style="margin-top: 1rem;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="btn-primary" style="text-decoration: none; display: inline-block;">View All Reservations</a>
+                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/<?= in_array($userRole, ['Admin', 'Staff']) ? 'reservations_manage.php' : 'my_reservations.php'; ?>" class="btn-primary" style="text-decoration: none; display: inline-block;">View All Reservations</a>
             </div>
         <?php endif; ?>
         </div>

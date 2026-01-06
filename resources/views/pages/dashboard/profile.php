@@ -44,9 +44,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
 $exportHistory = getUserExportHistory($userId);
 
 // Load current user data
-$stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status FROM users WHERE id = :id LIMIT 1');
+$stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at FROM users WHERE id = :id LIMIT 1');
 $stmt->execute(['id' => $userId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Check if user has valid ID document
+$hasValidId = false;
+$validIdDoc = null;
+if ($user) {
+    $docStmt = $pdo->prepare('SELECT id, file_name, uploaded_at, is_archived FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 ORDER BY uploaded_at DESC LIMIT 1');
+    $docStmt->execute(['user_id' => $userId]);
+    $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
+    $hasValidId = (bool)$validIdDoc;
+}
 
 if (!$user) {
     $error = 'Unable to load your profile information.';
@@ -57,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     $hasPasswordFields = !empty($_POST['current_password']) || !empty($_POST['new_password']) || !empty($_POST['confirm_password']);
     $hasProfileFields = isset($_POST['name']) && isset($_POST['email']);
     $hasProfilePicture = !empty($_FILES['profile_picture']['name']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK;
+    $hasValidIdUpload = !empty($_FILES['doc_valid_id']['name']) && $_FILES['doc_valid_id']['error'] === UPLOAD_ERR_OK;
     
     // Get form values, use existing user data as fallback
     $name = trim($_POST['name'] ?? $user['name']);
@@ -200,8 +211,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     ]);
 
                     // Refresh user data
+                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at FROM users WHERE id = :id LIMIT 1');
                     $stmt->execute(['id' => $userId]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    // Refresh document info
+                    $docStmt = $pdo->prepare('SELECT id, file_name, uploaded_at, is_archived FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 ORDER BY uploaded_at DESC LIMIT 1');
+                    $docStmt->execute(['user_id' => $userId]);
+                    $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
+                    $hasValidId = (bool)$validIdDoc;
 
                     // Update session
                     $_SESSION['user_name'] = $user['name'];
@@ -216,6 +234,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     } else {
                         $success = 'Profile updated successfully.';
                     }
+                }
+            }
+            
+            // Handle Valid ID upload
+            if ($hasValidIdUpload) {
+                require_once __DIR__ . '/../../../../config/secure_documents.php';
+                $result = saveDocumentToSecureStorage($_FILES['doc_valid_id'], $userId, 'valid_id');
+                
+                if ($result['success']) {
+                    // Store document in database
+                    $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
+                    $docStmt->execute([
+                        $userId,
+                        'valid_id',
+                        $result['file_path'],
+                        basename($result['file_path']),
+                        (int)$_FILES['doc_valid_id']['size']
+                    ]);
+                    
+                    // Note: User verification status will be updated by admin after review
+                    // We just save the document for now
+                    $success = ($success ? $success . ' ' : '') . 'Valid ID uploaded successfully. Your document is pending admin verification. Once verified, you will be able to use auto-approval features.';
+                    
+                    // Refresh document info
+                    $docStmt = $pdo->prepare('SELECT id, file_name, uploaded_at, is_archived FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 ORDER BY uploaded_at DESC LIMIT 1');
+                    $docStmt->execute(['user_id' => $userId]);
+                    $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
+                    $hasValidId = (bool)$validIdDoc;
+                } else {
+                    $error = ($error ? $error . ' ' : '') . 'Failed to upload valid ID: ' . ($result['error'] ?? 'Unknown error');
                 }
             }
         } catch (Throwable $e) {
@@ -356,6 +404,68 @@ ob_start();
 
                 <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0; display:flex; justify-content:flex-end;">
                     <button class="btn-primary" type="submit" style="padding:0.85rem 2rem; font-size:1rem; font-weight:600;">Save Changes</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="booking-card" id="verification">
+            <h2>Account Verification</h2>
+            <?php if ($user['is_verified']): ?>
+                <div style="background:#e3f8ef; border:2px solid #0d7a43; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                        <span style="font-size:1.5rem;">✅</span>
+                        <h3 style="margin:0; color:#0d7a43;">Account Verified</h3>
+                    </div>
+                    <p style="margin:0; color:#0d7a43; line-height:1.6;">
+                        Your account has been verified. You can now use auto-approval features for facility bookings.
+                        <?php if ($user['verified_at']): ?>
+                            Verified on: <?= date('F j, Y g:i A', strtotime($user['verified_at'])); ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+            <?php else: ?>
+                <div style="background:#fff4e5; border:2px solid #ffc107; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                        <span style="font-size:1.5rem;">⚠️</span>
+                        <h3 style="margin:0; color:#856404;">Account Not Verified</h3>
+                    </div>
+                    <p style="margin:0; color:#856404; line-height:1.6; margin-bottom:0.75rem;">
+                        Your account is active, but you haven't submitted a valid ID yet. To enable <strong>auto-approval features</strong> for facility bookings, please upload a valid government-issued ID below. Once uploaded, an admin will review and verify your account.
+                    </p>
+                    <p style="margin:0; color:#856404; font-size:0.9rem;">
+                        <strong>Note:</strong> You can still make reservations, but they will require manual approval until your account is verified.
+                    </p>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($hasValidId): ?>
+                <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+                    <h4 style="margin:0 0 0.5rem; color:#495057; font-size:1rem;">Current Valid ID Document</h4>
+                    <p style="margin:0; color:#6c757d; font-size:0.9rem;">
+                        File: <strong><?= htmlspecialchars($validIdDoc['file_name']); ?></strong><br>
+                        Uploaded: <?= date('F j, Y g:i A', strtotime($validIdDoc['uploaded_at'])); ?>
+                    </p>
+                    <?php if (!$user['is_verified']): ?>
+                        <p style="margin:0.5rem 0 0; color:#856404; font-size:0.85rem;">
+                            Status: Pending admin verification
+                        </p>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            
+            <form method="POST" class="booking-form" enctype="multipart/form-data">
+                <label>
+                    <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
+                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%; margin-bottom:0.5rem;">
+                    <small style="color:#6c757d; font-size:0.85rem; display:block;">
+                        Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
+                    </small>
+                </label>
+                
+                <div style="margin-top:1rem; padding-top:1rem; border-top:2px solid #e1e7f0;">
+                    <button class="btn-primary" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">
+                        <?= $hasValidId ? 'Upload New Valid ID' : 'Upload Valid ID'; ?>
+                    </button>
                 </div>
             </form>
         </section>

@@ -21,25 +21,33 @@ echo "Started at: " . date('Y-m-d H:i:s') . "\n";
 echo "Dry Run: " . ($dryRun ? 'Yes' : 'No') . "\n";
 echo "\n";
 
-// Get all pending reservations that have passed
-// Check both date and time slot (parse time slot to get end time)
+// Get all pending reservations that have expired
+// Two expiration criteria:
+// 1. expires_at timestamp has passed (48-hour time limit)
+// 2. Reservation date/time has passed (past event)
 $stmt = $pdo->query(
-    "SELECT r.id, r.reservation_date, r.time_slot, r.user_id, r.facility_id,
+    "SELECT r.id, r.reservation_date, r.time_slot, r.user_id, r.facility_id, r.expires_at,
             f.name as facility_name, u.name as user_name, u.email as user_email
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
      WHERE r.status = 'pending'
        AND (
-         r.reservation_date < CURDATE()
-         OR (
-           r.reservation_date = CURDATE()
-           AND (
-             -- Check if time slot has passed (basic check for HH:MM - HH:MM format)
-             SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', 1) < HOUR(NOW())
-             OR (
-               SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', 1) = HOUR(NOW())
-               AND SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', -1) < MINUTE(NOW())
+         -- Expired by time limit (48 hours passed)
+         (r.expires_at IS NOT NULL AND r.expires_at <= NOW())
+         OR
+         -- Past reservation date/time
+         (
+           r.reservation_date < CURDATE()
+           OR (
+             r.reservation_date = CURDATE()
+             AND (
+               -- Check if time slot has passed (basic check for HH:MM - HH:MM format)
+               SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', 1) < HOUR(NOW())
+               OR (
+                 SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', 1) = HOUR(NOW())
+                 AND SUBSTRING_INDEX(SUBSTRING_INDEX(r.time_slot, ' - ', -1), ':', -1) < MINUTE(NOW())
+               )
              )
            )
          )
@@ -49,7 +57,7 @@ $stmt = $pdo->query(
 $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $count = count($reservations);
 
-echo "Found {$count} expired pending reservations\n\n";
+echo "Found {$count} expired pending reservations (48-hour time limit or past date/time)\n\n";
 
 if ($count === 0) {
     echo "No expired reservations to decline.\n";
@@ -84,12 +92,20 @@ try {
             continue;
         }
         
+        // Determine expiration reason
+        $expirationReason = 'Auto-declined: ';
+        if ($reservation['expires_at'] && strtotime($reservation['expires_at']) <= time()) {
+            $expirationReason .= '48-hour time limit expired';
+        } else {
+            $expirationReason .= 'Reservation date/time has passed';
+        }
+        
         // Create history entry
         $histStmt = $pdo->prepare(
             "INSERT INTO reservation_history (reservation_id, status, note, created_at)
-             VALUES (?, 'denied', 'Auto-declined: Reservation date/time has passed', NOW())"
+             VALUES (?, 'denied', ?, NOW())"
         );
-        $histStmt->execute([$reservation['id']]);
+        $histStmt->execute([$reservation['id'], $expirationReason]);
         
         // Create notification for user
         $notifStmt = $pdo->prepare(
@@ -144,6 +160,7 @@ if ($dryRun) {
 }
 
 echo "Completed at: " . date('Y-m-d H:i:s') . "\n";
+
 
 
 

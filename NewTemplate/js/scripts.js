@@ -52,8 +52,22 @@ window.addEventListener('DOMContentLoaded', event => {
     });
 
     // Activate SimpleLightbox plugin for portfolio items
-    new SimpleLightbox({
-        elements: '#portfolio a.portfolio-box'
+    // Only apply to links that point to image files (not PHP pages)
+    // This allows facility detail links to work normally
+    const portfolioImageLinks = document.querySelectorAll('#portfolio a.portfolio-box[href$=".jpg"], #portfolio a.portfolio-box[href$=".jpeg"], #portfolio a.portfolio-box[href$=".png"], #portfolio a.portfolio-box[href$=".gif"], #portfolio a.portfolio-box[href$=".webp"]');
+    if (portfolioImageLinks.length > 0) {
+        new SimpleLightbox({
+            elements: portfolioImageLinks
+        });
+    }
+    
+    // Ensure facility detail links (PHP pages) work normally by preventing lightbox interference
+    const portfolioDetailLinks = document.querySelectorAll('#portfolio a.portfolio-box[href*=".php"]');
+    portfolioDetailLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            // Allow normal navigation - don't let SimpleLightbox interfere
+            // The href will naturally navigate to the PHP page
+        });
     });
 
 });

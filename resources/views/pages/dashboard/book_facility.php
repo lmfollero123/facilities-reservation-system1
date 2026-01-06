@@ -27,6 +27,12 @@ $BOOKING_LIMIT_WINDOW_DAYS = 30; // rolling window for active bookings
 $BOOKING_ADVANCE_MAX_DAYS = 60; // max days ahead
 $BOOKING_PER_DAY = 1; // max bookings per user per day (pending+approved)
 
+// Check if user is verified
+$userId = $_SESSION['user_id'] ?? null;
+$userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+$userVerificationStmt->execute(['user_id' => $userId]);
+$isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+
 try {
     $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status FROM facilities ORDER BY name');
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -34,6 +40,10 @@ try {
     $facilities = [];
     $error = 'Unable to load facilities right now.';
 }
+
+// Check if pre-filled from Smart Scheduler (for showing notification)
+$prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
+$prefillTimeSlot = isset($_GET['time_slot']) ? trim($_GET['time_slot']) : null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
@@ -44,7 +54,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $docRef = trim($_POST['doc_ref'] ?? '');
     $expectedAttendees = !empty($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : null;
     $isCommercial = isset($_POST['is_commercial']) && $_POST['is_commercial'] === '1';
-    $userId = $_SESSION['user_id'] ?? null;
+    $priorityLevel = isset($_POST['priority_level']) ? (int)$_POST['priority_level'] : 3; // Default: Private Individual
+    // Validate priority level (1=LGU/Barangay, 2=Community/Org, 3=Private)
+    if ($priorityLevel < 1 || $priorityLevel > 3) {
+        $priorityLevel = 3;
+    }
+    
+    // Check if user is verified - if not, require ID upload
+    $userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+    $userVerificationStmt->execute(['user_id' => $userId]);
+    $isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+    
+    $validIdFile = $_FILES['doc_valid_id'] ?? null;
+    $hasValidIdUpload = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
+    
+    // If user is not verified, require ID upload
+    if (!$isVerified && !$hasValidIdUpload) {
+        $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
+    }
     
     // Validate time inputs and create time slot string
     if (!$startTime || !$endTime) {
@@ -120,19 +147,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$error) {
-        // AI Conflict Detection
+        // AI Conflict Detection - BEST PRACTICE: Only APPROVED blocks, PENDING shows warning
         $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
         
+        // Hard conflict (approved reservation) - BLOCK booking
         if ($conflictCheck['has_conflict']) {
             $error = '⚠️ Conflict Detected: ' . $conflictCheck['message'];
             $conflictWarning = $conflictCheck;
-        } elseif ($conflictCheck['risk_score'] > 70) {
-            $conflictWarning = $conflictCheck;
+        } else {
+            // Soft conflict (pending) or high risk - show warning but allow booking
+            if (!empty($conflictCheck['soft_conflicts']) || $conflictCheck['risk_score'] > 70) {
+                $conflictWarning = $conflictCheck;
+            }
         }
         
-        // Only proceed if no hard conflict
+        // Only proceed if no hard conflict (approved reservations)
+        // Soft conflicts (pending) are allowed - admin will decide
         if (!$conflictCheck['has_conflict']) {
         try {
+            // If user uploaded an ID during booking, save it
+            if (!$isVerified && $hasValidIdUpload) {
+                require_once __DIR__ . '/../../../../config/secure_documents.php';
+                $result = saveDocumentToSecureStorage($validIdFile, $userId, 'valid_id');
+                
+                if ($result['success']) {
+                    // Store document in database
+                    $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
+                    $docStmt->execute([
+                        $userId,
+                        'valid_id',
+                        $result['file_path'],
+                        basename($result['file_path']),
+                        (int)$validIdFile['size']
+                    ]);
+                    
+                    // Note: User verification status will be updated by admin after review
+                    // For now, we just save the document
+                } else {
+                    $error = 'Failed to save ID document. Please try again.';
+                    throw new Exception('Document upload failed');
+                }
+            }
+            
             // Evaluate auto-approval conditions
             $autoApprovalResult = evaluateAutoApproval(
                 $facilityId,
@@ -145,17 +201,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             
             // Determine initial status based on auto-approval evaluation
+            // Note: If user is not verified, auto-approval will fail, so status will be 'pending'
             $initialStatus = $autoApprovalResult['auto_approve'] ? 'approved' : 'pending';
             $isAutoApproved = $autoApprovalResult['auto_approve'];
             
-            // Insert reservation with determined status
+            // Set expires_at for pending reservations (48 hours from now)
+            $expiresAt = null;
+            if ($initialStatus === 'pending') {
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+48 hours'));
+            }
+            
+            // Insert reservation with determined status, priority, and expiration
             $stmt = $pdo->prepare(
                 'INSERT INTO reservations (
                     user_id, facility_id, reservation_date, time_slot, purpose, 
-                    status, expected_attendees, is_commercial, auto_approved
+                    status, expected_attendees, is_commercial, auto_approved, priority_level, expires_at
                 ) VALUES (
                     :user, :facility, :date, :slot, :purpose, 
-                    :status, :attendees, :commercial, :auto_approved
+                    :status, :attendees, :commercial, :auto_approved, :priority, :expires
                 )'
             );
             $stmt->execute([
@@ -168,6 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'attendees' => $expectedAttendees,
                 'commercial' => $isCommercial ? 1 : 0,
                 'auto_approved' => $isAutoApproved ? 1 : 0,
+                'priority' => $priorityLevel,
+                'expires' => $expiresAt,
             ]);
             $newReservationId = $pdo->lastInsertId();
             
@@ -374,7 +439,21 @@ ob_start();
 <div class="booking-wrapper">
     <section class="booking-card">
         <h2>Reservation Details</h2>
-        <form class="booking-form" method="POST">
+        <?php if ($prefillFacilityId && $prefillTimeSlot): ?>
+            <div style="background:#e3f8ef; border:2px solid #0d7a43; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <span style="font-size:1.5rem;">✓</span>
+                    <div>
+                        <strong style="color:#0d7a43;">Pre-filled from Smart Scheduler</strong>
+                        <p style="margin:0.25rem 0 0; color:#0d7a43; font-size:0.9rem;">
+                            The form has been pre-filled with the recommended facility and time slot (<strong><?= htmlspecialchars($prefillTimeSlot); ?></strong>). 
+                            Please select a reservation date (preferably the next occurrence of the recommended day) and review all details before submitting.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+        <form class="booking-form" method="POST" enctype="multipart/form-data">
             <label>
                 Facility
                 <div class="input-wrapper">
@@ -421,17 +500,18 @@ ob_start();
                 </small>
             </label>
 
-            <div id="conflict-warning" style="display:none; background:#fff4e5; border:1px solid #ffc107; border-radius:8px; padding:1rem; margin-top:1rem;">
-                <h4 style="margin:0 0 0.5rem; color:#856404; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
-                    <span>⚠️</span> Conflict / Risk
-                </h4>
-                <p id="conflict-message" style="margin:0 0 0.75rem; color:#856404; font-size:0.85rem;"></p>
-                <div id="conflict-alternatives" style="display:none;">
-                    <p style="margin:0 0 0.5rem; color:#856404; font-size:0.85rem; font-weight:600;">Alternative time slots:</p>
-                    <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; color:#856404; font-size:0.85rem;"></ul>
+            <div id="conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
+                <div id="conflict-header" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <span id="conflict-icon" style="font-size:1.2rem;">⏳</span>
+                    <h4 id="conflict-title" style="margin:0; font-size:0.95rem;">Checking Availability...</h4>
                 </div>
-                <p id="conflict-risk" style="margin:0; color:#5b6888; font-size:0.82rem; display:none;"></p>
-                <small id="conflict-hint" style="display:none; color:#8b95b5; font-size:0.8rem;">Risk factors may include holidays/events, pending requests, and historical demand.</small>
+                <p id="conflict-message" style="margin:0 0 0.75rem; font-size:0.85rem;"></p>
+                <div id="conflict-alternatives" style="display:none;">
+                    <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Alternative time slots:</p>
+                    <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
+                </div>
+                <p id="conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
+                <small id="conflict-hint" style="display:none; font-size:0.8rem; opacity:0.8;">Risk factors may include holidays/events, pending requests, and historical demand.</small>
             </div>
 
             <label>
@@ -459,6 +539,21 @@ ob_start();
                 </small>
             </label>
 
+            <label>
+                Event Priority Level
+                <div class="input-wrapper">
+                    <span class="input-icon">⭐</span>
+                    <select name="priority_level" id="priority-level" required>
+                        <option value="3" selected>Private Individual Event</option>
+                        <option value="2">Community/Organization Event</option>
+                        <option value="1">LGU/Barangay Official Event</option>
+                    </select>
+                </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                    Priority helps admins make fair decisions when multiple requests compete for the same slot. LGU/Barangay events have highest priority.
+                </small>
+            </label>
+
             <div id="ai-recommendations" style="display:none; background:#e3f8ef; border:1px solid #0d7a43; border-radius:8px; padding:1rem; margin-top:1rem;">
                 <h4 style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
                     <span>🤖</span> AI Recommendations
@@ -474,6 +569,22 @@ ob_start();
                     <input type="text" name="doc_ref" placeholder="Document No. / Request Letter Ref.">
                 </div>
             </label>
+
+            <?php if (!$isVerified): ?>
+            <div style="padding:1rem; background:#fff4e5; border:2px solid #ffc107; border-radius:8px; margin-top:1rem;">
+                <h4 style="margin:0 0 0.5rem; color:#856404; font-size:1rem;">⚠️ Valid ID Required</h4>
+                <p style="margin:0 0 1rem; color:#856404; font-size:0.9rem; line-height:1.5;">
+                    Your account is not yet verified. Please upload a valid government-issued ID to proceed with this reservation. Once verified, you'll be able to use auto-approval features.
+                </p>
+                <label>
+                    Upload Valid ID (Required for unverified accounts)
+                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" required style="margin-top:0.5rem; padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                </label>
+                <small style="color:#856404; font-size:0.85rem; display:block; margin-top:0.5rem;">
+                    Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
+                </small>
+            </div>
+            <?php endif; ?>
 
             <button class="btn-primary" type="submit">Submit Booking Request</button>
         </form>
@@ -498,6 +609,18 @@ ob_start();
                         <?php endforeach; ?>
                     </ul>
                 <?php endif; ?>
+            </div>
+        <?php elseif ($conflictWarning && !empty($conflictWarning['soft_conflicts'])): ?>
+            <div style="background:#fff4e5; border:1px solid #ffc107; border-radius:8px; padding:1rem; margin-top:1.5rem;">
+                <h4 style="margin:0 0 0.5rem; color:#856404; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
+                    <span>⚠️</span> Soft Conflict - Pending Reservations
+                </h4>
+                <p style="margin:0 0 0.75rem; color:#856404; font-size:0.85rem;">
+                    <?= htmlspecialchars($conflictWarning['message']); ?>
+                </p>
+                <p style="margin:0; color:#856404; font-size:0.85rem; font-weight:600;">
+                    Note: You can still submit your booking. Admin will review all pending requests and approve the one with highest priority (LGU events > Community events > Private events).
+                </p>
             </div>
         <?php elseif ($conflictWarning && $conflictWarning['risk_score'] > 70): ?>
             <div style="background:#fff4e5; border:1px solid #ffc107; border-radius:8px; padding:1rem; margin-top:1.5rem;">
@@ -874,17 +997,71 @@ document.addEventListener('DOMContentLoaded', function() {
     const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
 
     function clearMessage() {
-        messageBox.style.display = 'none';
-        messageText.textContent = '';
-        altWrap.style.display = 'none';
-        altList.innerHTML = '';
-        riskLine.style.display = 'none';
-        riskLine.textContent = '';
+        // Fade out before hiding
+        messageBox.style.opacity = '0';
+        setTimeout(() => {
+            messageBox.style.display = 'none';
+            messageText.textContent = '';
+            altWrap.style.display = 'none';
+            altList.innerHTML = '';
+            riskLine.style.display = 'none';
+            riskLine.textContent = '';
+        }, 300);
     }
 
-    function showMessage(text, alternatives, riskScore, eventLabel) {
+    function showMessage(text, alternatives, riskScore, eventLabel, conflictType = 'hard') {
+        // Show message box with fade in
         messageBox.style.display = 'block';
+        messageBox.style.opacity = '0';
+        
+        // Force reflow
+        messageBox.offsetHeight;
+        
+        // Fade in
+        setTimeout(() => {
+            messageBox.style.opacity = '1';
+        }, 10);
+        
         messageText.textContent = text;
+        
+        const conflictIcon = document.getElementById('conflict-icon');
+        const conflictTitle = document.getElementById('conflict-title');
+        
+        // Change styling based on conflict type
+        if (conflictType === 'success' || conflictType === 'available') {
+            // Success/No conflict - green
+            messageBox.style.background = '#e3f8ef';
+            messageBox.style.border = '2px solid #0d7a43';
+            messageText.style.color = '#0d7a43';
+            if (conflictIcon) conflictIcon.textContent = '✓';
+            if (conflictTitle) conflictTitle.textContent = 'Slot Available';
+            if (conflictTitle) conflictTitle.style.color = '#0d7a43';
+        } else if (conflictType === 'soft') {
+            // Soft conflict (pending) - yellow/warning but allow submission
+            messageBox.style.background = '#fff4e5';
+            messageBox.style.border = '2px solid #ffc107';
+            messageText.style.color = '#856404';
+            if (conflictIcon) conflictIcon.textContent = '⚠️';
+            if (conflictTitle) conflictTitle.textContent = 'Warning - Pending Reservations';
+            if (conflictTitle) conflictTitle.style.color = '#856404';
+        } else if (conflictType === 'risk') {
+            // High risk - orange/warning
+            messageBox.style.background = '#fff4e5';
+            messageBox.style.border = '2px solid #ffc107';
+            messageText.style.color = '#856404';
+            if (conflictIcon) conflictIcon.textContent = '⚠️';
+            if (conflictTitle) conflictTitle.textContent = 'High Demand Period';
+            if (conflictTitle) conflictTitle.style.color = '#856404';
+        } else {
+            // Hard conflict (approved) - red/error, blocks submission
+            messageBox.style.background = '#fdecee';
+            messageBox.style.border = '2px solid #b23030';
+            messageText.style.color = '#b23030';
+            if (conflictIcon) conflictIcon.textContent = '✗';
+            if (conflictTitle) conflictTitle.textContent = 'Conflict Detected';
+            if (conflictTitle) conflictTitle.style.color = '#b23030';
+        }
+        
         if (alternatives && alternatives.length) {
             altWrap.style.display = 'block';
             // Use display field if available, otherwise use time_slot
@@ -938,9 +1115,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Build time slot string in format "HH:MM - HH:MM"
         const timeSlot = startTime + ' - ' + endTime;
         
-        // Show loading state (optional, but helpful for UX)
+        // Show loading state with professional styling
         messageBox.style.display = 'block';
-        messageText.textContent = 'Checking for conflicts...';
+        messageBox.style.opacity = '1';
+        messageBox.style.background = '#f0f4ff';
+        messageBox.style.border = '2px solid #6366f1';
+        messageText.style.color = '#4f46e5';
+        messageText.textContent = 'Checking availability and conflicts...';
+        
+        const conflictIcon = document.getElementById('conflict-icon');
+        const conflictTitle = document.getElementById('conflict-title');
+        if (conflictIcon) conflictIcon.textContent = '⏳';
+        if (conflictTitle) {
+            conflictTitle.textContent = 'Checking Availability...';
+            conflictTitle.style.color = '#4f46e5';
+        }
+        
+        altWrap.style.display = 'none';
+        riskLine.style.display = 'none';
         
         try {
             const url = basePath + '/resources/views/pages/dashboard/ai_conflict_check.php';
@@ -977,21 +1169,43 @@ document.addEventListener('DOMContentLoaded', function() {
             const eventLabel = eventMap[date] || null;
             const key = `${fid}|${date}|${timeSlot}`;
             
+            // Add small delay to make loading state visible (professional feel)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Hard conflict (approved reservation) - block booking
             if (data.has_conflict) {
-                showMessage(data.message || 'This slot is already booked.', data.alternatives || [], data.risk_score ?? null, eventLabel);
+                showMessage(data.message || 'This slot is already booked (approved reservation). Please select an alternative time.', data.alternatives || [], data.risk_score ?? null, eventLabel, 'hard');
                 lastShown = {fid, date, timeSlot};
-            } else if ((data.risk_score ?? 0) >= 50 || eventLabel) {
+            } 
+            // Soft conflict (pending reservations) - show warning but allow booking
+            else if (data.soft_conflicts && data.soft_conflicts.length > 0) {
+                const pendingCount = data.pending_count || data.soft_conflicts.length;
+                const msg = `Warning: ${pendingCount} pending reservation(s) exist for this slot. You can still book, but admin will approve only one based on priority.`;
+                showMessage(msg, [], data.risk_score ?? null, eventLabel, 'soft');
+                lastShown = {fid, date, timeSlot};
+            } 
+            // High risk or holiday
+            else if ((data.risk_score ?? 0) >= 50 || eventLabel) {
                 const msg = eventLabel
                     ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
                     : 'Higher demand expected. Consider alternative slots.';
-                showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel);
+                showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel, 'risk');
                 lastShown = {fid, date, timeSlot};
             } else {
-                // Only clear if this is a different query; keep previous warning otherwise
-                if (!lastShown || `${lastShown.fid}|${lastShown.date}|${lastShown.timeSlot}` !== key) {
-                    clearMessage();
-                    lastShown = null;
-                }
+                // No conflicts - show success message
+                const successMsg = eventLabel 
+                    ? `Slot is available! Note: ${eventLabel} may increase demand.`
+                    : '✓ This time slot is available for booking!';
+                showMessage(successMsg, [], data.risk_score ?? null, eventLabel, 'success');
+                lastShown = {fid, date, timeSlot};
+                
+                // Auto-hide success message after 4 seconds (but keep it visible long enough to see)
+                setTimeout(() => {
+                    // Only clear if this is still the last shown (user hasn't changed selection)
+                    if (lastShown && `${lastShown.fid}|${lastShown.date}|${lastShown.timeSlot}` === key) {
+                        clearMessage();
+                    }
+                }, 4000);
             }
         } catch (e) {
             console.error('Conflict check exception:', e);

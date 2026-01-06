@@ -10,7 +10,7 @@ $current = $_SERVER['PHP_SELF'] ?? '';
 $primaryLinks = [
     ['label' => 'Dashboard', 'href' => $base . '/resources/views/pages/dashboard/index.php', 'icon' => 'dashboard'],
     ['label' => 'Book a Facility', 'href' => $base . '/resources/views/pages/dashboard/book_facility.php', 'icon' => 'calendar-plus'],
-    ['label' => 'AI Scheduling', 'href' => $base . '/resources/views/pages/dashboard/ai_scheduling.php', 'icon' => 'robot'],
+    ['label' => 'Smart Scheduler', 'href' => $base . '/resources/views/pages/dashboard/ai_scheduling.php', 'icon' => 'robot'],
 ];
 
 $opsLinks = [];

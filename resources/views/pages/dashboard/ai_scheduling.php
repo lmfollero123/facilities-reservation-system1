@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 
 $pdo = db();
 $userRole = $_SESSION['role'] ?? 'Resident';
-$pageTitle = 'AI Predictive Scheduling | LGU Facilities Reservation';
+$pageTitle = 'Smart Scheduler | LGU Facilities Reservation';
 
 // Holiday / local event calendar (Philippines + Barangay Culiat) for current and next year
 $yearNow = (int)date('Y');
@@ -144,16 +144,22 @@ ob_start();
 ?>
 <div class="page-header">
     <div class="breadcrumb">
-        <span>Analytics</span><span class="sep">/</span><span>AI Predictive Scheduling</span>
+        <span>Analytics</span><span class="sep">/</span><span>Smart Scheduler</span>
     </div>
-    <h1>AI Predictive Scheduling</h1>
-    <small>Suggested time slots and peak patterns based on historical reservation data.</small>
+    <h1>Smart Scheduler</h1>
+    <small>AI-powered recommendations for optimal booking times based on historical reservation data and demand patterns.</small>
 </div>
 
 <div class="reports-grid">
     <section>
         <div class="report-card">
             <h2>Recommended Time Slots</h2>
+            <p style="color:#6c757d; font-size:0.9rem; margin-bottom:1rem; line-height:1.5;">
+                <strong>How recommendations work:</strong> The system analyzes historical booking patterns over the last 6 months. 
+                <strong>High recommendation</strong> means very few past bookings (1 or less) for that day/time combination, indicating lower conflict risk. 
+                <strong>Medium</strong> has moderate usage (2-3 bookings), while <strong>Low</strong> has frequent bookings (4+) and higher competition. 
+                These recommendations help you find the best times to book with minimal conflicts.
+            </p>
             <?php if (empty($slots)): ?>
                 <p style="color:#8b95b5; padding:1rem 0;">Not enough historical data yet to generate recommendations. Once more approved reservations are recorded, suggested slots will appear here.</p>
             <?php else: ?>
@@ -200,13 +206,20 @@ ob_start();
                 <span>AI</span> <span>Demand Forecast</span>
             </div>
             <h3>Insights Overview</h3>
-            <ul>
+            <ul style="line-height:1.8;">
                 <?php if ($peakDay): ?>
                     <li><strong>Peak day:</strong> Most approved reservations fall on <strong><?= htmlspecialchars($peakDay['day_name']); ?>s</strong>.</li>
                 <?php endif; ?>
                 <?php if ($peakTime): ?>
                     <li><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
                 <?php endif; ?>
+                <li><strong>Recommendation Scores:</strong>
+                    <ul style="margin-top:0.5rem; padding-left:1.5rem; list-style-type:disc;">
+                        <li><strong>High</strong> = 0-1 past bookings (low conflict risk, best choice)</li>
+                        <li><strong>Medium</strong> = 2-3 past bookings (moderate usage)</li>
+                        <li><strong>Low</strong> = 4+ past bookings (high competition, more conflicts)</li>
+                    </ul>
+                </li>
                 <li>Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
                 <li>These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
             </ul>

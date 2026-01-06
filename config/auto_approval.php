@@ -235,6 +235,23 @@ function evaluateAutoApproval(
         $reason = $reason ?: 'User has previous violations requiring manual review';
     }
     
+    // Condition 7.5: User must be verified (have submitted valid ID)
+    $userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+    $userVerificationStmt->execute(['user_id' => $userId]);
+    $isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+    
+    $conditions['user_verified'] = [
+        'passed' => $isVerified,
+        'message' => $isVerified 
+            ? 'User account is verified'
+            : 'User account is not verified - valid ID required for auto-approval'
+    ];
+    
+    if (!$isVerified) {
+        $allPassed = false;
+        $reason = $reason ?: 'User account is not verified - valid ID required for auto-approval';
+    }
+    
     // Condition 8: Reservation must be within advance booking window
     $today = date('Y-m-d');
     $maxDate = date('Y-m-d', strtotime("+{$advanceBookingWindowDays} days"));

@@ -273,7 +273,7 @@ $reportMonth = (int)($_GET['month'] ?? date('m'));
 $startDate = date('Y-m-01', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
 $endDate = date('Y-m-t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
 
-// Calculate KPIs
+// Calculate KPIs (Global Statistics for Admin/Staff)
 // Total reservations this month
 $totalStmt = $pdo->prepare(
     'SELECT COUNT(*) as total 
@@ -293,15 +293,68 @@ $approvedStmt = $pdo->prepare(
 $approvedStmt->execute(['start' => $startDate, 'end' => $endDate]);
 $approvedCount = (int)$approvedStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
+// Pending count
+$pendingStmt = $pdo->prepare(
+    'SELECT COUNT(*) as count 
+     FROM reservations 
+     WHERE reservation_date >= :start AND reservation_date <= :end 
+     AND status = "pending"'
+);
+$pendingStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$pendingCount = (int)$pendingStmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+// Denied count
+$deniedStmt = $pdo->prepare(
+    'SELECT COUNT(*) as count 
+     FROM reservations 
+     WHERE reservation_date >= :start AND reservation_date <= :end 
+     AND status = "denied"'
+);
+$deniedStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$deniedCount = (int)$deniedStmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+// Cancelled count
+$cancelledStmt = $pdo->prepare(
+    'SELECT COUNT(*) as count 
+     FROM reservations 
+     WHERE reservation_date >= :start AND reservation_date <= :end 
+     AND status = "cancelled"'
+);
+$cancelledStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$cancelledCount = (int)$cancelledStmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+// Global system statistics
+$totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role = "Resident" AND status = "active"');
+$totalUsers = (int)$totalUsersStmt->fetchColumn();
+
+$totalFacilitiesStmt = $pdo->query('SELECT COUNT(*) FROM facilities WHERE status = "available"');
+$totalFacilities = (int)$totalFacilitiesStmt->fetchColumn();
+
+$activeUsersStmt = $pdo->prepare(
+    'SELECT COUNT(DISTINCT user_id) 
+     FROM reservations 
+     WHERE reservation_date >= :start AND reservation_date <= :end 
+     AND status IN ("approved", "pending")'
+);
+$activeUsersStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$activeUsers = (int)$activeUsersStmt->fetchColumn();
+
 // Approval rate
-$approvalRate = $totalReservations > 0 ? round(($approvedCount / $totalReservations) * 100) : 0;
+$approvalRate = $totalReservations > 0 ? round(($approvedCount / $totalReservations) * 100, 1) : 0;
 
 // Utilization (simplified: approved reservations / total days in month * average slots per day)
 // Assuming 4 time slots per day as average (Morning, Afternoon, Evening, Full Day)
 $daysInMonth = (int)date('t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
 $totalPossibleSlots = $daysInMonth * 4; // Rough estimate
-$utilization = $totalPossibleSlots > 0 ? round(($approvedCount / $totalPossibleSlots) * 100) : 0;
+$utilization = $totalPossibleSlots > 0 ? round(($approvedCount / $totalPossibleSlots) * 100, 1) : 0;
 $utilization = min($utilization, 100); // Cap at 100%
+
+// Average reservations per user (for this month)
+$avgReservationsPerUser = $activeUsers > 0 ? round($totalReservations / $activeUsers, 1) : 0;
+
+// Total reservations (all time)
+$totalAllTimeStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
+$totalAllTime = (int)$totalAllTimeStmt->fetchColumn();
 
 // Facility utilization
 $facilityUtilStmt = $pdo->prepare(
@@ -470,19 +523,67 @@ ob_start();
             <h2>Monthly Reservation Volume</h2>
             <div class="kpi-row">
                 <div class="kpi">
-                    <span>Total Reservations</span>
+                    <span>Total Reservations (This Month)</span>
                     <strong><?= number_format($totalReservations); ?></strong>
                     <small>Across all facilities in <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></small>
                 </div>
                 <div class="kpi">
                     <span>Approval Rate</span>
                     <strong><?= $approvalRate; ?>%</strong>
-                    <small>Approved vs. total requests</small>
+                    <small><?= number_format($approvedCount); ?> of <?= number_format($totalReservations); ?> approved</small>
                 </div>
                 <div class="kpi">
                     <span>Utilization</span>
                     <strong><?= $utilization; ?>%</strong>
                     <small>Occupied time slots vs. available</small>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+                <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Global System Statistics</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total Users</div>
+                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalUsers); ?></div>
+                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active this month</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Available Facilities</div>
+                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalFacilities); ?></div>
+                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">Facilities in system</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total All-Time</div>
+                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalAllTime); ?></div>
+                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">All reservations ever</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Avg per User</div>
+                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= $avgReservationsPerUser; ?></div>
+                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">This month</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+                <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (This Month)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
+                    <div style="padding: 0.75rem; background: #e8f5e9; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #388e3c;"><?= number_format($approvedCount); ?></div>
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Approved</div>
+                    </div>
+                    <div style="padding: 0.75rem; background: #fff3e0; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #f57c00;"><?= number_format($pendingCount); ?></div>
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Pending</div>
+                    </div>
+                    <div style="padding: 0.75rem; background: #ffebee; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #d32f2f;"><?= number_format($deniedCount); ?></div>
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Denied</div>
+                    </div>
+                    <div style="padding: 0.75rem; background: #f5f5f5; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #616161;"><?= number_format($cancelledCount); ?></div>
+                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Cancelled</div>
+                    </div>
                 </div>
             </div>
             <?php if (empty($facilityData)): ?>

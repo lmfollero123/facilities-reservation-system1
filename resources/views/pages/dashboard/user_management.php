@@ -50,6 +50,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     }
                     break;
                     
+                case 'verify':
+                    // Verify user's ID document
+                    $adminId = $_SESSION['user_id'] ?? null;
+                    $userStmt = $pdo->prepare('SELECT name, email, is_verified FROM users WHERE id = :id');
+                    $userStmt->execute(['id' => $userId]);
+                    $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if (!$userInfo) {
+                        $message = 'User not found.';
+                        $messageType = 'error';
+                        break;
+                    }
+                    
+                    // Check if user has a valid ID document
+                    $docStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
+                    $docStmt->execute(['user_id' => $userId]);
+                    $hasValidId = $docStmt->fetch() !== false;
+                    
+                    if (!$hasValidId) {
+                        $message = 'User has not uploaded a valid ID document. Cannot verify.';
+                        $messageType = 'error';
+                        break;
+                    }
+                    
+                    $stmt = $pdo->prepare('UPDATE users SET is_verified = TRUE, verified_at = CURRENT_TIMESTAMP, verified_by = :admin_id, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['id' => $userId, 'admin_id' => $adminId]);
+                    
+                    logAudit('Verified user account', 'User Management', $userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId);
+                    $message = 'User account verified successfully. User can now use auto-approval features.';
+                    
+                    // Notify user
+                    if ($userInfo && !empty($userInfo['email'])) {
+                        try {
+                            require_once __DIR__ . '/../../../../config/notifications.php';
+                            createNotification(
+                                $userId,
+                                'system',
+                                'Account Verified',
+                                'Your account has been verified. You can now use auto-approval features for facility bookings.',
+                                base_path() . '/resources/views/pages/dashboard/profile.php'
+                            );
+                            
+                            $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p>"
+                                  . "<p>Your account has been verified by an administrator. You can now use <strong>auto-approval features</strong> for facility bookings.</p>"
+                                  . "<p>This means eligible reservations will be automatically approved without manual review.</p>";
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been verified', $body);
+                        } catch (Exception $e) {
+                            // ignore notification/email failures
+                        }
+                    }
+                    break;
+                    
                 case 'deny':
                     // Get user info for audit log
                     $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
@@ -193,7 +245,7 @@ $totalRows = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch users
-$sql = 'SELECT id, name, email, role, status, created_at, updated_at FROM users ' . $whereClause . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+$sql = 'SELECT id, name, email, role, status, is_verified, verified_at, created_at, updated_at FROM users ' . $whereClause . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
 $stmt = $pdo->prepare($sql);
 foreach ($params as $key => $value) {
     $stmt->bindValue(':' . $key, $value);
@@ -280,6 +332,7 @@ ob_start();
                     <th>Email</th>
                     <th>Role</th>
                     <th>Status</th>
+                    <th>Verification</th>
                     <th>Documents</th>
                     <th>Actions</th>
                 </tr>
@@ -313,6 +366,27 @@ ob_start();
                             $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'maintenance' : 'offline');
                             ?>
                             <span class="status-badge <?= $statusClass; ?>"><?= $statusDisplay; ?></span>
+                        </td>
+                        <td>
+                            <?php
+                            $isVerified = (bool)($user['is_verified'] ?? false);
+                            $hasValidIdDoc = isset($docsByUser[$user['id']]) && 
+                                !empty(array_filter($docsByUser[$user['id']], fn($d) => ($d['document_type'] ?? '') === 'valid_id'));
+                            
+                            if ($isVerified):
+                            ?>
+                                <span class="status-badge active" style="background:#28a745;">✓ Verified</span>
+                            <?php elseif ($hasValidIdDoc): ?>
+                                <span class="status-badge maintenance" style="background:#ffc107; color:#856404;">Pending Verification</span>
+                                <form method="POST" style="display:inline; margin-left:0.5rem;">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
+                                    <input type="hidden" name="action" value="verify">
+                                    <button type="submit" class="btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="return confirm('Verify this user\\'s account? This will enable auto-approval features.');">Verify</button>
+                                </form>
+                            <?php else: ?>
+                                <span class="status-badge offline" style="background:#6c757d;">Not Verified</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if (!empty($docsByUser[$user['id']])): ?>

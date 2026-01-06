@@ -13,25 +13,29 @@ require_once __DIR__ . '/time_helpers.php';
 /**
  * Detect potential conflicts for a reservation
  * 
+ * BEST PRACTICE: Only APPROVED reservations create hard conflicts (block slot).
+ * PENDING reservations are soft conflicts (warning shown, but booking allowed).
+ * Multiple PENDING reservations are allowed for the same slot - admin decides which to approve.
+ * 
  * @param int $facilityId Facility ID
  * @param string $date Reservation date (Y-m-d format)
- * @param string $timeSlot Time slot (e.g., "Morning (8AM - 12PM)")
+ * @param string $timeSlot Time slot (e.g., "08:00 - 12:00")
  * @param int|null $excludeReservationId Reservation ID to exclude from conflict check (for updates)
- * @return array Conflict information with 'has_conflict', 'conflicts', 'risk_score', 'alternatives'
+ * @return array Conflict information with 'has_conflict' (hard), 'soft_conflicts', 'risk_score', 'alternatives'
  */
 function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservationId = null) {
     $pdo = db();
     
-    // Get all reservations for this facility and date
-    $allReservationsStmt = $pdo->prepare(
-        'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose,
+    // Get APPROVED reservations (hard conflicts - block slot)
+    $approvedReservationsStmt = $pdo->prepare(
+        'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose, r.priority_level,
                 f.name AS facility_name, u.name AS requester_name
          FROM reservations r
          JOIN facilities f ON r.facility_id = f.id
          JOIN users u ON r.user_id = u.id
          WHERE r.facility_id = :facility_id
            AND r.reservation_date = :date
-           AND r.status IN ("pending", "approved")
+           AND r.status = "approved"
            ' . ($excludeReservationId ? 'AND r.id != :exclude_id' : '') . '
          ORDER BY r.created_at DESC'
     );
@@ -45,36 +49,71 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
         $params['exclude_id'] = $excludeReservationId;
     }
     
-    $allReservationsStmt->execute($params);
-    $allReservations = $allReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
+    $approvedReservationsStmt->execute($params);
+    $approvedReservations = $approvedReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Check for overlapping time ranges
-    $conflicts = [];
-    foreach ($allReservations as $reservation) {
+    // Get PENDING reservations (soft conflicts - warning only)
+    $pendingReservationsStmt = $pdo->prepare(
+        'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose, r.priority_level,
+                f.name AS facility_name, u.name AS requester_name, r.created_at, r.expires_at
+         FROM reservations r
+         JOIN facilities f ON r.facility_id = f.id
+         JOIN users u ON r.user_id = u.id
+         WHERE r.facility_id = :facility_id
+           AND r.reservation_date = :date
+           AND r.status = "pending"
+           AND (r.expires_at IS NULL OR r.expires_at > NOW())
+           ' . ($excludeReservationId ? 'AND r.id != :exclude_id' : '') . '
+         ORDER BY r.priority_level ASC, r.created_at ASC'
+    );
+    
+    $pendingReservationsStmt->execute($params);
+    $pendingReservations = $pendingReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Check for overlapping time ranges - HARD conflicts (approved only)
+    $hardConflicts = [];
+    foreach ($approvedReservations as $reservation) {
         if (timeSlotsOverlap($timeSlot, $reservation['time_slot'])) {
-            $conflicts[] = $reservation;
+            $hardConflicts[] = $reservation;
+        }
+    }
+    
+    // Check for overlapping time ranges - SOFT conflicts (pending - warning only)
+    $softConflicts = [];
+    foreach ($pendingReservations as $reservation) {
+        if (timeSlotsOverlap($timeSlot, $reservation['time_slot'])) {
+            $softConflicts[] = $reservation;
         }
     }
     
     // Calculate risk score based on historical patterns + holiday/event tags
     $riskScore = calculateConflictRisk($facilityId, $date, $timeSlot);
     
-    // Find alternative slots if conflict exists
+    // Find alternative slots if hard conflict exists
     $alternatives = [];
-    if (!empty($conflicts)) {
+    if (!empty($hardConflicts)) {
         $alternatives = findAlternativeSlots($facilityId, $date);
     }
     
+    // Build message based on conflict type
+    $message = 'No conflicts detected. This slot is available.';
+    if (!empty($hardConflicts)) {
+        $message = 'This time slot is already booked (approved reservation). Please select an alternative time.';
+    } elseif (!empty($softConflicts)) {
+        $count = count($softConflicts);
+        $message = "Warning: {$count} pending reservation(s) exist for this slot. You can still book, but admin will approve only one.";
+    } elseif ($riskScore > 70) {
+        $message = 'High demand period detected. Consider booking in advance.';
+    }
+    
     return [
-        'has_conflict' => !empty($conflicts),
-        'conflicts' => $conflicts,
+        'has_conflict' => !empty($hardConflicts),  // Hard conflict (approved) - blocks booking
+        'conflicts' => $hardConflicts,              // Approved reservations (hard conflicts)
+        'soft_conflicts' => $softConflicts,         // Pending reservations (soft conflicts - warning only)
+        'pending_count' => count($softConflicts),   // Count of pending reservations for same slot
         'risk_score' => $riskScore,
         'alternatives' => $alternatives,
-        'message' => !empty($conflicts) 
-            ? 'This time slot is already booked. Please select an alternative time.'
-            : ($riskScore > 70 
-                ? 'High demand period detected. Consider booking in advance.'
-                : 'No conflicts detected. This slot is available.')
+        'message' => $message
     ];
 }
 
@@ -180,13 +219,14 @@ function findAlternativeSlots($facilityId, $date) {
     $operatingStart = DateTime::createFromFormat('H:i', '08:00');
     $operatingEnd = DateTime::createFromFormat('H:i', '21:00');
     
-    // Get all existing bookings for this facility and date
+    // Get only APPROVED bookings for calculating available slots
+    // PENDING reservations don't block slots - they're temporary holds
     $bookingsStmt = $pdo->prepare(
         'SELECT time_slot 
          FROM reservations
          WHERE facility_id = :facility_id
            AND reservation_date = :date
-           AND status IN ("pending", "approved")
+           AND status = "approved"
          ORDER BY time_slot'
     );
     

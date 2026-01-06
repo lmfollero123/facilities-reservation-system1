@@ -61,16 +61,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $messageType = 'error';
                             logSecurityEvent('registration_attempt_existing_email', "Registration attempt with existing email: $email", 'info');
                         } else {
-                            // Validate Valid ID document (required)
+                            // Check if is_verified column exists (for backward compatibility)
+                            $checkColumnStmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_verified'");
+                            $hasVerifiedColumn = $checkColumnStmt->rowCount() > 0;
+                            
+                            // Valid ID document is now optional during registration
                             $validIdFile = $_FILES['doc_valid_id'] ?? null;
-
-                            if (!$validIdFile || !isset($validIdFile['tmp_name']) || $validIdFile['error'] !== UPLOAD_ERR_OK || $validIdFile['size'] === 0) {
-                                $message = 'Please upload a Valid ID document.';
-                                $messageType = 'error';
+                            $hasValidId = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
+                            
+                            // Insert new user with active status (auto-activated) but unverified
+                            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                            
+                            if ($hasVerifiedColumn) {
+                                // New schema with is_verified column
+                                $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, address, password_hash, role, status, is_verified) VALUES (?, ?, ?, ?, ?, 'Resident', 'active', ?)");
+                                $stmt->execute([
+                                    $name,
+                                    $email,
+                                    $mobile ?: null,
+                                    $address ?: null,
+                                    $passwordHash,
+                                    $hasValidId ? 1 : 0  // Set verified to true only if ID is provided
+                                ]);
                             } else {
-                                $uploads = ['valid_id' => $validIdFile];
-                                // Insert new user with pending status
-                                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                                // Old schema without is_verified column - use pending status (will need admin approval)
                                 $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, address, password_hash, role, status) VALUES (?, ?, ?, ?, ?, 'Resident', 'pending')");
                                 $stmt->execute([
                                     $name,
@@ -79,41 +93,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $address ?: null,
                                     $passwordHash
                                 ]);
+                            }
 
-                                $userId = (int)$pdo->lastInsertId();
+                            $userId = (int)$pdo->lastInsertId();
 
-                                // Store documents in secure storage (outside public/)
-                                foreach ($uploads as $type => $file) {
-                                    $result = saveDocumentToSecureStorage($file, $userId, $type);
-                                    
-                                    if (!$result['success']) {
-                                        $message = $result['error'] ?? 'Failed to save uploaded document.';
-                                        $messageType = 'error';
-                                        break;
-                                    }
-
+                            // If valid ID was uploaded, store it
+                            if ($hasValidId) {
+                                require_once __DIR__ . '/../../../../config/secure_documents.php';
+                                $result = saveDocumentToSecureStorage($validIdFile, $userId, 'valid_id');
+                                
+                                if ($result['success']) {
                                     // Store relative path (storage/private/documents/{userId}/{filename})
                                     $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
                                     $docStmt->execute([
                                         $userId,
-                                        $type,
-                                        $result['file_path'], // Relative path: storage/private/documents/{userId}/{filename}
+                                        'valid_id',
+                                        $result['file_path'],
                                         basename($result['file_path']),
-                                        (int)$file['size']
+                                        (int)$validIdFile['size']
                                     ]);
+                                    
+                                    // Update verification status if document saved successfully (only if column exists)
+                                    if ($hasVerifiedColumn) {
+                                        $updateStmt = $pdo->prepare("UPDATE users SET is_verified = TRUE WHERE id = ?");
+                                        $updateStmt->execute([$userId]);
+                                    }
+                                } else {
+                                    $message = 'Registration successful, but failed to save your ID document. You can upload it later from your profile.';
+                                    $messageType = 'warning';
                                 }
+                            }
 
-                                if ($messageType !== 'error') {
-                                    logSecurityEvent('registration_success', "New user registered: $email", 'info');
-                                    $message = 'Registration successful! Your account is pending document verification.';
-                                    $messageType = 'success';
-                                }
+                            if ($messageType !== 'error' && $messageType !== 'warning') {
+                                logSecurityEvent('registration_success', "New user registered: $email", 'info');
+                                $message = 'Registration successful! Your account is now active. To enable auto-approval features, please submit a valid ID from your profile.';
+                                $messageType = 'success';
                             }
                         }
                     } catch (Exception $e) {
-                        $message = 'Registration failed. Please try again.';
-                        $messageType = 'error';
-                        logSecurityEvent('registration_error', "Database error during registration: " . $e->getMessage(), 'error');
+                        // Check if the error is due to missing is_verified column
+                        $errorMsg = $e->getMessage();
+                        if (stripos($errorMsg, 'is_verified') !== false || stripos($errorMsg, 'Unknown column') !== false) {
+                            $message = 'Database migration required. Please contact the administrator or run the migration: database/migration_add_user_verification.sql';
+                            $messageType = 'error';
+                            logSecurityEvent('registration_error', "Database migration needed - is_verified column missing: " . $errorMsg, 'error');
+                        } else {
+                            $message = 'Registration failed: ' . htmlspecialchars($errorMsg);
+                            $messageType = 'error';
+                            logSecurityEvent('registration_error', "Database error during registration: " . $errorMsg, 'error');
+                        }
                     }
                 }
             }
@@ -124,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ob_start();
 ?>
 <div class="auth-container">
-    <div class="auth-card">
+    <div class="auth-card auth-card-wide">
         <div class="auth-header">
             <div class="auth-icon">📝</div>
             <h1>Create Account</h1>
@@ -137,42 +165,46 @@ ob_start();
             </div>
         <?php endif; ?>
         
-        <form method="POST" class="auth-form" enctype="multipart/form-data">
+        <form method="POST" class="auth-form auth-form-horizontal" enctype="multipart/form-data">
             <?= csrf_field(); ?>
-            <label>
-                Full Name
-                <div class="input-wrapper">
-                    <span class="input-icon">👤</span>
-                    <input name="name" type="text" placeholder="Juan Dela Cruz" required autofocus value="<?= isset($_POST['name']) ? e($_POST['name']) : ''; ?>" minlength="2">
-                </div>
-            </label>
+            <div class="auth-form-row">
+                <label>
+                    Full Name
+                    <div class="input-wrapper">
+                        <span class="input-icon">👤</span>
+                        <input name="name" type="text" placeholder="Juan Dela Cruz" required autofocus value="<?= isset($_POST['name']) ? e($_POST['name']) : ''; ?>" minlength="2">
+                    </div>
+                </label>
+                
+                <label>
+                    Email Address
+                    <div class="input-wrapper">
+                        <span class="input-icon">✉️</span>
+                        <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                    </div>
+                </label>
+            </div>
 
-            <label>
-                Address (must be in Barangay Culiat)
-                <div class="input-wrapper">
-                    <span class="input-icon">🏠</span>
-                    <input name="address" type="text" placeholder="e.g., Street, Barangay Culiat, Quezon City" required value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
-                </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                    Registration is limited to residents of Barangay Culiat.
-                </small>
-            </label>
-            
-            <label>
-                Email Address
-                <div class="input-wrapper">
-                    <span class="input-icon">✉️</span>
-                    <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
-                </div>
-            </label>
-            
-            <label>
-                Mobile Number
-                <div class="input-wrapper">
-                    <span class="input-icon">📱</span>
-                    <input name="mobile" type="tel" placeholder="+63 900 000 0000" value="<?= isset($_POST['mobile']) ? e($_POST['mobile']) : ''; ?>">
-                </div>
-            </label>
+            <div class="auth-form-row">
+                <label>
+                    Address (must be in Barangay Culiat)
+                    <div class="input-wrapper">
+                        <span class="input-icon">🏠</span>
+                        <input name="address" type="text" placeholder="e.g., Street, Barangay Culiat, Quezon City" required value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
+                    </div>
+                    <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500; opacity:0.95;">
+                        Registration is limited to residents of Barangay Culiat.
+                    </small>
+                </label>
+                
+                <label>
+                    Mobile Number
+                    <div class="input-wrapper">
+                        <span class="input-icon">📱</span>
+                        <input name="mobile" type="tel" placeholder="+63 900 000 0000" value="<?= isset($_POST['mobile']) ? e($_POST['mobile']) : ''; ?>">
+                    </div>
+                </label>
+            </div>
             
             <label>
                 Password
@@ -180,19 +212,19 @@ ob_start();
                     <span class="input-icon">🔒</span>
                     <input name="password" type="password" placeholder="Create a strong password (min. 8 characters)" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500; opacity:0.95;">
                     Must be at least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.
                 </small>
             </label>
 
-            <div style="padding:0.75rem 0; border-top:1px solid #e8ecf5; margin-top:1rem;">
-                <p style="margin:0 0 0.5rem; font-weight:600;">Upload Valid ID (required)</p>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-bottom:0.75rem;">
-                    Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
+            <div style="padding:0.75rem 0; border-top:1px solid rgba(255,255,255,0.2); margin-top:1rem;">
+                <p style="margin:0 0 0.5rem; font-weight:600; color:#fff;">Upload Valid ID (Optional)</p>
+                <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-bottom:0.75rem; font-weight:500; opacity:0.95; line-height:1.5;">
+                    Your account will be activated immediately. To enable auto-approval features for facility bookings, you can upload a valid ID now or later from your profile. Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
                 </small>
 
-                <label>Valid ID
-                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" required>
+                <label style="color:#fff;">Valid ID
+                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="margin-top:0.5rem; padding:0.9rem 1rem; border:2px solid rgba(255,255,255,0.3); border-radius:8px; background:rgba(255,255,255,0.2); color:#fff; width:100%;">
                 </label>
             </div>
             
@@ -312,6 +344,7 @@ ob_start();
 
 <script>
 // Auto-open modal on page load using Bootstrap's default behavior
+// Only show once - check localStorage
 window.addEventListener('load', function() {
     const modalElement = document.getElementById('termsModal');
     if (!modalElement) return;
@@ -337,34 +370,42 @@ window.addEventListener('load', function() {
         document.body.style.removeProperty('padding-right');
     };
 
-    // Show modal after ensuring DOM is ready
-    setTimeout(function() {
-        termsModal.show();
+    // Check if user has already accepted terms
+    const termsAcceptedKey = 'lgu_facilities_terms_accepted';
+    const termsAccepted = localStorage.getItem(termsAcceptedKey);
 
-        const modalDialog = modalElement.querySelector('.modal-dialog');
-        const modalContent = modalElement.querySelector('.modal-content');
-        const modalBody = modalElement.querySelector('.modal-body');
-        const understandBtn = document.getElementById('understandBtn');
+    // Show modal only if terms haven't been accepted yet
+    if (!termsAccepted) {
+        setTimeout(function() {
+            termsModal.show();
 
-        [modalDialog, modalContent, modalBody].forEach(el => {
-            if (el) el.style.pointerEvents = 'auto';
-        });
-        if (understandBtn) {
-            understandBtn.style.pointerEvents = 'auto';
-            understandBtn.style.cursor = 'pointer';
-            understandBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                try {
-                    termsModal.hide();
-                } catch (err) {
-                    // ignore
-                }
-                cleanupBackdrop();
+            const modalDialog = modalElement.querySelector('.modal-dialog');
+            const modalContent = modalElement.querySelector('.modal-content');
+            const modalBody = modalElement.querySelector('.modal-body');
+            const understandBtn = document.getElementById('understandBtn');
+
+            [modalDialog, modalContent, modalBody].forEach(el => {
+                if (el) el.style.pointerEvents = 'auto';
             });
-        }
-    }, 100);
+            if (understandBtn) {
+                understandBtn.style.pointerEvents = 'auto';
+                understandBtn.style.cursor = 'pointer';
+                understandBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Store acceptance in localStorage
+                    localStorage.setItem(termsAcceptedKey, 'true');
+                    try {
+                        termsModal.hide();
+                    } catch (err) {
+                        // ignore
+                    }
+                    cleanupBackdrop();
+                });
+            }
+        }, 100);
+    }
 
-    // Open when clicking the links
+    // Open when clicking the links (always allow manual viewing)
     document.getElementById('termsLink')?.addEventListener('click', function(e) {
         e.preventDefault();
         termsModal.show();

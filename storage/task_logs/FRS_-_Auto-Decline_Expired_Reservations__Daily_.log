@@ -50,3 +50,29 @@ Stack trace:
 #1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
 #2 {main}
   thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [2054] The server requested authentication method unknown to the client [auth_gssapi_client] in E:\Capstone_project\facilities_reservation_system\config\database.php:27
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(27): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 27
