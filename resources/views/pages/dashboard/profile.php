@@ -24,6 +24,74 @@ if (!$userId) {
 $success = '';
 $error = '';
 
+// Handle account deactivation request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account'])) {
+    require_once __DIR__ . '/../../../../config/audit.php';
+    
+    // Get user data first
+    $stmt = $pdo->prepare('SELECT id, name, email, status, role FROM users WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $userId]);
+    $userCheck = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$userCheck) {
+        $error = 'User not found.';
+    } elseif (strtolower($userCheck['status']) === 'deactivated') {
+        $error = 'Account is already deactivated.';
+    } elseif (in_array($userCheck['role'], ['Admin', 'Staff'])) {
+        $error = 'Administrator and Staff accounts cannot be self-deactivated. Please contact system administrator.';
+    } else {
+        try {
+            $reason = trim($_POST['deactivation_reason'] ?? '');
+            $reason = !empty($reason) ? substr($reason, 0, 500) : null; // Limit length
+            
+            // Soft delete: Set status to 'deactivated' and record timestamp
+            // Check if deactivated_at column exists (backward compatibility)
+            $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
+            $hasDeactivatedAt = $checkColumn->rowCount() > 0;
+            
+            if ($hasDeactivatedAt) {
+                $updateStmt = $pdo->prepare(
+                    'UPDATE users 
+                     SET status = "deactivated", 
+                         deactivated_at = CURRENT_TIMESTAMP,
+                         deactivation_reason = :reason,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id'
+                );
+                $updateStmt->execute([
+                    'reason' => $reason,
+                    'id' => $userId
+                ]);
+            } else {
+                // Fallback if migration hasn't been run yet
+                $updateStmt = $pdo->prepare(
+                    'UPDATE users 
+                     SET status = "deactivated", 
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id'
+                );
+                $updateStmt->execute(['id' => $userId]);
+            }
+            
+            // Log audit event
+            $details = 'Account deactivated by user';
+            if ($reason) {
+                $details .= ' - Reason: ' . substr($reason, 0, 100);
+            }
+            logAudit('Deactivated account', 'User Management', $details, $userId);
+            
+            // Destroy session and redirect to login
+            session_destroy();
+            header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+            exit;
+            
+        } catch (Throwable $e) {
+            $error = 'Failed to deactivate account. Please try again or contact support.';
+            error_log('Account deactivation error: ' . $e->getMessage());
+        }
+    }
+}
+
 // Handle data export request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
     $exportType = $_POST['export_type'] ?? 'full';
@@ -44,9 +112,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
 $exportHistory = getUserExportHistory($userId);
 
 // Load current user data
-$stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at FROM users WHERE id = :id LIMIT 1');
+// Check if deactivated_at column exists for backward compatibility
+$checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
+$hasDeactivatedAt = $checkColumn->rowCount() > 0;
+$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at';
+if ($hasDeactivatedAt) {
+    $selectFields .= ', deactivated_at, deactivation_reason';
+}
+$stmt = $pdo->prepare("SELECT $selectFields FROM users WHERE id = :id LIMIT 1");
 $stmt->execute(['id' => $userId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Prevent deactivated users from accessing profile (they shouldn't be logged in, but double-check)
+if ($user && strtolower($user['status']) === 'deactivated') {
+    session_destroy();
+    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+    exit;
+}
 
 // Check if user has valid ID document
 $hasValidId = false;
@@ -575,8 +657,96 @@ ob_start();
                 </ul>
             </div>
         </aside>
+        
+        <!-- Account Deactivation Section (Residents only) -->
+        <?php if ($user && !in_array($user['role'], ['Admin', 'Staff'])): ?>
+        <section class="booking-card" style="grid-column: 1 / -1; border: 2px solid #fee2e2; background: linear-gradient(135deg, rgba(254, 226, 226, 0.3), rgba(254, 242, 242, 0.5));">
+            <h2 style="color: #991b1b; display: flex; align-items: center; gap: 0.5rem;">
+                <span>⚠️</span>
+                <span>Account Deactivation</span>
+            </h2>
+            <div style="background: #fff; padding: 1.25rem; border-radius: 8px; margin-top: 1rem; border: 1px solid #fecaca;">
+                <p style="color: #7f1d1d; line-height: 1.7; margin: 0 0 1rem; font-size: 0.95rem;">
+                    <strong>Important:</strong> Deactivating your account will immediately disable your ability to log in and access the system. 
+                    However, in compliance with LGU record-keeping requirements and the Data Privacy Act:
+                </p>
+                <ul style="color: #7f1d1d; line-height: 1.8; margin: 0 0 1.25rem 1.25rem; font-size: 0.9rem; padding-left: 0.75rem;">
+                    <li>Your reservation history will be <strong>retained</strong> as public records</li>
+                    <li>Your uploaded documents (IDs, certificates) will be <strong>restricted from your access</strong> but retained for audit/compliance purposes</li>
+                    <li>Your audit trail entries will be <strong>preserved</strong> for accountability</li>
+                    <li>Personally identifiable information will be <strong>minimized</strong> but not completely deleted</li>
+                    <li>Only authorized LGU administrators will have access to your data after deactivation</li>
+                </ul>
+                <p style="color: #991b1b; font-weight: 600; margin: 0 0 1rem; font-size: 0.95rem;">
+                    This action cannot be undone by you. To restore access, contact the LGU IT office.
+                </p>
+                <form method="POST" id="deactivate-form" onsubmit="return confirmDeactivation(event);">
+                    <input type="hidden" name="deactivate_account" value="1">
+                    <input type="hidden" name="csrf_token" value="<?= bin2hex(random_bytes(32)); ?>">
+                    <label style="display: block; margin-bottom: 0.75rem;">
+                        <span style="display: block; font-weight: 600; color: #7f1d1d; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Reason for Deactivation (Optional)
+                        </span>
+                        <textarea 
+                            name="deactivation_reason" 
+                            rows="3" 
+                            placeholder="Please let us know why you're deactivating your account (optional, helps us improve our services)"
+                            style="width: 100%; padding: 0.75rem; border: 2px solid #fecaca; border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: vertical;"
+                        ></textarea>
+                    </label>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <button 
+                            type="submit" 
+                            class="btn-outline" 
+                            style="padding: 0.85rem 1.5rem; font-size: 0.95rem; font-weight: 600; border-color: #dc2626; color: #dc2626; background: #fff;"
+                            onmouseover="this.style.background='#fee2e2';" 
+                            onmouseout="this.style.background='#fff';"
+                        >
+                            Request Account Deactivation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+        <?php endif; ?>
     </div>
 <?php endif; ?>
+
+<script>
+function confirmDeactivation(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('deactivate-form');
+    const reason = form.querySelector('[name="deactivation_reason"]').value.trim();
+    
+    const confirmMsg = '⚠️ ACCOUNT DEACTIVATION CONFIRMATION\n\n' +
+        'Are you sure you want to deactivate your account?\n\n' +
+        'This will:\n' +
+        '• Immediately disable your login access\n' +
+        '• Restrict access to your documents (retained for compliance)\n' +
+        '• Preserve your reservation history and audit logs\n\n' +
+        'To restore access, you must contact the LGU IT office.\n\n' +
+        'This action cannot be undone by you.\n\n' +
+        'Type "DEACTIVATE" (in all caps) to confirm:';
+    
+    const userInput = prompt(confirmMsg);
+    
+    if (userInput === 'DEACTIVATE') {
+        // Double confirmation
+        const finalConfirm = confirm(
+            'Final confirmation: This will immediately deactivate your account and log you out. Continue?'
+        );
+        
+        if (finalConfirm) {
+            form.submit();
+        }
+    } else if (userInput !== null) {
+        alert('Confirmation text did not match. Account deactivation cancelled.');
+    }
+    
+    return false;
+}
+</script>
 
 <?php
 $content = ob_get_clean();

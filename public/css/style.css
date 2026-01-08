@@ -72,6 +72,17 @@ body.landing-page .footer {
 .guest-content {
     flex: 1;
     animation: fadeInUp 0.35s ease-out;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}
+
+/* Prevent any visual artifacts on main element */
+.guest-content::before,
+.guest-content::after {
+    display: none !important;
+    content: none !important;
 }
 
 a {
@@ -846,7 +857,15 @@ img {
 /* VISUAL CHANGE ONLY - Section cards updated to match template */
 .section {
     padding: 3rem 1.25rem;
-    background: transparent;
+    background: transparent !important;
+    position: relative;
+}
+
+/* Prevent background repetition or visual artifacts */
+.section::before,
+.section::after {
+    display: none !important;
+    content: none !important;
 }
 
 /* Contact section should not inherit section padding - it has its own styling */
@@ -859,10 +878,102 @@ body.landing-page .section:first-of-type:not(.contact-section) {
     padding-top: 7rem;
 }
 
+/* Ensure facility details page also has proper top spacing - override base section padding */
+body.landing-page .section.facility-details-section {
+    padding: 7rem 1.25rem 3rem 1.25rem !important; /* Override base section padding: top right bottom left */
+}
+
+/* Alternative selector using :has() for modern browsers */
+body.landing-page .section:has(.facility-detail-layout) {
+    padding: 7rem 1.25rem 3rem 1.25rem !important;
+}
+
+/* Ensure container doesn't add extra margin */
+body.landing-page .facility-detail-layout {
+    margin-top: 0; /* Remove any extra margin */
+}
+
 /* Ensure sections have proper spacing on public pages */
-body.landing-page .section:not(.contact-section) {
-    padding-top: 4rem;
-    padding-bottom: 3rem;
+body.landing-page .section:not(.contact-section):not(.facility-details-section) {
+    padding-top: 4rem; /* Keep top padding for navbar clearance */
+    padding-bottom: 0 !important; /* Remove bottom padding to prevent visible line */
+    margin-bottom: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* First section needs extra top padding for fixed navbar */
+body.landing-page .section:first-of-type:not(.contact-section) {
+    padding-top: 7rem; /* Extra padding for navbar clearance */
+    padding-bottom: 0 !important;
+}
+
+/* Add padding to container instead of section to prevent visual artifacts */
+/* Exception: portfolio section handles its own spacing */
+body.landing-page .section:not(.contact-section):not(#portfolio) .container {
+    margin-bottom: 3rem;
+}
+
+/* Fix for portfolio section - apply EXACT same background styling as auth-container */
+body.landing-page #portfolio {
+    min-height: auto !important;
+    padding-top: 7rem !important;
+    padding-bottom: 3rem !important; /* EXACT same as auth-container */
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+    overflow: visible !important;
+    border: none !important;
+    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important; /* EXACT same background */
+    background-attachment: fixed !important; /* EXACT same as auth-container */
+    position: relative;
+}
+
+/* Apply the same overlay effect as auth-container - EXACT copy */
+body.landing-page #portfolio::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Ensure container is above the overlay - EXACT same as auth-container */
+body.landing-page #portfolio > * {
+    position: relative;
+    z-index: 1;
+}
+
+body.landing-page #portfolio .container {
+    background: var(--card-bg);
+    backdrop-filter: var(--card-blur);
+    border-radius: 18px;
+    padding: 2rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+    border: none !important;
+    position: relative;
+    z-index: 1; /* Above the ::before overlay */
+}
+
+/* Prevent any visual artifacts or repeating backgrounds */
+body.landing-page #portfolio::after,
+body.landing-page #portfolio .container::before,
+body.landing-page #portfolio .container::after {
+    display: none !important;
+    content: none !important;
+    background: none !important;
 }
 
 /* Improve contrast for services section on dark background */
@@ -930,12 +1041,60 @@ body.landing-page .section:not(.contact-section) {
     border-top: none;
 }
 
+/* Remove any border between section and footer */
+.section + footer,
+body.landing-page .section:last-of-type,
+body.landing-page #portfolio + footer,
+body.landing-page main + footer,
+body.landing-page .guest-content + footer {
+    border-top: none !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Ensure no gap between section and footer */
+body.landing-page #portfolio {
+    margin-bottom: 0 !important;
+}
+
+footer.bg-light {
+    margin-top: 0 !important;
+    padding-top: 3rem !important; /* Add top padding to footer instead */
+}
+
+/* Ensure smooth transition from section to footer - no gradient area */
+body.landing-page main,
+body.landing-page .guest-content {
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}
+
+body.landing-page main::before,
+body.landing-page main::after,
+body.landing-page .guest-content::before,
+body.landing-page .guest-content::after {
+    display: none !important;
+    content: none !important;
+    background: none !important;
+}
+
 .section .container {
     background: var(--card-bg);
     backdrop-filter: var(--card-blur);
     border-radius: 18px;
     padding: 2rem;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
+}
+
+/* Prevent container from creating visual artifacts on scroll */
+.section .container::before,
+.section .container::after {
+    display: none !important;
+    content: none !important;
 }
 
 /* Remove duplicate container background in contact section - auth-card already has styling */
@@ -1115,6 +1274,17 @@ body.landing-page .section:not(.contact-section) {
     background: #ffffff;
 }
 
+/* Ensure buttons align at the bottom - push button to bottom of card */
+.facility-card .card-body > *:last-child {
+    margin-top: auto;
+}
+
+/* Specifically target the View Details button */
+.facility-card .card-body .btn-primary {
+    margin-top: auto;
+    width: 100%;
+}
+
 .facility-card h3 {
     color: #1e3a5f;
     margin: 0;
@@ -1126,6 +1296,15 @@ body.landing-page .section:not(.contact-section) {
     color: #4a5568;
     margin: 0;
     line-height: 1.6;
+    flex: 1;
+    /* Limit height to 3 lines with ellipsis */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3; /* Standard property for compatibility */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 4.8em; /* Approximately 3 lines */
 }
 
 .facility-card small {
@@ -1710,9 +1889,26 @@ body.landing-page .section:not(.contact-section) {
 }
 
 .footer {
-    background: #05122b;
-    color: var(--gov-white);
-    padding: 2rem 1.25rem;
+    background: #f7f7f7 !important;
+    color: var(--gov-white) !important;
+    padding: 4rem 1.25rem !important; /* Increased to 4rem for better vertical spacing */
+    border-top: none !important;
+    margin-top: 0 !important;
+    min-height: auto;
+}
+
+/* Override Bootstrap bg-light class if used */
+footer.bg-light {
+    background: #f5f6f8 !important;
+    color: var(--gov-white) !important;
+    border-top: none !important;
+    padding: 4rem 1.25rem !important; /* Match footer padding - increased for better spacing */
+}
+
+/* Remove any gradient or border that might create a secondary footer effect */
+footer.bg-light::before,
+footer::before {
+    display: none !important;
 }
 
 .footer .container {
@@ -1721,10 +1917,15 @@ body.landing-page .section:not(.contact-section) {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    align-items: center; /* Center content horizontally */
+    justify-content: center; /* Center content vertically */
+    padding: 0; /* Remove any container padding that might affect spacing */
 }
 
 .footer small {
     color: #98a4c4;
+    text-align: center; /* Center the text */
+    margin: 0; /* Remove any default margins */
 }
 
 /* Dashboard layout */

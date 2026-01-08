@@ -63,7 +63,7 @@ for ($i = 0; $i < 14; $i++) {
 
 ob_start();
 ?>
-<section class="section">
+<section class="section facility-details-section">
     <div class="container facility-detail-layout">
         <div class="facility-detail-main">
             <div class="facility-hero-card">

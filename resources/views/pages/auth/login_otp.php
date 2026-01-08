@@ -29,6 +29,13 @@ try {
         exit;
     }
 
+    // Check if account is deactivated
+    if (strtolower($user['status']) === 'deactivated') {
+        session_destroy();
+        header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+        exit;
+    }
+    
     if ($user['status'] !== 'active') {
         $error = 'Your account is not active.';
     }

@@ -62,8 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             // Verify password
                             if ($user && password_verify($password, $user['password_hash'])) {
+                                // Check if account is deactivated
+                                if (strtolower($user['status']) === 'deactivated') {
+                                    $error = 'Your account has been deactivated. To restore access, please contact the LGU IT office.';
+                                    logSecurityEvent('login_attempt_deactivated', "Login attempt to deactivated account: $email", 'info');
+                                }
                                 // Check if account is active
-                                if ($user['status'] !== 'active') {
+                                elseif ($user['status'] !== 'active') {
                                     $error = 'Your account is not active. Please contact an administrator.';
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
@@ -158,6 +163,16 @@ ob_start();
             <h1>Welcome Back</h1>
             <p>Sign in to access your reservations</p>
         </div>
+        
+        <?php if (isset($_GET['deactivated']) && $_GET['deactivated'] == '1'): ?>
+            <div style="background: #fff4e5; border: 2px solid #f59e0b; color: #92400e; padding: 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
+                <strong>⚠️ Account Deactivated</strong>
+                <p style="margin: 0.5rem 0 0; line-height: 1.6;">
+                    Your account has been successfully deactivated. You can no longer log in to the system.
+                    To restore access, please contact the LGU IT office.
+                </p>
+            </div>
+        <?php endif; ?>
         
         <?php if ($error): ?>
             <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
