@@ -117,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                AND reservation_date BETWEEN :start AND :end
                AND status IN ("pending","approved")'
         );
+        // Note: postponed and on_hold reservations don't count as active bookings
         $activeCountStmt->execute([
             'uid' => $userId,
             'start' => date('Y-m-d'),
@@ -134,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    AND reservation_date = :date
                    AND status IN ("pending","approved")'
             );
+            // Note: postponed and on_hold reservations don't count toward daily limit
             $perDayStmt->execute([
                 'uid' => $userId,
                 'date' => $date,
@@ -146,6 +148,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if (!$error) {
+        // Check facility status - prevent booking if under maintenance or offline
+        $facilityStatusStmt = $pdo->prepare('SELECT status, name FROM facilities WHERE id = :id');
+        $facilityStatusStmt->execute(['id' => $facilityId]);
+        $facilityStatus = $facilityStatusStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$facilityStatus) {
+            $error = 'Invalid facility selected. Please select a valid facility.';
+        } elseif ($facilityStatus['status'] === 'maintenance') {
+            $error = '⚠️ This facility is currently under maintenance and cannot be booked at this time. Please select a different facility or check back later.';
+        } elseif ($facilityStatus['status'] === 'offline') {
+            $error = '⚠️ This facility is currently offline and unavailable for booking. Please select a different facility.';
+        }
+    }
+    
     if (!$error) {
         // AI Conflict Detection - BEST PRACTICE: Only APPROVED blocks, PENDING shows warning
         $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
@@ -357,12 +374,8 @@ foreach ($availabilityData as $row) {
     }
 }
 
-// Check for facilities in maintenance
-$maintenanceStmt = $pdo->query('SELECT COUNT(*) FROM facilities WHERE status IN ("maintenance", "offline")');
-$hasMaintenance = (int)$maintenanceStmt->fetchColumn() > 0;
-
 $resDetailStmt = $pdo->prepare(
-    'SELECT r.reservation_date, r.time_slot, r.status, r.purpose, f.name AS facility_name, u.name AS requester
+    'SELECT r.reservation_date, r.time_slot, r.status, r.purpose, f.name AS facility_name, f.status AS facility_status, u.name AS requester
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -377,6 +390,17 @@ $resDetailStmt->execute([
 $resDetailByDate = [];
 foreach ($resDetailStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $resDetailByDate[$row['reservation_date']][] = $row;
+}
+
+// Build maintenance status per date (check if any reservation on that date involves a facility in maintenance)
+$maintenanceByDate = [];
+foreach ($resDetailByDate as $date => $reservations) {
+    foreach ($reservations as $reservation) {
+        if ($reservation['facility_status'] === 'maintenance' || $reservation['facility_status'] === 'offline') {
+            $maintenanceByDate[$date] = true;
+            break;
+        }
+    }
 }
 
 $yearNow = (int)date('Y');
@@ -461,7 +485,7 @@ ob_start();
                     <select name="facility_id" id="facility-select" required>
                         <option value="">Select a facility...</option>
                         <?php foreach ($facilities as $facility): ?>
-                            <option value="<?= $facility['id']; ?>">
+                            <option value="<?= $facility['id']; ?>" data-status="<?= htmlspecialchars($facility['status']); ?>">
                                 <?= htmlspecialchars($facility['name']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -662,11 +686,12 @@ ob_start();
                     // Determine status
                     $status = 'available';
                     $title = 'Available';
+                    $hasMaintenanceOnDate = isset($maintenanceByDate[$currentDate]) && $maintenanceByDate[$currentDate];
                     
-                    if ($hasMaintenance && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
+                    if ($hasMaintenanceOnDate && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
                         $status = 'unavailable';
                         $title = 'Maintenance + ' . ($dateData['approved'] + $dateData['pending']) . ' booking(s)';
-                    } elseif ($hasMaintenance) {
+                    } elseif ($hasMaintenanceOnDate) {
                         $status = 'unavailable';
                         $title = 'Maintenance';
                     } elseif ($dateData['approved'] > 0 && $dateData['pending'] > 0) {
@@ -751,11 +776,12 @@ ob_start();
 
                             $status = 'available';
                             $title = 'Available';
+                            $hasMaintenanceOnDate = isset($maintenanceByDate[$currentDate]) && $maintenanceByDate[$currentDate];
 
-                            if ($hasMaintenance && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
+                            if ($hasMaintenanceOnDate && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
                                 $status = 'unavailable';
                                 $title = 'Maintenance + ' . ($dateData['approved'] + $dateData['pending']) . ' booking(s)';
-                            } elseif ($hasMaintenance) {
+                            } elseif ($hasMaintenanceOnDate) {
                                 $status = 'unavailable';
                                 $title = 'Maintenance';
                             } elseif ($dateData['approved'] > 0 && $dateData['pending'] > 0) {
@@ -971,7 +997,48 @@ ob_start();
         </div>
     </aside>
 </div>
+
+<!-- Maintenance Warning Modal -->
+<div id="maintenanceWarningModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 2000;">
+    <div class="modal-dialog" style="max-width: 500px; z-index: 2001;">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <div style="font-size: 3rem;">🔧</div>
+            <div>
+                <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue-dark);">Facility Under Maintenance</h3>
+                <p style="margin: 0; color: #4c5b7c; font-size: 0.95rem;" id="maintenanceModalMessage"></p>
+            </div>
+        </div>
+        <p style="color: #856404; background: #fff4e5; padding: 1rem; border-radius: 8px; margin: 1rem 0; border-left: 4px solid #ffc107;">
+            <strong>⚠️ Important:</strong> This facility is currently unavailable for booking. Please select a different facility or check back later when maintenance is complete.
+        </p>
+        <div class="modal-actions">
+            <button type="button" class="btn-primary" onclick="closeMaintenanceWarning()">OK, I Understand</button>
+        </div>
+    </div>
+</div>
+
 <script>
+function closeMaintenanceWarning() {
+    const modal = document.getElementById('maintenanceWarningModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.visibility = 'hidden';
+        modal.classList.remove('open');
+    }
+    // Always restore body scroll
+    document.body.style.overflow = '';
+    document.body.style.removeProperty('overflow');
+    
+    // Clear facility dropdown after user acknowledges warning
+    const facilitySelect = document.getElementById('facility-select');
+    if (facilitySelect) {
+        facilitySelect.value = '';
+        // Trigger change event to clear any related UI
+        facilitySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Tell main.js to skip its legacy conflict handler on this page
     window.DISABLE_CONFLICT_CHECK = true;
@@ -989,6 +1056,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const eventMap = <?= json_encode($eventMap); ?>;
     const basePath = <?= json_encode(base_path()); ?>;
+
+    // Check facility status when selected
+    facilitySel.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            // Ensure body scroll is restored when no facility is selected
+            document.body.style.overflow = '';
+            return; // Skip if no selection or placeholder selected
+        }
+        
+        const facilityStatus = selectedOption.getAttribute('data-status');
+        const facilityName = selectedOption.text;
+        const modal = document.getElementById('maintenanceWarningModal');
+        const modalMessage = document.getElementById('maintenanceModalMessage');
+        
+        // Only proceed if modal elements exist
+        if (!modal || !modalMessage) {
+            console.error('Maintenance warning modal elements not found');
+            return;
+        }
+        
+        if (facilityStatus === 'maintenance' || facilityStatus === 'offline') {
+            // Set message based on status
+            if (facilityStatus === 'maintenance') {
+                modalMessage.textContent = 
+                    `"${facilityName}" is currently under maintenance and cannot be booked at this time.`;
+            } else {
+                modalMessage.textContent = 
+                    `"${facilityName}" is currently offline and unavailable for booking.`;
+            }
+            
+            // Show modal with proper styling
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        } else {
+            // Ensure body scroll is restored for available facilities
+            document.body.style.overflow = '';
+        }
+    });
 
     // Prefill from query params (facility_id, reservation_date, time_slot)
     const qp = new URLSearchParams(window.location.search);
@@ -1289,8 +1398,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Prefill values and trigger change events
     if (preFacility && facilitySel) {
-        facilitySel.value = preFacility;
-        facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+        const prefilledOption = facilitySel.querySelector(`option[value="${preFacility}"]`);
+        if (prefilledOption) {
+            const prefilledStatus = prefilledOption.getAttribute('data-status');
+            // Only prefill if facility is available (not maintenance/offline)
+            if (prefilledStatus === 'available') {
+                facilitySel.value = preFacility;
+                facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+            } else if (prefilledStatus === 'maintenance' || prefilledStatus === 'offline') {
+                // If pre-filled facility is maintenance/offline, show warning modal
+                setTimeout(() => {
+                    facilitySel.value = preFacility;
+                    facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+                }, 100);
+            }
+        }
     }
     if (preDate && dateInput) {
         dateInput.value = preDate;
@@ -1311,6 +1433,21 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => {
             checkConflict();
         }, 200);
+    }
+    
+    // Safety: Ensure body scroll is restored on page load
+    document.body.style.overflow = '';
+    document.body.style.removeProperty('overflow');
+    
+    // Add safety cleanup: restore scroll if modal is closed by clicking outside
+    const modal = document.getElementById('maintenanceWarningModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            // If clicking the backdrop (not the dialog), close modal
+            if (e.target === modal) {
+                closeMaintenanceWarning();
+            }
+        });
     }
 });
 </script>

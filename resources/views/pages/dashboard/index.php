@@ -106,87 +106,228 @@ $upcomingStmt->execute();
 $upcomingReservations = $upcomingStmt->fetchAll(PDO::FETCH_ASSOC);
 $upcomingCount = count($upcomingReservations);
 
-// Get pending approvals (Admin/Staff only)
+// Pending count will be calculated with filters in the statistics section below
 $pendingCount = 0;
 $pendingReservations = [];
-if (in_array($userRole, ['Admin', 'Staff'])) {
-    $pendingStmt = $pdo->query(
-        'SELECT COUNT(*) FROM reservations WHERE status = "pending"'
-    );
-    $pendingCount = (int)$pendingStmt->fetchColumn();
-    
-    $pendingListStmt = $pdo->query(
-        'SELECT r.id, r.reservation_date, r.time_slot, f.name AS facility_name, u.name AS requester_name
-         FROM reservations r
-         JOIN facilities f ON r.facility_id = f.id
-         JOIN users u ON r.user_id = u.id
-         WHERE r.status = "pending"
-         ORDER BY r.created_at ASC
-         LIMIT 5'
-    );
-    $pendingReservations = $pendingListStmt->fetchAll(PDO::FETCH_ASSOC);
-}
 
-// Get total reservations (global for Admin/Staff, user-specific for Residents)
+// Get total reservations (global for Admin/Staff, user-specific for Residents) - RESPECT FILTERS
 if (in_array($userRole, ['Admin', 'Staff'])) {
-    $totalResStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
+    // Build conditions for filtered statistics
+    $statConditions = [];
+    $statParams = [];
+    if ($statusFilter) {
+        $statConditions[] = "status = :f_status_stat";
+        $statParams['f_status_stat'] = $statusFilter;
+    }
+    if ($facilityFilter > 0) {
+        $statConditions[] = "facility_id = :f_facility_stat";
+        $statParams['f_facility_stat'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $statConditions[] = "reservation_date >= :f_start_stat";
+        $statParams['f_start_stat'] = $startDateFilter;
+    }
+    if ($endDateFilter) {
+        $statConditions[] = "reservation_date <= :f_end_stat";
+        $statParams['f_end_stat'] = $endDateFilter;
+    }
+    
+    $whereClause = empty($statConditions) ? '' : ' WHERE ' . implode(' AND ', $statConditions);
+    
+    // Total reservations (filtered)
+    $totalResSql = 'SELECT COUNT(*) FROM reservations' . $whereClause;
+    $totalResStmt = $pdo->prepare($totalResSql);
+    $totalResStmt->execute($statParams);
     $totalReservations = (int)$totalResStmt->fetchColumn();
     
-    $approvedResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "approved"');
+    // Approved reservations (filtered, but status filter might override)
+    $approvedConditions = $statConditions;
+    $approvedParams = $statParams;
+    if (!$statusFilter) {
+        $approvedConditions[] = "status = 'approved'";
+    }
+    $approvedWhereClause = empty($approvedConditions) ? ' WHERE status = "approved"' : ' WHERE ' . implode(' AND ', $approvedConditions);
+    $approvedResSql = 'SELECT COUNT(*) FROM reservations' . $approvedWhereClause;
+    $approvedResStmt = $pdo->prepare($approvedResSql);
+    $approvedResStmt->execute($approvedParams);
     $approvedReservations = (int)$approvedResStmt->fetchColumn();
     
-    $deniedResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "denied"');
+    // Denied reservations
+    $deniedConditions = $statConditions;
+    $deniedParams = $statParams;
+    if (!$statusFilter) {
+        $deniedConditions[] = "status = 'denied'";
+    }
+    $deniedWhereClause = empty($deniedConditions) ? ' WHERE status = "denied"' : ' WHERE ' . implode(' AND ', $deniedConditions);
+    $deniedResSql = 'SELECT COUNT(*) FROM reservations' . $deniedWhereClause;
+    $deniedResStmt = $pdo->prepare($deniedResSql);
+    $deniedResStmt->execute($deniedParams);
     $deniedReservations = (int)$deniedResStmt->fetchColumn();
     
-    $cancelledResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "cancelled"');
+    // Cancelled reservations
+    $cancelledConditions = $statConditions;
+    $cancelledParams = $statParams;
+    if (!$statusFilter) {
+        $cancelledConditions[] = "status = 'cancelled'";
+    }
+    $cancelledWhereClause = empty($cancelledConditions) ? ' WHERE status = "cancelled"' : ' WHERE ' . implode(' AND ', $cancelledConditions);
+    $cancelledResSql = 'SELECT COUNT(*) FROM reservations' . $cancelledWhereClause;
+    $cancelledResStmt = $pdo->prepare($cancelledResSql);
+    $cancelledResStmt->execute($cancelledParams);
     $cancelledReservations = (int)$cancelledResStmt->fetchColumn();
     
-    // Additional global statistics for Admin/Staff
+    // Pending count (already calculated above, but recalculate with filters)
+    $pendingConditions = ['status = "pending"'];
+    $pendingParams = [];
+    if ($facilityFilter > 0) {
+        $pendingConditions[] = "facility_id = :f_facility_pending";
+        $pendingParams['f_facility_pending'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $pendingConditions[] = "reservation_date >= :f_start_pending";
+        $pendingParams['f_start_pending'] = $startDateFilter;
+    }
+    if ($endDateFilter) {
+        $pendingConditions[] = "reservation_date <= :f_end_pending";
+        $pendingParams['f_end_pending'] = $endDateFilter;
+    }
+    $pendingWhereClause = ' WHERE ' . implode(' AND ', $pendingConditions);
+    $pendingCountStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations' . $pendingWhereClause);
+    $pendingCountStmt->execute($pendingParams);
+    $pendingCount = (int)$pendingCountStmt->fetchColumn();
+    
+    // Additional global statistics (not filtered by date/facility)
     $totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role = "Resident" AND status = "active"');
     $totalUsers = (int)$totalUsersStmt->fetchColumn();
     
     $totalFacilitiesStmt = $pdo->query('SELECT COUNT(*) FROM facilities WHERE status = "available"');
     $totalFacilities = (int)$totalFacilitiesStmt->fetchColumn();
     
-    $activeUsersStmt = $pdo->query('SELECT COUNT(DISTINCT user_id) FROM reservations WHERE status IN ("approved", "pending")');
+    // Active users (with filters)
+    $activeConditions = ['status IN ("approved", "pending")'];
+    $activeParams = [];
+    if ($facilityFilter > 0) {
+        $activeConditions[] = "facility_id = :f_facility_active";
+        $activeParams['f_facility_active'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $activeConditions[] = "reservation_date >= :f_start_active";
+        $activeParams['f_start_active'] = $startDateFilter;
+    }
+    if ($endDateFilter) {
+        $activeConditions[] = "reservation_date <= :f_end_active";
+        $activeParams['f_end_active'] = $endDateFilter;
+    }
+    $activeWhereClause = ' WHERE ' . implode(' AND ', $activeConditions);
+    $activeUsersStmt = $pdo->prepare('SELECT COUNT(DISTINCT user_id) FROM reservations' . $activeWhereClause);
+    $activeUsersStmt->execute($activeParams);
     $activeUsers = (int)$activeUsersStmt->fetchColumn();
     
-    // Today's reservations
-    $todayResStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE reservation_date = CURDATE() AND status IN ("approved", "pending")');
+    // Today's reservations (respect facility filter)
+    $todayConditions = ['reservation_date = CURDATE()', 'status IN ("approved", "pending")'];
+    $todayParams = [];
+    if ($facilityFilter > 0) {
+        $todayConditions[] = "facility_id = :f_facility_today";
+        $todayParams['f_facility_today'] = $facilityFilter;
+    }
+    $todayWhereClause = ' WHERE ' . implode(' AND ', $todayConditions);
+    $todayResStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations' . $todayWhereClause);
+    $todayResStmt->execute($todayParams);
     $todayReservations = (int)$todayResStmt->fetchColumn();
     
-    // This week's reservations
+    // This week's reservations (respect facility filter)
     $weekStart = date('Y-m-d', strtotime('monday this week'));
     $weekEnd = date('Y-m-d', strtotime('sunday this week'));
-    $weekResStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE reservation_date BETWEEN :start AND :end AND status IN ("approved", "pending")');
-    $weekResStmt->execute(['start' => $weekStart, 'end' => $weekEnd]);
+    $weekConditions = ['reservation_date BETWEEN :start AND :end', 'status IN ("approved", "pending")'];
+    $weekParams = ['start' => $weekStart, 'end' => $weekEnd];
+    if ($facilityFilter > 0) {
+        $weekConditions[] = "facility_id = :f_facility_week";
+        $weekParams['f_facility_week'] = $facilityFilter;
+    }
+    $weekWhereClause = ' WHERE ' . implode(' AND ', $weekConditions);
+    $weekResStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations' . $weekWhereClause);
+    $weekResStmt->execute($weekParams);
     $weekReservations = (int)$weekResStmt->fetchColumn();
     
-    // Approval rate calculation
+    // Approval rate calculation (respect filters)
     $approvalRate = $totalReservations > 0 
         ? round(($approvedReservations / $totalReservations) * 100, 1) 
         : 0;
     
-    // Average reservations per user
+    // Average reservations per user (respect filters)
     $avgReservationsPerUser = $totalUsers > 0 
         ? round($totalReservations / $totalUsers, 1) 
         : 0;
     
-    // Expired pending (expiring soon - within 24 hours)
+    // Expired pending (expiring soon - within 24 hours, not filtered)
     $expiringSoonStmt = $pdo->query('SELECT COUNT(*) FROM reservations WHERE status = "pending" AND expires_at IS NOT NULL AND expires_at <= DATE_ADD(NOW(), INTERVAL 24 HOUR)');
     $expiringSoon = (int)$expiringSoonStmt->fetchColumn();
+    
+    // Get pending list for display (with filters)
+    $pendingListConditions = ['r.status = "pending"'];
+    $pendingListParams = [];
+    if ($facilityFilter > 0) {
+        $pendingListConditions[] = "r.facility_id = :f_facility_list";
+        $pendingListParams['f_facility_list'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $pendingListConditions[] = "r.reservation_date >= :f_start_list";
+        $pendingListParams['f_start_list'] = $startDateFilter;
+    }
+    if ($endDateFilter) {
+        $pendingListConditions[] = "r.reservation_date <= :f_end_list";
+        $pendingListParams['f_end_list'] = $endDateFilter;
+    }
+    
+    $pendingListWhereClause = ' WHERE ' . implode(' AND ', $pendingListConditions);
+    $pendingListSql = 'SELECT r.id, r.reservation_date, r.time_slot, f.name AS facility_name, u.name AS requester_name
+         FROM reservations r
+         JOIN facilities f ON r.facility_id = f.id
+         JOIN users u ON r.user_id = u.id' . $pendingListWhereClause . '
+         ORDER BY r.created_at ASC
+         LIMIT 5';
+    $pendingListStmt = $pdo->prepare($pendingListSql);
+    $pendingListStmt->execute($pendingListParams);
+    $pendingReservations = $pendingListStmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
-    // Resident view - user-specific data
-    $totalResStmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id'
-    );
-    $totalResStmt->execute(['user_id' => $userId]);
+    // Resident view - user-specific data (with filters)
+    $residentConditions = ['user_id = :user_id'];
+    $residentParams = ['user_id' => $userId];
+    
+    if ($statusFilter) {
+        $residentConditions[] = "status = :f_status_resident";
+        $residentParams['f_status_resident'] = $statusFilter;
+    }
+    if ($facilityFilter > 0) {
+        $residentConditions[] = "facility_id = :f_facility_resident";
+        $residentParams['f_facility_resident'] = $facilityFilter;
+    }
+    if ($startDateFilter) {
+        $residentConditions[] = "reservation_date >= :f_start_resident";
+        $residentParams['f_start_resident'] = $startDateFilter;
+    }
+    if ($endDateFilter) {
+        $residentConditions[] = "reservation_date <= :f_end_resident";
+        $residentParams['f_end_resident'] = $endDateFilter;
+    }
+    
+    $residentWhereClause = ' WHERE ' . implode(' AND ', $residentConditions);
+    
+    $totalResSql = 'SELECT COUNT(*) FROM reservations' . $residentWhereClause;
+    $totalResStmt = $pdo->prepare($totalResSql);
+    $totalResStmt->execute($residentParams);
     $totalReservations = (int)$totalResStmt->fetchColumn();
     
-    $approvedResStmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM reservations WHERE user_id = :user_id AND status = "approved"'
-    );
-    $approvedResStmt->execute(['user_id' => $userId]);
+    // Approved reservations for resident
+    $approvedConditions = $residentConditions;
+    $approvedParams = $residentParams;
+    if (!$statusFilter) {
+        $approvedConditions[] = "status = 'approved'";
+    }
+    $approvedWhereClause = ' WHERE ' . implode(' AND ', $approvedConditions);
+    $approvedResSql = 'SELECT COUNT(*) FROM reservations' . $approvedWhereClause;
+    $approvedResStmt = $pdo->prepare($approvedResSql);
+    $approvedResStmt->execute($approvedParams);
     $approvedReservations = (int)$approvedResStmt->fetchColumn();
     
     // Set defaults for non-admin users
@@ -200,6 +341,19 @@ if (in_array($userRole, ['Admin', 'Staff'])) {
     $approvalRate = 0;
     $avgReservationsPerUser = 0;
     $expiringSoon = 0;
+}
+
+// Helper function to build URL with filters
+function buildFilterUrl($basePath, $page, $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, $additionalParams = []) {
+    $params = [];
+    if ($statusFilter) $params['status'] = $statusFilter;
+    if ($facilityFilter > 0) $params['facility_id'] = $facilityFilter;
+    if ($startDateFilter) $params['start_date'] = $startDateFilter;
+    if ($endDateFilter) $params['end_date'] = $endDateFilter;
+    $params = array_merge($params, $additionalParams);
+    
+    $queryString = !empty($params) ? '?' . http_build_query($params) : '';
+    return $basePath . $page . $queryString;
 }
 
 // Get unread notifications
@@ -418,7 +572,7 @@ ob_start();
 <div class="stat-grid">
     <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
         <!-- Admin/Staff Global Statistics -->
-        <div class="stat-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #1976d2; margin: 0.5rem 0;">
                 <?= number_format($totalReservations); ?>
@@ -427,9 +581,9 @@ ob_start();
                 <?= number_format($approvedReservations); ?> approved • 
                 <?= number_format($pendingCount); ?> pending
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'pending', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); text-decoration: none; color: inherit;">
             <h3>Pending Approvals</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #f57c00; margin: 0.5rem 0;">
                 <?= number_format($pendingCount); ?>
@@ -441,9 +595,9 @@ ob_start();
                     Awaiting review
                 <?php endif; ?>
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/user_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); text-decoration: none; color: inherit;">
             <h3>Total Users</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #388e3c; margin: 0.5rem 0;">
                 <?= number_format($totalUsers); ?>
@@ -451,9 +605,9 @@ ob_start();
             <small style="color: #5b6888;">
                 <?= number_format($activeUsers); ?> active users
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);">
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/facility_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); text-decoration: none; color: inherit;">
             <h3>Available Facilities</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #7b1fa2; margin: 0.5rem 0;">
                 <?= number_format($totalFacilities); ?>
@@ -461,9 +615,9 @@ ob_start();
             <small style="color: #5b6888;">
                 Facilities in system
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, date('Y-m-d'), date('Y-m-d')); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%); text-decoration: none; color: inherit;">
             <h3>Today's Bookings</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #f9a825; margin: 0.5rem 0;">
                 <?= number_format($todayReservations); ?>
@@ -471,9 +625,9 @@ ob_start();
             <small style="color: #5b6888;">
                 <?= number_format($weekReservations); ?> this week
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'approved', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); text-decoration: none; color: inherit;">
             <h3>Approval Rate</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #00796b; margin: 0.5rem 0;">
                 <?= $approvalRate; ?>%
@@ -481,9 +635,9 @@ ob_start();
             <small style="color: #5b6888;">
                 <?= number_format($approvedReservations); ?> of <?= number_format($totalReservations); ?> approved
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reports.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); text-decoration: none; color: inherit;">
             <h3>Avg per User</h3>
             <p style="font-size: 2rem; font-weight: 700; color: #c2185b; margin: 0.5rem 0;">
                 <?= $avgReservationsPerUser; ?>
@@ -491,9 +645,9 @@ ob_start();
             <small style="color: #5b6888;">
                 Reservations per user
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card">
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/notifications.php" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>Notifications</h3>
             <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
                 <?= $unreadNotifications; ?>
@@ -501,10 +655,10 @@ ob_start();
             <small style="color: #8b95b5;">
                 Unread notifications
             </small>
-        </div>
+        </a>
     <?php else: ?>
         <!-- Resident Statistics -->
-        <div class="stat-card">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>My Upcoming Reservations</h3>
             <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue); margin: 0.5rem 0;">
                 <?= $upcomingCount; ?>
@@ -512,9 +666,9 @@ ob_start();
             <small style="color: #8b95b5;">
                 <?= $upcomingCount === 1 ? 'reservation' : 'reservations'; ?> in the next 7 days
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card">
+        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
             <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.5rem 0;">
                 <?= $totalReservations; ?>
@@ -522,9 +676,9 @@ ob_start();
             <small style="color: #8b95b5;">
                 <?= $approvedReservations; ?> approved
             </small>
-        </div>
+        </a>
         
-        <div class="stat-card">
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/notifications.php" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>Notifications</h3>
             <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
                 <?= $unreadNotifications; ?>
@@ -532,13 +686,13 @@ ob_start();
             <small style="color: #8b95b5;">
                 <?= $unreadNotifications === 1 ? 'unread notification' : 'unread notifications'; ?>
             </small>
-        </div>
+        </a>
     <?php endif; ?>
 </div>
 
 <div class="booking-wrapper" style="margin-top: 2rem;">
     <section class="booking-card collapsible-card">
-        <button class="collapsible-header" data-collapse-target="upcoming-reservations">
+        <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
             <span><?= in_array($userRole, ['Admin', 'Staff']) ? 'Upcoming Reservations (All Users)' : 'My Upcoming Reservations'; ?></span>
             <span class="chevron">▼</span>
         </button>
@@ -600,7 +754,7 @@ ob_start();
     
     <?php if (in_array($userRole, ['Admin', 'Staff']) && !empty($pendingReservations)): ?>
     <aside class="booking-card collapsible-card">
-        <button class="collapsible-header" data-collapse-target="pending-requests">
+        <button type="button" class="collapsible-header" data-collapse-target="pending-requests">
             <span>Recent Pending Requests</span>
             <span class="chevron">▼</span>
         </button>
@@ -695,24 +849,51 @@ ob_start();
     function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
     function init() {
-        document.querySelectorAll('.collapsible-header').forEach(header => {
+        // Only handle collapsibles within the dashboard page (not sidebar)
+        document.querySelectorAll('.booking-card .collapsible-header, .collapsible-card .collapsible-header').forEach(header => {
             const targetId = header.getAttribute('data-collapse-target');
+            if (!targetId) return;
+            
             const body = document.getElementById(targetId);
-            if (!body) return;
+            if (!body) {
+                console.warn('Collapsible target not found:', targetId);
+                return;
+            }
+            
             const chevron = header.querySelector('.chevron');
+            
+            // Apply saved state
             if (state[targetId]) {
                 body.classList.add('is-collapsed');
                 if (chevron) chevron.style.transform = 'rotate(-90deg)';
+            } else {
+                body.classList.remove('is-collapsed');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
             }
-            header.addEventListener('click', () => {
+            
+            // Add click handler with event prevention
+            header.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
                 const isCollapsed = body.classList.toggle('is-collapsed');
-                if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                if (chevron) {
+                    chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                }
                 state[targetId] = isCollapsed;
                 save();
             });
         });
     }
-    document.addEventListener('DOMContentLoaded', init);
+    
+    // Disable global collapsible handler for dashboard page
+    window.DISABLE_GLOBAL_COLLAPSIBLE = true;
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 
 document.addEventListener('DOMContentLoaded', function() {

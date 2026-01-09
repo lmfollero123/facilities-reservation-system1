@@ -29,14 +29,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const syncSidebarInitial = () => {
         if (!sidebar) return;
         const isMobile = window.innerWidth <= 960;
+        
+        // Check if there's a saved collapsed state in localStorage (desktop only)
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        const shouldBeCollapsed = savedState === 'true' && !isMobile;
+        
         if (isMobile) {
             // On mobile, sidebar should be hidden by default
             closeSidebar();
         } else {
-            // On desktop, sidebar should always be visible
-            sidebar.classList.remove("collapsed");
+            // On desktop, restore saved state or default to expanded
+            if (shouldBeCollapsed) {
+                sidebar.classList.add("collapsed");
+                sidebarToggle?.setAttribute("aria-expanded", "false");
+            } else {
+                sidebar.classList.remove("collapsed");
+                sidebarToggle?.setAttribute("aria-expanded", "true");
+            }
+            // Never show backdrop on desktop
             sidebarBackdrop.classList.remove("active");
-            sidebarToggle?.setAttribute("aria-expanded", "true");
         }
         
         // Ensure sidebar nav is scrollable if content overflows
@@ -64,11 +75,33 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener("click", (e) => {
             e.stopPropagation();
+            const isMobile = window.innerWidth <= 960;
             const isCollapsed = sidebar.classList.contains("collapsed");
-            if (isCollapsed) {
-                openSidebar();
+            
+            if (isMobile) {
+                // On mobile, toggle show/hide
+                if (isCollapsed) {
+                    openSidebar();
+                } else {
+                    closeSidebar();
+                }
             } else {
-                closeSidebar();
+                // On desktop, toggle collapsed (narrow) state
+                if (isCollapsed) {
+                    sidebar.classList.remove("collapsed");
+                    sidebarToggle.setAttribute("aria-expanded", "true");
+                    // Save state to localStorage
+                    localStorage.setItem('sidebarCollapsed', 'false');
+                    // Don't show backdrop on desktop
+                    sidebarBackdrop.classList.remove("active");
+                } else {
+                    sidebar.classList.add("collapsed");
+                    sidebarToggle.setAttribute("aria-expanded", "false");
+                    // Save state to localStorage
+                    localStorage.setItem('sidebarCollapsed', 'true');
+                    // Don't show backdrop on desktop
+                    sidebarBackdrop.classList.remove("active");
+                }
             }
         });
     }

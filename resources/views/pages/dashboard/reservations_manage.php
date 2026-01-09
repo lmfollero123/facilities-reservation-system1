@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
     if ($reservationId && in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, r.postponed_priority, f.name AS facility_name, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -372,7 +372,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $note = $_POST['note'] ?? null;
                 }
                 
-                $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                // If approving a postponed reservation, clear postponed_at timestamp (priority flag remains for tracking)
+                if ($action === 'approved' && $reservation['status'] === 'postponed') {
+                    $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                } else {
+                    $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                }
                 $stmt->execute([
                     'status' => $action,
                     'id' => $reservationId,
@@ -401,6 +406,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $notifMessage = 'Your reservation request for ' . $reservation['facility_name'];
                     $notifMessage .= ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ')';
                     $notifMessage .= ' has been ' . $action . '.';
+                    
+                    // Check if this was a postponed reservation with priority
+                    if ($action === 'approved' && $reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])) {
+                        $notifMessage .= ' This reservation had priority due to previous postponement.';
+                    }
+                    
                     if (!empty($note)) {
                         $notifMessage .= ' Note: ' . $note;
                     }
@@ -433,12 +444,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
 }
 
 $pendingStmt = $pdo->query(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, f.name AS facility, u.name AS requester
+    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, f.name AS facility, u.name AS requester
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
-     WHERE r.status = "pending"
-     ORDER BY r.created_at ASC'
+     WHERE r.status IN ("pending", "postponed")
+     ORDER BY r.postponed_priority DESC, r.postponed_at ASC, r.created_at ASC'
 );
 $pendingReservations = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -527,19 +538,27 @@ ob_start();
                     <tbody>
                     <?php foreach ($pendingReservations as $reservation): ?>
                         <tr>
-                            <td><?= htmlspecialchars($reservation['requester']); ?></td>
+                            <td>
+                                <?= htmlspecialchars($reservation['requester']); ?>
+                                <?php if ($reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])): ?>
+                                    <span style="display:inline-block; margin-left:0.5rem; background:#1e3a8a; color:white; padding:0.15rem 0.4rem; border-radius:4px; font-size:0.75rem; font-weight:600;">PRIORITY</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars($reservation['facility']); ?></td>
                             <td><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></td>
                             <td><?= htmlspecialchars($reservation['purpose']); ?></td>
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                    <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
                                     <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
-                                    <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
-                                        <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
-                                        <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
-                                        <button class="btn-primary confirm-action" data-message="Approve this reservation?" name="action" value="approved" type="submit">Approve</button>
-                                        <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
-                                    </form>
+                                    <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
+                                        <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                            <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
+                                            <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
+                                            <button class="btn-primary confirm-action" data-message="Approve this reservation?<?= !empty($reservation['postponed_priority']) ? ' (This reservation has priority due to previous postponement.)' : ''; ?>" name="action" value="approved" type="submit">Approve</button>
+                                            <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -569,7 +588,18 @@ ob_start();
                 <span class="status-badge cancelled">Cancelled</span>
                 <span style="margin-left: 0.5rem;">Reservation cancelled by staff or requester.</span>
             </li>
+            <li>
+                <span class="status-badge postponed">Postponed</span>
+                <span style="margin-left: 0.5rem;">Reservation postponed (e.g., due to facility maintenance). May have priority status.</span>
+            </li>
+            <li>
+                <span class="status-badge on_hold">On Hold</span>
+                <span style="margin-left: 0.5rem;">Reservation temporarily on hold.</span>
+            </li>
         </ul>
+        <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; font-size: 0.85rem; color: #6b7280;">
+            <strong>Note:</strong> Postponed reservations with priority status (marked with PRIORITY badge) will be given preference during review.
+        </p>
     </aside>
 </div>
 

@@ -13,12 +13,16 @@ $navLinks = [
 ?>
 <!-- Navigation -->
 <nav class="navbar navbar-expand-lg navbar-light fixed-top py-3" id="mainNav">
-    <div class="container px-4 px-lg-5">
-        <a class="navbar-brand" href="<?= $base; ?>/resources/views/pages/public/home.php">Barangay Culiat Public Facilities Reservation System</a>
+    <div class="container px-4 px-lg-5" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <a class="navbar-brand" href="<?= $base; ?>/resources/views/pages/public/home.php" style="margin-right: auto;">Barangay Culiat Public Facilities Reservation System</a>
+        <div id="navbar-datetime" class="navbar-datetime" style="margin: 0 auto; padding: 0 2rem; color: #fff; font-size: 0.9rem; font-weight: 500; white-space: nowrap;">
+            <span id="navbar-date"></span>
+            <span id="navbar-time" style="margin-left: 0.5rem;"></span>
+        </div>
         <button class="navbar-toggler navbar-toggler-right" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarResponsive">
+        <div class="collapse navbar-collapse" id="navbarResponsive" style="margin-left: auto;">
             <ul class="navbar-nav ms-auto my-2 my-lg-0">
                 <?php 
                 $isHomePage = str_contains($currentPage, 'home.php');
@@ -63,6 +67,49 @@ $navLinks = [
         </div>
     </div>
 </nav>
+
+<script>
+// Update navbar date and time
+function updateNavbarDateTime() {
+    const now = new Date();
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const dayName = days[now.getDay()];
+    const monthName = months[now.getMonth()];
+    const day = now.getDate();
+    const year = now.getFullYear();
+    
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes.toString().padStart(2, '0');
+    const displaySeconds = seconds.toString().padStart(2, '0');
+    
+    const dateElement = document.getElementById('navbar-date');
+    const timeElement = document.getElementById('navbar-time');
+    
+    if (dateElement) {
+        dateElement.textContent = `${dayName}, ${monthName} ${day}, ${year}`;
+    }
+    if (timeElement) {
+        timeElement.textContent = `${displayHours}:${displayMinutes}:${displaySeconds} ${ampm}`;
+    }
+}
+
+// Update immediately and then every second
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        updateNavbarDateTime();
+        setInterval(updateNavbarDateTime, 1000);
+    });
+} else {
+    updateNavbarDateTime();
+    setInterval(updateNavbarDateTime, 1000);
+}
+</script>
 
 
 

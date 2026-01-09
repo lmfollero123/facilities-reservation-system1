@@ -244,9 +244,9 @@ ob_start();
                     $dayReservations = $reservationsByDate[$currentDate] ?? [];
                     $hasMaintenance = false;
                     
-                    // Check for facilities in maintenance
-                    foreach ($facilities as $facility) {
-                        if ($facility['status'] === 'maintenance' || $facility['status'] === 'offline') {
+                    // Check if any reservation on THIS date is for a facility in maintenance
+                    foreach ($dayReservations as $reservation) {
+                        if ($reservation['facility_status'] === 'maintenance' || $reservation['facility_status'] === 'offline') {
                             $hasMaintenance = true;
                             break;
                         }

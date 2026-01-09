@@ -201,9 +201,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function openChat() {
         panel.classList.add('open');
         panel.setAttribute('aria-hidden', 'false');
+        // Scroll to bottom and focus input after opening
         setTimeout(() => {
+            scrollToBottom();
             input.focus();
-        }, 150);
+        }, 200);
     }
 
     function closeChat() {
@@ -252,6 +254,15 @@ document.addEventListener('DOMContentLoaded', function () {
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
 
+    // Handle Enter key: Send on Enter, new line on Shift+Enter
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+        // Shift+Enter allows new line (default behavior)
+    });
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
 
@@ -271,6 +282,12 @@ document.addEventListener('DOMContentLoaded', function () {
             removeTypingIndicator(typingId);
             const response = getMockResponse(message);
             addMessage(response, 'bot');
+            // Refocus input after bot responds
+            setTimeout(function() {
+                if (input && document.body.contains(input)) {
+                    input.focus();
+                }
+            }, 150);
         }, 1000 + Math.random() * 1000);
     });
 
@@ -298,7 +315,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         messagesContainer.appendChild(wrapper);
-        scrollToBottom();
+        // Scroll after DOM update - use multiple attempts to ensure it works
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
     }
 
     function showTypingIndicator() {
@@ -314,7 +333,9 @@ document.addEventListener('DOMContentLoaded', function () {
             '  </div>' +
             '</div>';
         messagesContainer.appendChild(wrapper);
-        scrollToBottom();
+        // Scroll after DOM update - use multiple attempts to ensure it works
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
         return id;
     }
 
@@ -324,7 +345,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function scrollToBottom() {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        if (!messagesContainer) return;
+        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        requestAnimationFrame(function() {
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+        // Double-check after a short delay
+        setTimeout(function() {
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }, 10);
     }
 
     function escapeHtml(text) {

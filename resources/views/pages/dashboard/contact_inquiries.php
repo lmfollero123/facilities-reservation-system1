@@ -75,8 +75,8 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Contact Inquiries</span>
     </div>
-    <h1>Contact Inquiries</h1>
-    <small>View and manage inquiries, concerns, and technical issues from the public contact form.</small>
+    <h1 style="color: #1b1b1f;">Contact Inquiries</h1>
+    <small style="color: #6b7897;">View and manage inquiries, concerns, and technical issues from the public contact form.</small>
 </div>
 
 <?php if (isset($success)): ?>
@@ -95,7 +95,7 @@ ob_start();
     <!-- Detail View -->
     <div class="card-elevated">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Inquiry Details</h2>
+            <h2 style="color: #1b1b1f;">Inquiry Details</h2>
             <a href="<?= $base; ?>/resources/views/pages/dashboard/contact_inquiries.php" class="btn btn-outline">← Back to List</a>
         </div>
         
@@ -103,16 +103,16 @@ ob_start();
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                 <div>
                     <strong style="color: #6b7897; font-size: 0.85rem;">Name</strong>
-                    <p style="margin: 0.25rem 0 0; font-weight: 600;"><?= htmlspecialchars($inquiry['name']); ?></p>
+                    <p style="margin: 0.25rem 0 0; font-weight: 600; color: #1b1b1f;"><?= htmlspecialchars($inquiry['name']); ?></p>
                 </div>
                 <div>
                     <strong style="color: #6b7897; font-size: 0.85rem;">Email</strong>
-                    <p style="margin: 0.25rem 0 0;"><a href="mailto:<?= htmlspecialchars($inquiry['email']); ?>"><?= htmlspecialchars($inquiry['email']); ?></a></p>
+                    <p style="margin: 0.25rem 0 0; color: #1b1b1f;"><a href="mailto:<?= htmlspecialchars($inquiry['email']); ?>" style="color: #285ccd; text-decoration: none;"><?= htmlspecialchars($inquiry['email']); ?></a></p>
                 </div>
                 <?php if ($inquiry['organization']): ?>
                 <div>
                     <strong style="color: #6b7897; font-size: 0.85rem;">Organization</strong>
-                    <p style="margin: 0.25rem 0 0;"><?= htmlspecialchars($inquiry['organization']); ?></p>
+                    <p style="margin: 0.25rem 0 0; color: #1b1b1f;"><?= htmlspecialchars($inquiry['organization']); ?></p>
                 </div>
                 <?php endif; ?>
                 <div>
@@ -123,13 +123,13 @@ ob_start();
                 </div>
                 <div>
                     <strong style="color: #6b7897; font-size: 0.85rem;">Submitted</strong>
-                    <p style="margin: 0.25rem 0 0;"><?= date('M d, Y g:i A', strtotime($inquiry['created_at'])); ?></p>
+                    <p style="margin: 0.25rem 0 0; color: #1b1b1f;"><?= date('M d, Y g:i A', strtotime($inquiry['created_at'])); ?></p>
                 </div>
             </div>
             
             <div style="margin-top: 1.5rem;">
                 <strong style="color: #6b7897; font-size: 0.85rem;">Message</strong>
-                <p style="margin: 0.75rem 0 0; white-space: pre-wrap; line-height: 1.7;"><?= htmlspecialchars($inquiry['message']); ?></p>
+                <p style="margin: 0.75rem 0 0; white-space: pre-wrap; line-height: 1.7; color: #1b1b1f;"><?= htmlspecialchars($inquiry['message']); ?></p>
             </div>
         </div>
         
@@ -182,27 +182,27 @@ ob_start();
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr style="background: #f5f7fd; border-bottom: 2px solid #e1e7f0;">
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Name</th>
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Email</th>
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Message Preview</th>
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Status</th>
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Date</th>
-                            <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Actions</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Name</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Email</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Message Preview</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Status</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Date</th>
+                            <th style="padding: 0.75rem; text-align: left; font-weight: 600; color: #1b1b1f;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($inquiries as $inq): ?>
                             <tr style="border-bottom: 1px solid #e1e7f0;">
-                                <td style="padding: 0.75rem;"><?= htmlspecialchars($inq['name']); ?></td>
-                                <td style="padding: 0.75rem;"><a href="mailto:<?= htmlspecialchars($inq['email']); ?>"><?= htmlspecialchars($inq['email']); ?></a></td>
-                                <td style="padding: 0.75rem; max-width: 300px;">
+                                <td style="padding: 0.75rem; color: #1b1b1f;"><?= htmlspecialchars($inq['name']); ?></td>
+                                <td style="padding: 0.75rem; color: #1b1b1f;"><a href="mailto:<?= htmlspecialchars($inq['email']); ?>" style="color: #285ccd; text-decoration: none;"><?= htmlspecialchars($inq['email']); ?></a></td>
+                                <td style="padding: 0.75rem; max-width: 300px; color: #1b1b1f;">
                                     <?= htmlspecialchars(mb_strimwidth($inq['message'], 0, 80, '...')); ?>
                                 </td>
-                                <td style="padding: 0.75rem;">
+                                <td style="padding: 0.75rem; color: #1b1b1f;">
                                     <span class="status-badge <?= $inq['status']; ?>"><?= ucfirst(str_replace('_', ' ', $inq['status'])); ?></span>
                                 </td>
-                                <td style="padding: 0.75rem;"><?= date('M d, Y', strtotime($inq['created_at'])); ?></td>
-                                <td style="padding: 0.75rem;">
+                                <td style="padding: 0.75rem; color: #1b1b1f;"><?= date('M d, Y', strtotime($inq['created_at'])); ?></td>
+                                <td style="padding: 0.75rem; color: #1b1b1f;">
                                     <a href="?id=<?= $inq['id']; ?>" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">View</a>
                                 </td>
                             </tr>
@@ -237,6 +237,46 @@ ob_start();
 .status-badge.closed {
     background: #f5f5f5;
     color: #616161;
+}
+
+/* Fix text contrast for contact inquiries detail view */
+.card-elevated .booking-form label,
+.card-elevated .booking-form label span {
+    color: #285ccd !important;
+}
+
+.card-elevated .booking-form select,
+.card-elevated .booking-form textarea,
+.card-elevated .booking-form input {
+    color: #1b1b1f !important;
+}
+
+.card-elevated .booking-form select option {
+    color: #1b1b1f;
+}
+
+/* Ensure proper contrast for "Last updated by" text */
+.card-elevated p[style*="color: #6b7897"] {
+    color: #6b7897 !important;
+}
+
+/* Fix text contrast for contact inquiries list view table */
+.card-elevated table th,
+.card-elevated table td {
+    color: #1b1b1f !important;
+}
+
+.card-elevated table th {
+    color: #1b1b1f !important;
+}
+
+.card-elevated table a {
+    color: #285ccd !important;
+}
+
+.card-elevated table a:hover {
+    color: #285ccd !important;
+    text-decoration: underline;
 }
 </style>
 

@@ -10,6 +10,7 @@ $current = $_SERVER['PHP_SELF'] ?? '';
 $primaryLinks = [
     ['label' => 'Dashboard', 'href' => $base . '/resources/views/pages/dashboard/index.php', 'icon' => 'dashboard'],
     ['label' => 'Book a Facility', 'href' => $base . '/resources/views/pages/dashboard/book_facility.php', 'icon' => 'calendar-plus'],
+    ['label' => 'My Reservations', 'href' => $base . '/resources/views/pages/dashboard/my_reservations.php', 'icon' => 'calendar'],
     ['label' => 'Smart Scheduler', 'href' => $base . '/resources/views/pages/dashboard/ai_scheduling.php', 'icon' => 'robot'],
 ];
 
@@ -56,6 +57,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
                         $iconPaths = [
                             'dashboard' => '<path d="M3 13H11V3H3V13ZM3 21H11V15H3V21ZM13 21H21V11H13V21ZM13 3V9H21V3H13Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                             'calendar-plus' => '<path d="M19 21H5C3.89543 21 3 20.1046 3 19V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V19C21 20.1046 20.1046 21 19 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 3V7M8 3V7M3 11H21M12 15V19M15 17H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+                            'calendar' => '<path d="M19 21H5C3.89543 21 3 20.1046 3 19V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V19C21 20.1046 20.1046 21 19 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 3V7M8 3V7M3 11H21M9 15H15M11 13V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                             'robot' => '<path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L18 4H6L3 7V9C1.9 9 1 9.9 1 11V18C1 19.1 1.9 20 3 20H21C22.1 20 23 19.1 23 18V11C23 9.9 22.1 9 21 9ZM7.5 15C6.7 15 6 14.3 6 13.5C6 12.7 6.7 12 7.5 12C8.3 12 9 12.7 9 13.5C9 14.3 8.3 15 7.5 15ZM16.5 15C15.7 15 15 14.3 15 13.5C15 12.7 15.7 12 16.5 12C17.3 12 18 12.7 18 13.5C18 14.3 17.3 15 16.5 15Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                             'message-circle' => '<path d="M21 11.5C21.0034 12.8199 20.6951 14.1219 20.1 15.3C19.3944 16.7118 18.3098 17.8992 16.9674 18.7293C15.6251 19.5594 14.0782 19.9994 12.5 20C11.1801 20.0035 9.87812 19.6951 8.7 19.1L3 21L4.9 15.3C4.30493 14.1219 3.99656 12.8199 4 11.5C4.00061 9.92179 4.44061 8.37488 5.27072 7.03258C6.10083 5.69028 7.28825 4.6056 8.7 3.90003C9.87812 3.30496 11.1801 2.99659 12.5 3.00003H13C15.0843 3.11502 17.053 3.99479 18.5291 5.47089C20.0052 6.94699 20.885 8.91568 21 11V11.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                         ];

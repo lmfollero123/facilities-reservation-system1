@@ -42,12 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception('Reservation not found or you do not have permission to reschedule it.');
         }
         
-        // Status-based constraints: Only pending or approved can be rescheduled
-        if (!in_array($reservation['status'], ['pending', 'approved'], true)) {
+        // Status-based constraints: Only pending, approved, or postponed can be rescheduled
+        if (!in_array($reservation['status'], ['pending', 'approved', 'postponed'], true)) {
             if ($reservation['status'] === 'denied') {
                 throw new Exception('Rejected reservations cannot be rescheduled. Please create a new reservation request.');
             } elseif ($reservation['status'] === 'cancelled') {
                 throw new Exception('Cancelled reservations cannot be rescheduled. Please create a new reservation request.');
+            } elseif ($reservation['status'] === 'on_hold') {
+                throw new Exception('Reservations on hold cannot be rescheduled at this time. Please contact support.');
             } else {
                 throw new Exception('This reservation cannot be rescheduled due to its current status.');
             }
@@ -145,16 +147,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $oldTimeSlot = $reservation['time_slot'];
         $oldStatus = $reservation['status'];
         
-        // Constraint 3: Approved reservations require re-approval
-        $newStatus = ($oldStatus === 'approved') ? 'pending' : $oldStatus;
+        // Constraint 3: Approved and postponed reservations require re-approval
+        // Postponed reservations keep priority but go back to pending for re-approval
+        $newStatus = (in_array($oldStatus, ['approved', 'postponed'], true)) ? 'pending' : $oldStatus;
         
+        // Check if this is a postponed reservation with priority (keep priority when rescheduling)
+        $priorityCheckStmt = $pdo->prepare('SELECT postponed_priority FROM reservations WHERE id = :id');
+        $priorityCheckStmt->execute(['id' => $reservationId]);
+        $hasPriority = (bool)$priorityCheckStmt->fetchColumn();
+        
+        // When rescheduling a postponed reservation, clear postponed_at but keep priority flag
+        // The priority flag will remain so admins know this reservation has priority
         $updateStmt = $pdo->prepare(
             'UPDATE reservations 
              SET reservation_date = :new_date, 
                  time_slot = :new_time_slot, 
                  status = :new_status,
                  reschedule_count = reschedule_count + 1,
-                 updated_at = CURRENT_TIMESTAMP
+                 updated_at = CURRENT_TIMESTAMP,
+                 postponed_at = NULL
              WHERE id = :id'
         );
         $updateStmt->execute([
@@ -164,10 +175,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             'id' => $reservationId
         ]);
         
+        // Note: postponed_priority flag is NOT cleared - it remains so admin knows this reservation has priority
+        
         // Constraint 4: Full audit log maintained
         $historyNote = 'Rescheduled from ' . $oldDate . ' (' . $oldTimeSlot . ') to ' . $newDate . ' (' . $newTimeSlot . '). Reason: ' . $reason;
-        if ($oldStatus === 'approved') {
+        if ($oldStatus === 'approved' || $oldStatus === 'postponed') {
             $historyNote .= ' Status changed to pending for re-approval.';
+            if ($oldStatus === 'postponed' && $hasPriority) {
+                $historyNote .= ' Priority status maintained - this reservation will be given preference during review.';
+            }
         }
         
         $histStmt = $pdo->prepare(

@@ -166,6 +166,12 @@ if ($isHomePage || $isPublicPage) {
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(0, 71, 171, 0.3);
         }
+        
+        /* Ensure facility details page has proper spacing from navbar */
+        body.landing-page .section.facility-details-section {
+            padding-top: 7rem !important;
+            padding-bottom: 3rem !important;
+        }
     </style>
 </head>
 <body id="page-top" class="<?= htmlspecialchars($bodyClass); ?>">

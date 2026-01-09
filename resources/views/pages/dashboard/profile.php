@@ -553,100 +553,21 @@ ob_start();
         </section>
 
         <aside class="booking-card">
-            <h2>Change Password</h2>
+            <h2>Account Security</h2>
             <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;">
-                Update your password regularly to help keep your account secure. Use a strong password with at least 8 characters.
+                Manage your account security settings, change your password, and export your data.
             </p>
-            <form method="POST" class="booking-form">
-                <label>
-                    Current Password
-                    <div class="input-wrapper">
-                        <span class="input-icon">🔒</span>
-                        <input type="password" name="current_password" placeholder="Enter current password" class="profile-input">
-                    </div>
-                </label>
-                <label>
-                    New Password
-                    <div class="input-wrapper">
-                        <span class="input-icon">🔑</span>
-                        <input type="password" name="new_password" placeholder="Enter new password (min 8 characters)" class="profile-input">
-                    </div>
-                </label>
-                <label>
-                    Confirm New Password
-                    <div class="input-wrapper">
-                        <span class="input-icon">✅</span>
-                        <input type="password" name="confirm_password" placeholder="Re-enter new password" class="profile-input">
-                    </div>
-                </label>
-
-                <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
-                    <button class="btn-outline" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">Update Password</button>
-                </div>
-            </form>
-
-            <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
-                <h3 style="margin:0 0 1rem; color:#1b1b1f; font-size:1.1rem; font-weight:600;">Data Export</h3>
-                <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1rem; line-height:1.6;">
-                    Under the Data Privacy Act, you have the right to request a copy of your personal data. Export files expire after 7 days for security.
-                </p>
-                <form method="POST" style="display:flex; flex-direction:column; gap:0.75rem;">
-                    <input type="hidden" name="export_data" value="1">
-                    <label>
-                        <span style="display:block; margin-bottom:0.5rem; color:#1b1b1f; font-weight:500;">Export Type</span>
-                        <select name="export_type" required style="width:100%; padding:0.75rem; border:2px solid #e1e7f0; border-radius:6px; font-size:0.95rem;">
-                            <option value="full">Full Data Export (All Information)</option>
-                            <option value="profile">Profile Information Only</option>
-                            <option value="reservations">Reservations Only</option>
-                            <option value="documents">Documents List Only</option>
-                        </select>
-                    </label>
-                    <button type="submit" class="btn-primary" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">Generate Export</button>
-                </form>
+            
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+                <button type="button" class="btn-primary" onclick="openPasswordModal()" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
+                    <span>🔑</span>
+                    <span>Change Password</span>
+                </button>
                 
-                <?php if (!empty($exportHistory)): ?>
-                    <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
-                        <h4 style="margin:0 0 0.75rem; color:#1b1b1f; font-size:1rem; font-weight:600;">Recent Exports</h4>
-                        <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                            <?php foreach (array_slice($exportHistory, 0, 5) as $export): ?>
-                                <?php
-                                $isExpired = strtotime($export['expires_at']) < time();
-                                $fileExists = file_exists(app_root_path() . '/' . $export['file_path']);
-                                $canDownload = !$isExpired && $fileExists;
-                                ?>
-                                <div style="padding:0.75rem; background:#f8f9fa; border-radius:6px; font-size:0.85rem;">
-                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-                                        <div>
-                                            <strong><?= ucfirst(htmlspecialchars($export['export_type'])); ?></strong>
-                                            <span style="color:#5b6888; margin-left:0.5rem;">
-                                                <?= date('M d, Y H:i', strtotime($export['created_at'])); ?>
-                                            </span>
-                                        </div>
-                                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                                            <?php if ($canDownload): ?>
-                                                <a href="<?= base_path() . '/resources/views/pages/dashboard/export_view.php?id=' . $export['id']; ?>" 
-                                                   class="btn-primary" 
-                                                   style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">View</a>
-                                                <a href="<?= base_path() . '/resources/views/pages/dashboard/download_export.php?id=' . $export['id']; ?>" 
-                                                   class="btn-outline" 
-                                                   style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Download JSON</a>
-                                            <?php else: ?>
-                                                <span style="color:#8b95b5; font-size:0.8rem;">
-                                                    <?= $isExpired ? 'Expired' : 'Unavailable'; ?>
-                                                </span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    <?php if (!$isExpired): ?>
-                                        <div style="margin-top:0.25rem; color:#5b6888; font-size:0.8rem;">
-                                            Expires: <?= date('M d, Y', strtotime($export['expires_at'])); ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
+                <button type="button" class="btn-outline" onclick="openExportModal()" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
+                    <span>📥</span>
+                    <span>Data Export</span>
+                </button>
             </div>
 
             <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
@@ -657,6 +578,129 @@ ob_start();
                 </ul>
             </div>
         </aside>
+        
+        <!-- Change Password Modal -->
+        <div id="passwordModal" class="facility-modal">
+            <div class="facility-modal-backdrop" onclick="closePasswordModal()"></div>
+            <div class="facility-modal-dialog">
+                <div class="facility-modal-content">
+                    <div class="facility-modal-header">
+                        <h2>Change Password</h2>
+                        <button type="button" class="facility-modal-close" onclick="closePasswordModal()" aria-label="Close">×</button>
+                    </div>
+                    <div class="facility-modal-body">
+                        <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;">
+                            Update your password regularly to help keep your account secure. Use a strong password with at least 8 characters.
+                        </p>
+                        <form method="POST" class="booking-form" id="passwordForm">
+                            <label class="profile-form-label">
+                                <span class="profile-label-text">Current Password</span>
+                                <div class="input-wrapper">
+                                    <span class="input-icon">🔒</span>
+                                    <input type="password" name="current_password" placeholder="Enter current password" class="profile-input" required>
+                                </div>
+                            </label>
+                            <label class="profile-form-label">
+                                <span class="profile-label-text">New Password</span>
+                                <div class="input-wrapper">
+                                    <span class="input-icon">🔑</span>
+                                    <input type="password" name="new_password" placeholder="Enter new password (min 8 characters)" class="profile-input" required>
+                                </div>
+                            </label>
+                            <label class="profile-form-label">
+                                <span class="profile-label-text">Confirm New Password</span>
+                                <div class="input-wrapper">
+                                    <span class="input-icon">✅</span>
+                                    <input type="password" name="confirm_password" placeholder="Re-enter new password" class="profile-input" required>
+                                </div>
+                            </label>
+                            <div style="display:flex; gap:0.75rem; margin-top:1.5rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
+                                <button class="btn-primary" type="submit" style="flex:1; padding:0.85rem; font-size:1rem; font-weight:600;">Update Password</button>
+                                <button class="btn-outline" type="button" onclick="closePasswordModal()" style="flex:1; padding:0.85rem; font-size:1rem; font-weight:600;">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Data Export Modal -->
+        <div id="exportModal" class="facility-modal">
+            <div class="facility-modal-backdrop" onclick="closeExportModal()"></div>
+            <div class="facility-modal-dialog" style="max-width:700px;">
+                <div class="facility-modal-content">
+                    <div class="facility-modal-header">
+                        <h2>Data Export</h2>
+                        <button type="button" class="facility-modal-close" onclick="closeExportModal()" aria-label="Close">×</button>
+                    </div>
+                    <div class="facility-modal-body">
+                        <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;">
+                            Under the Data Privacy Act, you have the right to request a copy of your personal data. Export files expire after 7 days for security.
+                        </p>
+                        <form method="POST" id="exportForm" style="display:flex; flex-direction:column; gap:1rem;">
+                            <input type="hidden" name="export_data" value="1">
+                            <label class="profile-form-label">
+                                <span class="profile-label-text">Export Type</span>
+                                <select name="export_type" required style="width:100%; padding:0.75rem; border:2px solid #e1e7f0; border-radius:6px; font-size:0.95rem; font-family:inherit;">
+                                    <option value="full">Full Data Export (All Information)</option>
+                                    <option value="profile">Profile Information Only</option>
+                                    <option value="reservations">Reservations Only</option>
+                                    <option value="documents">Documents List Only</option>
+                                </select>
+                            </label>
+                            <div style="display:flex; gap:0.75rem; margin-top:0.5rem; padding-top:1rem; border-top:2px solid #e1e7f0;">
+                                <button type="submit" class="btn-primary" style="flex:1; padding:0.85rem; font-size:1rem; font-weight:600;">Generate Export</button>
+                                <button type="button" class="btn-outline" onclick="closeExportModal()" style="flex:1; padding:0.85rem; font-size:1rem; font-weight:600;">Cancel</button>
+                            </div>
+                        </form>
+                        
+                        <?php if (!empty($exportHistory)): ?>
+                            <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
+                                <h4 style="margin:0 0 0.75rem; color:#1b1b1f; font-size:1rem; font-weight:600;">Recent Exports</h4>
+                                <div style="display:flex; flex-direction:column; gap:0.5rem; max-height:300px; overflow-y:auto;">
+                                    <?php foreach (array_slice($exportHistory, 0, 10) as $export): ?>
+                                        <?php
+                                        $isExpired = strtotime($export['expires_at']) < time();
+                                        $fileExists = file_exists(app_root_path() . '/' . $export['file_path']);
+                                        $canDownload = !$isExpired && $fileExists;
+                                        ?>
+                                        <div style="padding:0.75rem; background:#f8f9fa; border-radius:6px; font-size:0.85rem;">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                                                <div>
+                                                    <strong><?= ucfirst(htmlspecialchars($export['export_type'])); ?></strong>
+                                                    <span style="color:#5b6888; margin-left:0.5rem;">
+                                                        <?= date('M d, Y H:i', strtotime($export['created_at'])); ?>
+                                                    </span>
+                                                </div>
+                                                <div style="display:flex; gap:0.5rem; align-items:center;">
+                                                    <?php if ($canDownload): ?>
+                                                        <a href="<?= base_path() . '/resources/views/pages/dashboard/export_view.php?id=' . $export['id']; ?>" 
+                                                           class="btn-primary" 
+                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">View</a>
+                                                        <a href="<?= base_path() . '/resources/views/pages/dashboard/download_export.php?id=' . $export['id']; ?>" 
+                                                           class="btn-outline" 
+                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Download JSON</a>
+                                                    <?php else: ?>
+                                                        <span style="color:#8b95b5; font-size:0.8rem;">
+                                                            <?= $isExpired ? 'Expired' : 'Unavailable'; ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                            <?php if (!$isExpired): ?>
+                                                <div style="margin-top:0.25rem; color:#5b6888; font-size:0.8rem;">
+                                                    Expires: <?= date('M d, Y', strtotime($export['expires_at'])); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- Account Deactivation Section (Residents only) -->
         <?php if ($user && !in_array($user['role'], ['Admin', 'Staff'])): ?>
@@ -713,6 +757,40 @@ ob_start();
 <?php endif; ?>
 
 <script>
+function openPasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closePasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+    // Reset form
+    document.getElementById('passwordForm').reset();
+}
+
+function openExportModal() {
+    const modal = document.getElementById('exportModal');
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeExportModal() {
+    const modal = document.getElementById('exportModal');
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// Close modals on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePasswordModal();
+        closeExportModal();
+    }
+});
+
 function confirmDeactivation(event) {
     event.preventDefault();
     

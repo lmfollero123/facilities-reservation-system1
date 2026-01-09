@@ -12,6 +12,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'S
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/maintenance_helper.php';
 $pdo = db();
 $pageTitle = 'Facility Management | LGU Facilities Reservation';
 
@@ -107,10 +108,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $details = $name;
                 if ($oldFacility && $oldFacility['status'] !== $status) {
                     $details .= ' – Status changed from ' . $oldFacility['status'] . ' to ' . $status;
+                    
+                    // Handle reservation status updates when facility status changes
+                    if ($status === 'maintenance') {
+                        // Facility went to maintenance - update reservations
+                        $maintenanceResult = handleFacilityMaintenanceStatusChange($facilityId, $name);
+                        $details .= '. Updated reservations: ' . ($maintenanceResult['pending_cancelled'] + $maintenanceResult['approved_postponed']) . ' affected';
+                        
+                        if ($maintenanceResult['pending_cancelled'] > 0 || $maintenanceResult['approved_postponed'] > 0) {
+                            $message = 'Facility updated successfully. ';
+                            if ($maintenanceResult['pending_cancelled'] > 0) {
+                                $message .= "Cancelled {$maintenanceResult['pending_cancelled']} pending reservation(s). ";
+                            }
+                            if ($maintenanceResult['approved_postponed'] > 0) {
+                                $message .= "Postponed {$maintenanceResult['approved_postponed']} approved reservation(s) with priority. ";
+                                $message .= "Email notifications have been sent to affected users.";
+                            }
+                        } else {
+                            $message = 'Facility updated successfully.';
+                        }
+                    } elseif ($oldFacility['status'] === 'maintenance' && $status === 'available') {
+                        // Facility became available again - notify users with postponed reservations
+                        $availableResult = handleFacilityAvailableStatusChange($facilityId, $name);
+                        if ($availableResult['notified'] > 0) {
+                            $message = 'Facility updated successfully. Notified ' . $availableResult['notified'] . ' user(s) with priority reservations that the facility is available again.';
+                        } else {
+                            $message = 'Facility updated successfully.';
+                        }
+                    } else {
+                        $message = 'Facility updated successfully.';
+                    }
+                } else {
+                    $message = 'Facility updated successfully.';
                 }
-                logAudit('Updated facility', 'Facility Management', $details);
                 
-                $message = 'Facility updated successfully.';
+                logAudit('Updated facility', 'Facility Management', $details);
             } else {
                 // Geocode location if coordinates not provided but location is
                 if (($latitude === null || $longitude === null) && !empty($location)) {
@@ -193,250 +225,264 @@ ob_start();
 <?php endif; ?>
 
 <div class="facility-admin">
-<section class="collapsible-card">
-    <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
-        <span>Facilities</span>
-        <span class="chevron">▼</span>
-    </button>
-    <div class="collapsible-body" id="facilities-list">
-        <?php if (empty($facilities)): ?>
-            <article class="facility-card-admin">
-                <p>No facilities added yet. Use the form to add your first facility.</p>
-            </article>
-        <?php else: ?>
-            <?php foreach ($facilities as $facility): ?>
+    <div style="margin-bottom: 1.5rem;">
+        <button class="btn-primary" type="button" onclick="openFacilityModal()" style="display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 1.75rem; font-size: 1rem; font-weight: 600;">
+            <span style="font-size: 1.2rem;">➕</span>
+            <span>Add Facility</span>
+        </button>
+    </div>
+
+    <section class="collapsible-card">
+        <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
+            <span>Facilities</span>
+            <span class="chevron">▼</span>
+        </button>
+        <div class="collapsible-body" id="facilities-list">
+            <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
-                    <header>
-                        <div>
-                            <h3><?= htmlspecialchars($facility['name']); ?></h3>
-                            <?php if ($facility['base_rate']): ?>
-                                <small><?= htmlspecialchars($facility['base_rate']); ?></small>
-                            <?php endif; ?>
-                        </div>
-                        <span class="status-badge <?= $facility['status']; ?>">
-                            <?= ucfirst($facility['status']); ?>
-                        </span>
-                    </header>
-                    <?php if ($facility['description']): ?>
-                        <p style="margin:0.5rem 0 1rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
-                    <?php endif; ?>
-                    <div class="availability-toggle">
-                        <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled>
-                        <span><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
-                    </div>
-                    <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
-                    <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                    <p>No facilities added yet. Click "Add Facility" to add your first facility.</p>
                 </article>
-            <?php endforeach; ?>
-
-            <?php if ($totalPages > 1): ?>
-                <div class="pagination">
-                    <?php if ($page > 1): ?>
-                        <a href="?page=<?= $page - 1; ?>">&larr; Prev</a>
-                    <?php endif; ?>
-                    <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
-                    <?php if ($page < $totalPages): ?>
-                        <a href="?page=<?= $page + 1; ?>">Next &rarr;</a>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        <?php endif; ?>
-    </div>
-</section>
-
-<aside>
-    <div class="collapsible-card">
-        <button type="button" class="collapsible-header" data-collapse-target="add-facility">
-            <span id="form-title">Add Facility</span>
-            <span class="chevron">▼</span>
-        </button>
-        <div class="collapsible-body" id="add-facility">
-        <form class="facility-form" method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="facility_id" id="facility_id">
-                <label>
-                    Facility Name
-                    <div class="input-wrapper">
-                        <span class="input-icon">🏛️</span>
-                        <input type="text" name="name" id="form-name" placeholder="e.g., Barangay Function Room" required>
-                    </div>
-                </label>
-                <label>
-                    Standard Rate
-                    <div class="input-wrapper">
-                        <span class="input-icon">💰</span>
-                        <input type="text" name="base_rate" id="form-rate" placeholder="₱2,500 / 4 hrs">
-                    </div>
-                </label>
-                <label>
-                    Description
-                    <textarea name="description" id="form-description" placeholder="Key features, inclusions, restrictions"></textarea>
-                </label>
-                <label>
-                    Location
-                    <div class="input-wrapper">
-                        <span class="input-icon">📍</span>
-                        <input type="text" name="location" id="form-location" placeholder="e.g., Barangay Culiat, Quezon City">
-                    </div>
-                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Full address for location-based recommendations</small>
-                </label>
-                <label>
-                    Latitude (Optional)
-                    <div class="input-wrapper">
-                        <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="latitude" id="form-latitude" placeholder="14.6760">
-                    </div>
-                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
-                </label>
-                <label>
-                    Longitude (Optional)
-                    <div class="input-wrapper">
-                        <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="longitude" id="form-longitude" placeholder="121.0437">
-                    </div>
-                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
-                </label>
-                <label>
-                    Capacity
-                    <div class="input-wrapper">
-                        <span class="input-icon">👥</span>
-                        <input type="text" name="capacity" id="form-capacity" placeholder="e.g., 200 persons">
-                    </div>
-                </label>
-                <label>
-                    Amenities
-                    <textarea name="amenities" id="form-amenities" placeholder="e.g., Sound system, projector, chairs, air-conditioning"></textarea>
-                </label>
-                <label>
-                    Rules / Guidelines
-                    <textarea name="rules" id="form-rules" placeholder="Key house rules to show on the public page"></textarea>
-                </label>
-                <label>
-                    Facility Image
-                    <input type="file" name="image" id="form-image" accept="image/*">
-                </label>
-                <label>
-                    Image Citation
-                    <div class="input-wrapper">
-                        <span class="input-icon">📷</span>
-                        <input type="text" name="image_citation" id="form-image-citation" placeholder="e.g., Google Maps, Photo by John Doe">
-                    </div>
-                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Source/attribution for the facility image (optional)</small>
-                </label>
-                <label>
-                    Status
-                    <div class="input-wrapper">
-                        <span class="input-icon">📊</span>
-                        <select name="status" id="form-status">
-                            <option value="available">Available</option>
-                            <option value="maintenance">Maintenance</option>
-                            <option value="offline">Offline</option>
-                        </select>
-                    </div>
-                </label>
-
-                <div style="margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid #e5e7eb;">
-                    <h3 style="margin:0 0 1rem; font-size:1rem; color:#1b1b1f;">Auto-Approval Settings</h3>
-                    <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
-                        When enabled, reservations meeting all conditions will be automatically approved without staff review.
-                    </p>
-
-                    <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
-                        <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve">
-                        <span>Enable auto-approval for this facility</span>
-                    </label>
-
-                    <label>
-                        Capacity Threshold (Optional)
-                        <div class="input-wrapper">
-                            <span class="input-icon">👥</span>
-                            <input type="number" name="capacity_threshold" id="form-capacity-threshold" min="1" placeholder="e.g., 100">
-                        </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                            Maximum expected attendees allowed for auto-approval. Leave blank for no limit.
-                        </small>
-                    </label>
-
-                    <label>
-                        Maximum Duration (hours, Optional)
-                        <div class="input-wrapper">
-                            <span class="input-icon">⏰</span>
-                            <input type="number" step="0.5" name="max_duration_hours" id="form-max-duration" min="0.5" placeholder="e.g., 4.0">
-                        </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                            Maximum reservation duration in hours for auto-approval. Leave blank for no limit. (Default time slots are 4 hours each)
-                        </small>
-                    </label>
-                </div>
-
-                <button class="btn-primary" type="submit">Save Facility</button>
-                <button class="btn-outline" type="button" onclick="resetFacilityForm()" style="margin-top:0.5rem;">Cancel / New Facility</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="collapsible-card">
-        <button type="button" class="collapsible-header" data-collapse-target="recent-activity">
-            <span>Recent Activity</span>
-            <span class="chevron">▼</span>
-        </button>
-        <div class="collapsible-body" id="recent-activity">
-        <?php if (empty($auditTrail)): ?>
-            <p style="color:#8b95b5; font-size:0.9rem; margin:0;">No activity recorded yet.</p>
-        <?php else: ?>
-            <ul class="audit-list">
-                <?php foreach ($auditTrail as $entry): ?>
-                    <li>
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                            <div style="flex:1;">
-                                <strong style="display:block; color:#1b1b1f; font-size:0.9rem; margin-bottom:0.25rem;">
-                                    <?= htmlspecialchars($entry['action']); ?>
-                                </strong>
-                                <?php if ($entry['details']): ?>
-                                    <p style="margin:0; color:#5b6888; font-size:0.85rem; line-height:1.4;">
-                                        <?= htmlspecialchars($entry['details']); ?>
-                                    </p>
-                                <?php endif; ?>
-                                <?php if ($entry['user_name']): ?>
-                                    <small style="color:#8b95b5; font-size:0.8rem; display:block; margin-top:0.25rem;">
-                                        by <?= htmlspecialchars($entry['user_name']); ?>
-                                    </small>
+            <?php else: ?>
+                <?php foreach ($facilities as $facility): ?>
+                    <article class="facility-card-admin">
+                        <header>
+                            <div>
+                                <h3><?= htmlspecialchars($facility['name']); ?></h3>
+                                <?php if ($facility['base_rate']): ?>
+                                    <small><?= htmlspecialchars($facility['base_rate']); ?></small>
                                 <?php endif; ?>
                             </div>
-                            <small style="color:#8b95b5; font-size:0.75rem; white-space:nowrap;">
-                                <?= date('M j, Y g:i A', strtotime($entry['created_at'])); ?>
-                            </small>
+                            <span class="status-badge <?= $facility['status']; ?>">
+                                <?= ucfirst($facility['status']); ?>
+                            </span>
+                        </header>
+                        <?php if ($facility['description']): ?>
+                            <p style="margin:0.5rem 0 1rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
+                        <?php endif; ?>
+                        <div class="availability-toggle">
+                            <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled>
+                            <span><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
                         </div>
-                    </li>
+                        <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
+                        <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                    </article>
                 <?php endforeach; ?>
-            </ul>
-            <?php if ($auditTotalPages > 1): ?>
-                <div class="pagination" style="margin-top:0.75rem; justify-content:center;">
-                    <?php if ($auditPage > 1): ?>
-                        <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage - 1])); ?>">&larr; Prev</a>
-                    <?php endif; ?>
-                    <span class="current">Page <?= $auditPage; ?> of <?= $auditTotalPages; ?></span>
-                    <?php if ($auditPage < $auditTotalPages): ?>
-                        <a href="?<?= http_build_query(array_merge($_GET, ['audit_page' => $auditPage + 1])); ?>">Next &rarr;</a>
-                    <?php endif; ?>
-                </div>
+
+                <?php if ($totalPages > 1): ?>
+                    <div class="pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="?page=<?= $page - 1; ?>">&larr; Prev</a>
+                        <?php endif; ?>
+                        <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
+                        <?php if ($page < $totalPages): ?>
+                            <a href="?page=<?= $page + 1; ?>">Next &rarr;</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
-            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/audit_trail.php?module=Facility+Management" 
-               style="display:block; text-align:center; margin-top:0.75rem; color:var(--gov-blue); font-size:0.85rem; font-weight:500;">
-                View Full Audit Trail →
-            </a>
-        <?php endif; ?>
+        </div>
+    </section>
+</div>
+
+<!-- Facility Modal -->
+<div id="facilityModal" class="facility-modal" style="display: none;">
+    <div class="facility-modal-backdrop" onclick="closeFacilityModal()"></div>
+    <div class="facility-modal-dialog">
+        <div class="facility-modal-content">
+            <div class="facility-modal-header">
+                <h2 id="form-title">Add Facility</h2>
+                <button type="button" class="facility-modal-close" onclick="closeFacilityModal()" aria-label="Close">×</button>
+            </div>
+            <div class="facility-modal-body">
+                <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm">
+                    <input type="hidden" name="facility_id" id="facility_id">
+                    <label>
+                        Facility Name
+                        <div class="input-wrapper">
+                            <span class="input-icon">🏛️</span>
+                            <input type="text" name="name" id="form-name" placeholder="e.g., Barangay Function Room" required>
+                        </div>
+                    </label>
+                    <label>
+                        Standard Rate
+                        <div class="input-wrapper">
+                            <span class="input-icon">💰</span>
+                            <input type="text" name="base_rate" id="form-rate" placeholder="₱2,500 / 4 hrs">
+                        </div>
+                    </label>
+                    <label>
+                        Description
+                        <textarea name="description" id="form-description" placeholder="Key features, inclusions, restrictions"></textarea>
+                    </label>
+                    <label>
+                        Location
+                        <div class="input-wrapper">
+                            <span class="input-icon">📍</span>
+                            <input type="text" name="location" id="form-location" placeholder="e.g., Barangay Culiat, Quezon City">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Full address for location-based recommendations</small>
+                    </label>
+                    <label>
+                        Latitude (Optional)
+                        <div class="input-wrapper">
+                            <span class="input-icon">🌐</span>
+                            <input type="number" step="any" name="latitude" id="form-latitude" placeholder="14.6760">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
+                    </label>
+                    <label>
+                        Longitude (Optional)
+                        <div class="input-wrapper">
+                            <span class="input-icon">🌐</span>
+                            <input type="number" step="any" name="longitude" id="form-longitude" placeholder="121.0437">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
+                    </label>
+                    <label>
+                        Capacity
+                        <div class="input-wrapper">
+                            <span class="input-icon">👥</span>
+                            <input type="text" name="capacity" id="form-capacity" placeholder="e.g., 200 persons">
+                        </div>
+                    </label>
+                    <label>
+                        Amenities
+                        <textarea name="amenities" id="form-amenities" placeholder="e.g., Sound system, projector, chairs, air-conditioning"></textarea>
+                    </label>
+                    <label>
+                        Rules / Guidelines
+                        <textarea name="rules" id="form-rules" placeholder="Key house rules to show on the public page"></textarea>
+                    </label>
+                    <label>
+                        Facility Image
+                        <input type="file" name="image" id="form-image" accept="image/*">
+                    </label>
+                    <label>
+                        Image Citation
+                        <div class="input-wrapper">
+                            <span class="input-icon">📷</span>
+                            <input type="text" name="image_citation" id="form-image-citation" placeholder="e.g., Google Maps, Photo by John Doe">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Source/attribution for the facility image (optional)</small>
+                    </label>
+                    <label>
+                        Status
+                        <div class="input-wrapper">
+                            <span class="input-icon">📊</span>
+                            <select name="status" id="form-status">
+                                <option value="available">Available</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="offline">Offline</option>
+                            </select>
+                        </div>
+                    </label>
+
+                    <!-- Auto-Approval Settings as Collapsible Section -->
+                    <div class="collapsible-card" style="margin-top: 1.5rem;">
+                        <button type="button" class="collapsible-header" id="auto-approval-header" onclick="toggleAutoApprovalSection(event);" style="cursor: pointer;">
+                            <span>Auto-Approval Settings</span>
+                            <span class="chevron" id="auto-approval-chevron">▼</span>
+                        </button>
+                        <div class="collapsible-body is-collapsed" id="auto-approval-settings">
+                            <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
+                                When enabled, reservations meeting all conditions will be automatically approved without staff review.
+                            </p>
+
+                            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+                                <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve">
+                                <span>Enable auto-approval for this facility</span>
+                            </label>
+
+                            <label>
+                                Capacity Threshold (Optional)
+                                <div class="input-wrapper">
+                                    <span class="input-icon">👥</span>
+                                    <input type="number" name="capacity_threshold" id="form-capacity-threshold" min="1" placeholder="e.g., 100">
+                                </div>
+                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                                    Maximum expected attendees allowed for auto-approval. Leave blank for no limit.
+                                </small>
+                            </label>
+
+                            <label>
+                                Maximum Duration (hours, Optional)
+                                <div class="input-wrapper">
+                                    <span class="input-icon">⏰</span>
+                                    <input type="number" step="0.5" name="max_duration_hours" id="form-max-duration" min="0.5" placeholder="e.g., 4.0">
+                                </div>
+                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                                    Maximum reservation duration in hours for auto-approval. Leave blank for no limit. (Default time slots are 4 hours each)
+                                </small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                        <button class="btn-primary" type="submit">Save Facility</button>
+                        <button class="btn-outline" type="button" onclick="resetFacilityForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-    </aside>
 </div>
 
 <script>
 // Disable global collapsible handler for this page to prevent conflicts
 window.DISABLE_GLOBAL_COLLAPSIBLE = true;
 
+function openFacilityModal(resetForm = true) {
+    if (resetForm) {
+        resetFacilityForm();
+    } else {
+        // When editing, ensure auto-approval section chevron is initialized correctly
+        const autoApprovalSection = document.getElementById('auto-approval-settings');
+        const autoApprovalChevron = document.getElementById('auto-approval-chevron');
+        if (autoApprovalSection && autoApprovalChevron) {
+            if (autoApprovalSection.classList.contains('is-collapsed')) {
+                autoApprovalChevron.style.transform = 'rotate(-90deg)';
+            } else {
+                autoApprovalChevron.style.transform = 'rotate(0deg)';
+            }
+        }
+    }
+    document.getElementById('facilityModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+        document.getElementById('form-name').focus();
+    }, 100);
+}
+
+function closeFacilityModal() {
+    document.getElementById('facilityModal').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function toggleAutoApprovalSection(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const section = document.getElementById('auto-approval-settings');
+    const chevron = document.getElementById('auto-approval-chevron');
+    const isCollapsed = section.classList.contains('is-collapsed');
+    
+    if (isCollapsed) {
+        section.classList.remove('is-collapsed');
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        section.classList.add('is-collapsed');
+        chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+
 function editFacility(payload) {
-    const facility = JSON.parse(payload);
+    const facility = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    
+    // Set form title first
     document.getElementById('form-title').textContent = 'Update Facility';
+    
+    // Populate all form fields
     document.getElementById('facility_id').value = facility.id || '';
     document.getElementById('form-name').value = facility.name || '';
     document.getElementById('form-rate').value = facility.base_rate || '';
@@ -452,7 +498,9 @@ function editFacility(payload) {
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
-    document.getElementById('form-name').focus();
+    
+    // Open modal WITHOUT resetting the form (pass false)
+    openFacilityModal(false);
 }
 
 function resetFacilityForm() {
@@ -473,6 +521,14 @@ function resetFacilityForm() {
     document.getElementById('form-capacity-threshold').value = '';
     document.getElementById('form-max-duration').value = '';
     document.getElementById('form-image').value = '';
+    
+    // Reset auto-approval section to collapsed state
+    const autoApprovalSection = document.getElementById('auto-approval-settings');
+    const autoApprovalChevron = document.getElementById('auto-approval-chevron');
+    if (autoApprovalSection && autoApprovalChevron) {
+        autoApprovalSection.classList.add('is-collapsed');
+        autoApprovalChevron.style.transform = 'rotate(-90deg)';
+    }
 }
 
 // Collapsible helper with localStorage persistence
