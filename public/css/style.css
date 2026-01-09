@@ -1265,7 +1265,7 @@ body.landing-page .guest-content::after {
 
 .section-header p {
     margin: 0;
-    color: #e0e0e0;
+    color: #242121;
     font-size: 0.95rem;
 }
 
@@ -1926,6 +1926,14 @@ body.landing-page .guest-content::after {
     font-weight: 600;
     color: #fff;
     font-size: 0.9rem;
+}
+
+/* Exception: Checkbox labels should be horizontal, not vertical */
+.auth-form label:has(input[type="checkbox"]),
+.auth-form > div > label[style*="display: flex"],
+.auth-form > div > label[style*="display:flex"] {
+    flex-direction: row !important;
+    align-items: flex-start !important;
 }
 
 .auth-form .input-wrapper {
@@ -3537,6 +3545,97 @@ footer::before {
 /* Ensure modals are properly displayed when opened */
 .facility-modal[style*="display:flex"] {
     display: flex !important;
+}
+
+/* Improved Checkbox Styling */
+input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    cursor: pointer;
+    accent-color: var(--gov-blue);
+    flex-shrink: 0;
+    vertical-align: top;
+}
+
+/* Checkbox in labels - better alignment */
+label input[type="checkbox"],
+label > input[type="checkbox"] {
+    margin-right: 0.5rem !important;
+    margin-left: 0 !important;
+    vertical-align: top;
+    margin-top: 0.125rem !important;
+}
+
+/* Checkbox label wrapper for flex layout - center aligned with first line of text */
+label[style*="display:flex"] input[type="checkbox"],
+label[style*="display: flex"] input[type="checkbox"] {
+    margin-right: 0.5rem !important;
+    margin-left: 0 !important;
+    align-self: flex-start;
+    margin-top: 0.125rem !important;
+}
+
+/* Specific alignment for flex labels with flex-start */
+label[style*="align-items:flex-start"] input[type="checkbox"],
+label[style*="align-items: flex-start"] input[type="checkbox"] {
+    margin-top: 0.125rem !important;
+}
+
+/* Specific alignment for flex labels with center alignment */
+label[style*="align-items:center"] input[type="checkbox"],
+label[style*="align-items: center"] input[type="checkbox"] {
+    margin-top: 0 !important;
+}
+
+/* Facility management modal checkbox */
+.facility-modal-body label input[type="checkbox"],
+.facility-modal-body label[style*="display:flex"] input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    flex-shrink: 0;
+    margin-top: 0.125rem !important;
+}
+
+/* Register page checkbox styling - override column direction for checkbox labels */
+.auth-form label:has(input[type="checkbox"]) {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+}
+
+.auth-form label input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    flex-shrink: 0 !important;
+    margin-top: 0.125rem !important;
+    margin-right: 0.5rem !important;
+    margin-bottom: 0 !important;
+}
+
+/* Book facility page checkbox - when in regular label */
+.booking-form label input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    vertical-align: top;
+    margin-top: 0.125rem !important;
+    margin-right: 0.5rem !important;
+}
+
+/* Disabled checkbox styling */
+input[type="checkbox"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .modal-dialog {

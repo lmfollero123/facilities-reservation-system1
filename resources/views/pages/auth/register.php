@@ -229,9 +229,9 @@ ob_start();
             </div>
             
             <div style="margin: 1.5rem 0; padding: 1rem; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
-                <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
-                    <input type="checkbox" name="accept_terms" required style="margin-top: 0.25rem; cursor: pointer;">
-                    <span style="color: #fff; font-size: 0.9rem; line-height: 1.6;">
+                <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
+                    <input type="checkbox" name="accept_terms" required style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
+                    <span style="color: #fff; font-size: 0.9rem; line-height: 1.6; flex: 1; margin-top: 0;">
                         I have read and agree to the <a href="#" id="termsLink" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).
                     </span>
                 </label>

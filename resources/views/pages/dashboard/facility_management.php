@@ -259,9 +259,9 @@ ob_start();
                         <?php if ($facility['description']): ?>
                             <p style="margin:0.5rem 0 1rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
                         <?php endif; ?>
-                        <div class="availability-toggle">
-                            <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled>
-                            <span><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
+                        <div class="availability-toggle" style="display:flex; align-items:flex-start; gap:0.5rem;">
+                            <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
+                            <span style="line-height:1.5;"><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
                         </div>
                         <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
                         <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
@@ -285,7 +285,7 @@ ob_start();
 </div>
 
 <!-- Facility Modal -->
-<div id="facilityModal" class="facility-modal" style="display: none;">
+<div id="facilityModal" class="facility-modal">
     <div class="facility-modal-backdrop" onclick="closeFacilityModal()"></div>
     <div class="facility-modal-dialog">
         <div class="facility-modal-content">
@@ -388,9 +388,9 @@ ob_start();
                                 When enabled, reservations meeting all conditions will be automatically approved without staff review.
                             </p>
 
-                            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
-                                <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve">
-                                <span>Enable auto-approval for this facility</span>
+                            <label style="display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:1rem; cursor:pointer;">
+                                <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
+                                <span style="flex:1; line-height:1.5;">Enable auto-approval for this facility</span>
                             </label>
 
                             <label>
@@ -432,6 +432,7 @@ ob_start();
 window.DISABLE_GLOBAL_COLLAPSIBLE = true;
 
 function openFacilityModal(resetForm = true) {
+    const modal = document.getElementById('facilityModal');
     if (resetForm) {
         resetFacilityForm();
     } else {
@@ -446,15 +447,19 @@ function openFacilityModal(resetForm = true) {
             }
         }
     }
-    document.getElementById('facilityModal').style.display = 'flex';
+    modal.classList.add('open');
     document.body.style.overflow = 'hidden';
     setTimeout(() => {
-        document.getElementById('form-name').focus();
+        const nameField = document.getElementById('form-name');
+        if (nameField) {
+            nameField.focus();
+        }
     }, 100);
 }
 
 function closeFacilityModal() {
-    document.getElementById('facilityModal').style.display = 'none';
+    const modal = document.getElementById('facilityModal');
+    modal.classList.remove('open');
     document.body.style.overflow = '';
 }
 

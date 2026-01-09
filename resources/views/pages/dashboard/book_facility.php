@@ -544,13 +544,15 @@ ob_start();
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Describe your event - AI will suggest the best facilities for you.</small>
             </label>
 
-            <label>
-                <input type="checkbox" name="is_commercial" value="1" id="is-commercial">
-                <span style="margin-left:0.5rem;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
-            </label>
-            <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem; margin-left:1.5rem;">
-                Commercial reservations require manual approval by LGU staff.
-            </small>
+            <div>
+                <label style="display:flex; align-items:flex-start; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" name="is_commercial" value="1" id="is-commercial" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
+                    <span style="flex:1; line-height:1.5;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
+                </label>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem; margin-left:calc(18px + 0.5rem);">
+                    Commercial reservations require manual approval by LGU staff.
+                </small>
+            </div>
 
             <label>
                 Expected Number of Attendees (Optional)
