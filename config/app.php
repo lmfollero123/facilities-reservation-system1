@@ -46,3 +46,18 @@ if (!function_exists('app_root_path')) {
     }
 }
 
+if (!function_exists('base_url')) {
+    /**
+     * Returns the full base URL (protocol + domain + base path).
+     * Use this for generating absolute URLs in emails or external links.
+     *
+     * @return string Full base URL (e.g., "http://lgu.test" or "https://example.com/app")
+     */
+    function base_url(): string
+    {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = base_path();
+        return $protocol . '://' . $host . $base;
+    }
+}

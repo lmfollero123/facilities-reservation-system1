@@ -118,12 +118,9 @@ These textual diagrams include all current modules: auth/OTP, forgot/reset passw
 
 **Future/Planned Integrations:**
 - **AI Chatbot Provider** (UI implemented, model integration pending): Connect chatbot UI to AI/ML model API for contextual responses
-- **Urban Planning & Development** (UI implemented, API integration pending): Share usage analytics, receive planning recommendations, auto-create facilities from new developments
 - **Community Infrastructure Maintenance Management** (Design complete): Sync facility status with maintenance schedules, block dates during maintenance
-- **Infrastructure Project Management** (Design complete): Sync project timelines, auto-create facilities from completed projects
+- **Infrastructure Management** (Design complete): Sync project timelines, auto-create facilities from completed projects
 - **Utilities Billing & Management** (Design complete): Track utility costs, handle outage alerts
-- **Road and Transportation Infrastructure Monitoring** (Design complete): Handle road closure alerts, traffic impact
-- **Energy Efficiency Management** (Design complete): Share usage analytics, receive efficiency recommendations
 
 Pending external integrations (Brevo/domain SMTP, AI chatbot model, LGU system APIs) are noted as planned external components.
 

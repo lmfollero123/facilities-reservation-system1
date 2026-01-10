@@ -188,7 +188,7 @@ function sendPostponementEmail(string $userEmail, string $userName, string $faci
                 
                 <p>We apologize for any inconvenience this may cause. If you have any questions or concerns, please contact us.</p>
                 
-                <a href='" . base_path() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
+                <a href='" . base_url() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
             </div>
             <div class='footer'>
                 <p>LGU Facilities Reservation System<br>
@@ -221,7 +221,7 @@ Priority Status: Active
 
 We apologize for any inconvenience this may cause. If you have any questions or concerns, please contact us.
 
-View your reservations: " . base_path() . "/resources/views/pages/dashboard/my_reservations.php
+View your reservations: " . base_url() . "/resources/views/pages/dashboard/my_reservations.php
 
 ---
 LGU Facilities Reservation System
@@ -351,7 +351,7 @@ function sendFacilityAvailableEmail(string $userEmail, string $userName, string 
                     <li>We recommend rescheduling at least 3 days in advance of your preferred date.</li>
                 </ul>
                 
-                <a href='" . base_path() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
+                <a href='" . base_url() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
                 
                 <p>Thank you for your patience during the maintenance period.</p>
             </div>
@@ -385,7 +385,7 @@ Next Steps:
 - Due to your priority status, your reservation will be processed with preference.
 - We recommend rescheduling at least 3 days in advance of your preferred date.
 
-View your reservations: " . base_path() . "/resources/views/pages/dashboard/my_reservations.php
+View your reservations: " . base_url() . "/resources/views/pages/dashboard/my_reservations.php
 
 Thank you for your patience during the maintenance period.
 

@@ -31,33 +31,32 @@ body {
 }
 
 body:not(.dashboard) {
-    background: linear-gradient(145deg, var(--gov-blue-light), var(--gov-blue-dark-alt));
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     position: relative;
 }
 
-/* VISUAL CHANGE ONLY - Landing page background - Professional government style */
+/* VISUAL CHANGE ONLY - Landing page background - Glassmorphism with cityhall image */
 body.landing-page {
-    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%);
-    background-attachment: fixed;
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed;
+    min-height: 100vh;
     position: relative;
     overflow-x: hidden;
 }
 
+/* Glassmorphism overlay - blur effect for landing pages */
 body.landing-page::before {
     content: "";
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: 
-        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
-        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
-    background-size: 100% 100%, 100% 100%, 100% 100%;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     z-index: 0;
     pointer-events: none;
 }
@@ -67,6 +66,22 @@ body.landing-page .guest-navbar,
 body.landing-page .footer {
     position: relative;
     z-index: 1;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #f5f6f8 !important;
+}
+
+body.landing-page footer {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #f5f6f8 !important;
+}
+
+body.landing-page footer::before,
+body.landing-page footer::after {
+    display: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 
 .guest-content {
@@ -76,6 +91,11 @@ body.landing-page .footer {
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
+    padding-top: 80px !important; /* Clearance for fixed navbar */
+}
+
+body.landing-page .guest-content {
+    padding-top: 0 !important; /* Remove extra padding, handled by sections */
 }
 
 /* Prevent any visual artifacts on main element */
@@ -95,15 +115,53 @@ img {
     display: block;
 }
 
-/* VISUAL CHANGE ONLY - Guest navigation updated to match template */
-.guest-navbar {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+/* VISUAL CHANGE ONLY - Guest navigation updated to match template with glassmorphism */
+.guest-navbar,
+#mainNav,
+#mainNav.navbar,
+#mainNav.navbar-expand-lg,
+#mainNav.navbar-light {
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    z-index: 1000 !important;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Ensure navbar text is visible */
+#mainNav .navbar-brand,
+#mainNav .navbar-brand span,
+#mainNav .nav-link,
+#mainNav .navbar-datetime {
+    color: #ffffff !important;
+}
+
+#mainNav .nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+#mainNav .nav-link:hover,
+#mainNav .nav-link.active {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* Navbar toggle button visibility */
+#mainNav .navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#mainNav .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
 .guest-navbar .container,
@@ -131,6 +189,19 @@ img {
     flex-shrink: 0;
     white-space: nowrap;
     order: 1; /* First item on left */
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+#mainNav .navbar-brand img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
+#mainNav .navbar-brand span {
+    display: inline-block;
 }
 
 #mainNav .navbar-collapse {
@@ -235,6 +306,14 @@ img {
         max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    
+    #mainNav .navbar-brand img {
+        height: 30px !important;
+    }
+    
+    #mainNav .navbar-brand span {
+        display: none; /* Hide text on very small screens, show only logo */
     }
 }
 
@@ -1000,21 +1079,39 @@ img {
     position: relative;
 }
 
+/* Override for facilities page section - allow background image */
+body.landing-page #portfolio.section,
+body.landing-page section#portfolio.section {
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
+    background-attachment: fixed !important;
+}
+
 /* Facility details section - override base padding immediately */
 .section.facility-details-section {
     padding: 7rem 1.25rem 3rem 1.25rem !important;
 }
 
-/* Prevent background repetition or visual artifacts */
+/* Prevent background repetition or visual artifacts - but allow for specific sections */
 .section::before,
 .section::after {
     display: none !important;
     content: none !important;
 }
 
+/* Override for sections that need glassmorphism blur */
+.contact-section::before,
+#portfolio.section::before,
+section#portfolio.section::before {
+    display: block !important;
+    content: "" !important;
+}
+
 /* Contact section should not inherit section padding - it has its own styling */
 .contact-section {
     padding: 0 !important;
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
+    background-attachment: fixed !important;
+    position: relative !important;
 }
 
 /* Add top padding for sections on public pages to account for fixed navbar */
@@ -1059,56 +1156,62 @@ body.landing-page .section:not(.contact-section):not(#portfolio) .container {
     margin-bottom: 3rem;
 }
 
-/* Fix for portfolio section - apply EXACT same background styling as auth-container */
-body.landing-page #portfolio {
-    min-height: auto !important;
-    padding-top: 7rem !important;
-    padding-bottom: 3rem !important; /* EXACT same as auth-container */
+/* Fix for portfolio section on facilities page - apply glassmorphism with cityhall background */
+body.landing-page #portfolio.section,
+body.landing-page section#portfolio.section {
+    min-height: 100vh !important;
+    padding-top: 120px !important; /* Increased for navbar clearance */
+    padding-bottom: 3rem !important;
     padding-left: 1.25rem !important;
     padding-right: 1.25rem !important;
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     overflow: visible !important;
     border: none !important;
-    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important; /* EXACT same background */
-    background-attachment: fixed !important; /* EXACT same as auth-container */
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
+    background-attachment: fixed !important;
     position: relative;
 }
 
-/* Apply the same overlay effect as auth-container - EXACT copy */
-body.landing-page #portfolio::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: 
-        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
-        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
-    background-size: 100% 100%, 100% 100%, 100% 100%;
-    z-index: 0;
-    pointer-events: none;
+/* Apply glassmorphism overlay effect for facilities page */
+body.landing-page #portfolio.section::before,
+body.landing-page section#portfolio.section::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    display: block !important;
 }
 
-/* Ensure container is above the overlay - EXACT same as auth-container */
-body.landing-page #portfolio > * {
+/* Ensure container is above the overlay */
+body.landing-page #portfolio.section > * {
     position: relative;
     z-index: 1;
 }
 
-body.landing-page #portfolio .container {
-    background: var(--card-bg);
-    backdrop-filter: var(--card-blur);
+/* Facilities page specific - white container */
+body.landing-page #portfolio.section .container {
+    background: #ffffff;
     border-radius: 18px;
     padding: 2rem;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     border: none !important;
     position: relative;
     z-index: 1; /* Above the ::before overlay */
+}
+
+/* Homepage portfolio gallery - no white container */
+body.landing-page #portfolio .container-fluid {
+    padding: 0;
 }
 
 /* Prevent any visual artifacts or repeating backgrounds */
@@ -1145,6 +1248,133 @@ body.landing-page #portfolio .container::after {
 
 #services hr.divider {
     background-color: #285ccd;
+}
+
+/* Homepage Masthead section */
+.masthead {
+    padding-top: 80px !important; /* Clearance for fixed navbar */
+    padding-bottom: 0 !important;
+    min-height: calc(100vh - 80px);
+    display: flex;
+    align-items: center;
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    position: relative;
+}
+
+.masthead::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 0;
+}
+
+.masthead .container,
+.masthead .row,
+.masthead [class*="col-"] {
+    position: relative;
+    z-index: 1;
+}
+
+/* Homepage sections */
+.page-section {
+    padding: 6rem 0;
+    position: relative;
+}
+
+/* First page-section after masthead needs extra top padding */
+.masthead + .page-section {
+    padding-top: 6rem;
+}
+
+/* Ensure sections have proper spacing on landing pages */
+body.landing-page .page-section {
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+}
+
+.page-section.bg-primary {
+    background-color: var(--gov-blue-dark) !important;
+    color: #ffffff;
+}
+
+.page-section h2,
+.page-section .h2 {
+    color: inherit;
+    margin-bottom: 1.5rem;
+}
+
+.page-section p,
+.page-section .text-white-75 {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Portfolio section styling - override only for homepage, keep custom for facilities page */
+body.landing-page #portfolio:not(.facilities-page) {
+    padding: 0 !important;
+}
+
+.portfolio-box {
+    position: relative;
+    display: block;
+    overflow: hidden;
+}
+
+.portfolio-box img {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.portfolio-box:hover img {
+    transform: scale(1.1);
+}
+
+.portfolio-box-caption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 2rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+    color: #ffffff;
+    transition: all 0.3s ease;
+}
+
+.portfolio-box:hover .portfolio-box-caption {
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+}
+
+.project-category {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.project-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+/* Divider styling */
+.divider {
+    height: 0.2rem;
+    max-width: 3.25rem;
+    margin: 1.5rem auto;
+    background-color: #f4623a;
+    opacity: 1;
+}
+
+.divider-light {
+    background-color: #ffffff;
 }
 
 /* Improve contrast for announcements section on dark background */
@@ -1491,7 +1721,7 @@ body.landing-page .guest-content::after {
 .rules-list {
     list-style: decimal;
     padding-left: 1.25rem;
-    color: #fff;
+    color: #1b1b1f !important;
     line-height: 1.8;
 }
 
@@ -1622,20 +1852,29 @@ body.landing-page .guest-content::after {
     gap: 1.5rem;
 }
 
+.facility-section {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    margin-bottom: 0;
+}
+
 .facility-section h3 {
     margin-bottom: 0.5rem;
-    color: #fff;
+    color: #1b1b1f !important;
     font-weight: 600;
 }
 
 .facility-section p {
     margin: 0;
-    color: #fff;
+    color: #1b1b1f !important;
     line-height: 1.7;
 }
 
 .facility-section .rate-text {
-    color: #fff;
+    color: #1b1b1f !important;
     font-weight: 600;
 }
 
@@ -1648,20 +1887,20 @@ body.landing-page .guest-content::after {
     top: 5.5rem;
 }
 
-/* VISUAL CHANGE ONLY - Facility availability card updated */
+/* VISUAL CHANGE ONLY - Facility availability card - white background */
 .facility-availability-card {
     border-radius: 18px;
     border: none;
-    background: var(--card-bg);
-    backdrop-filter: var(--card-blur);
+    background: #ffffff !important;
+    backdrop-filter: none !important;
     padding: 1.5rem 1.75rem;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .facility-availability-card h3 {
     margin-top: 0;
     margin-bottom: 1rem;
-    color: #fff;
+    color: #1b1b1f !important;
 }
 
 .facility-availability-card .calendar {
@@ -1678,13 +1917,24 @@ body.landing-page .guest-content::after {
     font-size: 0.75rem;
     word-break: break-word;
     overflow: hidden;
+    color: #1b1b1f;
+}
+
+.facility-availability-card .calendar .day.available {
+    background: #e6f4ff;
+    color: var(--gov-blue-dark);
+}
+
+.facility-availability-card .calendar .day.unavailable {
+    background: #fbe9e7;
+    color: #b23c17;
 }
 
 .availability-note {
     margin-top: 0.85rem;
     font-size: 0.85rem;
-    color: #ffffff;
-    opacity: 0.9;
+    color: #4c5b7c !important;
+    opacity: 1;
     line-height: 1.5;
 }
 
@@ -1791,8 +2041,8 @@ body.landing-page .guest-content::after {
     padding-bottom: 3rem !important;
     padding-left: 1.25rem !important;
     padding-right: 1.25rem !important;
-    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important;
-    background-attachment: fixed;
+    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
+    background-attachment: fixed !important;
     position: relative;
 }
 
@@ -1807,21 +2057,23 @@ body.landing-page .guest-content::after {
     }
 }
 
+/* Glassmorphism overlay effect with blur - override section::before disabling */
 .auth-container::before,
-.contact-section::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: 
-        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
-        linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
-    background-size: 100% 100%, 100% 100%, 100% 100%;
-    z-index: 0;
-    pointer-events: none;
+.contact-section::before,
+body.landing-page .contact-section::before,
+section.contact-section::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    display: block !important;
 }
 
 .auth-container > *,
@@ -1833,10 +2085,9 @@ body.landing-page .guest-content::after {
 .auth-card {
     max-width: 440px;
     width: 100%;
-    background: var(--card-bg);
-    backdrop-filter: var(--card-blur);
+    background: #ffffff !important;
     border-radius: 18px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     padding: 2.5rem;
     border: none;
 }
@@ -1878,19 +2129,19 @@ body.landing-page .guest-content::after {
     align-items: center;
     justify-content: center;
     font-size: 1.8rem;
-    box-shadow: 0 4px 12px rgba(0, 71, 171, 0.2);
+    box-shadow: 0 4px 12px rgba(99, 132, 210, 0.25);
 }
 
 .auth-header h1 {
     margin: 0 0 0.5rem;
-    color: #fff;
+    color: #1b1b1f;
     font-size: 1.75rem;
     font-weight: 700;
 }
 
 .auth-header p {
     margin: 0;
-    color: #f0f0f0;
+    color: #4c5b7c;
     font-size: 0.95rem;
 }
 
@@ -1918,13 +2169,13 @@ body.landing-page .guest-content::after {
     }
 }
 
-/* VISUAL CHANGE ONLY - Auth form labels and inputs updated for glass-morphism */
+/* VISUAL CHANGE ONLY - Auth form labels and inputs updated for white background */
 .auth-form label {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     font-weight: 600;
-    color: #fff;
+    color: #1b1b1f;
     font-size: 0.9rem;
 }
 
@@ -1945,7 +2196,7 @@ body.landing-page .guest-content::after {
     left: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.7);
+    color: #6e84b7;
     font-size: 1.1rem;
     pointer-events: none;
 }
@@ -1953,27 +2204,38 @@ body.landing-page .guest-content::after {
 .auth-form input,
 .auth-form textarea {
     width: 100%;
-    padding: 0.9rem 1rem 0.9rem 2.75rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    padding: 0.9rem 1rem;
+    border: 2px solid #cdd5e4;
     border-radius: 8px;
     font-size: 1rem;
     font-family: inherit;
     transition: all 0.2s ease;
-    background: rgba(255, 255, 255, 0.2);
-    color: #fff;
+    background: #ffffff;
+    color: #1b1b1f;
+}
+
+/* Add extra left padding when input has an icon */
+.auth-form .input-wrapper:has(.input-icon) input {
+    padding-left: 2.75rem;
 }
 
 .auth-form input:focus,
 .auth-form textarea:focus {
     outline: none;
-    border-color: rgba(255, 255, 255, 0.6);
-    background: rgba(255, 255, 255, 0.3);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    border-color: var(--gov-blue);
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
+}
+
+/* Textarea specific styling - no left padding for icon */
+.auth-form textarea {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
 }
 
 .auth-form input::placeholder,
 .auth-form textarea::placeholder {
-    color: rgba(255, 255, 255, 0.6);
+    color: #8b94a8;
 }
 
 .auth-form input[type="file"] {
@@ -1982,8 +2244,8 @@ body.landing-page .guest-content::after {
 
 .auth-form input[type="file"]::-webkit-file-upload-button {
     padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: var(--gov-blue);
+    border: 1px solid var(--gov-blue-dark);
     border-radius: 6px;
     color: #fff;
     font-weight: 500;
@@ -1993,7 +2255,7 @@ body.landing-page .guest-content::after {
 }
 
 .auth-form input[type="file"]::-webkit-file-upload-button:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: var(--gov-blue-dark);
 }
 
 .auth-form .btn-primary {
@@ -2022,10 +2284,10 @@ body.landing-page .guest-content::after {
 .auth-footer {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #e0e6ed;
     text-align: center;
     font-size: 0.9rem;
-    color: #ffffffcc;
+    color: #4c5b7c;
 }
 
 .auth-footer a {
@@ -2393,13 +2655,23 @@ footer::before {
 
 .notif-dot {
     position: absolute;
-    top: -4px;
-    right: -4px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+    top: -6px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
     background: #ff4b5c;
     border: 2px solid var(--gov-white);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 14px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
 }
 
 .page-header {
@@ -2453,6 +2725,13 @@ footer::before {
     gap: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.sidebar .brand img {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .sidebar .brand span.logo {
@@ -3630,6 +3909,56 @@ label[style*="align-items: center"] input[type="checkbox"] {
     vertical-align: top;
     margin-top: 0.125rem !important;
     margin-right: 0.5rem !important;
+}
+
+/* Book facility checkbox in flex label - align like Terms checkbox */
+.booking-form label[style*="display:flex"] input[type="checkbox"],
+.booking-form label[style*="display: flex"] input[type="checkbox"],
+.booking-form > div > label[style*="display:flex"] input[type="checkbox"],
+.booking-form > div > label[style*="display: flex"] input[type="checkbox"] {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    align-self: flex-start;
+    margin-top: 0.125rem !important;
+}
+
+/* Modal overlay and container for availability calendar */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 1rem;
+}
+
+.modal-container {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.modal-container .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.modal-container .modal-body {
+    padding: 1.5rem 2rem;
+    overflow-y: auto;
+    flex: 1;
 }
 
 /* Disabled checkbox styling */

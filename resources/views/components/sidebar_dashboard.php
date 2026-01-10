@@ -21,10 +21,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => 'building'],
         ['label' => 'Maintenance Integration', 'href' => $base . '/resources/views/pages/dashboard/maintenance_integration.php', 'icon' => 'wrench'],
         ['label' => 'Infrastructure Projects', 'href' => $base . '/resources/views/pages/dashboard/infrastructure_projects_integration.php', 'icon' => 'hammer'],
-        ['label' => 'Urban Planning', 'href' => $base . '/resources/views/pages/dashboard/urban_planning_integration.php', 'icon' => 'map'],
         ['label' => 'Utilities Integration', 'href' => $base . '/resources/views/pages/dashboard/utilities_integration.php', 'icon' => 'bolt'],
-        ['label' => 'Road & Transportation', 'href' => $base . '/resources/views/pages/dashboard/road_transpo_integration.php', 'icon' => 'road'],
-        ['label' => 'Energy Efficiency', 'href' => $base . '/resources/views/pages/dashboard/energy_efficiency_integration.php', 'icon' => 'lightbulb'],
         ['label' => 'Reports & Analytics', 'href' => $base . '/resources/views/pages/dashboard/reports.php', 'icon' => 'chart-bar'],
         ['label' => 'User Management', 'href' => $base . '/resources/views/pages/dashboard/user_management.php', 'icon' => 'users'],
         ['label' => 'Document Management', 'href' => $base . '/resources/views/pages/dashboard/document_management.php', 'icon' => 'folder'],
@@ -41,7 +38,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
 
 <aside class="sidebar">
     <div class="brand">
-        <span class="logo">LGU</span>
+        <img src="<?= $base; ?>/public/img/logocityhall.png" alt="City Hall Logo" style="height: 32px; width: auto; object-fit: contain;">
         <span>Facilities</span>
         <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close sidebar">✕</button>
     </div>

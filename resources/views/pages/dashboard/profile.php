@@ -10,6 +10,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/data_export.php';
 
 $pdo = db();
@@ -115,7 +116,7 @@ $exportHistory = getUserExportHistory($userId);
 // Check if deactivated_at column exists for backward compatibility
 $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
 $hasDeactivatedAt = $checkColumn->rowCount() > 0;
-$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at';
+$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp';
 if ($hasDeactivatedAt) {
     $selectFields .= ', deactivated_at, deactivation_reason';
 }
@@ -145,11 +146,37 @@ if (!$user) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
+    // Handle OTP preference update separately (if only OTP toggle is changed)
+    if (isset($_POST['enable_otp']) && !isset($_POST['name']) && !isset($_POST['current_password'])) {
+        // This is an OTP preference-only update
+        $enableOtp = (int)$_POST['enable_otp'];
+        try {
+            $updateStmt = $pdo->prepare('UPDATE users SET enable_otp = :enable_otp, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $updateStmt->execute(['enable_otp' => $enableOtp, 'id' => $userId]);
+            
+            // Refresh user data with same select fields as loaded earlier
+            $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
+            $hasDeactivatedAt = $checkColumn->rowCount() > 0;
+            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp';
+            if ($hasDeactivatedAt) {
+                $refreshFields .= ', deactivated_at, deactivation_reason';
+            }
+            $stmt = $pdo->prepare("SELECT $refreshFields FROM users WHERE id = :id LIMIT 1");
+            $stmt->execute(['id' => $userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $success = $enableOtp ? 'OTP has been enabled. You will receive a code via email on each login.' : 'OTP has been disabled. You can now log in with just your password.';
+        } catch (Exception $e) {
+            $error = 'Unable to update OTP preference. Please try again.';
+        }
+    }
+    
     // Check if this is a password-only update (password form) or profile update
     $hasPasswordFields = !empty($_POST['current_password']) || !empty($_POST['new_password']) || !empty($_POST['confirm_password']);
     $hasProfileFields = isset($_POST['name']) && isset($_POST['email']);
     $hasProfilePicture = !empty($_FILES['profile_picture']['name']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK;
     $hasValidIdUpload = !empty($_FILES['doc_valid_id']['name']) && $_FILES['doc_valid_id']['error'] === UPLOAD_ERR_OK;
+    $updateOtpPreference = isset($_POST['enable_otp']); // Check if OTP preference is being updated
     
     // Get form values, use existing user data as fallback
     $name = trim($_POST['name'] ?? $user['name']);
@@ -275,9 +302,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     }
                     
                     // Only update fields that were actually changed
+                    $enableOtp = isset($_POST['enable_otp']) ? (int)$_POST['enable_otp'] : ($user['enable_otp'] ?? 1);
                     $updateStmt = $pdo->prepare(
                         'UPDATE users 
-                         SET name = :name, email = :email, mobile = :mobile, address = :address, latitude = :latitude, longitude = :longitude, profile_picture = :profile_picture, password_hash = :password_hash, updated_at = CURRENT_TIMESTAMP 
+                         SET name = :name, email = :email, mobile = :mobile, address = :address, latitude = :latitude, longitude = :longitude, profile_picture = :profile_picture, password_hash = :password_hash, enable_otp = :enable_otp, updated_at = CURRENT_TIMESTAMP 
                          WHERE id = :id'
                     );
                     $updateStmt->execute([
@@ -289,11 +317,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                         'longitude' => $longitude ?: null,
                         'profile_picture' => $profilePicture,
                         'password_hash' => $newPasswordHash,
+                        'enable_otp' => $enableOtp,
                         'id' => $userId,
                     ]);
 
                     // Refresh user data
-                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at FROM users WHERE id = :id LIMIT 1');
+                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp FROM users WHERE id = :id LIMIT 1');
                     $stmt->execute(['id' => $userId]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
@@ -558,6 +587,38 @@ ob_start();
                 Manage your account security settings, change your password, and export your data.
             </p>
             
+            <!-- OTP Preference Toggle -->
+            <div id="otp-toggle-container" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
+                <div style="display:flex; align-items:flex-start; gap:1rem;">
+                    <div style="flex:1;">
+                        <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem; font-size:0.95rem;">
+                            Two-Factor Authentication (OTP)
+                        </label>
+                        <p id="otp-status-text" style="color:#5b6888; font-size:0.85rem; margin:0; line-height:1.5;">
+                            <?php if ($user['enable_otp'] ?? true): ?>
+                                OTP is currently <strong>enabled</strong>. You'll receive a code via email each time you log in.
+                            <?php else: ?>
+                                OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.
+                            <?php endif; ?>
+                        </p>
+                        <div id="otp-status-message" style="margin-top:0.5rem; font-size:0.85rem; display:none;"></div>
+                    </div>
+                    <label style="position:relative; display:inline-block; width:48px; height:26px; cursor:pointer; flex-shrink:0;">
+                        <input 
+                            type="checkbox" 
+                            id="otp-toggle-checkbox" 
+                            value="1" 
+                            <?= ($user['enable_otp'] ?? true) ? 'checked' : ''; ?> 
+                            onchange="toggleOTPPreference(this);" 
+                            style="opacity:0; width:0; height:0;"
+                        >
+                        <span id="otp-toggle-switch" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:<?= ($user['enable_otp'] ?? true) ? '#2563eb' : '#ccc'; ?>; border-radius:26px; transition:background-color 0.3s;">
+                            <span id="otp-toggle-knob" style="position:absolute; content:''; height:20px; width:20px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:transform 0.3s; transform:translateX(<?= ($user['enable_otp'] ?? true) ? '22px' : '0'; ?>); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            
             <div style="display:flex; flex-direction:column; gap:1rem;">
                 <button type="button" class="btn-primary" onclick="openPasswordModal()" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
                     <span>🔑</span>
@@ -573,6 +634,7 @@ ob_start();
             <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
                 <h3 style="font-size:0.95rem; color:#1b1b1f; margin-bottom:0.75rem;">Security Tips</h3>
                 <ul class="audit-list" style="margin:0;">
+                    <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>OTP Security:</strong> We recommend keeping OTP enabled for better account protection.</li>
                     <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Password tip:</strong> Avoid reusing passwords from other systems.</li>
                     <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Account access:</strong> Contact the LGU IT office if you suspect unauthorized activity.</li>
                 </ul>
@@ -757,6 +819,88 @@ ob_start();
 <?php endif; ?>
 
 <script>
+// OTP Toggle Handler - AJAX update without page refresh
+function toggleOTPPreference(checkbox) {
+    const isEnabled = checkbox.checked;
+    const toggleSwitch = document.getElementById('otp-toggle-switch');
+    const toggleKnob = document.getElementById('otp-toggle-knob');
+    const statusText = document.getElementById('otp-status-text');
+    const statusMessage = document.getElementById('otp-status-message');
+    
+    // Immediately update UI for instant feedback
+    if (isEnabled) {
+        toggleSwitch.style.backgroundColor = '#2563eb';
+        toggleKnob.style.transform = 'translateX(22px)';
+        statusText.innerHTML = 'OTP is currently <strong>enabled</strong>. You\'ll receive a code via email each time you log in.';
+    } else {
+        toggleSwitch.style.backgroundColor = '#ccc';
+        toggleKnob.style.transform = 'translateX(0)';
+        statusText.innerHTML = 'OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.';
+    }
+    
+    // Disable checkbox during request
+    checkbox.disabled = true;
+    statusMessage.style.display = 'none';
+    
+    // Prepare form data
+    const formData = new FormData();
+    formData.append('enable_otp', isEnabled ? '1' : '0');
+    formData.append('<?= CSRF_TOKEN_NAME; ?>', '<?= csrf_token(); ?>');
+    
+    // Send AJAX request
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text())
+    .then(html => {
+        // Re-enable checkbox
+        checkbox.disabled = false;
+        
+        // Show success message
+        statusMessage.style.display = 'block';
+        statusMessage.style.color = '#0d7a43';
+        statusMessage.style.padding = '0.5rem';
+        statusMessage.style.backgroundColor = '#e3f8ef';
+        statusMessage.style.borderRadius = '4px';
+        statusMessage.textContent = isEnabled 
+            ? '✓ OTP has been enabled. You will receive a code via email on each login.' 
+            : '✓ OTP has been disabled. You can now log in with just your password.';
+        
+        // Hide message after 3 seconds
+        setTimeout(() => {
+            statusMessage.style.display = 'none';
+        }, 3000);
+    })
+    .catch(error => {
+        // Revert UI on error
+        checkbox.checked = !isEnabled;
+        if (isEnabled) {
+            toggleSwitch.style.backgroundColor = '#ccc';
+            toggleKnob.style.transform = 'translateX(0)';
+            statusText.innerHTML = 'OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.';
+        } else {
+            toggleSwitch.style.backgroundColor = '#2563eb';
+            toggleKnob.style.transform = 'translateX(22px)';
+            statusText.innerHTML = 'OTP is currently <strong>enabled</strong>. You\'ll receive a code via email each time you log in.';
+        }
+        checkbox.disabled = false;
+        
+        // Show error message
+        statusMessage.style.display = 'block';
+        statusMessage.style.color = '#b23030';
+        statusMessage.style.padding = '0.5rem';
+        statusMessage.style.backgroundColor = '#fdecee';
+        statusMessage.style.borderRadius = '4px';
+        statusMessage.textContent = '✗ Failed to update OTP preference. Please try again.';
+        
+        // Hide error message after 5 seconds
+        setTimeout(() => {
+            statusMessage.style.display = 'none';
+        }, 5000);
+    });
+}
+
 function openPasswordModal() {
     const modal = document.getElementById('passwordModal');
     modal.classList.add('open');

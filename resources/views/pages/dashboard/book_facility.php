@@ -346,7 +346,7 @@ if (!empty($_SESSION['user_id'])) {
 
 // Get availability snapshot for next 14 days
 $today = date('Y-m-d');
-$endDate = date('Y-m-d', strtotime('+29 days'));
+$endDate = date('Y-m-d', strtotime('+13 days'));
 
 $availabilityStmt = $pdo->prepare(
     'SELECT r.reservation_date, r.status, COUNT(*) as reservation_count
@@ -544,14 +544,16 @@ ob_start();
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Describe your event - AI will suggest the best facilities for you.</small>
             </label>
 
-            <div>
-                <label style="display:flex; align-items:flex-start; gap:0.5rem; cursor:pointer;">
-                    <input type="checkbox" name="is_commercial" value="1" id="is-commercial" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
-                    <span style="flex:1; line-height:1.5;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
+            <div style="margin: 1.5rem 0; padding: 1rem; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
+                    <input type="checkbox" name="is_commercial" value="1" id="is-commercial" style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
+                    <span style="flex: 1; line-height: 1.6; margin-top: 0;">
+                        <span style="color: #1b1b1f; font-size: 0.9rem;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
+                        <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.5rem; line-height: 1.5;">
+                            Commercial reservations require manual approval by LGU staff.
+                        </small>
+                    </span>
                 </label>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem; margin-left:calc(18px + 0.5rem);">
-                    Commercial reservations require manual approval by LGU staff.
-                </small>
             </div>
 
             <label>
@@ -671,13 +673,13 @@ ob_start();
             </p>
         </div>
 
-        <div class="schedule-board">
+        <div class="schedule-board" style="display:none;" id="availabilitySnapshotContainer">
             <header>
                 <h3>Availability Snapshot</h3>
                 <a class="btn-outline" href="<?= base_path(); ?>/resources/views/pages/dashboard/calendar.php">View Full Calendar</a>
             </header>
-            <div class="schedule-grid">
-                <?php for ($i = 0; $i < 30; $i++): ?>
+            <div class="schedule-grid" id="availabilitySnapshot" title="Click on dates for details">
+                <?php for ($i = 0; $i < 14; $i++): ?>
                     <?php
                     $currentDate = date('Y-m-d', strtotime("+$i days"));
                     $dayNumber = date('d', strtotime($currentDate));
@@ -748,27 +750,37 @@ ob_start();
                 <span><span class="dot" style="background:#dbeafe; border:1px solid #2563eb;"></span> Holiday / Barangay Event</span>
             </div>
             <small style="display:block; margin-top:0.75rem; color:#8b95b5; font-size:0.85rem;">
-                Showing next 30 days. Hover over dates for details.
+                Showing next 14 days. Click on dates for details.
             </small>
         </div>
 
-        <!-- Full Calendar Modal -->
+        <!-- Button to show availability -->
+        <div style="margin-top: 1.5rem; text-align: center;">
+            <button type="button" class="btn-outline" id="showAvailableDatesBtn" style="padding: 0.75rem 1.5rem; font-size: 0.95rem;">
+                📅 Show Available Dates
+            </button>
+            <a class="btn-outline" href="<?= base_path(); ?>/resources/views/pages/dashboard/calendar.php" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; margin-left: 0.75rem;">
+                View Full Calendar
+            </a>
+        </div>
+
+        <!-- Availability Calendar Modal -->
         <?php
         $rangeStartLabel = date('M d, Y');
-        $rangeEndLabel = date('M d, Y', strtotime('+29 days'));
+        $rangeEndLabel = date('M d, Y', strtotime('+13 days'));
         ?>
-        <div id="fullCalendarModal" class="modal-overlay" style="display:none;">
-            <div class="modal-container">
+        <div id="availabilityCalendarModal" class="modal-overlay" style="display:none;">
+            <div class="modal-container" style="max-width:900px;">
                 <div class="modal-header">
                     <div>
-                        <h3 style="margin:0;">Full Calendar</h3>
-                        <small style="color:#64748b;">Next 30 days · <?= $rangeStartLabel; ?> — <?= $rangeEndLabel; ?></small>
+                        <h3 style="margin:0;">Availability Calendar</h3>
+                        <small style="color:#64748b;">Next 14 days · <?= $rangeStartLabel; ?> — <?= $rangeEndLabel; ?></small>
                     </div>
-                    <button type="button" class="btn-outline" id="closeFullCalendar" aria-label="Close calendar">Close</button>
+                    <button type="button" class="btn-outline" id="closeAvailabilityCalendar" aria-label="Close calendar">Close</button>
                 </div>
                 <div class="modal-body">
                     <div class="schedule-grid full-grid">
-                        <?php for ($i = 0; $i < 30; $i++): ?>
+                        <?php for ($i = 0; $i < 14; $i++): ?>
                             <?php
                             $currentDate = date('Y-m-d', strtotime("+$i days"));
                             $dayNumber = date('d', strtotime($currentDate));
@@ -872,9 +884,11 @@ ob_start();
 
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const openBtn = document.getElementById('openFullCalendar');
-            const closeBtn = document.getElementById('closeFullCalendar');
-            const modal = document.getElementById('fullCalendarModal');
+            const showBtn = document.getElementById('showAvailableDatesBtn');
+            const snapshotContainer = document.getElementById('availabilitySnapshotContainer');
+            const snapshotGrid = document.getElementById('availabilitySnapshot');
+            const closeBtn = document.getElementById('closeAvailabilityCalendar');
+            const modal = document.getElementById('availabilityCalendarModal');
             const dayModal = document.getElementById('dayDetailModal');
             const closeDayDetail = document.getElementById('closeDayDetail');
             const dayDetailTitle = document.getElementById('dayDetailTitle');
@@ -883,11 +897,11 @@ ob_start();
             const resDetail = <?= json_encode($resDetailByDate); ?>;
             const eventMapJS = <?= json_encode($eventMap); ?>;
 
-            function openModal() {
+            function openAvailabilityModal() {
                 modal.style.display = 'flex';
                 document.body.classList.add('modal-open');
             }
-            function closeModal() {
+            function closeAvailabilityModal() {
                 modal.style.display = 'none';
                 document.body.classList.remove('modal-open');
             }
@@ -924,25 +938,39 @@ ob_start();
                 document.body.classList.remove('modal-open');
             }
 
-            if (openBtn) openBtn.addEventListener('click', openModal);
-            if (closeBtn) closeBtn.addEventListener('click', closeModal);
+            // Show/hide snapshot container when clicking the button
+            if (showBtn && snapshotContainer) {
+                showBtn.addEventListener('click', () => {
+                    if (snapshotContainer.style.display === 'none' || !snapshotContainer.style.display) {
+                        snapshotContainer.style.display = 'block';
+                        showBtn.textContent = '📅 Hide Available Dates';
+                    } else {
+                        snapshotContainer.style.display = 'none';
+                        showBtn.textContent = '📅 Show Available Dates';
+                    }
+                });
+            }
+            if (closeBtn) closeBtn.addEventListener('click', closeAvailabilityModal);
             modal?.addEventListener('click', (e) => {
-                if (e.target === modal) closeModal();
+                if (e.target === modal) closeAvailabilityModal();
             });
             closeDayDetail?.addEventListener('click', closeDayModal);
             dayModal?.addEventListener('click', (e) => {
                 if (e.target === dayModal) closeDayModal();
             });
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeModal();
-                if (e.key === 'Escape') closeDayModal();
+                if (e.key === 'Escape') {
+                    if (modal && modal.style.display === 'flex') closeAvailabilityModal();
+                    if (dayModal && dayModal.style.display === 'flex') closeDayModal();
+                }
             });
 
             function bindCells(scope) {
                 scope.querySelectorAll('.schedule-cell').forEach(cell => {
                     const dateStr = cell.getAttribute('data-date');
-                    cell.addEventListener('click', () => {
+                    cell.addEventListener('click', (e) => {
                         if (!dateStr) return;
+                        e.stopPropagation(); // Prevent grid click from firing
                         openDayModal(dateStr);
                     });
                     // event color

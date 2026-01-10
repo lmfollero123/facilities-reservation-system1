@@ -114,7 +114,7 @@ ob_start();
                 <section class="facility-section">
                     <h3>Usage</h3>
                     <p class="rate-text"><strong>Free of Charge</strong></p>
-                    <p style="color:#fff; font-size:0.9rem; margin-top:0.5rem; opacity:0.95;">This facility is provided free of charge for public use by the LGU/Barangay.</p>
+                    <p style="color:#4c5b7c; font-size:0.9rem; margin-top:0.5rem;">This facility is provided free of charge for public use by the LGU/Barangay.</p>
                 </section>
 
                 <?php if (!empty($facility['amenities'])): ?>

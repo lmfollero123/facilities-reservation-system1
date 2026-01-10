@@ -1104,22 +1104,23 @@
 - Multi-turn conversation support
 - Context-aware responses using reservation data
 
-### Urban Planning Integration Workflow (UI Implemented, API Integration Pending)
-**Status**: Frontend complete, backend integration pending
+### Infrastructure Management Integration Workflow (Design Complete, Not Implemented)
+**Status**: Design complete, implementation pending
 
 **Planned Flow**:
-1. Urban Planning system analyzes facility usage data
-2. Planning recommendations generated
-3. Recommendations sent via API to reservation system
-4. Admin/Staff views recommendations in dashboard
-5. Admin can approve/reject planning actions
-6. Approved actions trigger facility creation/updates
+1. Infrastructure project timeline received via API
+2. Facilities automatically blocked during construction periods
+3. New facilities automatically created when projects complete
+4. Notifications sent to affected users
 
-**Future Features**:
-- Export reservation trends and usage statistics
-- Receive new development notifications
-- Auto-create facilities from approved developments
-- Validate facility usage against zoning regulations
+### Utilities Billing Integration Workflow (Design Complete, Not Implemented)
+**Status**: Design complete, implementation pending
+
+**Planned Flow**:
+1. Utility outage alerts received via API
+2. Affected facilities automatically set to unavailable
+3. Users with bookings notified of utility outages
+4. Facility usage data exported for billing reconciliation
 
 ### Maintenance Management Integration Workflow (Design Complete, Not Implemented)
 **Status**: Design complete, implementation pending

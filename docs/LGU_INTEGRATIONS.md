@@ -14,13 +14,10 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 
 ## LGU 1 System Ecosystem
 
-### 1. **Infrastructure Project Management**
+### 1. **Infrastructure Management**
 ### 2. **Utilities Billing & Management**
-### 3. **Road and Transpo Infrastructure Monitoring**
+### 3. **Community Infrastructure Maintenance Management**
 ### 4. **Public Facilities Reservation System** ← *Your System*
-### 5. **Community Infrastructure Maintenance Management**
-### 6. **Energy Efficiency MGMT**
-### 7. **Urban Planning & Development**
 
 ---
 
@@ -48,7 +45,7 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 
 ---
 
-### 🔗 **2. Infrastructure Project Management**
+### 🔗 **2. Infrastructure Management**
 **Integration Level**: ⭐⭐ **MEDIUM PRIORITY**
 
 **Why**: Infrastructure projects may affect facility availability (renovations, expansions, new facilities).
@@ -69,29 +66,8 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 
 ---
 
-### 🔗 **3. Urban Planning & Development**
+### 🔗 **3. Utilities Billing & Management**
 **Integration Level**: ⭐⭐ **MEDIUM PRIORITY**
-
-**Why**: Urban planning decisions affect facility locations, capacity, and demand forecasting.
-
-**Potential Integrations**:
-- **Demand Forecasting**: Share reservation data for urban planning analysis
-- **Location Analytics**: Provide facility usage data for planning decisions
-- **New Development Integration**: Add facilities when new developments are approved
-- **Zoning Compliance**: Validate facility usage against zoning regulations
-
-**Data Exchange**:
-- **Outbound**: Reservation trends, facility usage statistics, location data
-- **Inbound**: Zoning changes, new development plans, planning recommendations
-
-**Implementation**:
-- Data export/API for analytics
-- Webhook for new development notifications
-
----
-
-### 🔗 **4. Utilities Billing & Management**
-**Integration Level**: ⭐ **LOW PRIORITY**
 
 **Why**: Facility usage may affect utility billing, and utility issues may affect facility availability.
 
@@ -111,46 +87,6 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 
 ---
 
-### 🔗 **5. Road and Transpo Infrastructure Monitoring**
-**Integration Level**: ⭐ **LOW PRIORITY**
-
-**Why**: Road closures or transportation issues may affect facility accessibility.
-
-**Potential Integrations**:
-- **Accessibility Alerts**: Notify users about road closures affecting facility access
-- **Traffic Impact**: Consider traffic patterns in facility recommendations
-- **Parking Availability**: Link to parking management (if applicable)
-
-**Data Exchange**:
-- **Outbound**: Facility location data, event schedules
-- **Inbound**: Road closure notifications, traffic alerts
-
-**Implementation**:
-- Webhook for road closure alerts
-- API integration for traffic data
-
----
-
-### 🔗 **6. Energy Efficiency MGMT**
-**Integration Level**: ⭐ **LOW PRIORITY**
-
-**Why**: Facility usage patterns can inform energy efficiency strategies.
-
-**Potential Integrations**:
-- **Usage Analytics**: Share facility usage data for energy planning
-- **Efficiency Recommendations**: Receive recommendations for energy-efficient scheduling
-- **Peak Usage Tracking**: Identify peak usage times for energy optimization
-
-**Data Exchange**:
-- **Outbound**: Facility usage statistics, booking patterns
-- **Inbound**: Energy efficiency recommendations, peak usage alerts
-
-**Implementation**:
-- Data export for energy analysis
-- API for efficiency recommendations
-
----
-
 ## Integration Architecture Recommendations
 
 ### Option 1: API Gateway Pattern (Recommended)
@@ -164,11 +100,8 @@ Your **Public Facilities Reservation System** is currently a **standalone system
        │                │
 ┌──────▼──────┐  ┌──────▼──────────────────┐
 │ Facilities  │  │ Maintenance Management    │
-│ Reservation │  │ Infrastructure Projects   │
-│ System      │  │ Urban Planning           │
-│             │  │ Utilities Billing         │
-│             │  │ Road Monitoring           │
-│             │  │ Energy Efficiency        │
+│ Reservation │  │ Infrastructure Management │
+│ System      │  │ Utilities Billing         │
 └─────────────┘  └──────────────────────────┘
 ```
 
@@ -192,18 +125,13 @@ Your **Public Facilities Reservation System** is currently a **standalone system
    - Maintenance calendar blocking
 
 ### Phase 2: Medium Priority (Strategic Value)
-2. **Infrastructure Project Management**
+2. **Infrastructure Management**
    - Project timeline integration
    - New facility automation
 
-3. **Urban Planning & Development**
-   - Data sharing for analytics
-   - Planning decision support
-
-### Phase 3: Low Priority (Future Enhancement)
-4. **Utilities Billing & Management**
-5. **Road and Transpo Infrastructure Monitoring**
-6. **Energy Efficiency MGMT**
+3. **Utilities Billing & Management**
+   - Utility outage alerts
+   - Billing data integration
 
 ---
 
@@ -219,6 +147,7 @@ Your **Public Facilities Reservation System** is currently a **standalone system
    - `GET /api/integrations/facilities/status` - Provide facility status
    - `GET /api/integrations/reservations/analytics` - Provide usage analytics
    - `GET /api/integrations/facilities/locations` - Provide facility locations
+   - `GET /api/integrations/facilities/usage` - Provide facility usage data for billing
 
 3. **Webhook Support**:
    - Real-time notifications for critical events
@@ -262,12 +191,15 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 
 **Integration Approach**: API Gateway pattern with REST APIs and webhooks for real-time updates.
 
+**Planned Integrations**:
+1. **Community Infrastructure Maintenance Management** (High Priority)
+2. **Infrastructure Management** (Medium Priority)
+3. **Utilities Billing & Management** (Medium Priority)
+
 **Next Steps**:
 1. Define integration requirements with other LGU system teams
 2. Design API contracts and data schemas
 3. Implement API endpoints in your system
 4. Test integration with staging environments
 5. Deploy and monitor integration health
-
-
 

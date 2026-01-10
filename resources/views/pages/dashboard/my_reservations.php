@@ -13,7 +13,12 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
+
+// Auto-decline expired pending reservations before querying
+autoDeclineExpiredReservations();
+
 $pageTitle = 'My Reservations | LGU Facilities Reservation';
 $userId = $_SESSION['user_id'] ?? null;
 $message = '';
@@ -227,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($oldStatus === 'approved') {
                 $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
             }
-            $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+            $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
             sendEmail($userInfo['email'], $userInfo['name'], $emailSubject, $emailBody);
         }
         

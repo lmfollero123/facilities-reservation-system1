@@ -4,6 +4,17 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 
+// Ensure base_url() function exists (fallback if not loaded from app.php)
+if (!function_exists('base_url')) {
+    function base_url(): string
+    {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = base_path();
+        return $protocol . '://' . $host . $base;
+    }
+}
+
 $pageTitle = 'Forgot Password | LGU Facilities Reservation';
 $message = '';
 $messageType = '';
@@ -32,19 +43,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Generate reset token
                     $token = bin2hex(random_bytes(32));
                     $tokenHash = hash('sha256', $token);
-                    $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
+                    
+                    // Debug: Log token info
+                    error_log('Password reset token generated - Length: ' . strlen($token) . ', First 10 chars: ' . substr($token, 0, 10));
+                    error_log('Token hash generated - First 20 chars: ' . substr($tokenHash, 0, 20));
                     
                     // Delete old tokens for this user
                     $pdo->prepare("DELETE FROM password_reset_tokens WHERE user_id = ?")->execute([$user['id']]);
                     
-                    // Save new token
+                    // Save new token - use database function for timezone-safe expiration
                     $tokenStmt = $pdo->prepare(
-                        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)"
+                        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))"
                     );
-                    $tokenStmt->execute([$user['id'], $tokenHash, $expiresAt]);
+                    $result = $tokenStmt->execute([$user['id'], $tokenHash]);
                     
-                    // Send reset email
-                    $resetUrl = base_path() . '/resources/views/pages/auth/reset_password.php?token=' . $token;
+                    if (!$result) {
+                        error_log('ERROR: Failed to insert password reset token for user ' . $user['id']);
+                        throw new Exception('Failed to save reset token');
+                    }
+                    
+                    // Verify token was saved correctly
+                    $verifyStmt = $pdo->prepare("SELECT id, token_hash, expires_at FROM password_reset_tokens WHERE user_id = ? ORDER BY id DESC LIMIT 1");
+                    $verifyStmt->execute([$user['id']]);
+                    $savedToken = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if (!$savedToken) {
+                        error_log('ERROR: Token was NOT saved to database after insert!');
+                        throw new Exception('Token verification failed');
+                    }
+                    
+                    // Double-check the hash matches
+                    if ($savedToken['token_hash'] !== $tokenHash) {
+                        error_log('ERROR: Token hash mismatch! Generated: ' . substr($tokenHash, 0, 20) . '... Saved: ' . substr($savedToken['token_hash'], 0, 20) . '...');
+                        throw new Exception('Token hash verification failed');
+                    }
+                    
+                    // Log the token and hash for debugging
+                    error_log('Password reset token created - Token (first 20): ' . substr($token, 0, 20) . '... | Hash (first 20): ' . substr($tokenHash, 0, 20) . '...');
+                    
+                    // Send reset email - token is hex (URL-safe)
+                    $resetUrl = base_url() . '/resources/views/pages/auth/reset_password.php?token=' . $token;
+                    error_log('Reset URL (first 100 chars): ' . substr($resetUrl, 0, 100) . '...');
                     $subject = "Password Reset Request - Barangay Culiat Facilities";
                     $htmlBody = "
                     <html>

@@ -192,7 +192,7 @@ ob_start();
                         <span class="input-icon">🏠</span>
                         <input name="address" type="text" placeholder="e.g., Street, Barangay Culiat, Quezon City" required value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
                     </div>
-                    <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500; opacity:0.95;">
+                    <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;">
                         Registration is limited to residents of Barangay Culiat.
                     </small>
                 </label>
@@ -212,14 +212,14 @@ ob_start();
                     <span class="input-icon">🔒</span>
                     <input name="password" type="password" placeholder="Create a strong password (min. 8 characters)" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
                 </div>
-                <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500; opacity:0.95;">
+                <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;">
                     Must be at least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.
                 </small>
             </label>
 
             <div style="padding:0.75rem 0; border-top:1px solid rgba(255,255,255,0.2); margin-top:1rem;">
-                <p style="margin:0 0 0.5rem; font-weight:600; color:#fff;">Upload Valid ID (Optional)</p>
-                <small style="color:#e0e7ff; font-size:0.85rem; display:block; margin-bottom:0.75rem; font-weight:500; opacity:0.95; line-height:1.5;">
+                <p style="margin:0 0 0.5rem; font-weight:600; color:#1b1b1f;">Upload Valid ID (Optional)</p>
+                <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-bottom:0.75rem; font-weight:500; line-height:1.5;">
                     Your account will be activated immediately. To enable auto-approval features for facility bookings, you can upload a valid ID now or later from your profile. Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
                 </small>
 
@@ -231,8 +231,8 @@ ob_start();
             <div style="margin: 1.5rem 0; padding: 1rem; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
                 <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
                     <input type="checkbox" name="accept_terms" required style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
-                    <span style="color: #fff; font-size: 0.9rem; line-height: 1.6; flex: 1; margin-top: 0;">
-                        I have read and agree to the <a href="#" id="termsLink" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: rgba(255, 255, 255, 0.9); text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).
+                    <span style="color: #1b1b1f; font-size: 0.9rem; line-height: 1.6; flex: 1; margin-top: 0;">
+                        I have read and agree to the <a href="#" id="termsLink" style="color: #2864ef; text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: #2864ef; text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).
                     </span>
                 </label>
             </div>
@@ -249,7 +249,7 @@ ob_start();
 <!-- Terms and Conditions Modal -->
 <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-scrollable modal-lg">
-        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border-radius: 18px; border: none; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);">
+        <div class="modal-content" style="background: #ffffff; border-radius: 18px; border: none; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);">
             <div class="modal-header" style="border-bottom: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem;">
                 <h5 class="modal-title" id="termsModalLabel" style="color: #1e3a5f; font-weight: 700; font-size: 1.5rem;">
                     Terms and Conditions & Data Privacy Policy
@@ -337,8 +337,13 @@ ob_start();
 }
 .modal-backdrop {
     z-index: 1050 !important;
-    background-color: rgba(0, 0, 0, 0.5) !important;
+    background-color: rgba(0, 0, 0, 0.25) !important;
     pointer-events: none !important; /* don't block clicks to modal */
+}
+
+/* Prevent multiple backdrops */
+.modal-backdrop.show ~ .modal-backdrop.show {
+    display: none !important;
 }
 </style>
 

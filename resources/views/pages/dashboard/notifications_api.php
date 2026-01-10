@@ -55,12 +55,20 @@ try {
                 'user_id' => $userId,
             ]);
             
-            echo json_encode(['success' => true]);
+            // Return updated count
+            $count = getUnreadNotificationCount($userId);
+            echo json_encode(['success' => true, 'count' => $count]);
         } else {
             echo json_encode(['success' => false, 'error' => 'Invalid notification ID']);
         }
     } elseif ($action === 'count') {
-        $count = getUnreadNotificationCount($userId);
+        // Use the exact same query logic as the notifications page to ensure consistency
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM notifications 
+             WHERE (user_id = :user_id OR user_id IS NULL) AND is_read = FALSE'
+        );
+        $stmt->execute(['user_id' => $userId]);
+        $count = (int)$stmt->fetchColumn();
         echo json_encode(['success' => true, 'count' => $count]);
     } else {
         echo json_encode(['success' => false, 'error' => 'Invalid action']);

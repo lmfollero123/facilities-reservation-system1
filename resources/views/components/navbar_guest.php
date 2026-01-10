@@ -14,7 +14,10 @@ $navLinks = [
 <!-- Navigation -->
 <nav class="navbar navbar-expand-lg navbar-light fixed-top py-3" id="mainNav">
     <div class="container px-4 px-lg-5" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-        <a class="navbar-brand" href="<?= $base; ?>/resources/views/pages/public/home.php" style="margin-right: auto;">Barangay Culiat Public Facilities Reservation System</a>
+        <a class="navbar-brand" href="<?= $base; ?>/resources/views/pages/public/home.php" style="margin-right: auto; display: flex; align-items: center; gap: 0.75rem;">
+            <img src="<?= $base; ?>/public/img/logocityhall.png" alt="City Hall Logo" style="height: 40px; width: auto;">
+            <span>Barangay Culiat Public Facilities Reservation System</span>
+        </a>
         <div id="navbar-datetime" class="navbar-datetime" style="margin: 0 auto; padding: 0 2rem; color: #fff; font-size: 0.9rem; font-weight: 500; white-space: nowrap;">
             <span id="navbar-date"></span>
             <span id="navbar-time" style="margin-left: 0.5rem;"></span>

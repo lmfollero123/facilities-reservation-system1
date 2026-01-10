@@ -28,27 +28,37 @@ if ($isHomePage || $isPublicPage) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.css" rel="stylesheet" />
     <!-- Favicon (inline to avoid 404) -->
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">
-    <!-- Template CSS (includes Bootstrap) -->
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Custom CSS -->
     <?php 
     try {
         $base = base_path();
-        $templateCss = $base . '/NewTemplate/css/styles.css';
         $customCss = $base . '/public/css/style.css';
     } catch (Exception $e) {
         $base = '';
-        $templateCss = '/NewTemplate/css/styles.css';
         $customCss = '/public/css/style.css';
     }
     ?>
-    <link href="<?= htmlspecialchars($templateCss); ?>" rel="stylesheet" />
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>">
     <style>
         /* Fallback: Ensure critical styles load even if external CSS fails */
         body.landing-page {
-            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important;
-            background-attachment: fixed;
+            background: url("<?= base_path(); ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed !important;
             min-height: 100vh;
+        }
+        body.landing-page::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 0;
+            pointer-events: none;
         }
         .contact-section {
             min-height: 100vh !important;
@@ -59,8 +69,7 @@ if ($isHomePage || $isPublicPage) {
             padding-bottom: 3rem !important;
             padding-left: 1.25rem !important;
             padding-right: 1.25rem !important;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 25%, #2d5a8f 50%, #1e4a6b 75%, #0f2d4a 100%) !important;
-            background-attachment: fixed;
+            background: url("<?= base_path(); ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed !important;
             position: relative;
         }
         .contact-section::before {
@@ -70,10 +79,9 @@ if ($isHomePage || $isPublicPage) {
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: 
-                radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
-                linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             z-index: 0;
             pointer-events: none;
         }
@@ -84,10 +92,9 @@ if ($isHomePage || $isPublicPage) {
         .auth-card {
             max-width: 440px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.25) !important;
-            backdrop-filter: blur(15px) !important;
+            background: #ffffff !important;
             border-radius: 18px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
             padding: 2.5rem;
             border: none;
         }
@@ -97,13 +104,13 @@ if ($isHomePage || $isPublicPage) {
         }
         .auth-header h1 {
             margin: 0 0 0.5rem;
-            color: #fff !important;
+            color: #1b1b1f !important;
             font-size: 1.75rem;
             font-weight: 700;
         }
         .auth-header p {
             margin: 0;
-            color: #f0f0f0 !important;
+            color: #4c5b7c !important;
             font-size: 0.95rem;
         }
         .auth-form label {
@@ -111,7 +118,7 @@ if ($isHomePage || $isPublicPage) {
             flex-direction: column;
             gap: 0.5rem;
             font-weight: 600;
-            color: #fff !important;
+            color: #1b1b1f !important;
             font-size: 0.9rem;
         }
         .auth-form .input-wrapper {
@@ -122,32 +129,32 @@ if ($isHomePage || $isPublicPage) {
             left: 1rem;
             top: 50%;
             transform: translateY(-50%);
-            color: rgba(255, 255, 255, 0.7);
+            color: #6e84b7;
             font-size: 1.1rem;
             pointer-events: none;
         }
         .auth-form input,
         .auth-form textarea {
             width: 100%;
-            padding: 0.9rem 1rem 0.9rem 2.75rem;
-            border: 2px solid rgba(255, 255, 255, 0.3) !important;
+            padding: 0.9rem 1rem !important;
+            border: 2px solid #cdd5e4 !important;
             border-radius: 8px;
             font-size: 1rem;
             font-family: inherit;
             transition: all 0.2s ease;
-            background: rgba(255, 255, 255, 0.2) !important;
-            color: #fff !important;
+            background: #ffffff !important;
+            color: #1b1b1f !important;
         }
         .auth-form input:focus,
         .auth-form textarea:focus {
             outline: none;
-            border-color: rgba(255, 255, 255, 0.6) !important;
-            background: rgba(255, 255, 255, 0.3) !important;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+            border-color: #6384d2 !important;
+            background: #ffffff !important;
+            box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
         }
         .auth-form input::placeholder,
         .auth-form textarea::placeholder {
-            color: rgba(255, 255, 255, 0.6) !important;
+            color: #8b94a8 !important;
         }
         .btn-primary {
             margin-top: 0.5rem;
@@ -184,8 +191,7 @@ if ($isHomePage || $isPublicPage) {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- SimpleLightbox plugin JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.js"></script>
-<!-- Template JS -->
-<script src="<?= htmlspecialchars($base); ?>/NewTemplate/js/scripts.js"></script>
+<!-- Bootstrap and plugins JS is loaded below -->
 <!-- Custom JS -->
 <script src="<?= htmlspecialchars($base); ?>/public/js/main.js"></script>
 </body>

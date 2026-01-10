@@ -73,21 +73,20 @@
 - As an admin, I can configure the chatbot to ground responses on system documentation and FAQs so users receive accurate, contextual information.
 - As a system, the chatbot can access reservation and facility data to provide context-aware responses so users get relevant answers.
 
-### Urban Planning Integration (UI Implemented, API Integration Pending)
-- As an urban planner, I can receive facility usage analytics and reservation trends from the system so I can make data-driven planning decisions.
-- As an urban planner, I can see facility location analytics and capacity utilization data so I can identify areas needing new facilities.
-- As an admin, I can receive new development plans from the Urban Planning system and automatically create facilities when projects are approved so the system stays current with new infrastructure.
-- As an admin, I can validate facility usage against zoning regulations so facilities comply with planning requirements.
-
 ### Maintenance Management Integration (Design Complete, Not Implemented)
 - As a maintenance manager, I can schedule maintenance in the Maintenance Management system and have it automatically block facility bookings and notify affected users so maintenance is coordinated with reservations.
 - As a resident, I am automatically notified when a facility I've booked enters maintenance so I can plan accordingly.
 - As the system, I automatically update facility status to "maintenance" when maintenance is scheduled so availability is accurately reflected.
 
-### Project Management Integration (Design Complete, Not Implemented)
+### Infrastructure Management Integration (Design Complete, Not Implemented)
 - As a project manager, I can sync construction timelines with the reservation system so facilities are automatically blocked during construction periods.
 - As an admin, I can automatically add new facilities to the system when infrastructure projects are completed so new facilities are immediately available for booking.
 - As a resident, I am notified about facility closures due to construction projects so I can plan my bookings around construction timelines.
+
+### Utilities Billing Integration (Design Complete, Not Implemented)
+- As a billing manager, I can receive facility usage data from the reservation system so I can track utility consumption per reservation.
+- As an admin, I can receive utility outage alerts so facilities can be automatically blocked when utilities are unavailable.
+- As a resident, I am notified when a facility I've booked is affected by utility outages so I can plan accordingly.
 # User Stories (Completed System)
 
 ## Registration & Access Control

@@ -63,18 +63,6 @@
   - Safety filtering and allow-listing
 - **Communication Pattern**: REST API to AI provider, queries internal DB for context
 
-### **Urban Planning Integration Service** (UI Implemented, API Integration Pending)
-- **Status**: Frontend complete, backend integration pending
-- **Current Implementation**:
-  - Admin dashboard page for viewing planning recommendations
-  - Mock data display system
-- **Planned Backend**:
-  - API integration with Urban Planning system
-  - Data export for analytics (reservation trends, usage statistics)
-  - Webhook handler for new development notifications
-  - Zoning compliance validation
-- **Communication Pattern**: REST API for data exchange, webhooks for real-time updates
-
 ### **Maintenance Management Integration Service** (Design Complete, Not Implemented)
 - **Status**: Planned, high priority
 - **Planned Features**:
@@ -84,7 +72,7 @@
   - Notify affected users
 - **Communication Pattern**: Webhook/API from Maintenance Management system
 
-### **Project Management Integration Service** (Design Complete, Not Implemented)
+### **Infrastructure Management Integration Service** (Design Complete, Not Implemented)
 - **Status**: Planned, medium priority
 - **Planned Features**:
   - Receive project timelines via API
@@ -93,9 +81,18 @@
   - Update facility capacity for expansions
 - **Communication Pattern**: REST API for project data exchange
 
+### **Utilities Billing Integration Service** (Design Complete, Not Implemented)
+- **Status**: Planned, medium priority
+- **Planned Features**:
+  - Receive utility outage alerts via API
+  - Block facilities when utilities are unavailable
+  - Provide facility usage data for billing
+  - Track utility consumption per reservation
+- **Communication Pattern**: REST API for utility data exchange
+
 ## Notes
 - Current deployment is monolithic PHP with modular responsibilities; the "services" above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today. 
-- **Future Integrations**: Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot UI is implemented and ready for model integration. Urban Planning integration page exists with mock data, awaiting API integration. Other LGU system integrations (Maintenance, Projects, Utilities, etc.) are designed but not yet implemented.
+- **Future Integrations**: Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot UI is implemented and ready for model integration. LGU system integrations (Maintenance Management, Infrastructure Management, Utilities Billing) are designed but not yet implemented.
 
 
 

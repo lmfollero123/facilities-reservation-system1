@@ -260,8 +260,9 @@
 - Registration enforces Barangay Culiat residency (address check) and at least one supporting document uploaded to User Documents.
 - **Future Integrations (Planned)**:
   - **External Entity: AI Chatbot Provider** - Process 9.3 (AI Chatbot) will connect to external AI/ML model API (UI implemented, integration pending)
-  - **External Entity: Urban Planning System** - Data sharing for analytics and planning recommendations (UI implemented, API integration pending)
   - **External Entity: Maintenance Management** - Facility status sync and maintenance scheduling (design complete, implementation pending)
+  - **External Entity: Infrastructure Management** - Project timeline sync and facility creation (design complete, implementation pending)
+  - **External Entity: Utilities Billing** - Utility outage alerts and usage data exchange (design complete, implementation pending)
   - **External Entity: Project Management** - Project timeline sync and new facility creation (design complete, implementation pending)
 
 ---

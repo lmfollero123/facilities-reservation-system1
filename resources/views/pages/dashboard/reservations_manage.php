@@ -13,79 +13,12 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 
 // Auto-decline expired pending reservations (past their reservation time)
-$now = new DateTime();
-$autoDeclined = 0;
-try {
-    // Get all pending reservations and check if they've expired
-    $pendingStmt = $pdo->query(
-        'SELECT id, reservation_date, time_slot, user_id FROM reservations WHERE status = "pending"'
-    );
-    $allPending = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $expiredReservations = [];
-    $currentTime = time();
-    $currentDate = date('Y-m-d');
-    
-    foreach ($allPending as $pending) {
-        $resDate = $pending['reservation_date'];
-        $timeSlot = $pending['time_slot'];
-        
-        // Check if date is in the past
-        if ($resDate < $currentDate) {
-            $expiredReservations[] = $pending;
-            continue;
-        }
-        
-        // Check if it's today and the time slot has passed
-        if ($resDate === $currentDate) {
-            $currentHour = (int)date('H');
-            if (strpos($timeSlot, 'Morning') !== false && $currentHour >= 12) {
-                $expiredReservations[] = $pending;
-            } elseif (strpos($timeSlot, 'Afternoon') !== false && $currentHour >= 17) {
-                $expiredReservations[] = $pending;
-            } elseif (strpos($timeSlot, 'Evening') !== false && $currentHour >= 21) {
-                $expiredReservations[] = $pending;
-            }
-        }
-    }
-    
-    foreach ($expiredReservations as $expired) {
-        // Update status to denied
-        $updateStmt = $pdo->prepare('UPDATE reservations SET status = "denied", updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-        $updateStmt->execute([$expired['id']]);
-        
-        // Add to history
-        $histStmt = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (?, ?, ?, NULL)');
-        $histStmt->execute([
-            $expired['id'],
-            'denied',
-            'Automatically denied: Reservation time has passed without approval.'
-        ]);
-        
-        // Notify user
-        $facilityStmt = $pdo->prepare('SELECT f.name FROM facilities f JOIN reservations r ON f.id = r.facility_id WHERE r.id = ?');
-        $facilityStmt->execute([$expired['id']]);
-        $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
-        $facilityName = $facility ? $facility['name'] : 'Facility';
-        
-        createNotification(
-            $expired['user_id'],
-            'booking',
-            'Reservation Automatically Denied',
-            'Your reservation request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($expired['reservation_date'])) . ' (' . $expired['time_slot'] . ') has been automatically denied because the reservation time has passed without approval.',
-            base_path() . '/resources/views/pages/dashboard/my_reservations.php'
-        );
-        
-        logAudit('Auto-denied expired reservation', 'Reservations', 'RES-' . $expired['id'] . ' – Past reservation time without approval');
-        $autoDeclined++;
-    }
-} catch (Throwable $e) {
-    // Silently fail - don't interrupt the page
-}
+$autoDeclined = autoDeclineExpiredReservations();
 
 $message = '';
 $messageType = 'success';
@@ -100,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
 
     if ($reservationId && in_array($action, $allowed, true)) {
         try {
-            // Get reservation details for audit log
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, r.postponed_priority, f.name AS facility_name, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
+            // Get reservation details for audit log (including facility status)
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -140,13 +73,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 }
                 
                 // Modify date/time of approved reservation
-                if (empty($_POST['new_date']) || empty($_POST['new_time_slot'])) {
-                    throw new Exception('New date and time slot are required for modification.');
+                if (empty($_POST['new_date']) || empty($_POST['start_time']) || empty($_POST['end_time'])) {
+                    throw new Exception('New date, start time, and end time are required for modification.');
                 }
                 
                 $newDate = $_POST['new_date'];
-                $newTimeSlot = $_POST['new_time_slot'];
+                $startTime = trim($_POST['start_time']);
+                $endTime = trim($_POST['end_time']);
                 $reason = trim($_POST['reason'] ?? '');
+                
+                // Validate time format and create time slot string
+                $startTimeObj = DateTime::createFromFormat('H:i', $startTime);
+                $endTimeObj = DateTime::createFromFormat('H:i', $endTime);
+                
+                if (!$startTimeObj || !$endTimeObj) {
+                    throw new Exception('Invalid time format. Please use valid time values.');
+                } elseif ($endTimeObj <= $startTimeObj) {
+                    throw new Exception('End time must be after start time.');
+                }
+                
+                // Format time slot as "HH:MM - HH:MM" for storage
+                $newTimeSlot = $startTime . ' - ' . $endTime;
                 
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
@@ -218,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-                    $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
                     sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
                 }
                 
@@ -250,13 +197,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 }
                 
                 // Postpone approved reservation (change to pending with new date)
-                if (empty($_POST['new_date']) || empty($_POST['new_time_slot'])) {
-                    throw new Exception('New date and time slot are required for postponement.');
+                if (empty($_POST['new_date']) || empty($_POST['start_time']) || empty($_POST['end_time'])) {
+                    throw new Exception('New date, start time, and end time are required for postponement.');
                 }
                 
                 $newDate = $_POST['new_date'];
-                $newTimeSlot = $_POST['new_time_slot'];
+                $startTime = trim($_POST['start_time']);
+                $endTime = trim($_POST['end_time']);
                 $reason = trim($_POST['reason'] ?? '');
+                
+                // Validate time format and create time slot string
+                $startTimeObj = DateTime::createFromFormat('H:i', $startTime);
+                $endTimeObj = DateTime::createFromFormat('H:i', $endTime);
+                
+                if (!$startTimeObj || !$endTimeObj) {
+                    throw new Exception('Invalid time format. Please use valid time values.');
+                } elseif ($endTimeObj <= $startTimeObj) {
+                    throw new Exception('End time must be after start time.');
+                }
+                
+                // Format time slot as "HH:MM - HH:MM" for storage
+                $newTimeSlot = $startTime . ' - ' . $endTime;
                 
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
@@ -329,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
                     $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
-                    $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
                     sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
                 }
                 
@@ -370,6 +331,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $note = 'Cancelled by admin/staff. Reason: ' . $reason;
                 } else {
                     $note = $_POST['note'] ?? null;
+                }
+                
+                // Validate facility status before approval
+                if ($action === 'approved') {
+                    $facilityStatus = strtolower($reservation['facility_status'] ?? 'available');
+                    if ($facilityStatus === 'maintenance' || $facilityStatus === 'offline') {
+                        $statusLabel = ucfirst($facilityStatus);
+                        throw new Exception('Cannot approve reservation: The facility "' . htmlspecialchars($reservation['facility_name']) . '" is currently under ' . $statusLabel . '. Please change the facility status to "Available" before approving reservations.');
+                    }
                 }
                 
                 // If approving a postponed reservation, clear postponed_at timestamp (priority flag remains for tracking)
@@ -429,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                         if (!empty($note)) {
                             $emailBody .= '<p><strong>Note:</strong> ' . htmlspecialchars($note) . '</p>';
                         }
-                        $emailBody .= '<p><a href="' . base_path() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                        $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
                         sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
                     }
                 }
@@ -674,14 +644,15 @@ ob_start();
             <input type="date" name="new_date" id="modify_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                New Time Slot <span style="color: #dc3545;">*</span>
+                Start Time <span style="color: #dc3545;">*</span>
             </label>
-            <select name="new_time_slot" id="modify_new_time_slot" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
-                <option value="">Select time slot...</option>
-                <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
-                <option value="Afternoon (1:00 PM - 5:00 PM)">Afternoon (1:00 PM - 5:00 PM)</option>
-                <option value="Evening (6:00 PM - 10:00 PM)">Evening (6:00 PM - 10:00 PM)</option>
-            </select>
+            <input type="time" name="start_time" id="modify_start_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
+            
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                End Time <span style="color: #dc3545;">*</span>
+            </label>
+            <input type="time" name="end_time" id="modify_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Reason for Modification <span style="color: #dc3545;">*</span>
@@ -722,14 +693,15 @@ ob_start();
             <input type="date" name="new_date" id="postpone_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                New Time Slot <span style="color: #dc3545;">*</span>
+                Start Time <span style="color: #dc3545;">*</span>
             </label>
-            <select name="new_time_slot" id="postpone_new_time_slot" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
-                <option value="">Select time slot...</option>
-                <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
-                <option value="Afternoon (1:00 PM - 5:00 PM)">Afternoon (1:00 PM - 5:00 PM)</option>
-                <option value="Evening (6:00 PM - 10:00 PM)">Evening (6:00 PM - 10:00 PM)</option>
-            </select>
+            <input type="time" name="start_time" id="postpone_start_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
+            
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                End Time <span style="color: #dc3545;">*</span>
+            </label>
+            <input type="time" name="end_time" id="postpone_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Reason for Postponement <span style="color: #dc3545;">*</span>
@@ -782,8 +754,17 @@ function openModifyModal(reservationId, currentDate, currentTime, facilityName) 
     document.getElementById('modify_reservation_id').value = reservationId;
     document.getElementById('modify_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
     document.getElementById('modify_new_date').value = '';
-    document.getElementById('modify_new_time_slot').value = '';
+    document.getElementById('modify_start_time').value = '';
+    document.getElementById('modify_end_time').value = '';
     document.getElementById('modify_reason').value = '';
+    
+    // Try to parse current time slot and prefill if in "HH:MM - HH:MM" format
+    const timeMatch = currentTime.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+        document.getElementById('modify_start_time').value = timeMatch[1].padStart(2, '0') + ':' + timeMatch[2];
+        document.getElementById('modify_end_time').value = timeMatch[3].padStart(2, '0') + ':' + timeMatch[4];
+    }
+    
     document.getElementById('modifyModal').style.display = 'flex';
 }
 
@@ -795,8 +776,17 @@ function openPostponeModal(reservationId, currentDate, currentTime, facilityName
     document.getElementById('postpone_reservation_id').value = reservationId;
     document.getElementById('postpone_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
     document.getElementById('postpone_new_date').value = '';
-    document.getElementById('postpone_new_time_slot').value = '';
+    document.getElementById('postpone_start_time').value = '';
+    document.getElementById('postpone_end_time').value = '';
     document.getElementById('postpone_reason').value = '';
+    
+    // Try to parse current time slot and prefill if in "HH:MM - HH:MM" format
+    const timeMatch = currentTime.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+        document.getElementById('postpone_start_time').value = timeMatch[1].padStart(2, '0') + ':' + timeMatch[2];
+        document.getElementById('postpone_end_time').value = timeMatch[3].padStart(2, '0') + ':' + timeMatch[4];
+    }
+    
     document.getElementById('postponeModal').style.display = 'flex';
 }
 
@@ -814,6 +804,53 @@ function openCancelModal(reservationId, facilityName, currentDate, currentTime) 
 function closeCancelModal() {
     document.getElementById('cancelModal').style.display = 'none';
 }
+
+// Time validation for modify and postpone modals
+function validateTimeInputs(startInputId, endInputId) {
+    const startInput = document.getElementById(startInputId);
+    const endInput = document.getElementById(endInputId);
+    
+    if (startInput && endInput) {
+        function validate() {
+            const startTime = startInput.value;
+            const endTime = endInput.value;
+            
+            if (startTime && endTime) {
+                const start = new Date('2000-01-01T' + startTime);
+                const end = new Date('2000-01-01T' + endTime);
+                
+                if (end <= start) {
+                    endInput.setCustomValidity('End time must be after start time');
+                    return false;
+                }
+                
+                const durationMs = end - start;
+                const durationHours = durationMs / (1000 * 60 * 60);
+                
+                if (durationHours > 12) {
+                    endInput.setCustomValidity('Reservation duration cannot exceed 12 hours');
+                    return false;
+                }
+                
+                if (durationHours < 0.5) {
+                    endInput.setCustomValidity('Reservation duration must be at least 30 minutes');
+                    return false;
+                }
+                
+                endInput.setCustomValidity('');
+            }
+            return true;
+        }
+        
+        startInput.addEventListener('change', validate);
+        endInput.addEventListener('change', validate);
+        endInput.addEventListener('input', validate);
+    }
+}
+
+// Initialize time validation for both modals
+validateTimeInputs('modify_start_time', 'modify_end_time');
+validateTimeInputs('postpone_start_time', 'postpone_end_time');
 
 // Close modals when clicking outside
 document.getElementById('modifyModal').addEventListener('click', function(e) {

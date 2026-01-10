@@ -192,9 +192,14 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Add click handlers for marking as read
             notifPanelContent.querySelectorAll('.notif-item').forEach(item => {
-                item.addEventListener('click', function() {
+                item.addEventListener('click', function(e) {
+                    // Don't mark as read if clicking on a link
+                    if (e.target.tagName === 'A' || e.target.closest('a')) {
+                        return;
+                    }
+                    
                     const notifId = this.dataset.notifId;
-                    if (!this.classList.contains('read')) {
+                    if (notifId && !this.classList.contains('read') && !this.classList.contains('read')) {
                         markAsRead(notifId);
                         this.classList.remove('unread');
                         this.classList.add('read');
@@ -206,7 +211,50 @@ document.addEventListener("DOMContentLoaded", () => {
         function markAsRead(notifId) {
             fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=mark_read&id=' + notifId, {
                 method: 'POST'
-            }).catch(error => console.error('Error marking as read:', error));
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update badge count after marking as read
+                    updateNotificationBadge();
+                }
+            })
+            .catch(error => console.error('Error marking as read:', error));
+        }
+        
+        function updateNotificationBadge() {
+            fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=count')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success !== undefined) {
+                        const badge = document.querySelector('.notif-dot');
+                        const unreadCount = data.count || 0;
+                        
+                        if (unreadCount > 0) {
+                            if (badge) {
+                                badge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
+                                badge.style.display = '';
+                            } else {
+                                // Create badge if it doesn't exist
+                                const bell = document.querySelector('.notif-bell');
+                                if (bell) {
+                                    const newBadge = document.createElement('span');
+                                    newBadge.className = 'notif-dot';
+                                    newBadge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
+                                    bell.appendChild(newBadge);
+                                }
+                            }
+                        } else {
+                            // Hide badge if no unread notifications
+                            if (badge) {
+                                badge.style.display = 'none';
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating badge:', error);
+                });
         }
         
         function formatTimeAgo(dateString) {
@@ -236,6 +284,8 @@ document.addEventListener("DOMContentLoaded", () => {
             notifPanel.classList.toggle("open");
             if (notifPanel.classList.contains("open")) {
                 loadNotifications();
+                // Refresh badge count when opening panel
+                updateNotificationBadge();
             }
         });
 

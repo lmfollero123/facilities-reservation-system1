@@ -116,10 +116,15 @@ ob_start();
                                     <?= $note['is_read'] ? 'Read' : 'New'; ?>
                                 </span>
                                 <?php if (!$note['is_read']): ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="notification_id" value="<?= $note['id']; ?>">
-                                        <button type="submit" name="mark_read" class="btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Mark Read</button>
-                                    </form>
+                                    <button 
+                                        type="button" 
+                                        class="btn-outline mark-read-btn" 
+                                        style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" 
+                                        data-notif-id="<?= $note['id']; ?>"
+                                        onclick="markNotificationAsRead(this, <?= $note['id']; ?>)"
+                                    >
+                                        Mark Read
+                                    </button>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -157,6 +162,107 @@ ob_start();
         </ul>
     </aside>
 </div>
+<script>
+// Function to mark notification as read via AJAX and update UI + badge
+function markNotificationAsRead(button, notifId) {
+    // Disable button
+    button.disabled = true;
+    button.textContent = 'Marking...';
+    
+    fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=mark_read&id=' + notifId, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the notification item UI
+            const notifItem = button.closest('.notif-item');
+            if (notifItem) {
+                notifItem.classList.remove('unread');
+                notifItem.classList.add('read');
+                
+                // Update status badge
+                const statusBadge = notifItem.querySelector('.status-badge');
+                if (statusBadge) {
+                    statusBadge.className = 'status-badge status-approved';
+                    statusBadge.textContent = 'Read';
+                }
+                
+                // Remove the "Mark Read" button
+                button.remove();
+            }
+            
+            // Update badge count in navbar
+            updateNotificationBadge();
+        } else {
+            // Re-enable button on error
+            button.disabled = false;
+            button.textContent = 'Mark Read';
+            alert('Failed to mark notification as read. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+        button.disabled = false;
+        button.textContent = 'Mark Read';
+        alert('An error occurred. Please try again.');
+    });
+}
+
+// Function to update notification badge count
+function updateNotificationBadge() {
+    fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=count')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success !== undefined) {
+                const badge = document.querySelector('.notif-dot');
+                const unreadCount = data.count || 0;
+                
+                if (unreadCount > 0) {
+                    if (badge) {
+                        badge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
+                        badge.style.display = '';
+                    } else {
+                        // Create badge if it doesn't exist
+                        const bell = document.querySelector('.notif-bell');
+                        if (bell) {
+                            const newBadge = document.createElement('span');
+                            newBadge.className = 'notif-dot';
+                            newBadge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
+                            bell.appendChild(newBadge);
+                        }
+                    }
+                } else {
+                    // Hide badge if no unread notifications
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error updating badge:', error);
+        });
+}
+
+// Update badge count when page loads (in case it changed)
+document.addEventListener('DOMContentLoaded', function() {
+    // Force refresh the badge count to ensure it matches what's displayed
+    setTimeout(function() {
+        updateNotificationBadge();
+    }, 100);
+    
+    // Also update badge when notifications are marked as read via page interactions
+    document.querySelectorAll('.mark-read-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            // Update badge after marking as read
+            setTimeout(function() {
+                updateNotificationBadge();
+            }, 500);
+        });
+    });
+});
+</script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';

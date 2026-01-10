@@ -11,8 +11,13 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 
 $pdo = db();
+
+// Auto-decline expired pending reservations before querying
+autoDeclineExpiredReservations();
+
 $userId = $_SESSION['user_id'] ?? null;
 $userRole = $_SESSION['role'] ?? 'Resident';
 $pageTitle = 'Dashboard | LGU Facilities Reservation';

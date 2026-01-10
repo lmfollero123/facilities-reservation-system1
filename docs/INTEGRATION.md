@@ -56,7 +56,7 @@
 - Auth/Notifications/Approvals/Password Reset/Contact → Email: SMTP (OTP, approval/lock, reset, inquiry alert).
 - Reservation/Facility/User → AI Recommendation: In-process call for scoring/distance/conflict + holiday/event risk tagging.
 
-## Future/Planned Integrations (UI Ready or Design Complete)
+## Future/Planned Integrations
 
 ### 🤖 **AI Chatbot Integration** (High Priority - UI Implemented)
 - **Status**: UI implemented, AI/ML model integration pending
@@ -80,28 +80,6 @@
   - `resources/views/pages/dashboard/ai_chatbot.php` (standalone page)
   - JavaScript handlers for message processing
 
-### 🏙️ **Urban Planning & Development Integration** (Medium Priority - UI Implemented)
-- **Status**: UI implemented, API integration pending
-- **Current State**:
-  - Dashboard page exists: `urban_planning_integration.php`
-  - Mock data for planning recommendations displayed
-  - Admin/Staff access control implemented
-- **Planned Features**:
-  - **Demand Forecasting**: Export reservation trends and facility usage statistics for urban planning analysis
-  - **Location Analytics**: Provide facility usage data (peak times, capacity utilization) for planning decisions
-  - **New Development Integration**: Automatically add new facilities when developments are approved
-  - **Zoning Compliance**: Validate facility usage against zoning regulations (e.g., event types, capacity limits)
-  - **Planning Recommendations**: Receive and display planning recommendations from Urban Planning system
-  - **Timeline Sync**: Synchronize facility development timelines with planning projects
-- **Data Exchange**:
-  - **Outbound**: Reservation trends, facility usage statistics, location data, capacity utilization metrics
-  - **Inbound**: Zoning changes, new development plans, planning recommendations, project timelines
-- **API Endpoints (To Be Implemented)**:
-  - `GET /api/integrations/urban-planning/analytics` - Provide usage analytics
-  - `POST /api/integrations/urban-planning/new-development` - Receive new development notifications
-  - `GET /api/integrations/urban-planning/zoning-changes` - Receive zoning regulation updates
-  - `POST /api/integrations/urban-planning/facility-usage` - Export facility usage data
-
 ### 🔧 **Community Infrastructure Maintenance Management Integration** (High Priority - Not Implemented)
 - **Status**: Planned, priority integration
 - **Planned Features**:
@@ -115,7 +93,7 @@
   - `POST /api/integrations/maintenance/completion` - Receive maintenance completion notifications
   - `GET /api/integrations/facilities/status` - Provide facility status
 
-### 🏗️ **Infrastructure Project Management Integration** (Medium Priority - Not Implemented)
+### 🏗️ **Infrastructure Management Integration** (Medium Priority - Not Implemented)
 - **Status**: Planned integration
 - **Planned Features**:
   - **Project Timeline Sync**: Block facilities during construction/renovation projects
@@ -126,8 +104,8 @@
   - `POST /api/integrations/projects/timeline` - Receive project timelines
   - `POST /api/integrations/projects/facility-creation` - Receive new facility data from completed projects
 
-### ⚡ **Utilities Billing & Management Integration** (Low Priority - Not Implemented)
-- **Status**: Future enhancement
+### ⚡ **Utilities Billing & Management Integration** (Medium Priority - Not Implemented)
+- **Status**: Planned integration
 - **Planned Features**:
   - **Utility Cost Tracking**: Link facility usage to utility consumption
   - **Billing Integration**: Include facility rental fees in utility bills (if applicable)
@@ -137,26 +115,6 @@
   - `POST /api/integrations/utilities/outage` - Receive utility outage alerts
   - `GET /api/integrations/facilities/usage` - Provide facility usage data for billing
 
-### 🚧 **Road and Transportation Infrastructure Monitoring Integration** (Low Priority - Not Implemented)
-- **Status**: Future enhancement
-- **Planned Features**:
-  - **Accessibility Alerts**: Notify users about road closures affecting facility access
-  - **Traffic Impact**: Consider traffic patterns in facility recommendations
-  - **Parking Availability**: Link to parking management (if applicable)
-- **API Endpoints (To Be Implemented)**:
-  - `POST /api/integrations/transport/road-closure` - Receive road closure notifications
-  - `GET /api/integrations/facilities/locations` - Provide facility location data
-
-### 💡 **Energy Efficiency Management Integration** (Low Priority - Not Implemented)
-- **Status**: Future enhancement
-- **Planned Features**:
-  - **Usage Analytics**: Share facility usage data for energy planning
-  - **Efficiency Recommendations**: Receive recommendations for energy-efficient scheduling
-  - **Peak Usage Tracking**: Identify peak usage times for energy optimization
-- **API Endpoints (To Be Implemented)**:
-  - `GET /api/integrations/energy/usage-analytics` - Provide usage statistics
-  - `POST /api/integrations/energy/recommendations` - Receive efficiency recommendations
-
 ---
 
 ## Notes
@@ -164,9 +122,4 @@
 - **Future Integrations**: 
   - SMTP: swap to Brevo + domain
   - AI Chatbot: UI implemented, awaiting AI/ML model integration
-  - Urban Planning: UI implemented with mock data, awaiting API integration
-  - Other LGU systems: Design complete, awaiting implementation prioritization
-
-
-
-
+  - LGU System Integrations: Maintenance Management (High Priority), Infrastructure Management (Medium Priority), Utilities Billing (Medium Priority) - Design complete, awaiting implementation prioritization

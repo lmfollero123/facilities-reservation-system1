@@ -44,7 +44,7 @@ ob_start();
                 
                 <label>
                     Message
-                    <textarea name="message" rows="5" placeholder="Provide your inquiry or reservation number" style="width: 100%; padding: 0.9rem 1rem; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 8px; font-size: 1rem; font-family: inherit; transition: all 0.2s ease; background: rgba(255, 255, 255, 0.2); color: #fff; resize: vertical;" required minlength="10"></textarea>
+                    <textarea name="message" rows="5" placeholder="Provide your inquiry or reservation number" required minlength="10"></textarea>
                 </label>
                 
                 <button class="btn-primary" type="submit" id="submitBtn">Submit Inquiry</button>
