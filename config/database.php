@@ -8,7 +8,7 @@
 
 const DB_HOST = 'localhost';
 const DB_NAME = 'cprf_facilities_reservation';
-const DB_USER = 'root';        // default XAMPP user
+const DB_USER = 'cprf_root';        // default XAMPP user
 const DB_PASS = '#Ej9+LqgMpteCp17';           // set this if you configured a password
 
 /**
