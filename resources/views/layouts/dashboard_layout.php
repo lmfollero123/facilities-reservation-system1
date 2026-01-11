@@ -17,7 +17,8 @@ $userName = $_SESSION['name'] ?? 'User';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle); ?></title>
-    <link rel="stylesheet" href="<?= base_path(); ?>/public/css/style.css">
+    <?php $cssVersion = '2.0'; // Cache-busting: Update when CSS changes are deployed ?>
+    <link rel="stylesheet" href="<?= base_path(); ?>/public/css/style.css?v=<?= $cssVersion; ?>">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

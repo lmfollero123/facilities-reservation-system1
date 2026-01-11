@@ -39,8 +39,10 @@ if ($isHomePage || $isPublicPage) {
         $base = '';
         $customCss = '/public/css/style.css';
     }
+    // Cache-busting: Update this version number when CSS changes are deployed
+    $cssVersion = '2.0';
     ?>
-    <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
     <style>
         /* Fallback: Ensure critical styles load even if external CSS fails */
         body.landing-page {
