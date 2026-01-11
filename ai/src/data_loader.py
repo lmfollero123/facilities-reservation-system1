@@ -162,7 +162,16 @@ class DataLoader:
         """
         
         try:
-            df = pd.read_sql(query, self.connection)
+            # Use cursor directly - DictCursor returns dictionaries
+            cursor = self.connection.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            cursor.close()
+            
+            # Rows are already dictionaries (DictCursor)
+            data = [row for row in rows]
+            df = pd.DataFrame(data)
+            
             print(f"Loaded {len(df)} facilities")
             return df
         except Exception as e:

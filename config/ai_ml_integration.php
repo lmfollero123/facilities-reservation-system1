@@ -261,6 +261,132 @@ function classifyChatbotIntent(string $question): array {
 }
 
 /**
+ * Classify reservation purpose into a category
+ * 
+ * @param string $purpose Purpose text
+ * @return array Category classification result
+ */
+function classifyPurposeCategory(string $purpose): array {
+    $result = callPythonModel('api/classify_purpose.py', [], ['purpose' => $purpose]);
+    
+    // Return default if error
+    if (isset($result['error'])) {
+        return [
+            'category' => 'private',
+            'confidence' => 0.0,
+            'error' => $result['error'],
+        ];
+    }
+    
+    return $result;
+}
+
+/**
+ * Detect if reservation purpose is unclear or suspicious
+ * 
+ * @param string $purpose Purpose text
+ * @return array Unclear detection result
+ */
+function detectUnclearPurpose(string $purpose): array {
+    $result = callPythonModel('api/detect_unclear_purpose.py', [], ['purpose' => $purpose]);
+    
+    // Return default if error
+    if (isset($result['error'])) {
+        return [
+            'is_unclear' => true,
+            'probability' => 0.5,
+            'confidence' => 0.0,
+            'error' => $result['error'],
+        ];
+    }
+    
+    return $result;
+}
+
+/**
+ * Get facility recommendations using ML model
+ * 
+ * @param array $facilities List of facility data arrays
+ * @param int $userId User ID
+ * @param string $purpose Event purpose
+ * @param int $expectedAttendees Expected attendees
+ * @param string $timeSlot Time slot string
+ * @param string $reservationDate Reservation date (Y-m-d format)
+ * @param bool $isCommercial Is commercial reservation
+ * @param int $userBookingCount User's total booking count
+ * @param int $limit Number of recommendations
+ * @return array Recommendations with ML scores
+ */
+function recommendFacilitiesML(
+    array $facilities,
+    int $userId,
+    string $purpose,
+    int $expectedAttendees,
+    string $timeSlot,
+    string $reservationDate,
+    bool $isCommercial = false,
+    int $userBookingCount = 0,
+    int $limit = 5
+): array {
+    $inputData = [
+        'facilities' => $facilities,
+        'user_id' => $userId,
+        'purpose' => $purpose,
+        'expected_attendees' => $expectedAttendees,
+        'time_slot' => $timeSlot,
+        'reservation_date' => $reservationDate,
+        'is_commercial' => $isCommercial,
+        'user_booking_count' => $userBookingCount,
+        'limit' => $limit,
+    ];
+    
+    $result = callPythonModel('api/recommend_facilities.py', [], $inputData);
+    
+    // Return original facilities if error (fallback)
+    if (isset($result['error'])) {
+        return [
+            'recommendations' => array_slice($facilities, 0, $limit),
+            'error' => $result['error'],
+        ];
+    }
+    
+    return $result;
+}
+
+/**
+ * Forecast booking demand for a facility on a specific date
+ * 
+ * @param int $facilityId Facility ID
+ * @param string $date Date (Y-m-d format)
+ * @param array|null $historicalData Optional historical booking data
+ * @return array Demand forecast result
+ */
+function forecastDemandML(
+    int $facilityId,
+    string $date,
+    ?array $historicalData = null
+): array {
+    $inputData = [
+        'facility_id' => $facilityId,
+        'date' => $date,
+        'historical_data' => $historicalData,
+    ];
+    
+    $result = callPythonModel('api/forecast_demand.py', [], $inputData);
+    
+    // Return default if error
+    if (isset($result['error'])) {
+        return [
+            'predicted_count' => 0.0,
+            'confidence' => 0.0,
+            'error' => $result['error'],
+        ];
+    }
+    
+    return $result;
+}
+
+/**
  * Check if ML models are available
  * 
  * @return array Status of each model

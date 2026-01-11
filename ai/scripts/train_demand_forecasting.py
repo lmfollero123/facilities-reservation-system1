@@ -54,8 +54,16 @@ def prepare_time_series_data(reservations_df: pd.DataFrame, facilities_df: pd.Da
     max_date = daily_bookings['reservation_date'].max()
     date_range = pd.date_range(start=min_date, end=max_date, freq='D')
     
-    # Get all facility IDs
-    facility_ids = facilities_df['id'].tolist()
+    # Get all facility IDs (ensure they're integers)
+    if 'id' in facilities_df.columns:
+        facility_ids = pd.to_numeric(facilities_df['id'], errors='coerce').dropna().astype(int).tolist()
+        if not facility_ids:
+            print("Warning: No valid facility IDs found")
+            return pd.DataFrame()
+    else:
+        facility_ids = []
+        print("Warning: No 'id' column in facilities DataFrame")
+        return pd.DataFrame()
     
     # Create full combination of dates and facilities
     date_facility_combos = []
@@ -63,16 +71,21 @@ def prepare_time_series_data(reservations_df: pd.DataFrame, facilities_df: pd.Da
         for facility_id in facility_ids:
             date_facility_combos.append({
                 'date': date,
-                'facility_id': facility_id
+                'facility_id': facility_id  # Already an integer
             })
     
     full_df = pd.DataFrame(date_facility_combos)
     
+    # Rename reservation_date to date in daily_bookings for merging
+    daily_bookings = daily_bookings.rename(columns={'reservation_date': 'date'})
+    
+    # Ensure facility_id is the same type in both DataFrames
+    daily_bookings['facility_id'] = daily_bookings['facility_id'].astype(int)
+    full_df['facility_id'] = full_df['facility_id'].astype(int)
+    
     # Merge with actual bookings
-    full_df = full_df.merge(daily_bookings, on=['reservation_date', 'facility_id'], how='left')
+    full_df = full_df.merge(daily_bookings, on=['date', 'facility_id'], how='left')
     full_df['booking_count'] = full_df['booking_count'].fillna(0)
-    full_df['date'] = full_df['reservation_date']
-    full_df = full_df.drop(columns=['reservation_date'], errors='ignore')
     
     # Add time features
     full_df['year'] = full_df['date'].dt.year
@@ -228,6 +241,11 @@ def main():
         
         print("\n2. Preparing time series data...")
         ts_df = prepare_time_series_data(reservations_df, facilities_df)
+        
+        if ts_df.empty:
+            print("   Error: Could not prepare time series data. Check facility data.")
+            return
+        
         print(f"   Time series data shape: {ts_df.shape}")
         print(f"   Date range: {ts_df['date'].min()} to {ts_df['date'].max()}")
         print(f"   Facilities: {ts_df['facility_id'].nunique()}")

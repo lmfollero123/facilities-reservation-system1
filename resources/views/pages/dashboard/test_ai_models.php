@@ -112,6 +112,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
                 ]);
                 break;
                 
+            case 'purpose_category':
+                if (!function_exists('classifyPurposeCategory')) {
+                    echo json_encode(['success' => false, 'error' => 'Function classifyPurposeCategory not available']);
+                    exit;
+                }
+                
+                $results = [];
+                foreach ($input['purposes'] as $purpose) {
+                    $result = classifyPurposeCategory($purpose);
+                    $results[] = [
+                        'purpose' => $purpose,
+                        'category' => $result['category'] ?? 'private',
+                        'confidence' => $result['confidence'] ?? 0.0,
+                        'error' => $result['error'] ?? null
+                    ];
+                }
+                
+                echo json_encode([
+                    'success' => true,
+                    'results' => $results
+                ]);
+                break;
+                
+            case 'purpose_unclear':
+                if (!function_exists('detectUnclearPurpose')) {
+                    echo json_encode(['success' => false, 'error' => 'Function detectUnclearPurpose not available']);
+                    exit;
+                }
+                
+                $results = [];
+                foreach ($input['purposes'] as $purpose) {
+                    $result = detectUnclearPurpose($purpose);
+                    $results[] = [
+                        'purpose' => $purpose,
+                        'is_unclear' => $result['is_unclear'] ?? true,
+                        'probability' => $result['probability'] ?? 0.5,
+                        'confidence' => $result['confidence'] ?? 0.0,
+                        'error' => $result['error'] ?? null
+                    ];
+                }
+                
+                echo json_encode([
+                    'success' => true,
+                    'results' => $results
+                ]);
+                break;
+                
+            case 'facility_recommendation':
+                if (!function_exists('recommendFacilitiesML')) {
+                    echo json_encode(['success' => false, 'error' => 'Function recommendFacilitiesML not available']);
+                    exit;
+                }
+                
+                // Get facilities from database
+                $facilitiesStmt = $pdo->query('SELECT id, name, capacity, amenities, status FROM facilities WHERE status = "available" LIMIT 10');
+                $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                $result = recommendFacilitiesML(
+                    facilities: $facilities,
+                    userId: $input['user_id'] ?? $userId,
+                    purpose: $input['purpose'] ?? 'Community meeting',
+                    expectedAttendees: $input['expected_attendees'] ?? 50,
+                    timeSlot: $input['time_slot'] ?? '08:00 - 12:00',
+                    reservationDate: $input['reservation_date'] ?? date('Y-m-d', strtotime('+7 days')),
+                    isCommercial: $input['is_commercial'] ?? false,
+                    userBookingCount: $input['user_booking_count'] ?? 0,
+                    limit: 5
+                );
+                
+                echo json_encode([
+                    'success' => !isset($result['error']),
+                    'result' => $result
+                ]);
+                break;
+                
+            case 'demand_forecasting':
+                if (!function_exists('forecastDemandML')) {
+                    echo json_encode(['success' => false, 'error' => 'Function forecastDemandML not available']);
+                    exit;
+                }
+                
+                $results = [];
+                $testDates = [
+                    date('Y-m-d', strtotime('+7 days')),
+                    date('Y-m-d', strtotime('+14 days')),
+                    date('Y-m-d', strtotime('+30 days')),
+                ];
+                
+                foreach ($testDates as $date) {
+                    $result = forecastDemandML(
+                        facilityId: $input['facility_id'] ?? 1,
+                        date: $date,
+                        historicalData: null
+                    );
+                    $results[] = [
+                        'date' => $date,
+                        'facility_id' => $input['facility_id'] ?? 1,
+                        'predicted_count' => $result['predicted_count'] ?? 0.0,
+                        'confidence' => $result['confidence'] ?? 0.0,
+                        'error' => $result['error'] ?? null
+                    ];
+                }
+                
+                echo json_encode([
+                    'success' => true,
+                    'results' => $results
+                ]);
+                break;
+                
             default:
                 echo json_encode(['success' => false, 'error' => 'Unknown test type']);
         }
@@ -250,10 +359,10 @@ pre {
         'conflict_detection' => true,  // Integrated in ai_helpers.php
         'auto_approval_risk' => true,  // Integrated in auto_approval.php
         'chatbot_intent' => true,      // Integrated in ai_chatbot.php
-        'facility_recommendation' => false,  // Model exists but not integrated
-        'demand_forecasting' => false, // Model exists but not integrated
-        'purpose_category' => false,   // Model exists but not integrated
-        'purpose_unclear' => false,    // Model exists but not integrated
+        'purpose_category' => true,    // Integrated in book_facility.php
+        'purpose_unclear' => true,     // Integrated in book_facility.php
+        'facility_recommendation' => true,  // Integrated in book_facility.php (facility_recommendations_api.php)
+        'demand_forecasting' => true,  // Integrated (API available, can be used in scheduling pages)
     ];
     ?>
 
@@ -346,20 +455,78 @@ pre {
         <?php endif; ?>
     </div>
 
-    <!-- Test 4: Available but Not Integrated -->
+    <!-- Test 4: Purpose Category Classification -->
     <div class="test-section">
-        <h2>4. Available Models (Not Yet Integrated)</h2>
-        <p>The following models are trained but not yet integrated into the system:</p>
-        <ul>
-            <?php foreach ($modelStatus as $modelName => $status): ?>
-                <?php if (($status['available'] ?? false) && !($integrationStatus[$modelName] ?? false)): ?>
-                    <li>
-                        <strong><?= ucfirst(str_replace('_', ' ', $modelName)) ?></strong>
-                        - Model file exists but no API script/integration yet
-                    </li>
-                <?php endif; ?>
-            <?php endforeach; ?>
-        </ul>
+        <h2>4. Purpose Category Classification</h2>
+        <p><strong>Status:</strong>
+            <span class="status-badge <?= ($integrationStatus['purpose_category'] && $modelStatus['purpose_category']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
+                <?= ($integrationStatus['purpose_category'] && $modelStatus['purpose_category']['available']) ? 'Integrated & Available' : 'Not Ready' ?>
+            </span>
+        </p>
+        <p><strong>Integration:</strong> Used in reservation booking (<code>resources/views/pages/dashboard/book_facility.php</code>)</p>
+        
+        <?php if ($modelStatus['purpose_category']['available'] && function_exists('classifyPurposeCategory')): ?>
+            <button class="test-button" onclick="testPurposeCategory()">Run Test</button>
+            <div id="purpose-category-result"></div>
+        <?php else: ?>
+            <p style="color: #991b1b;">Model not available or function not loaded.</p>
+        <?php endif; ?>
+    </div>
+
+    <!-- Test 5: Purpose Unclear Detection -->
+    <div class="test-section">
+        <h2>5. Purpose Unclear Detection</h2>
+        <p><strong>Status:</strong>
+            <span class="status-badge <?= ($integrationStatus['purpose_unclear'] && $modelStatus['purpose_unclear']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
+                <?= ($integrationStatus['purpose_unclear'] && $modelStatus['purpose_unclear']['available']) ? 'Integrated & Available' : 'Not Ready' ?>
+            </span>
+        </p>
+        <p><strong>Integration:</strong> Used in reservation booking (<code>resources/views/pages/dashboard/book_facility.php</code>)</p>
+        
+        <?php if ($modelStatus['purpose_unclear']['available'] && function_exists('detectUnclearPurpose')): ?>
+            <button class="test-button" onclick="testPurposeUnclear()">Run Test</button>
+            <div id="purpose-unclear-result"></div>
+        <?php else: ?>
+            <p style="color: #991b1b;">Model not available or function not loaded.</p>
+        <?php endif; ?>
+    </div>
+
+    <!-- Test 6: Facility Recommendation -->
+    <div class="test-section">
+        <h2>6. Facility Recommendation</h2>
+        <p><strong>Status:</strong>
+            <span class="status-badge <?= ($integrationStatus['facility_recommendation'] && $modelStatus['facility_recommendation']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
+                <?= ($integrationStatus['facility_recommendation'] && $modelStatus['facility_recommendation']['available']) ? 'Integrated & Available' : ($integrationStatus['facility_recommendation'] ? 'Integrated (Needs Training)' : 'Not Ready') ?>
+            </span>
+        </p>
+        <p><strong>Integration:</strong> Used in booking form recommendations (<code>resources/views/pages/dashboard/book_facility.php</code>)</p>
+        <p><small>Note: Requires 5+ approved reservations to train. Falls back to rule-based recommendations if model not available.</small></p>
+        
+        <?php if (function_exists('recommendFacilitiesML')): ?>
+            <button class="test-button" onclick="testFacilityRecommendation()">Run Test</button>
+            <div id="facility-recommendation-result"></div>
+        <?php else: ?>
+            <p style="color: #991b1b;">Function not available.</p>
+        <?php endif; ?>
+    </div>
+
+    <!-- Test 7: Demand Forecasting -->
+    <div class="test-section">
+        <h2>7. Demand Forecasting</h2>
+        <p><strong>Status:</strong>
+            <span class="status-badge <?= ($integrationStatus['demand_forecasting'] && $modelStatus['demand_forecasting']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
+                <?= ($integrationStatus['demand_forecasting'] && $modelStatus['demand_forecasting']['available']) ? 'Integrated & Available' : ($integrationStatus['demand_forecasting'] ? 'Integrated (Needs Training)' : 'Not Ready') ?>
+            </span>
+        </p>
+        <p><strong>Integration:</strong> API available for scheduling pages (<code>config/ai_ml_integration.php</code>)</p>
+        <p><small>Note: Requires 30+ reservations to train. Can be integrated into Smart Scheduler page.</small></p>
+        
+        <?php if (function_exists('forecastDemandML')): ?>
+            <button class="test-button" onclick="testDemandForecasting()">Run Test</button>
+            <div id="demand-forecasting-result"></div>
+        <?php else: ?>
+            <p style="color: #991b1b;">Function not available.</p>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -433,6 +600,112 @@ function testChatbotIntent() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({messages: testMessages})
+    })
+    .then(res => res.json())
+    .then(data => {
+        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        </div>`;
+    })
+    .catch(err => {
+        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
+    });
+}
+
+function testPurposeCategory() {
+    const resultDiv = document.getElementById('purpose-category-result');
+    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
+    
+    const testPurposes = [
+        'Barangay General Assembly',
+        'Basketball Tournament',
+        'Zumba Fitness Class',
+        'Wedding Reception',
+        'Community Meeting',
+        'Private Party'
+    ];
+    
+    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=purpose_category', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({purposes: testPurposes})
+    })
+    .then(res => res.json())
+    .then(data => {
+        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        </div>`;
+    })
+    .catch(err => {
+        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
+    });
+}
+
+function testPurposeUnclear() {
+    const resultDiv = document.getElementById('purpose-unclear-result');
+    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
+    
+    const testPurposes = [
+        'Barangay General Assembly for community development',
+        'test',
+        'asdf',
+        'Wedding celebration with family and friends',
+        'gg',
+        'Community health seminar and workshop'
+    ];
+    
+    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=purpose_unclear', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({purposes: testPurposes})
+    })
+    .then(res => res.json())
+    .then(data => {
+        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        </div>`;
+    })
+    .catch(err => {
+        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
+    });
+}
+
+function testFacilityRecommendation() {
+    const resultDiv = document.getElementById('facility-recommendation-result');
+    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
+    
+    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=facility_recommendation', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            purpose: 'Community General Assembly',
+            expected_attendees: 100,
+            time_slot: '08:00 - 12:00',
+            reservation_date: '<?= date('Y-m-d', strtotime('+7 days')); ?>',
+            is_commercial: false
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        </div>`;
+    })
+    .catch(err => {
+        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
+    });
+}
+
+function testDemandForecasting() {
+    const resultDiv = document.getElementById('demand-forecasting-result');
+    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
+    
+    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=demand_forecasting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            facility_id: 1
+        })
     })
     .then(res => res.json())
     .then(data => {

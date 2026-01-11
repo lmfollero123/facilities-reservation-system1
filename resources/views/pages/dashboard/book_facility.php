@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 require_once __DIR__ . '/../../../../config/auto_approval.php';
+require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 
 $pdo = db();
 $pageTitle = 'Book a Facility | LGU Facilities Reservation';
@@ -163,6 +164,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
+    // AI Purpose Analysis - Check if purpose is unclear or categorize it
+    $purposeAnalysis = null;
+    $purposeCategory = null;
+    if (!$error && !empty($purpose) && function_exists('detectUnclearPurpose')) {
+        try {
+            $unclearResult = detectUnclearPurpose($purpose);
+            if (!isset($unclearResult['error']) && $unclearResult['is_unclear'] && $unclearResult['probability'] > 0.7) {
+                // Purpose is unclear - warn user but allow booking (will be flagged for review)
+                $purposeAnalysis = [
+                    'warning' => 'Your purpose description seems unclear or too brief. Please provide more details to help us process your request faster.',
+                    'is_unclear' => true,
+                    'probability' => $unclearResult['probability']
+                ];
+            }
+            
+            // Also classify the purpose category
+            if (function_exists('classifyPurposeCategory')) {
+                $categoryResult = classifyPurposeCategory($purpose);
+                if (!isset($categoryResult['error'])) {
+                    $purposeCategory = $categoryResult['category'];
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Purpose analysis error: " . $e->getMessage());
+        }
+    }
+    
     if (!$error) {
         // AI Conflict Detection - BEST PRACTICE: Only APPROVED blocks, PENDING shows warning
         $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
@@ -267,6 +295,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $historyNote = $isAutoApproved 
                 ? 'Automatically approved by system - all conditions met'
                 : 'Pending manual review by staff';
+            
+            // Add purpose analysis note if purpose is unclear
+            if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
+                $historyNote .= ' | Purpose flagged as unclear by AI';
+            }
+            
             $historyStmt->execute([
                 'res_id' => $newReservationId,
                 'status' => $initialStatus,
@@ -317,6 +351,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Include reason if provided
                 if (!empty($autoApprovalResult['reason']) && $autoApprovalResult['reason'] !== 'All conditions met for auto-approval') {
                     $success .= ' (Note: ' . htmlspecialchars($autoApprovalResult['reason']) . ')';
+                }
+                
+                // Include purpose analysis warning if purpose is unclear
+                if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
+                    $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
                 }
             }
         } catch (Throwable $e) {
@@ -1425,6 +1464,84 @@ document.addEventListener('DOMContentLoaded', function() {
     startTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('input', validateTimes);
+    
+    // Facility Recommendations
+    const purposeInput = document.getElementById('purpose-input');
+    const recommendationsDiv = document.getElementById('ai-recommendations');
+    const recommendationsList = document.getElementById('recommendations-list');
+    let recommendationTimeout = null;
+    
+    async function fetchRecommendations() {
+        const purpose = purposeInput?.value?.trim();
+        if (!purpose || purpose.length < 5) {
+            if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+            return;
+        }
+        
+        const date = dateInput?.value || new Date().toISOString().split('T')[0];
+        const startTime = startTimeInput?.value || '08:00';
+        const endTime = endTimeInput?.value || '12:00';
+        const timeSlot = startTime + ' - ' + endTime;
+        const expectedAttendees = document.querySelector('input[name="expected_attendees"]')?.value || 50;
+        const isCommercial = document.getElementById('is-commercial')?.checked || false;
+        
+        try {
+            const formData = new URLSearchParams();
+            formData.append('purpose', purpose);
+            formData.append('reservation_date', date);
+            formData.append('time_slot', timeSlot);
+            formData.append('expected_attendees', expectedAttendees);
+            if (isCommercial) formData.append('is_commercial', '1');
+            
+            const response = await fetch(basePath + '/resources/views/pages/dashboard/facility_recommendations_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch recommendations');
+            }
+            
+            const data = await response.json();
+            
+            if (data.recommendations && data.recommendations.length > 0) {
+                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+                if (recommendationsList) {
+                    recommendationsList.innerHTML = data.recommendations.map((rec, idx) => {
+                        const score = rec.ml_relevance_score ? rec.ml_relevance_score.toFixed(1) : 'N/A';
+                        const reason = rec.reason || 'Recommended based on your event purpose';
+                        return `
+                            <div style="padding:0.5rem; margin-bottom:0.5rem; background:white; border-radius:4px;">
+                                <strong>${idx + 1}. ${rec.name}</strong>
+                                <span style="float:right; color:#0d7a43; font-weight:bold;">Score: ${score}</span>
+                                <div style="font-size:0.8rem; color:#666; margin-top:0.25rem;">${reason}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } else {
+                if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Recommendation error:', error);
+            if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+        }
+    }
+    
+    // Debounced recommendation fetching
+    function debouncedFetchRecommendations() {
+        if (recommendationTimeout) {
+            clearTimeout(recommendationTimeout);
+        }
+        recommendationTimeout = setTimeout(fetchRecommendations, 800);
+    }
+    
+    purposeInput?.addEventListener('input', debouncedFetchRecommendations);
+    purposeInput?.addEventListener('blur', fetchRecommendations);
+    dateInput?.addEventListener('change', fetchRecommendations);
+    startTimeInput?.addEventListener('change', fetchRecommendations);
+    endTimeInput?.addEventListener('change', fetchRecommendations);
 
     // Prefill values and trigger change events
     if (preFacility && facilitySel) {

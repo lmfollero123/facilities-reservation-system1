@@ -38,16 +38,17 @@ if (isset($_GET['export'])) {
         fputcsv($output, ['Date', 'Facility', 'Requester', 'Time Slot', 'Status', 'Purpose']);
         
         // Data rows
-        $exportStmt = $pdo->prepare(
-            'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
+        $exportSql = 'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
                     r.time_slot, r.status, r.purpose
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
-             JOIN users u ON r.user_id = u.id
-             WHERE r.reservation_date >= :start AND r.reservation_date <= :end
-             ORDER BY r.reservation_date DESC'
-        );
-        $exportStmt->execute(['start' => $startDate, 'end' => $endDate]);
+             JOIN users u ON r.user_id = u.id';
+        if ($dateFilterClause) {
+            $exportSql .= ' WHERE r.reservation_date >= :start AND r.reservation_date <= :end';
+        }
+        $exportSql .= ' ORDER BY r.reservation_date DESC';
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($dateParams);
         
         while ($row = $exportStmt->fetch(PDO::FETCH_ASSOC)) {
             fputcsv($output, [
@@ -67,16 +68,17 @@ if (isset($_GET['export'])) {
         header('Content-Type: text/html');
         header('Content-Disposition: attachment; filename="reservations_report_' . date('Y-m-d') . '.html"');
         
-        $exportStmt = $pdo->prepare(
-            'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
+        $exportSql = 'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
                     r.time_slot, r.status, r.purpose, u.email AS requester_email
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
-             JOIN users u ON r.user_id = u.id
-             WHERE r.reservation_date >= :start AND r.reservation_date <= :end
-             ORDER BY r.reservation_date DESC'
-        );
-        $exportStmt->execute(['start' => $startDate, 'end' => $endDate]);
+             JOIN users u ON r.user_id = u.id';
+        if ($dateFilterClause) {
+            $exportSql .= ' WHERE r.reservation_date >= :start AND r.reservation_date <= :end';
+        }
+        $exportSql .= ' ORDER BY r.reservation_date DESC';
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($dateParams);
         $reservations = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Calculate summary stats
@@ -267,60 +269,78 @@ if (isset($_GET['export'])) {
     }
 }
 
-// Get date parameters (default to current month)
-$reportYear = (int)($_GET['year'] ?? date('Y'));
-$reportMonth = (int)($_GET['month'] ?? date('m'));
-$startDate = date('Y-m-01', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-$endDate = date('Y-m-t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
+// Get date parameters (default to current month, or 'all' for all time)
+$reportYear = isset($_GET['year']) ? ($_GET['year'] === 'all' ? null : (int)$_GET['year']) : date('Y');
+$reportMonth = isset($_GET['month']) ? ($_GET['month'] === 'all' ? null : (int)$_GET['month']) : date('m');
+
+if ($reportYear === null || $reportMonth === null) {
+    // Show all time data (no date filter)
+    $startDate = null;
+    $endDate = null;
+    $filterLabel = 'All Time';
+    $dateFilterClause = '';
+    $dateParams = [];
+} else {
+    // Filter by specific month/year
+    $startDate = date('Y-m-01', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
+    $endDate = date('Y-m-t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
+    $filterLabel = date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
+    $dateFilterClause = 'WHERE reservation_date >= :start AND reservation_date <= :end';
+    $dateParams = ['start' => $startDate, 'end' => $endDate];
+}
 
 // Calculate KPIs (Global Statistics for Admin/Staff)
-// Total reservations this month
-$totalStmt = $pdo->prepare(
-    'SELECT COUNT(*) as total 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end'
-);
-$totalStmt->execute(['start' => $startDate, 'end' => $endDate]);
+// Total reservations
+$totalSql = 'SELECT COUNT(*) as total FROM reservations';
+if ($dateFilterClause) {
+    $totalSql .= ' ' . $dateFilterClause;
+}
+$totalStmt = $pdo->prepare($totalSql);
+$totalStmt->execute($dateParams);
 $totalReservations = (int)$totalStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
 // Approved count
-$approvedStmt = $pdo->prepare(
-    'SELECT COUNT(*) as count 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     AND status = "approved"'
-);
-$approvedStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$approvedSql = 'SELECT COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $approvedSql .= ' ' . $dateFilterClause . ' AND status = "approved"';
+} else {
+    $approvedSql .= ' WHERE status = "approved"';
+}
+$approvedStmt = $pdo->prepare($approvedSql);
+$approvedStmt->execute($dateParams);
 $approvedCount = (int)$approvedStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
 // Pending count
-$pendingStmt = $pdo->prepare(
-    'SELECT COUNT(*) as count 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     AND status = "pending"'
-);
-$pendingStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$pendingSql = 'SELECT COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $pendingSql .= ' ' . $dateFilterClause . ' AND status = "pending"';
+} else {
+    $pendingSql .= ' WHERE status = "pending"';
+}
+$pendingStmt = $pdo->prepare($pendingSql);
+$pendingStmt->execute($dateParams);
 $pendingCount = (int)$pendingStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
 // Denied count
-$deniedStmt = $pdo->prepare(
-    'SELECT COUNT(*) as count 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     AND status = "denied"'
-);
-$deniedStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$deniedSql = 'SELECT COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $deniedSql .= ' ' . $dateFilterClause . ' AND status = "denied"';
+} else {
+    $deniedSql .= ' WHERE status = "denied"';
+}
+$deniedStmt = $pdo->prepare($deniedSql);
+$deniedStmt->execute($dateParams);
 $deniedCount = (int)$deniedStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
 // Cancelled count
-$cancelledStmt = $pdo->prepare(
-    'SELECT COUNT(*) as count 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     AND status = "cancelled"'
-);
-$cancelledStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$cancelledSql = 'SELECT COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $cancelledSql .= ' ' . $dateFilterClause . ' AND status = "cancelled"';
+} else {
+    $cancelledSql .= ' WHERE status = "cancelled"';
+}
+$cancelledStmt = $pdo->prepare($cancelledSql);
+$cancelledStmt->execute($dateParams);
 $cancelledCount = (int)$cancelledStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
 // Global system statistics
@@ -330,22 +350,35 @@ $totalUsers = (int)$totalUsersStmt->fetchColumn();
 $totalFacilitiesStmt = $pdo->query('SELECT COUNT(*) FROM facilities WHERE status = "available"');
 $totalFacilities = (int)$totalFacilitiesStmt->fetchColumn();
 
-$activeUsersStmt = $pdo->prepare(
-    'SELECT COUNT(DISTINCT user_id) 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     AND status IN ("approved", "pending")'
-);
-$activeUsersStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$activeUsersSql = 'SELECT COUNT(DISTINCT user_id) FROM reservations';
+if ($dateFilterClause) {
+    $activeUsersSql .= ' ' . $dateFilterClause . ' AND status IN ("approved", "pending")';
+} else {
+    $activeUsersSql .= ' WHERE status IN ("approved", "pending")';
+}
+$activeUsersStmt = $pdo->prepare($activeUsersSql);
+$activeUsersStmt->execute($dateParams);
 $activeUsers = (int)$activeUsersStmt->fetchColumn();
 
 // Approval rate
 $approvalRate = $totalReservations > 0 ? round(($approvedCount / $totalReservations) * 100, 1) : 0;
 
-// Utilization (simplified: approved reservations / total days in month * average slots per day)
-// Assuming 4 time slots per day as average (Morning, Afternoon, Evening, Full Day)
-$daysInMonth = (int)date('t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-$totalPossibleSlots = $daysInMonth * 4; // Rough estimate
+// Utilization (simplified: approved reservations / total days in period * average slots per day)
+// Assuming 4 time slots per day as average
+if ($startDate && $endDate) {
+    $daysInMonth = (int)date('t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
+    $totalPossibleSlots = $daysInMonth * 4; // Rough estimate
+} else {
+    // For all time, use a rough estimate based on total days since first reservation
+    $firstResStmt = $pdo->query('SELECT MIN(reservation_date) as first_date FROM reservations');
+    $firstDate = $firstResStmt->fetch(PDO::FETCH_ASSOC)['first_date'];
+    if ($firstDate) {
+        $daysDiff = max(1, (time() - strtotime($firstDate)) / 86400);
+        $totalPossibleSlots = $daysDiff * 4;
+    } else {
+        $totalPossibleSlots = 1;
+    }
+}
 $utilization = $totalPossibleSlots > 0 ? round(($approvedCount / $totalPossibleSlots) * 100, 1) : 0;
 $utilization = min($utilization, 100); // Cap at 100%
 
@@ -357,26 +390,38 @@ $totalAllTimeStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
 $totalAllTime = (int)$totalAllTimeStmt->fetchColumn();
 
 // Facility utilization
-$facilityUtilStmt = $pdo->prepare(
-    'SELECT f.name, COUNT(r.id) as booking_count,
-            (SELECT COUNT(*) FROM reservations r2 
-             WHERE r2.facility_id = f.id 
-             AND r2.reservation_date >= :start 
-             AND r2.reservation_date <= :end 
-             AND r2.status = "approved") as approved_count
-     FROM facilities f
-     LEFT JOIN reservations r ON f.id = r.facility_id 
-         AND r.reservation_date >= :start2 
-         AND r.reservation_date <= :end2
-     GROUP BY f.id, f.name
-     ORDER BY approved_count DESC'
-);
-$facilityUtilStmt->execute([
-    'start' => $startDate,
-    'end' => $endDate,
-    'start2' => $startDate,
-    'end2' => $endDate,
-]);
+if ($dateFilterClause) {
+    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
+                (SELECT COUNT(*) FROM reservations r2 
+                 WHERE r2.facility_id = f.id 
+                 AND r2.reservation_date >= :start 
+                 AND r2.reservation_date <= :end 
+                 AND r2.status = "approved") as approved_count
+         FROM facilities f
+         LEFT JOIN reservations r ON f.id = r.facility_id 
+             AND r.reservation_date >= :start2 
+             AND r.reservation_date <= :end2
+         GROUP BY f.id, f.name
+         ORDER BY approved_count DESC';
+    $facilityUtilStmt = $pdo->prepare($facilityUtilSql);
+    $facilityUtilStmt->execute([
+        'start' => $startDate,
+        'end' => $endDate,
+        'start2' => $startDate,
+        'end2' => $endDate,
+    ]);
+} else {
+    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
+                (SELECT COUNT(*) FROM reservations r2 
+                 WHERE r2.facility_id = f.id 
+                 AND r2.status = "approved") as approved_count
+         FROM facilities f
+         LEFT JOIN reservations r ON f.id = r.facility_id
+         GROUP BY f.id, f.name
+         ORDER BY approved_count DESC';
+    $facilityUtilStmt = $pdo->prepare($facilityUtilSql);
+    $facilityUtilStmt->execute();
+}
 $facilityData = $facilityUtilStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate max bookings for percentage (find highest count)
@@ -386,13 +431,13 @@ foreach ($facilityData as $fac) {
 }
 
 // Reservation outcomes breakdown
-$outcomesStmt = $pdo->prepare(
-    'SELECT status, COUNT(*) as count 
-     FROM reservations 
-     WHERE reservation_date >= :start AND reservation_date <= :end 
-     GROUP BY status'
-);
-$outcomesStmt->execute(['start' => $startDate, 'end' => $endDate]);
+$outcomesSql = 'SELECT status, COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $outcomesSql .= ' ' . $dateFilterClause;
+}
+$outcomesSql .= ' GROUP BY status';
+$outcomesStmt = $pdo->prepare($outcomesSql);
+$outcomesStmt->execute($dateParams);
 $outcomes = $outcomesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $outcomesMap = [
@@ -432,8 +477,14 @@ for ($i = 5; $i >= 0; $i--) {
     $monthlyData[] = (int)$monthStmt->fetchColumn();
 }
 
-// Status distribution
-$statusStmt = $pdo->query('SELECT status, COUNT(*) as count FROM reservations GROUP BY status');
+// Status distribution (for selected period)
+$statusSql = 'SELECT status, COUNT(*) as count FROM reservations';
+if ($dateFilterClause) {
+    $statusSql .= ' ' . $dateFilterClause;
+}
+$statusSql .= ' GROUP BY status';
+$statusStmt = $pdo->prepare($statusSql);
+$statusStmt->execute($dateParams);
 $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 $statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
 foreach ($statusData as $row) {
@@ -446,15 +497,30 @@ $statusLabels = ['Approved','Pending','Denied','Cancelled'];
 $statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['denied'], $statusMap['cancelled']];
 $statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
 
-// Top facilities by approved bookings
-$facilityStmt = $pdo->query(
-    'SELECT f.name, COUNT(r.id) as booking_count
-     FROM facilities f
-     LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"
-     GROUP BY f.id, f.name
-     ORDER BY booking_count DESC
-     LIMIT 5'
-);
+// Top facilities by approved bookings (for selected period)
+if ($dateFilterClause) {
+    $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
+         FROM facilities f
+         LEFT JOIN reservations r ON f.id = r.facility_id 
+             AND r.status = "approved"
+             AND r.reservation_date >= :start 
+             AND r.reservation_date <= :end
+         GROUP BY f.id, f.name
+         ORDER BY booking_count DESC
+         LIMIT 5';
+    $facilityStmt = $pdo->prepare($facilitySql);
+    $facilityStmt->execute($dateParams);
+} else {
+    $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
+         FROM facilities f
+         LEFT JOIN reservations r ON f.id = r.facility_id 
+             AND r.status = "approved"
+         GROUP BY f.id, f.name
+         ORDER BY booking_count DESC
+         LIMIT 5';
+    $facilityStmt = $pdo->prepare($facilitySql);
+    $facilityStmt->execute();
+}
 $facilityDataChart = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 $facilityLabels = [];
 $facilityCounts = [];
@@ -476,22 +542,39 @@ ob_start();
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <form method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
-            <select name="month" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+            <select name="month" id="month-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                <option value="all" <?= ($reportMonth === null) ? 'selected' : ''; ?>>All Time</option>
                 <?php for ($m = 1; $m <= 12; $m++): ?>
-                    <option value="<?= $m; ?>" <?= $m == $reportMonth ? 'selected' : ''; ?>>
+                    <option value="<?= $m; ?>" <?= ($reportMonth !== null && $m == $reportMonth) ? 'selected' : ''; ?>>
                         <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
                     </option>
                 <?php endfor; ?>
             </select>
-            <select name="year" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+            <select name="year" id="year-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                <option value="all" <?= ($reportYear === null) ? 'selected' : ''; ?>>All Years</option>
                 <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
-                    <option value="<?= $y; ?>" <?= $y == $reportYear ? 'selected' : ''; ?>>
+                    <option value="<?= $y; ?>" <?= ($reportYear !== null && $y == $reportYear) ? 'selected' : ''; ?>>
                         <?= $y; ?>
                     </option>
                 <?php endfor; ?>
             </select>
             <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Update</button>
         </form>
+        <script>
+        // Auto-submit when "All Time" is selected in month or year
+        document.getElementById('month-filter')?.addEventListener('change', function() {
+            if (this.value === 'all') {
+                document.getElementById('year-filter').value = 'all';
+                this.form.submit();
+            }
+        });
+        document.getElementById('year-filter')?.addEventListener('change', function() {
+            if (this.value === 'all') {
+                document.getElementById('month-filter').value = 'all';
+                this.form.submit();
+            }
+        });
+        </script>
         </div>
     </div>
 </div>
@@ -649,32 +732,34 @@ ob_start();
             <div class="ai-chip">
                 <span>AI</span> <span>Predictive Insight</span>
             </div>
-            <h3>Usage Patterns (<?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?>)</h3>
+            <h3>Usage Patterns (<?= htmlspecialchars($filterLabel); ?>)</h3>
             <?php
             // Get peak day of week
-            $dayOfWeekStmt = $pdo->prepare(
-                'SELECT DAYNAME(reservation_date) as day_name, COUNT(*) as count
+            $dayOfWeekSql = 'SELECT DAYNAME(reservation_date) as day_name, COUNT(*) as count
                  FROM reservations
-                 WHERE reservation_date >= :start AND reservation_date <= :end
-                 AND status = "approved"
-                 GROUP BY DAYNAME(reservation_date)
+                 WHERE status = "approved"';
+            if ($dateFilterClause) {
+                $dayOfWeekSql .= ' AND reservation_date >= :start AND reservation_date <= :end';
+            }
+            $dayOfWeekSql .= ' GROUP BY DAYNAME(reservation_date)
                  ORDER BY count DESC
-                 LIMIT 1'
-            );
-            $dayOfWeekStmt->execute(['start' => $startDate, 'end' => $endDate]);
+                 LIMIT 1';
+            $dayOfWeekStmt = $pdo->prepare($dayOfWeekSql);
+            $dayOfWeekStmt->execute($dateParams);
             $peakDay = $dayOfWeekStmt->fetch(PDO::FETCH_ASSOC);
             
             // Get most popular time slot
-            $timeSlotStmt = $pdo->prepare(
-                'SELECT time_slot, COUNT(*) as count
+            $timeSlotSql = 'SELECT time_slot, COUNT(*) as count
                  FROM reservations
-                 WHERE reservation_date >= :start AND reservation_date <= :end
-                 AND status = "approved"
-                 GROUP BY time_slot
+                 WHERE status = "approved"';
+            if ($dateFilterClause) {
+                $timeSlotSql .= ' AND reservation_date >= :start AND reservation_date <= :end';
+            }
+            $timeSlotSql .= ' GROUP BY time_slot
                  ORDER BY count DESC
-                 LIMIT 1'
-            );
-            $timeSlotStmt->execute(['start' => $startDate, 'end' => $endDate]);
+                 LIMIT 1';
+            $timeSlotStmt = $pdo->prepare($timeSlotSql);
+            $timeSlotStmt->execute($dateParams);
             $peakTimeSlot = $timeSlotStmt->fetch(PDO::FETCH_ASSOC);
             
             // Get most booked facility

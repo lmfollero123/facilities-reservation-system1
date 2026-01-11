@@ -413,42 +413,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
     }
 }
 
-$pendingStmt = $pdo->query(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, f.name AS facility, u.name AS requester
+// Get pending reservations with pagination and filtering
+$pendingPerPage = 10;
+$pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
+$pendingOffset = ($pendingPage - 1) * $pendingPerPage;
+$pendingSearch = trim($_GET['pending_search'] ?? '');
+
+// Build pending query with filters
+$pendingWhere = ['r.status IN ("pending", "postponed")'];
+$pendingParams = [];
+
+if (!empty($pendingSearch)) {
+    $pendingWhere[] = '(u.name LIKE :pending_search OR f.name LIKE :pending_search OR r.purpose LIKE :pending_search)';
+    $pendingParams['pending_search'] = '%' . $pendingSearch . '%';
+}
+
+$pendingWhereClause = 'WHERE ' . implode(' AND ', $pendingWhere);
+
+// Count total pending reservations
+$pendingCountSql = 'SELECT COUNT(*) FROM reservations r JOIN facilities f ON r.facility_id = f.id JOIN users u ON r.user_id = u.id ' . $pendingWhereClause;
+$pendingCountStmt = $pdo->prepare($pendingCountSql);
+$pendingCountStmt->execute($pendingParams);
+$pendingTotal = (int)$pendingCountStmt->fetchColumn();
+$pendingTotalPages = max(1, (int)ceil($pendingTotal / $pendingPerPage));
+
+// Get pending reservations
+$pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, f.name AS facility, u.name AS requester
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
-     WHERE r.status IN ("pending", "postponed")
-     ORDER BY r.postponed_priority DESC, r.postponed_at ASC, r.created_at ASC'
-);
+     ' . $pendingWhereClause . '
+     ORDER BY r.postponed_priority DESC, r.postponed_at ASC, r.created_at ASC
+     LIMIT :pending_limit OFFSET :pending_offset';
+$pendingStmt = $pdo->prepare($pendingSql);
+foreach ($pendingParams as $key => $value) {
+    $pendingStmt->bindValue(':' . $key, $value);
+}
+$pendingStmt->bindValue(':pending_limit', $pendingPerPage, PDO::PARAM_INT);
+$pendingStmt->bindValue(':pending_offset', $pendingOffset, PDO::PARAM_INT);
+$pendingStmt->execute();
 $pendingReservations = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get approved reservations for management (only upcoming dates)
+// Get approved reservations for management (only upcoming dates) with pagination and filtering
 $currentDate = date('Y-m-d');
 $currentHour = (int)date('H');
-$approvedStmt = $pdo->prepare(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, f.name AS facility, u.name AS requester, u.email AS requester_email
+$approvedPerPage = 10;
+$approvedPage = max(1, (int)($_GET['approved_page'] ?? 1));
+$approvedOffset = ($approvedPage - 1) * $approvedPerPage;
+$approvedSearch = trim($_GET['approved_search'] ?? '');
+
+// Build approved query with filters
+$approvedWhere = [
+    'r.status = "approved"',
+    '(' .
+    'r.reservation_date > :current_date' .
+    ' OR (' .
+    'r.reservation_date = :current_date' .
+    ' AND (' .
+    '(r.time_slot LIKE "%Morning%" AND :current_hour < 12)' .
+    ' OR (r.time_slot LIKE "%Afternoon%" AND :current_hour < 17)' .
+    ' OR (r.time_slot LIKE "%Evening%" AND :current_hour < 21)' .
+    ')' .
+    ')' .
+    ')'
+];
+$approvedParams = [
+    'current_date' => $currentDate,
+    'current_hour' => $currentHour,
+];
+
+if (!empty($approvedSearch)) {
+    $approvedWhere[] = '(u.name LIKE :approved_search OR f.name LIKE :approved_search OR r.purpose LIKE :approved_search OR u.email LIKE :approved_search)';
+    $approvedParams['approved_search'] = '%' . $approvedSearch . '%';
+}
+
+$approvedWhereClause = 'WHERE ' . implode(' AND ', $approvedWhere);
+
+// Count total approved reservations
+$approvedCountSql = 'SELECT COUNT(*) FROM reservations r JOIN facilities f ON r.facility_id = f.id JOIN users u ON r.user_id = u.id ' . $approvedWhereClause;
+$approvedCountStmt = $pdo->prepare($approvedCountSql);
+$approvedCountStmt->execute($approvedParams);
+$approvedTotal = (int)$approvedCountStmt->fetchColumn();
+$approvedTotalPages = max(1, (int)ceil($approvedTotal / $approvedPerPage));
+
+// Get approved reservations
+$approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, f.name AS facility, u.name AS requester, u.email AS requester_email
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
-     WHERE r.status = "approved"
-     AND (
-         r.reservation_date > :current_date
-         OR (
-             r.reservation_date = :current_date
-             AND (
-                 (r.time_slot LIKE "%Morning%" AND :current_hour < 12)
-                 OR (r.time_slot LIKE "%Afternoon%" AND :current_hour < 17)
-                 OR (r.time_slot LIKE "%Evening%" AND :current_hour < 21)
-             )
-         )
-     )
-     ORDER BY r.reservation_date ASC, r.time_slot ASC'
-);
-$approvedStmt->execute([
-    'current_date' => $currentDate,
-    'current_hour' => $currentHour,
-]);
+     ' . $approvedWhereClause . '
+     ORDER BY r.reservation_date ASC, r.time_slot ASC
+     LIMIT :approved_limit OFFSET :approved_offset';
+$approvedStmt = $pdo->prepare($approvedSql);
+foreach ($approvedParams as $key => $value) {
+    $approvedStmt->bindValue(':' . $key, $value);
+}
+$approvedStmt->bindValue(':approved_limit', $approvedPerPage, PDO::PARAM_INT);
+$approvedStmt->bindValue(':approved_offset', $approvedOffset, PDO::PARAM_INT);
+$approvedStmt->execute();
 $approvedReservations = $approvedStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $perPage = 5;
@@ -490,9 +552,21 @@ ob_start();
 
 <div class="booking-wrapper">
     <section class="booking-card">
-        <h2>Pending Requests</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <h2 style="margin: 0;">Pending Requests</h2>
+            <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 250px; max-width: 400px;">
+                <input type="text" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>" placeholder="Search by name, facility, or purpose..." style="flex: 1; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+                <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Search</button>
+                <?php if (!empty($pendingSearch)): ?>
+                    <a href="?" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none;">Clear</a>
+                <?php endif; ?>
+                <input type="hidden" name="approved_page" value="<?= $approvedPage; ?>">
+                <input type="hidden" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>">
+                <input type="hidden" name="page" value="<?= $page; ?>">
+            </form>
+        </div>
         <?php if (empty($pendingReservations)): ?>
-            <p>No reservations awaiting approval.</p>
+            <p>No reservations awaiting approval<?= !empty($pendingSearch) ? ' matching your search.' : '.'; ?></p>
         <?php else: ?>
             <div class="table-responsive">
                 <table class="table">
@@ -536,6 +610,17 @@ ob_start();
                     </tbody>
                 </table>
             </div>
+            <?php if ($pendingTotalPages > 1): ?>
+                <div class="pagination" style="margin-top: 1rem;">
+                    <?php if ($pendingPage > 1): ?>
+                        <a href="?pending_page=<?= $pendingPage - 1; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>&page=<?= $page; ?>">&larr; Prev</a>
+                    <?php endif; ?>
+                    <span class="current">Page <?= $pendingPage; ?> of <?= $pendingTotalPages; ?> (<?= $pendingTotal; ?> total)</span>
+                    <?php if ($pendingPage < $pendingTotalPages): ?>
+                        <a href="?pending_page=<?= $pendingPage + 1; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>&page=<?= $page; ?>">Next &rarr;</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </section>
 
@@ -575,13 +660,27 @@ ob_start();
 
 <!-- Approved Reservations Management Section -->
 <div class="booking-card" style="margin-top: 1.5rem;">
-    <h2>Approved Reservations Management</h2>
-    <p style="color: #8b95b5; margin-bottom: 1rem; font-size: 0.9rem;">
-        Manage upcoming approved reservations in case of emergencies or schedule conflicts. Only future reservations can be modified, postponed, or cancelled.
-    </p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h2 style="margin: 0 0 0.5rem 0;">Approved Reservations Management</h2>
+            <p style="color: #8b95b5; margin: 0; font-size: 0.9rem;">
+                Manage upcoming approved reservations in case of emergencies or schedule conflicts. Only future reservations can be modified, postponed, or cancelled.
+            </p>
+        </div>
+    </div>
+    <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+        <input type="text" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>" placeholder="Search by name, facility, purpose, or email..." style="flex: 1; min-width: 250px; max-width: 400px; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+        <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Search</button>
+        <?php if (!empty($approvedSearch)): ?>
+            <a href="?" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none;">Clear</a>
+        <?php endif; ?>
+        <input type="hidden" name="pending_page" value="<?= $pendingPage; ?>">
+        <input type="hidden" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>">
+        <input type="hidden" name="page" value="<?= $page; ?>">
+    </form>
     
     <?php if (empty($approvedReservations)): ?>
-        <p style="color: #8b95b5; text-align: center; padding: 2rem;">No approved reservations at this time.</p>
+        <p style="color: #8b95b5; text-align: center; padding: 2rem;">No approved reservations at this time<?= !empty($approvedSearch) ? ' matching your search.' : '.'; ?></p>
     <?php else: ?>
         <div class="table-responsive">
             <table class="table">
@@ -619,6 +718,17 @@ ob_start();
                 </tbody>
             </table>
         </div>
+        <?php if ($approvedTotalPages > 1): ?>
+            <div class="pagination" style="margin-top: 1rem;">
+                <?php if ($approvedPage > 1): ?>
+                    <a href="?approved_page=<?= $approvedPage - 1; ?>&approved_search=<?= urlencode($approvedSearch); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&page=<?= $page; ?>">&larr; Prev</a>
+                <?php endif; ?>
+                <span class="current">Page <?= $approvedPage; ?> of <?= $approvedTotalPages; ?> (<?= $approvedTotal; ?> total)</span>
+                <?php if ($approvedPage < $approvedTotalPages): ?>
+                    <a href="?approved_page=<?= $approvedPage + 1; ?>&approved_search=<?= urlencode($approvedSearch); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&page=<?= $page; ?>">Next &rarr;</a>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 
