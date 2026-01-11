@@ -1,9 +1,8 @@
 <?php
 /**
  * Root entry point for the Facilities Reservation System
- * Redirects to the public home page
+ * Directly includes the public home page
  */
 
-// Redirect to the public home page
-header('Location: resources/views/pages/public/home.php');
-exit;
+// Directly include the home page (no redirect)
+require_once __DIR__ . '/resources/views/pages/public/home.php';
