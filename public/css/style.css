@@ -62,26 +62,39 @@ body.landing-page::before {
 }
 
 body.landing-page .guest-content,
-body.landing-page .guest-navbar,
-body.landing-page .footer {
+body.landing-page .guest-navbar {
     position: relative;
     z-index: 1;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    background: #f5f6f8 !important;
 }
 
-body.landing-page footer {
+body.landing-page .footer,
+body.landing-page footer,
+footer.bg-light,
+footer {
+    position: relative !important;
+    z-index: 100 !important; /* Higher z-index to ensure it's above the blur overlay */
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: #f5f6f8 !important;
+    filter: none !important; /* Remove any filter effects */
+    opacity: 1 !important; /* Ensure full opacity */
+    isolation: isolate !important; /* Create new stacking context to isolate from blur */
+    transform: translateZ(0) !important; /* Force hardware acceleration and new stacking context */
 }
 
 body.landing-page footer::before,
-body.landing-page footer::after {
+body.landing-page footer::after,
+footer.bg-light::before,
+footer.bg-light::after,
+footer::before,
+footer::after {
     display: none !important;
+    content: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    filter: none !important;
 }
 
 .guest-content {
@@ -2303,29 +2316,57 @@ section.contact-section::before {
 }
 
 .footer {
-    background: #f7f7f7 !important;
-    color: var(--gov-white) !important;
-    padding: 4rem 1.25rem !important; /* Increased to 4rem for better vertical spacing */
+    background: #f5f6f8 !important;
+    color: #4c5b7c !important; /* Dark text for readability */
+    padding: 3rem 1.25rem !important; /* Equal top and bottom padding for centering */
     border-top: none !important;
     margin-top: 0 !important;
     min-height: auto;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    position: relative !important;
+    z-index: 100 !important;
+    display: flex !important;
+    align-items: center !important; /* Vertically center footer content */
+    justify-content: center !important; /* Horizontally center footer content */
 }
 
 /* Override Bootstrap bg-light class if used */
-footer.bg-light {
+footer.bg-light,
+footer.bg-light.py-5,
+footer.py-5 {
     background: #f5f6f8 !important;
-    color: var(--gov-white) !important;
+    color: #4c5b7c !important; /* Dark text for readability */
     border-top: none !important;
-    padding: 4rem 1.25rem !important; /* Match footer padding - increased for better spacing */
+    padding-top: 3.5rem !important; /* Increased top padding */
+    padding-bottom: 3.5rem !important; /* Increased bottom padding */
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    position: relative !important;
+    z-index: 100 !important;
+    display: flex !important;
+    align-items: center !important; /* Vertically center footer content */
+    justify-content: center !important; /* Horizontally center footer content */
 }
 
 /* Remove any gradient or border that might create a secondary footer effect */
 footer.bg-light::before,
-footer::before {
+footer.bg-light::after,
+footer::before,
+footer::after {
     display: none !important;
+    content: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
 }
 
-.footer .container {
+.footer .container,
+footer .container {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
@@ -2333,13 +2374,17 @@ footer::before {
     gap: 0.75rem;
     align-items: center; /* Center content horizontally */
     justify-content: center; /* Center content vertically */
-    padding: 0; /* Remove any container padding that might affect spacing */
+    padding: 0 !important; /* Remove any container padding that might affect spacing */
+    width: 100%;
 }
 
-.footer small {
+.footer small,
+footer small {
     color: #98a4c4;
     text-align: center; /* Center the text */
     margin: 0; /* Remove any default margins */
+    padding: 0; /* Remove any padding */
+    display: block;
 }
 
 /* Dashboard layout */

@@ -225,10 +225,10 @@ ob_start();
             </ul>
         </div>
         <div class="report-card" style="margin-top: 1.5rem;">
-            <h2>Integration Notes</h2>
+            <h2>Smart Scheduling</h2>
             <p class="resource-meta">
-                This page currently uses simple historical patterns (no ML model yet). It can later be wired to a
-                dedicated AI service that factors in seasonality and event types.
+                This page uses historical booking patterns and AI-powered analysis to recommend optimal time slots. 
+                Recommendations consider seasonality, day-of-week patterns, and historical usage data to help you find the best available times.
             </p>
         </div>
     </aside>

@@ -2,9 +2,9 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../../../config/app.php';
 $isLoggedIn = $_SESSION['user_authenticated'] ?? false;
 if (!$isLoggedIn) {
-    require_once __DIR__ . '/../../../config/app.php';
     header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
     exit;
 }
@@ -276,19 +276,47 @@ document.addEventListener('DOMContentLoaded', function () {
         addMessage(message, 'user');
 
         const typingId = showTypingIndicator();
+        const sendBtn = document.getElementById('chatbotWidgetSendBtn');
+        
+        // Disable send button while waiting for response
+        if (sendBtn) {
+            sendBtn.disabled = true;
+        }
 
-        // Simulated AI response (replace with real API later)
-        setTimeout(function () {
+        // Call real chatbot API
+        const formData = new URLSearchParams();
+        formData.append('message', message);
+
+        fetch('<?= base_path(); ?>/resources/views/pages/dashboard/ai_chatbot.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
             removeTypingIndicator(typingId);
-            const response = getMockResponse(message);
-            addMessage(response, 'bot');
+            const responseText = data.reply || 'I apologize, but I couldn\'t process your request. Please try again.';
+            addMessage(responseText, 'bot');
             // Refocus input after bot responds
             setTimeout(function() {
                 if (input && document.body.contains(input)) {
                     input.focus();
                 }
             }, 150);
-        }, 1000 + Math.random() * 1000);
+        })
+        .catch(error => {
+            console.error('Chatbot API error:', error);
+            removeTypingIndicator(typingId);
+            addMessage('I apologize, but I\'m having trouble connecting right now. Please try again later.', 'bot');
+        })
+        .finally(() => {
+            // Re-enable send button
+            if (sendBtn) {
+                sendBtn.disabled = false;
+            }
+        });
     });
 
     function addMessage(text, type) {

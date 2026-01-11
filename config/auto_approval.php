@@ -21,6 +21,11 @@
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
 
+// Load ML integration if available
+if (file_exists(__DIR__ . '/ai_ml_integration.php')) {
+    require_once __DIR__ . '/ai_ml_integration.php';
+}
+
 /**
  * Evaluates a reservation request against auto-approval conditions.
  * 
@@ -274,6 +279,84 @@ function evaluateAutoApproval(
     $result['auto_approve'] = $allPassed && $facilityAutoApprove;
     $result['conditions'] = $conditions;
     $result['reason'] = $reason ?: ($allPassed ? 'All conditions met for auto-approval' : 'One or more conditions not met');
+    
+    // Add ML-based risk assessment if available
+    if (function_exists('assessRiskML') && $allPassed) {
+        try {
+            // Get user data for ML assessment
+            $userStmt = $pdo->prepare(
+                'SELECT 
+                    u.is_verified,
+                    COUNT(r.id) as booking_count
+                 FROM users u
+                 LEFT JOIN reservations r ON r.user_id = u.id AND r.status = "approved"
+                 WHERE u.id = :user_id
+                 GROUP BY u.id'
+            );
+            $userStmt->execute(['user_id' => $userId]);
+            $userData = $userStmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Get violation count
+            $violationStmt = $pdo->prepare(
+                'SELECT COUNT(*) FROM user_violations 
+                 WHERE user_id = :user_id 
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)
+                   AND severity IN ("high", "critical")'
+            );
+            $violationStmt->execute(['user_id' => $userId]);
+            $violationCount = (int)$violationStmt->fetchColumn();
+            
+            $userData = $userData ?: [];
+            $userData['violation_count'] = $violationCount;
+            $userData['booking_count'] = (int)($userData['booking_count'] ?? 0);
+            $userData['is_verified'] = (bool)($userData['is_verified'] ?? false);
+            
+            // Prepare facility data
+            $facilityData = [
+                'auto_approve' => $facilityAutoApprove,
+                'capacity' => $facility['capacity'] ?? '100',
+                'max_duration_hours' => $facility['max_duration_hours'] ?? 8.0,
+                'capacity_threshold' => $facility['capacity_threshold'] ?? null,
+            ];
+            
+            $mlRisk = assessRiskML(
+                $facilityId,
+                $userId,
+                $reservationDate,
+                $timeSlot,
+                $expectedAttendees,
+                $isCommercial,
+                $facilityData,
+                $userData
+            );
+            
+            if (!isset($mlRisk['error'])) {
+                // Add ML risk info to result
+                $result['ml_risk'] = [
+                    'risk_level' => $mlRisk['risk_level'],
+                    'risk_probability' => $mlRisk['risk_probability'],
+                    'confidence' => $mlRisk['confidence'] ?? 0,
+                    'is_low_risk' => $mlRisk['is_low_risk'] ?? false,
+                    'is_high_risk' => $mlRisk['is_high_risk'] ?? true,
+                ];
+                
+                // Use ML risk as additional signal (if high confidence ML says high risk, be more cautious)
+                if ($mlRisk['is_high_risk'] && ($mlRisk['confidence'] ?? 0) > 0.7) {
+                    // ML model with high confidence suggests high risk - override auto-approve
+                    $result['auto_approve'] = false;
+                    $result['ml_risk_override'] = true;
+                    $result['reason'] = 'ML model suggests manual review (high risk confidence: ' . 
+                                      round(($mlRisk['confidence'] ?? 0) * 100) . '%)';
+                } elseif ($mlRisk['is_low_risk'] && ($mlRisk['confidence'] ?? 0) > 0.7) {
+                    // ML model with high confidence suggests low risk - reinforce auto-approve if rules pass
+                    $result['ml_risk_reinforce'] = true;
+                }
+            }
+        } catch (Exception $e) {
+            // Silent fail - continue with rule-based only
+            error_log("ML risk assessment error in evaluateAutoApproval: " . $e->getMessage());
+        }
+    }
     
     return $result;
 }

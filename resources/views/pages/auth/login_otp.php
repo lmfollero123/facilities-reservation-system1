@@ -129,7 +129,6 @@ ob_start();
             <label>
                 OTP Code
                 <div class="input-wrapper">
-                    <span class="input-icon">🔑</span>
                     <input name="otp" type="text" inputmode="numeric" pattern="\d{6}" placeholder="Enter 6-digit code" required>
                 </div>
             </label>

@@ -137,7 +137,6 @@ ob_start();
             <label>
                 Email Address
                 <div class="input-wrapper">
-                    <span class="input-icon">✉️</span>
                     <input name="email" type="email" placeholder="your@email.com" required autofocus>
                 </div>
             </label>

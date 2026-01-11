@@ -5,7 +5,9 @@ require_once __DIR__ . '/../../../../config/security.php';
 
 $pageTitle = 'Reset Password | LGU Facilities Reservation';
 $error = '';
+$passwordError = ''; // Separate error for password validation (doesn't invalidate token)
 $success = false;
+$tokenValid = false; // Track if token is valid
 // Get token from URL - PHP automatically decodes URL parameters, but ensure we get raw value
 $rawToken = isset($_GET['token']) ? $_GET['token'] : '';
 // Try to get from REQUEST_URI if not in GET
@@ -28,72 +30,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (empty($token)) {
                 $error = 'Invalid reset token.';
-            } elseif (empty($password) || strlen($password) < 8) {
-            $error = 'Password must be at least 8 characters long.';
-        } elseif ($password !== $confirmPassword) {
-            $error = 'Passwords do not match.';
-        } else {
-            try {
-                $pdo = db();
-                
-                // Clean and hash the token
-                $token = trim($token);
-                $tokenHash = hash('sha256', $token);
-                
-                // Find valid token - use database NOW() for timezone-safe comparison
-                $stmt = $pdo->prepare(
-                    "SELECT prt.user_id, prt.expires_at, prt.used_at 
-                     FROM password_reset_tokens prt
-                     JOIN users u ON prt.user_id = u.id
-                     WHERE prt.token_hash = ? AND prt.expires_at > NOW() AND prt.used_at IS NULL AND u.status = 'active'"
-                );
-                $stmt->execute([$tokenHash]);
-                $tokenData = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if (!$tokenData) {
-                    // Check if token exists but is expired or used - use database NOW() for expiration check
-                    $checkStmt = $pdo->prepare(
-                        "SELECT prt.expires_at, prt.used_at, 
-                                (prt.expires_at > NOW()) as is_not_expired
+            } else {
+                try {
+                    $pdo = db();
+                    
+                    // Clean and hash the token
+                    $token = trim($token);
+                    $tokenHash = hash('sha256', $token);
+                    
+                    // Find valid token - use database NOW() for timezone-safe comparison
+                    $stmt = $pdo->prepare(
+                        "SELECT prt.user_id, prt.expires_at, prt.used_at 
                          FROM password_reset_tokens prt
                          JOIN users u ON prt.user_id = u.id
-                         WHERE prt.token_hash = ? AND u.status = 'active'"
+                         WHERE prt.token_hash = ? AND prt.expires_at > NOW() AND prt.used_at IS NULL AND u.status = 'active'"
                     );
-                    $checkStmt->execute([$tokenHash]);
-                    $checkData = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                    $stmt->execute([$tokenHash]);
+                    $tokenData = $stmt->fetch(PDO::FETCH_ASSOC);
                     
-                    if (!$checkData) {
-                        $error = 'Invalid reset token. Please request a new password reset.';
-                    } elseif ($checkData['used_at']) {
-                        $error = 'This reset link has already been used. Please request a new one.';
-                    } elseif (!$checkData['is_not_expired']) {
-                        $error = 'This reset link has expired. Please request a new one.';
-                    } else {
-                        $error = 'Invalid or expired reset token. Please request a new password reset.';
-                    }
-                } else {
-                    // Validate password strength
-                    $passwordErrors = validatePassword($password);
-                    if (!empty($passwordErrors)) {
-                        $error = implode(' ', $passwordErrors);
-                    } else {
-                        // Update password
-                        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-                        $pdo->prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?")
-                            ->execute([$passwordHash, $tokenData['user_id']]);
+                    if (!$tokenData) {
+                        // Check if token exists but is expired or used - use database NOW() for expiration check
+                        $checkStmt = $pdo->prepare(
+                            "SELECT prt.expires_at, prt.used_at, 
+                                    (prt.expires_at > NOW()) as is_not_expired
+                             FROM password_reset_tokens prt
+                             JOIN users u ON prt.user_id = u.id
+                             WHERE prt.token_hash = ? AND u.status = 'active'"
+                        );
+                        $checkStmt->execute([$tokenHash]);
+                        $checkData = $checkStmt->fetch(PDO::FETCH_ASSOC);
                         
-                        // Mark token as used
-                        $pdo->prepare("UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = ?")
-                            ->execute([$tokenHash]);
+                        if (!$checkData) {
+                            $error = 'Invalid reset token. Please request a new password reset.';
+                        } elseif ($checkData['used_at']) {
+                            $error = 'This reset link has already been used. Please request a new one.';
+                        } elseif (!$checkData['is_not_expired']) {
+                            $error = 'This reset link has expired. Please request a new one.';
+                        } else {
+                            $error = 'Invalid or expired reset token. Please request a new password reset.';
+                        }
+                    } else {
+                        // Token is valid - now validate password
+                        $tokenValid = true;
                         
-                        $success = true;
+                        if (empty($password) || strlen($password) < 8) {
+                            $passwordError = 'Password must be at least 8 characters long.';
+                        } elseif ($password !== $confirmPassword) {
+                            $passwordError = 'Passwords do not match.';
+                        } else {
+                            // Validate password strength
+                            $passwordErrors = validatePassword($password);
+                            if (!empty($passwordErrors)) {
+                                $passwordError = implode(' ', $passwordErrors);
+                            } else {
+                                // Update password
+                                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                                $pdo->prepare("UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?")
+                                    ->execute([$passwordHash, $tokenData['user_id']]);
+                                
+                                // Mark token as used
+                                $pdo->prepare("UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = ?")
+                                    ->execute([$tokenHash]);
+                                
+                                $success = true;
+                            }
+                        }
                     }
+                } catch (Exception $e) {
+                    error_log('Password reset error: ' . $e->getMessage());
+                    $error = 'An error occurred. Please try again.';
                 }
-            } catch (Exception $e) {
-                error_log('Password reset error: ' . $e->getMessage());
-                $error = 'An error occurred. Please try again.';
             }
-        }
     }
 } elseif (!empty($token)) {
     // Validate token on page load
@@ -146,8 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$checkData['is_not_expired']) {
                     $error = 'This reset link has expired. Please request a new one.';
                 } else {
-                    // Token is valid - clear any error
+                    // Token is valid - clear any error and set flag
                     $error = '';
+                    $tokenValid = true;
                 }
             }
         }
@@ -176,7 +184,8 @@ ob_start();
             <div class="auth-footer">
                 <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php" class="btn-primary" style="display: block; text-align: center;">Go to Login</a>
             </div>
-        <?php elseif ($error): ?>
+        <?php elseif ($error && !$tokenValid): ?>
+            <!-- Token validation error - show error page -->
             <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
                 <?= htmlspecialchars($error); ?>
                 <?php if (!empty($token)): ?>
@@ -210,6 +219,12 @@ ob_start();
                 <a href="<?= base_path(); ?>/resources/views/pages/auth/forgot_password.php">Request New Reset Link</a>
             </div>
         <?php else: ?>
+            <!-- Show form (either no error, or password validation error with valid token) -->
+            <?php if ($passwordError): ?>
+                <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
+                    <?= htmlspecialchars($passwordError); ?>
+                </div>
+            <?php endif; ?>
             <form method="POST" class="auth-form">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="token" value="<?= htmlspecialchars($token); ?>">
@@ -217,7 +232,6 @@ ob_start();
                 <label>
                     New Password
                     <div class="input-wrapper">
-                        <span class="input-icon">🔒</span>
                         <input name="password" type="password" placeholder="Enter new password (min. 8 characters)" required minlength="8" autofocus>
                     </div>
                     <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
@@ -228,7 +242,6 @@ ob_start();
                 <label>
                     Confirm Password
                     <div class="input-wrapper">
-                        <span class="input-icon">🔒</span>
                         <input name="confirm_password" type="password" placeholder="Confirm new password" required minlength="8">
                     </div>
                 </label>

@@ -10,6 +10,11 @@
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
 
+// Load ML integration if available
+if (file_exists(__DIR__ . '/ai_ml_integration.php')) {
+    require_once __DIR__ . '/ai_ml_integration.php';
+}
+
 /**
  * Detect potential conflicts for a reservation
  * 
@@ -201,7 +206,42 @@ function calculateConflictRisk($facilityId, $date, $timeSlot) {
     // Holiday/event bump (0 or 20 points)
     $holidayRisk = $isHoliday ? 20 : 0;
     
-    return min(100, $historicalRisk + $pendingRisk + $holidayRisk);
+    // Calculate base risk score
+    $riskScore = min(100, $historicalRisk + $pendingRisk + $holidayRisk);
+    
+    // Add ML-based conflict prediction if available
+    $mlConflictScore = 0;
+    if (function_exists('predictConflictML')) {
+        try {
+            // Get facility capacity
+            $facilityStmt = $pdo->prepare('SELECT capacity FROM facilities WHERE id = :facility_id');
+            $facilityStmt->execute(['facility_id' => $facilityId]);
+            $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
+            $capacity = $facility['capacity'] ?? '100';
+            
+            $mlPrediction = predictConflictML(
+                $facilityId,
+                $date,
+                $timeSlot,
+                null, // expected_attendees not available in this function
+                false, // is_commercial not available in this function
+                $capacity
+            );
+            
+            if (!isset($mlPrediction['error']) && isset($mlPrediction['conflict_probability'])) {
+                // Convert ML probability (0-1) to risk score (0-100)
+                $mlConflictScore = $mlPrediction['conflict_probability'] * 100;
+                
+                // Combine rule-based and ML scores (weighted average: 60% rule-based, 40% ML)
+                $riskScore = ($riskScore * 0.6) + ($mlConflictScore * 0.4);
+            }
+        } catch (Exception $e) {
+            // Silent fail - continue with rule-based only
+            error_log("ML conflict prediction error in calculateConflictRisk: " . $e->getMessage());
+        }
+    }
+    
+    return min(100, $riskScore);
 }
 
 /**
