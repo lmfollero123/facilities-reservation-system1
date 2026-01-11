@@ -21,7 +21,6 @@ ob_start();
                 <label>
                     Full Name
                     <div class="input-wrapper">
-                        <span class="input-icon">👤</span>
                         <input type="text" name="name" placeholder="Juan Dela Cruz" required minlength="2">
                     </div>
                 </label>
@@ -29,7 +28,6 @@ ob_start();
                 <label>
                     Email Address
                     <div class="input-wrapper">
-                        <span class="input-icon">✉️</span>
                         <input type="email" name="email" placeholder="you@example.com" required>
                     </div>
                 </label>
@@ -37,7 +35,6 @@ ob_start();
                 <label>
                     Organization / Event
                     <div class="input-wrapper">
-                        <span class="input-icon">🏛️</span>
                         <input type="text" name="organization" placeholder="Barangay Assembly">
                     </div>
                 </label>

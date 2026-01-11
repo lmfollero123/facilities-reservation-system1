@@ -72,7 +72,7 @@ $weekFromNow = date('Y-m-d', strtotime('+7 days'));
 $facilityOptionsStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
 $facilityOptions = $facilityOptionsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get upcoming/reservations (filtered, up to 20)
+// Get upcoming/reservations (filtered, with pagination)
 // For Admin/Staff: show all upcoming reservations; For Residents: show only their own
 if (in_array($userRole, ['Admin', 'Staff'])) {
     $whereUpcoming = [];
@@ -92,6 +92,27 @@ if (!isset($paramsUpcoming['today']) && !$startDateFilter) {
     $paramsUpcoming['today'] = $today;
 }
 
+// Pagination for upcoming reservations
+$upcomingPerPage = max(5, (int)($_GET['upcoming_page_size'] ?? 5)); // Minimum 5 per page
+$upcomingPage = max(1, (int)($_GET['upcoming_page'] ?? 1));
+$upcomingOffset = ($upcomingPage - 1) * $upcomingPerPage;
+
+// Get total count
+$upcomingCountSql = '
+    SELECT COUNT(*) FROM reservations r
+    JOIN facilities f ON r.facility_id = f.id' .
+    (in_array($userRole, ['Admin', 'Staff']) ? ' JOIN users u ON r.user_id = u.id' : '') . '
+    WHERE ' . (empty($whereUpcoming) ? '1=1' : implode(' AND ', $whereUpcoming));
+$upcomingCountStmt = $pdo->prepare($upcomingCountSql);
+foreach ($paramsUpcoming as $k => $v) {
+    $type = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
+    $upcomingCountStmt->bindValue(':' . $k, $v, $type);
+}
+$upcomingCountStmt->execute();
+$upcomingTotal = (int)$upcomingCountStmt->fetchColumn();
+$upcomingTotalPages = max(1, (int)ceil($upcomingTotal / $upcomingPerPage));
+
+// Get paginated results
 $upcomingSql = '
     SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name' . 
     (in_array($userRole, ['Admin', 'Staff']) ? ', u.name AS requester_name' : '') . '
@@ -100,13 +121,15 @@ $upcomingSql = '
     (in_array($userRole, ['Admin', 'Staff']) ? ' JOIN users u ON r.user_id = u.id' : '') . '
     WHERE ' . (empty($whereUpcoming) ? '1=1' : implode(' AND ', $whereUpcoming)) . '
     ORDER BY r.reservation_date ASC
-    LIMIT 20';
+    LIMIT :limit OFFSET :offset';
 
 $upcomingStmt = $pdo->prepare($upcomingSql);
 foreach ($paramsUpcoming as $k => $v) {
     $type = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
     $upcomingStmt->bindValue(':' . $k, $v, $type);
 }
+$upcomingStmt->bindValue(':limit', $upcomingPerPage, PDO::PARAM_INT);
+$upcomingStmt->bindValue(':offset', $upcomingOffset, PDO::PARAM_INT);
 $upcomingStmt->execute();
 $upcomingReservations = $upcomingStmt->fetchAll(PDO::FETCH_ASSOC);
 $upcomingCount = count($upcomingReservations);
@@ -539,7 +562,7 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<form method="GET" class="booking-card" style="margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end;">
+<form method="GET" class="booking-card" style="margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items: end;">
     <div>
         <label for="status" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Status</label>
         <select id="status" name="status" class="booking-form-control">
@@ -641,26 +664,6 @@ ob_start();
                 <?= number_format($approvedReservations); ?> of <?= number_format($totalReservations); ?> approved
             </small>
         </a>
-        
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reports.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); text-decoration: none; color: inherit;">
-            <h3>Avg per User</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #c2185b; margin: 0.5rem 0;">
-                <?= $avgReservationsPerUser; ?>
-            </p>
-            <small style="color: #5b6888;">
-                Reservations per user
-            </small>
-        </a>
-        
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/notifications.php" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
-            <h3>Notifications</h3>
-            <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
-                <?= $unreadNotifications; ?>
-            </p>
-            <small style="color: #8b95b5;">
-                Unread notifications
-            </small>
-        </a>
     <?php else: ?>
         <!-- Resident Statistics -->
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
@@ -682,20 +685,10 @@ ob_start();
                 <?= $approvedReservations; ?> approved
             </small>
         </a>
-        
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/notifications.php" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
-            <h3>Notifications</h3>
-            <p style="font-size: 2rem; font-weight: 600; color: #ff4b5c; margin: 0.5rem 0;">
-                <?= $unreadNotifications; ?>
-            </p>
-            <small style="color: #8b95b5;">
-                <?= $unreadNotifications === 1 ? 'unread notification' : 'unread notifications'; ?>
-            </small>
-        </a>
     <?php endif; ?>
 </div>
 
-<div class="booking-wrapper" style="margin-top: 2rem;">
+<div class="booking-wrapper" style="margin-top: 1.5rem;">
     <section class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
             <span><?= in_array($userRole, ['Admin', 'Staff']) ? 'Upcoming Reservations (All Users)' : 'My Upcoming Reservations'; ?></span>
@@ -749,8 +742,19 @@ ob_start();
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            <?php if ($upcomingTotalPages > 1): ?>
+                <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <?php if ($upcomingPage > 1): ?>
+                        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage - 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+                    <?php endif; ?>
+                    <span style="padding: 0.5rem 1rem; color: #5b6888;">Page <?= $upcomingPage; ?> of <?= $upcomingTotalPages; ?> (<?= $upcomingTotal; ?> total)</span>
+                    <?php if ($upcomingPage < $upcomingTotalPages): ?>
+                        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage + 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <div style="margin-top: 1rem;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/<?= in_array($userRole, ['Admin', 'Staff']) ? 'reservations_manage.php' : 'my_reservations.php'; ?>" class="btn-primary" style="text-decoration: none; display: inline-block;">View All Reservations</a>
+                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/<?= in_array($userRole, ['Admin', 'Staff']) ? 'reservations_manage.php' : 'my_reservations.php'; ?>" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; min-width: fit-content; text-align: center;">View All Reservations</a>
             </div>
         <?php endif; ?>
         </div>
@@ -784,7 +788,7 @@ ob_start();
         </div>
         <?php if ($pendingCount > 5): ?>
             <div style="margin-top: 1rem; text-align: center;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-block; padding: 0.5rem 1rem;">View All (<?= $pendingCount; ?>)</a>
+                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; min-width: fit-content; text-align: center;">View All (<?= $pendingCount; ?>)</a>
             </div>
         <?php endif; ?>
         </div>

@@ -112,6 +112,26 @@ if (document.readyState === 'loading') {
     updateNavbarDateTime();
     setInterval(updateNavbarDateTime, 1000);
 }
+
+// Navbar scroll behavior - turn white when scrolling
+(function() {
+    const navbar = document.getElementById('mainNav');
+    if (!navbar) return;
+    
+    const scrollThreshold = 50; // Change color after scrolling 50px
+    
+    window.addEventListener('scroll', function() {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > scrollThreshold) {
+            // Scrolled down - make navbar white
+            navbar.classList.add('navbar-scrolled');
+        } else {
+            // At top - make navbar transparent
+            navbar.classList.remove('navbar-scrolled');
+        }
+    }, { passive: true });
+})();
 </script>
 
 

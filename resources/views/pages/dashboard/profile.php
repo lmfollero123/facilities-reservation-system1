@@ -348,33 +348,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                 }
             }
             
-            // Handle Valid ID upload
+            // Handle Valid ID upload - only allow if user doesn't already have one
             if ($hasValidIdUpload) {
-                require_once __DIR__ . '/../../../../config/secure_documents.php';
-                $result = saveDocumentToSecureStorage($_FILES['doc_valid_id'], $userId, 'valid_id');
-                
-                if ($result['success']) {
-                    // Store document in database
-                    $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
-                    $docStmt->execute([
-                        $userId,
-                        'valid_id',
-                        $result['file_path'],
-                        basename($result['file_path']),
-                        (int)$_FILES['doc_valid_id']['size']
-                    ]);
-                    
-                    // Note: User verification status will be updated by admin after review
-                    // We just save the document for now
-                    $success = ($success ? $success . ' ' : '') . 'Valid ID uploaded successfully. Your document is pending admin verification. Once verified, you will be able to use auto-approval features.';
-                    
-                    // Refresh document info
-                    $docStmt = $pdo->prepare('SELECT id, file_name, uploaded_at, is_archived FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 ORDER BY uploaded_at DESC LIMIT 1');
-                    $docStmt->execute(['user_id' => $userId]);
-                    $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
-                    $hasValidId = (bool)$validIdDoc;
+                if ($hasValidId) {
+                    $error = ($error ? $error . ' ' : '') . 'You have already uploaded a valid ID document. Please wait for admin verification.';
                 } else {
-                    $error = ($error ? $error . ' ' : '') . 'Failed to upload valid ID: ' . ($result['error'] ?? 'Unknown error');
+                    require_once __DIR__ . '/../../../../config/secure_documents.php';
+                    $result = saveDocumentToSecureStorage($_FILES['doc_valid_id'], $userId, 'valid_id');
+                    
+                    if ($result['success']) {
+                        // Store document in database
+                        $docStmt = $pdo->prepare("INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)");
+                        $docStmt->execute([
+                            $userId,
+                            'valid_id',
+                            $result['file_path'],
+                            basename($result['file_path']),
+                            (int)$_FILES['doc_valid_id']['size']
+                        ]);
+                        
+                        // Note: User verification status will be updated by admin after review
+                        // We just save the document for now
+                        $success = ($success ? $success . ' ' : '') . 'Valid ID uploaded successfully. Your document is pending admin verification. Once verified, you will be able to use auto-approval features.';
+                        
+                        // Refresh document info
+                        $docStmt = $pdo->prepare('SELECT id, file_name, uploaded_at, is_archived FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 ORDER BY uploaded_at DESC LIMIT 1');
+                        $docStmt->execute(['user_id' => $userId]);
+                        $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
+                        $hasValidId = (bool)$validIdDoc;
+                    } else {
+                        $error = ($error ? $error . ' ' : '') . 'Failed to upload valid ID: ' . ($result['error'] ?? 'Unknown error');
+                    }
                 }
             }
         } catch (Throwable $e) {
@@ -564,6 +568,7 @@ ob_start();
                 </div>
             <?php endif; ?>
             
+            <?php if (!$hasValidId): ?>
             <form method="POST" class="booking-form" enctype="multipart/form-data">
                 <label>
                     <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
@@ -575,10 +580,18 @@ ob_start();
                 
                 <div style="margin-top:1rem; padding-top:1rem; border-top:2px solid #e1e7f0;">
                     <button class="btn-primary" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">
-                        <?= $hasValidId ? 'Upload New Valid ID' : 'Upload Valid ID'; ?>
+                        Upload Valid ID
                     </button>
                 </div>
             </form>
+            <?php else: ?>
+            <div style="padding:1rem; background:#e7f3ff; border:2px solid #2196F3; border-radius:8px;">
+                <h4 style="margin:0 0 0.5rem; color:#1976D2; font-size:1rem;">📋 Valid ID Submitted</h4>
+                <p style="margin:0; color:#1976D2; font-size:0.9rem; line-height:1.5;">
+                    Your valid ID document has been submitted and is awaiting admin verification. Once verified, you'll be able to use auto-approval features.
+                </p>
+            </div>
+            <?php endif; ?>
         </section>
 
         <aside class="booking-card">

@@ -245,13 +245,45 @@ img {
 }
 
 /* When navbar is white (scrolled), make datetime text black */
-#mainNav.navbar-shrink .navbar-datetime {
+#mainNav.navbar-shrink .navbar-datetime,
+#mainNav.navbar-scrolled .navbar-datetime {
     color: #212529 !important;
 }
 
 #mainNav.navbar-shrink .navbar-datetime #navbar-date,
-#mainNav.navbar-shrink .navbar-datetime #navbar-time {
+#mainNav.navbar-shrink .navbar-datetime #navbar-time,
+#mainNav.navbar-scrolled .navbar-datetime #navbar-date,
+#mainNav.navbar-scrolled .navbar-datetime #navbar-time {
     color: #212529 !important;
+}
+
+/* Navbar scroll behavior - turn white when scrolled */
+#mainNav.navbar-scrolled {
+    background: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+#mainNav.navbar-scrolled .navbar-brand,
+#mainNav.navbar-scrolled .navbar-brand span,
+#mainNav.navbar-scrolled .nav-link {
+    color: #212529 !important;
+}
+
+#mainNav.navbar-scrolled .nav-link:hover,
+#mainNav.navbar-scrolled .nav-link.active {
+    color: #285ccd !important;
+}
+
+#mainNav.navbar-scrolled .navbar-toggler {
+    border-color: rgba(0, 0, 0, 0.3);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+#mainNav.navbar-scrolled .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(33, 37, 41, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
 #mainNav .navbar-datetime #navbar-date {
@@ -2679,9 +2711,12 @@ footer small {
 }
 
 .dashboard-content {
-    padding: 2rem;
+    padding: 1.5rem;
     flex: 1;
     animation: fadeInUp 0.3s ease-out;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .header-right {
@@ -2854,9 +2889,10 @@ footer small {
 .facility-card-admin {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
-    border-radius: 18px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
     border: none;
+    padding: 1.25rem;
 }
 
 @keyframes fadeInUp {
@@ -2879,7 +2915,7 @@ footer small {
 .stat-card {
     background: var(--gov-white);
     border-radius: 8px;
-    padding: 1.25rem;
+    padding: 1rem;
     border: 1px solid #e3e7f2;
 }
 
@@ -2997,21 +3033,31 @@ footer small {
     top: 50%;
     transform: translateY(-50%);
     color: #8b95b5;
-    font-size: 1.1rem;
+    z-index: 1;
     pointer-events: none;
+}
+
+.booking-form .input-wrapper:has(.input-icon) input,
+.booking-form .input-wrapper:has(.input-icon) select {
+    padding-left: 2.75rem;
 }
 
 .booking-form select,
 .booking-form input,
 .booking-form textarea {
     width: 100%;
-    padding: 0.9rem 1rem 0.9rem 2.75rem;
+    padding: 0.9rem 1rem;
     border: 2px solid #e1e6f3;
     border-radius: 8px;
     font-size: 1rem;
     font-family: inherit;
     transition: all 0.2s ease;
     background: #fafbfd;
+}
+
+.booking-form .input-wrapper:has(.input-icon) input,
+.booking-form .input-wrapper:has(.input-icon) select {
+    padding-left: 2.75rem;
 }
 
 .booking-form select:focus,

@@ -28,11 +28,16 @@ $BOOKING_LIMIT_WINDOW_DAYS = 30; // rolling window for active bookings
 $BOOKING_ADVANCE_MAX_DAYS = 60; // max days ahead
 $BOOKING_PER_DAY = 1; // max bookings per user per day (pending+approved)
 
-// Check if user is verified
+// Check if user is verified and if they have uploaded a valid ID
 $userId = $_SESSION['user_id'] ?? null;
 $userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
 $userVerificationStmt->execute(['user_id' => $userId]);
 $isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+
+// Check if user has already uploaded a valid ID document
+$hasValidIdDocStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
+$hasValidIdDocStmt->execute(['user_id' => $userId]);
+$hasValidIdDocument = (bool)$hasValidIdDocStmt->fetch();
 
 try {
     $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status FROM facilities ORDER BY name');
@@ -69,9 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $validIdFile = $_FILES['doc_valid_id'] ?? null;
     $hasValidIdUpload = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
     
-    // If user is not verified, require ID upload
-    if (!$isVerified && !$hasValidIdUpload) {
+    // If user is not verified and hasn't uploaded a valid ID, require ID upload
+    if (!$isVerified && !$hasValidIdDocument && !$hasValidIdUpload) {
         $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
+    }
+    
+    // If user already has a valid ID document uploaded, don't allow another upload
+    if (!$isVerified && $hasValidIdDocument && $hasValidIdUpload) {
+        $error = 'You have already submitted a valid ID document. Please wait for admin verification.';
     }
     
     // Validate time inputs and create time slot string
@@ -105,11 +115,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$facilityId || !$date || !$purpose || !$userId) {
         $error = 'Please complete all required fields.';
-    } elseif ($date < date('Y-m-d')) {
-        $error = 'Cannot book facilities for past dates. Please select a future date.';
-    } elseif ($date > date('Y-m-d', strtotime('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days'))) {
-        $error = "Bookings are allowed only up to {$BOOKING_ADVANCE_MAX_DAYS} days in advance.";
     } else {
+        // Validate date - ensure it's not in the past (use server timezone)
+        $today = new DateTime('today', new DateTimeZone(date_default_timezone_get() ?: 'Asia/Manila'));
+        $reservationDate = DateTime::createFromFormat('Y-m-d', $date, new DateTimeZone(date_default_timezone_get() ?: 'Asia/Manila'));
+        if (!$reservationDate) {
+            $error = 'Invalid date format.';
+        } elseif ($reservationDate < $today) {
+            $error = 'Cannot book facilities for past dates. Please select today or a future date.';
+        } elseif ($reservationDate > (clone $today)->modify('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days')) {
+            $error = "Bookings are allowed only up to {$BOOKING_ADVANCE_MAX_DAYS} days in advance.";
+        }
+    }
+    
+    if (!$error) {
         // Active bookings cap in rolling window
         $windowEnd = date('Y-m-d', strtotime('+' . ($BOOKING_LIMIT_WINDOW_DAYS - 1) . ' days'));
         $activeCountStmt = $pdo->prepare(
@@ -520,7 +539,7 @@ ob_start();
             <label>
                 Facility
                 <div class="input-wrapper">
-                    <span class="input-icon">🏛️</span>
+                    <i class="bi bi-building input-icon"></i>
                     <select name="facility_id" id="facility-select" required>
                         <option value="">Select a facility...</option>
                         <?php foreach ($facilities as $facility): ?>
@@ -537,7 +556,7 @@ ob_start();
             <label>
                 Reservation Date
                 <div class="input-wrapper">
-                    <span class="input-icon">📅</span>
+                    <i class="bi bi-calendar input-icon"></i>
                     <input type="date" name="reservation_date" id="reservation-date" min="<?= date('Y-m-d'); ?>" required>
                 </div>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Only future dates are allowed.</small>
@@ -546,8 +565,21 @@ ob_start();
             <label>
                 Start Time
                 <div class="input-wrapper">
-                    <span class="input-icon">⏰</span>
-                    <input type="time" name="start_time" id="start-time" required min="08:00" max="21:00">
+                    <i class="bi bi-clock input-icon"></i>
+                    <select name="start_time" id="start-time" required>
+                        <option value="">Select start time...</option>
+                        <?php
+                        // Generate 30-minute increments from 8:00 AM to 9:00 PM
+                        for ($hour = 8; $hour <= 21; $hour++) {
+                            for ($minute = 0; $minute < 60; $minute += 30) {
+                                if ($hour == 21 && $minute > 0) break; // Stop at 9:00 PM
+                                $timeValue = sprintf('%02d:%02d', $hour, $minute);
+                                $timeDisplay = date('g:i A', strtotime($timeValue));
+                                echo '<option value="' . $timeValue . '">' . $timeDisplay . '</option>';
+                            }
+                        }
+                        ?>
+                    </select>
                 </div>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
             </label>
@@ -555,8 +587,21 @@ ob_start();
             <label>
                 End Time
                 <div class="input-wrapper">
-                    <span class="input-icon">⏰</span>
-                    <input type="time" name="end_time" id="end-time" required min="08:00" max="21:00">
+                    <i class="bi bi-clock input-icon"></i>
+                    <select name="end_time" id="end-time" required>
+                        <option value="">Select end time...</option>
+                        <?php
+                        // Generate 30-minute increments from 8:00 AM to 9:00 PM
+                        for ($hour = 8; $hour <= 21; $hour++) {
+                            for ($minute = 0; $minute < 60; $minute += 30) {
+                                if ($hour == 21 && $minute > 0) break; // Stop at 9:00 PM
+                                $timeValue = sprintf('%02d:%02d', $hour, $minute);
+                                $timeDisplay = date('g:i A', strtotime($timeValue));
+                                echo '<option value="' . $timeValue . '">' . $timeDisplay . '</option>';
+                            }
+                        }
+                        ?>
+                    </select>
                 </div>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
                     Must be after start time. Maximum duration: 4 hours (if facility has auto-approval enabled).
@@ -598,7 +643,7 @@ ob_start();
             <label>
                 Expected Number of Attendees (Optional)
                 <div class="input-wrapper">
-                    <span class="input-icon">👥</span>
+                    <i class="bi bi-people input-icon"></i>
                     <input type="number" name="expected_attendees" id="expected-attendees" min="1" placeholder="e.g., 50">
                 </div>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
@@ -609,7 +654,7 @@ ob_start();
             <label>
                 Event Priority Level
                 <div class="input-wrapper">
-                    <span class="input-icon">⭐</span>
+                    <i class="bi bi-star input-icon"></i>
                     <select name="priority_level" id="priority-level" required>
                         <option value="3" selected>Private Individual Event</option>
                         <option value="2">Community/Organization Event</option>
@@ -632,12 +677,12 @@ ob_start();
             <label>
                 Supporting Document Reference
                 <div class="input-wrapper">
-                    <span class="input-icon">📄</span>
+                    <i class="bi bi-file-text input-icon"></i>
                     <input type="text" name="doc_ref" placeholder="Document No. / Request Letter Ref.">
                 </div>
             </label>
 
-            <?php if (!$isVerified): ?>
+            <?php if (!$isVerified && !$hasValidIdDocument): ?>
             <div style="padding:1rem; background:#fff4e5; border:2px solid #ffc107; border-radius:8px; margin-top:1rem;">
                 <h4 style="margin:0 0 0.5rem; color:#856404; font-size:1rem;">⚠️ Valid ID Required</h4>
                 <p style="margin:0 0 1rem; color:#856404; font-size:0.9rem; line-height:1.5;">
@@ -650,6 +695,13 @@ ob_start();
                 <small style="color:#856404; font-size:0.85rem; display:block; margin-top:0.5rem;">
                     Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
                 </small>
+            </div>
+            <?php elseif (!$isVerified && $hasValidIdDocument): ?>
+            <div style="padding:1rem; background:#e7f3ff; border:2px solid #2196F3; border-radius:8px; margin-top:1rem;">
+                <h4 style="margin:0 0 0.5rem; color:#1976D2; font-size:1rem;">📋 Valid ID Submitted</h4>
+                <p style="margin:0; color:#1976D2; font-size:0.9rem; line-height:1.5;">
+                    Your valid ID document has been submitted and is awaiting admin verification. Once verified, you'll be able to use auto-approval features.
+                </p>
             </div>
             <?php endif; ?>
 
@@ -1405,9 +1457,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dateInput?.addEventListener('change', debouncedCheckConflict);
     dateInput?.addEventListener('input', debouncedCheckConflict);
     startTimeInput?.addEventListener('change', debouncedCheckConflict);
-    startTimeInput?.addEventListener('input', debouncedCheckConflict);
     endTimeInput?.addEventListener('change', debouncedCheckConflict);
-    endTimeInput?.addEventListener('input', debouncedCheckConflict);
     
     // Also trigger check when time inputs are updated via time picker
     startTimeInput?.addEventListener('blur', function() {
@@ -1422,6 +1472,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Time validation: ensure end time is after start time and within limits
+    // Note: Times are now select dropdowns with only 30-minute increments, so no rounding needed
     function validateTimes() {
         if (!startTimeInput || !endTimeInput) return true;
         
@@ -1463,7 +1514,43 @@ document.addEventListener('DOMContentLoaded', function() {
     
     startTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('change', validateTimes);
-    endTimeInput?.addEventListener('input', validateTimes);
+    
+    // Update end time options based on start time selection
+    startTimeInput?.addEventListener('change', function() {
+        if (!startTimeInput || !endTimeInput) return;
+        const startTime = startTimeInput.value;
+        if (!startTime) {
+            // Enable all end time options if no start time selected
+            const endOptions = endTimeInput.querySelectorAll('option');
+            endOptions.forEach(option => option.disabled = false);
+            return;
+        }
+        
+        // Filter end time options to only show times after start time
+        const [startH, startM] = startTime.split(':').map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endOptions = endTimeInput.querySelectorAll('option');
+        endOptions.forEach(option => {
+            if (option.value === '') {
+                option.disabled = false;
+                return;
+            }
+            const [endH, endM] = option.value.split(':').map(Number);
+            const endMinutes = endH * 60 + endM;
+            option.disabled = endMinutes <= startMinutes;
+        });
+        
+        // If current end time is invalid, clear it
+        const endTime = endTimeInput.value;
+        if (endTime) {
+            const [endH, endM] = endTime.split(':').map(Number);
+            const endMinutes = endH * 60 + endM;
+            if (endMinutes <= startMinutes) {
+                endTimeInput.value = '';
+            }
+        }
+        validateTimes();
+    });
     
     // Facility Recommendations
     const purposeInput = document.getElementById('purpose-input');
