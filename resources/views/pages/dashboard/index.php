@@ -545,7 +545,7 @@ ob_start();
 </div>
 
 <?php if (!$isVerified && $userRole === 'Resident'): ?>
-<div class="booking-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1.5rem;">
+<div class="booking-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1rem; padding: 0.85rem;">
     <div style="display: flex; align-items: start; gap: 1rem;">
         <div style="font-size: 2rem; flex-shrink: 0;">⚠️</div>
         <div style="flex: 1;">
@@ -602,7 +602,7 @@ ob_start();
         <!-- Admin/Staff Global Statistics -->
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #1976d2; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #1976d2; margin: 0.3rem 0;">
                 <?= number_format($totalReservations); ?>
             </p>
             <small style="color: #5b6888;">
@@ -613,7 +613,7 @@ ob_start();
         
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'pending', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); text-decoration: none; color: inherit;">
             <h3>Pending Approvals</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #f57c00; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #f57c00; margin: 0.3rem 0;">
                 <?= number_format($pendingCount); ?>
             </p>
             <small style="color: #5b6888;">
@@ -627,7 +627,7 @@ ob_start();
         
         <a href="<?= base_path(); ?>/resources/views/pages/dashboard/user_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); text-decoration: none; color: inherit;">
             <h3>Total Users</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #388e3c; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #388e3c; margin: 0.3rem 0;">
                 <?= number_format($totalUsers); ?>
             </p>
             <small style="color: #5b6888;">
@@ -637,7 +637,7 @@ ob_start();
         
         <a href="<?= base_path(); ?>/resources/views/pages/dashboard/facility_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); text-decoration: none; color: inherit;">
             <h3>Available Facilities</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #7b1fa2; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #7b1fa2; margin: 0.3rem 0;">
                 <?= number_format($totalFacilities); ?>
             </p>
             <small style="color: #5b6888;">
@@ -647,7 +647,7 @@ ob_start();
         
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, date('Y-m-d'), date('Y-m-d')); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%); text-decoration: none; color: inherit;">
             <h3>Today's Bookings</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #f9a825; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #f9a825; margin: 0.3rem 0;">
                 <?= number_format($todayReservations); ?>
             </p>
             <small style="color: #5b6888;">
@@ -657,7 +657,7 @@ ob_start();
         
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'approved', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); text-decoration: none; color: inherit;">
             <h3>Approval Rate</h3>
-            <p style="font-size: 2rem; font-weight: 700; color: #00796b; margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 700; color: #00796b; margin: 0.3rem 0;">
                 <?= $approvalRate; ?>%
             </p>
             <small style="color: #5b6888;">
@@ -668,7 +668,7 @@ ob_start();
         <!-- Resident Statistics -->
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>My Upcoming Reservations</h3>
-            <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue); margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 600; color: var(--gov-blue); margin: 0.3rem 0;">
                 <?= $upcomingCount; ?>
             </p>
             <small style="color: #8b95b5;">
@@ -678,7 +678,7 @@ ob_start();
         
         <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
-            <p style="font-size: 2rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.5rem 0;">
+            <p style="font-size: 1.5rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.3rem 0;">
                 <?= $totalReservations; ?>
             </p>
             <small style="color: #8b95b5;">
@@ -688,7 +688,7 @@ ob_start();
     <?php endif; ?>
 </div>
 
-<div class="booking-wrapper" style="margin-top: 1.5rem;">
+<div class="booking-wrapper" style="margin-top: 1rem;">
     <section class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
             <span><?= in_array($userRole, ['Admin', 'Staff']) ? 'Upcoming Reservations (All Users)' : 'My Upcoming Reservations'; ?></span>
@@ -796,7 +796,7 @@ ob_start();
     <?php endif; ?>
 </div>
 
-<div class="reports-grid" style="margin-top: 2rem;">
+<div class="reports-grid" style="margin-top: 1rem;">
     <section class="booking-card">
         <h2>Reservation Trends</h2>
         <p style="color: #8b95b5; font-size: 0.9rem; margin-bottom: 1rem;">
@@ -815,7 +815,7 @@ ob_start();
 </div>
 
 <?php if (!empty($facilityLabels)): ?>
-<div class="booking-card" style="margin-top: 2rem;">
+<div class="booking-card" style="margin-top: 1rem;">
     <h2><?= in_array($userRole, ['Admin', 'Staff']) ? 'Top Facilities by Bookings' : 'Your Most Booked Facilities'; ?></h2>
     <p style="color: #8b95b5; font-size: 0.9rem; margin-bottom: 1rem;">
         Facilities with the highest number of <?= in_array($userRole, ['Admin', 'Staff']) ? 'approved reservations' : 'your reservations'; ?>
@@ -824,9 +824,9 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<div class="booking-card" style="margin-top: 2rem;">
+<div class="booking-card" style="margin-top: 1rem;">
     <h2>Quick Actions</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
         <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">📅 Book Facility</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">Submit a new reservation request</p>
