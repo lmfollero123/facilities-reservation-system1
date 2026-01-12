@@ -553,4 +553,43 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+// Mobile Table Helper - Automatically adds data-label attributes for mobile stacking
+(function() {
+    'use strict';
+    
+    function initMobileTables() {
+        // Find all tables within .table-responsive containers
+        const responsiveTables = document.querySelectorAll('.table-responsive table');
+        
+        responsiveTables.forEach(table => {
+            const headers = Array.from(table.querySelectorAll('thead th'));
+            if (headers.length === 0) return;
+            
+            // Get header text for each column
+            const headerTexts = headers.map(th => th.textContent.trim());
+            
+            // Add data-label to each td based on its column index
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td'));
+                cells.forEach((cell, index) => {
+                    if (headerTexts[index] && !cell.hasAttribute('data-label')) {
+                        cell.setAttribute('data-label', headerTexts[index]);
+                    }
+                });
+            });
+        });
+    }
+    
+    // Initialize on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMobileTables);
+    } else {
+        initMobileTables();
+    }
+    
+    // Also run after dynamic content loads (for AJAX tables)
+    window.initMobileTables = initMobileTables;
+})();
+
 
