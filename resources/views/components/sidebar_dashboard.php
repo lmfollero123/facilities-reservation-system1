@@ -18,8 +18,8 @@ $opsLinks = [];
 if (in_array($role, ['Admin', 'Staff'], true)) {
     $opsLinks = [
         ['label' => 'Reservation Approvals', 'href' => $base . '/resources/views/pages/dashboard/reservations_manage.php', 'icon' => 'check-circle'],
-        ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => 'building'],
         ['label' => 'Announcements', 'href' => $base . '/resources/views/pages/dashboard/announcements_manage.php', 'icon' => 'megaphone'],
+        ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => 'building'],
         ['label' => 'Maintenance Integration', 'href' => $base . '/resources/views/pages/dashboard/maintenance_integration.php', 'icon' => 'wrench'],
         ['label' => 'Infrastructure Projects', 'href' => $base . '/resources/views/pages/dashboard/infrastructure_projects_integration.php', 'icon' => 'hammer'],
         ['label' => 'Utilities Integration', 'href' => $base . '/resources/views/pages/dashboard/utilities_integration.php', 'icon' => 'bolt'],
@@ -84,6 +84,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
                                 <?php
                                 $iconPaths = [
                                     'check-circle' => '<path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+                                    'megaphone' => '<path d="M3 13H11V3H3V13ZM3 21H11V15H3V21ZM13 21H21V11H13V21ZM13 3V9H21V3H13Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'building' => '<path d="M3 21H21M5 21V7L13 2V21M5 21H9M9 21V13H15V21M15 21H19M9 9H9.01M9 13H9.01M15 9H15.01M15 13H15.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'wrench' => '<path d="M14.7 6.3C15.1 5.9 15.1 5.3 14.7 4.9L13.1 3.3C12.7 2.9 12.1 2.9 11.7 3.3L10.5 4.5L7.5 1.5C6.7 0.7 5.3 0.7 4.5 1.5L1.5 4.5C0.7 5.3 0.7 6.7 1.5 7.5L4.5 10.5L3.3 11.7C2.9 12.1 2.9 12.7 3.3 13.1L4.9 14.7C5.3 15.1 5.9 15.1 6.3 14.7L7.5 13.5L10.5 16.5C11.3 17.3 12.7 17.3 13.5 16.5L16.5 13.5L17.7 14.7C18.1 15.1 18.7 15.1 19.1 14.7L20.7 13.1C21.1 12.7 21.1 12.1 20.7 11.7L19.5 10.5L22.5 7.5C23.3 6.7 23.3 5.3 22.5 4.5L19.5 1.5C18.7 0.7 17.3 0.7 16.5 1.5L13.5 4.5L14.7 6.3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'hammer' => '<path d="M15 12L3 24L0 21L12 9M18 6L21 3L18 0L15 3L12 6L15 9L18 6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',

@@ -1396,16 +1396,20 @@ img {
     border-radius: 16px;
     font-size: 0.9rem;
     box-shadow: 0 12px 28px rgba(43, 91, 222, 0.25);
-    min-width: 150px;
+    width: auto;
+    flex: 1;
+    min-width: 140px;
     text-align: center;
+    white-space: nowrap;
 }
 
 /* Tablet and up - larger buttons */
 @media (min-width: 481px) {
     .hero-cta .btn-primary {
-        padding: 1rem 1.8rem;
+        padding: 0.75rem 1.8rem;
         font-size: 1rem;
-        min-width: 190px;
+        flex: 1;
+        max-width: 200px;
     }
 }
 
@@ -1421,16 +1425,20 @@ img {
     color: #0f172a;
     border: 1px solid #e2e8f0;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
-    min-width: 150px;
+    width: auto;
+    flex: 1;
+    min-width: 140px;
     text-align: center;
+    white-space: nowrap;
 }
 
 /* Tablet and up - larger buttons */
 @media (min-width: 481px) {
     .hero-cta .btn-light {
-        padding: 1rem 1.8rem;
+        padding: 0.75rem 1.8rem;
         font-size: 1rem;
-        min-width: 190px;
+        flex: 1;
+        max-width: 200px;
     }
 }
 
@@ -1442,19 +1450,22 @@ img {
 
 .hero-cta .hero-btn-row {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     flex-direction: column;
+    width: 100%;
 }
 
 /* Tablet and up - horizontal button layout */
 @media (min-width: 481px) {
     .hero-cta .hero-btn-row {
-        gap: 0.75rem;
+        gap: 1rem;
         flex-direction: row;
         flex-wrap: nowrap;
+        width: auto;
+        max-width: 450px;
     }
 }
 
@@ -1814,280 +1825,38 @@ body.landing-page #portfolio:not(.facilities-page) {
     background-color: #ffffff;
 }
 
-/* Modern Announcements Section */
-.announcements-modern {
-    background: transparent;
-    padding: 4rem 1rem;
+/* Improve contrast for announcements section on dark background */
+#announcements {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 0;
 }
 
-.announcements-modern .container {
-    max-width: 1200px;
+#announcements h2,
+#announcements .h2 {
+    color: #1e3a5f !important;
 }
 
-.announcements-header h2 {
-    color: #1e3a5f;
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
+#announcements p,
+#announcements .text-muted {
+    color: #4a5568 !important;
 }
 
-.announcements-header .divider {
-    background: linear-gradient(90deg, transparent, #285ccd, transparent);
-    height: 3px;
-    width: 80px;
-    margin: 1rem auto;
-    border: none;
+#announcements hr.divider {
+    background-color: #285ccd;
 }
 
-.announcements-header p {
-    color: #6b7280;
-    font-size: 1.1rem;
-}
-
-/* Announcements Grid */
-.announcements-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-    margin-top: 3rem;
-}
-
-@media (min-width: 768px) {
-    .announcements-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 2rem;
-    }
-}
-
-@media (min-width: 1024px) {
-    .announcements-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 2rem;
-    }
-}
-
-/* Announcement Card */
-.announcement-card {
+#announcements .card {
     background: #ffffff;
-    border-radius: 16px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid #e5e7eb;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    overflow: hidden;
+    border: 1px solid #e5e9f5;
 }
 
-.announcement-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-    background: var(--announcement-accent, #6384d2);
-    transition: width 0.3s ease;
+#announcements .card-title {
+    color: #1e3a5f !important;
 }
 
-.announcement-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
-    border-color: #d1d5db;
-}
-
-.announcement-card:hover::before {
-    width: 6px;
-}
-
-/* Card Header */
-.announcement-card-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.announcement-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    font-size: 1.5rem;
-    color: #ffffff;
-}
-
-.announcement-icon-primary {
-    background: linear-gradient(135deg, #6384d2, #285ccd);
-}
-
-.announcement-icon-danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-}
-
-.announcement-icon-success {
-    background: linear-gradient(135deg, #10b981, #059669);
-}
-
-.announcement-icon-warning {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-}
-
-.announcement-icon-info {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-}
-
-.announcement-icon-secondary {
-    background: linear-gradient(135deg, #6b7280, #4b5563);
-}
-
-.announcement-meta {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.announcement-type {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #6b7280;
-}
-
-.announcement-date {
-    font-size: 0.875rem;
-    color: #9ca3af;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.announcement-date i {
-    font-size: 0.75rem;
-}
-
-/* Announcement Image */
-.announcement-image-wrapper {
-    width: 100%;
-    margin-bottom: 1rem;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #f3f4f6;
-}
-
-.announcement-image {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-    display: block;
-}
-
-/* Card Body */
-.announcement-card-body {
-    flex: 1;
-    margin-bottom: 1rem;
-}
-
-.announcement-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin: 0 0 0.75rem 0;
-    line-height: 1.4;
-}
-
-.announcement-message {
-    font-size: 0.9375rem;
-    color: #4b5563;
-    line-height: 1.6;
-    margin: 0;
-}
-
-/* Card Footer */
-.announcement-card-footer {
-    padding-top: 1rem;
-    border-top: 1px solid #e5e7eb;
-    margin-top: auto;
-}
-
-.announcement-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #285ccd;
-    font-weight: 600;
-    font-size: 0.9375rem;
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-
-.announcement-link:hover {
-    color: #1e40af;
-    gap: 0.75rem;
-}
-
-.announcement-link i {
-    transition: transform 0.2s ease;
-}
-
-.announcement-link:hover i {
-    transform: translateX(4px);
-}
-
-/* Category-specific accent colors */
-.announcement-emergency::before {
-    background: #ef4444;
-}
-
-.announcement-event::before {
-    background: #6384d2;
-}
-
-.announcement-health::before {
-    background: #10b981;
-}
-
-.announcement-deadline::before {
-    background: #f59e0b;
-}
-
-.announcement-advisory::before {
-    background: #3b82f6;
-}
-
-.announcement-general::before {
-    background: #6b7280;
-}
-
-/* Mobile adjustments */
-@media (max-width: 767px) {
-    .announcements-modern {
-        padding: 3rem 1rem;
-    }
-    
-    .announcements-header h2 {
-        font-size: 2rem;
-    }
-    
-    .announcement-card {
-        padding: 1.25rem;
-    }
-    
-    .announcement-icon {
-        width: 44px;
-        height: 44px;
-        font-size: 1.25rem;
-    }
-    
-    .announcement-title {
-        font-size: 1.125rem;
-    }
+#announcements .card-text {
+    color: #4a5568 !important;
 }
 
 .section + .section {

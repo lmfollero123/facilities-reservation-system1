@@ -6,6 +6,11 @@
     RewriteEngine On
     RewriteBase /
     
+    # Route requests to index.php for URL-based routing
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [L]
+    
     # Force HTTPS in production (uncomment when deploying with SSL certificate)
     # NOTE: Uncomment this after obtaining SSL certificate and configuring HTTPS
     # RewriteCond %{HTTPS} off

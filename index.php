@@ -1,8 +1,25 @@
 <?php
 /**
  * Root entry point for the Facilities Reservation System
- * Directly includes the public home page
+ * Routes requests to appropriate pages
  */
 
-// Directly include the home page (no redirect)
-require_once __DIR__ . '/resources/views/pages/public/home.php';
+// Get the requested path
+$path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+$basePath = str_replace(basename(__FILE__), '', $_SERVER['SCRIPT_NAME']);
+$basePath = trim($basePath, '/');
+
+// Remove base path from requested path if present
+if ($basePath && strpos($path, $basePath) === 0) {
+    $path = substr($path, strlen($basePath));
+}
+$path = trim($path, '/');
+
+// Route the request
+if ($path === 'announcements') {
+    require_once __DIR__ . '/resources/views/pages/public/announcements.php';
+} else {
+    // Default to home page
+    require_once __DIR__ . '/resources/views/pages/public/home.php';
+}
+?>
