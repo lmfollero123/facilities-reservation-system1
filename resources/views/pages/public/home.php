@@ -17,7 +17,7 @@ $featuredFacilities = $featuredStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Public announcements (system-wide notifications with NULL user_id)
 $announcementsStmt = $pdo->prepare(
-    'SELECT id, title, message, type, link, created_at 
+    'SELECT id, title, message, type, link, image_path, created_at 
      FROM notifications 
      WHERE user_id IS NULL 
      ORDER BY created_at DESC 
@@ -188,6 +188,11 @@ ob_start();
                             </span>
                         </div>
                     </div>
+                    <?php if (!empty($item['image_path'])): ?>
+                    <div class="announcement-image-wrapper">
+                        <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>" class="announcement-image">
+                    </div>
+                    <?php endif; ?>
                     <div class="announcement-card-body">
                         <h3 class="announcement-title"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h3>
                         <p class="announcement-message"><?= $messagePreview; ?></p>

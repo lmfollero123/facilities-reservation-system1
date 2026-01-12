@@ -19,6 +19,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $opsLinks = [
         ['label' => 'Reservation Approvals', 'href' => $base . '/resources/views/pages/dashboard/reservations_manage.php', 'icon' => 'check-circle'],
         ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => 'building'],
+        ['label' => 'Announcements', 'href' => $base . '/resources/views/pages/dashboard/announcements_manage.php', 'icon' => 'megaphone'],
         ['label' => 'Maintenance Integration', 'href' => $base . '/resources/views/pages/dashboard/maintenance_integration.php', 'icon' => 'wrench'],
         ['label' => 'Infrastructure Projects', 'href' => $base . '/resources/views/pages/dashboard/infrastructure_projects_integration.php', 'icon' => 'hammer'],
         ['label' => 'Utilities Integration', 'href' => $base . '/resources/views/pages/dashboard/utilities_integration.php', 'icon' => 'bolt'],
