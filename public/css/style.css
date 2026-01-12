@@ -434,58 +434,51 @@ img {
         font-size: 0.95rem !important;
     }
     
-    /* Mobile menu dropdown - make it part of the document flow so it pushes content
-       (prevents internal scrolling inside the navbar). */
+    /* Mobile menu dropdown - expand below navbar, not overlaid */
     #mainNav {
-        overflow: visible !important; /* Allow dropdown to expand */
-        position: relative !important; /* Let navbar expand on mobile */
+        overflow: visible !important;
+        position: relative !important;
     }
 
-    /* Allow the container to wrap so the menu can sit on a new row below the brand */
     #mainNav .container {
         flex-wrap: wrap !important;
         position: relative !important;
     }
 
-    /* Use Bootstrap's collapse semantics: hide when collapsed, show when open */
-    #mainNav .navbar-collapse.collapse {
+    /* Hide menu when collapsed (default Bootstrap behavior) */
+    #mainNav .navbar-collapse.collapse:not(.show) {
         display: none !important;
-        width: 100% !important;
     }
 
-    /* Make the expanded menu a full-width block below the navbar (static positioning)
-       so it pushes the page content instead of overlaying with inner scroll. */
+    /* Full-width menu that expands below navbar when opened */
     #mainNav .navbar-collapse {
+        order: 3;
+        flex-basis: 100% !important;
         position: static !important;
+        width: 100% !important;
         top: auto !important;
         left: auto !important;
         right: auto !important;
-        width: 100% !important;
         max-height: none !important;
         overflow: visible !important;
         background: rgba(255, 255, 255, 0.98) !important;
         backdrop-filter: blur(12px) !important;
         -webkit-backdrop-filter: blur(12px) !important;
-        box-shadow: none !important;
-        border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
         margin: 0 !important;
-        padding: 0.6rem 0.75rem !important;
-        transition: none !important;
+        padding: 0.75rem 1rem !important;
+        transition: all 0.3s ease !important;
         opacity: 1 !important;
         z-index: 999 !important;
         visibility: visible !important;
     }
 
-    #mainNav .navbar-collapse.show,
-    #mainNav .navbar-collapse.collapsing {
-        display: block !important;
-    }
-
-    /* Stack the nav items vertically with touch-friendly spacing */
+    /* Stack nav items vertically */
     #mainNav .navbar-nav {
         flex-direction: column !important;
-        gap: 0.5rem !important;
-        padding-left: 0 !important;
+        gap: 0.25rem !important;
+        padding: 0 !important;
         margin: 0 !important;
         width: 100% !important;
     }
@@ -496,11 +489,23 @@ img {
 
     #mainNav .navbar-nav .nav-link {
         display: block !important;
-        padding: 0.75rem 1rem !important;
+        padding: 0.8rem 1rem !important;
         width: 100% !important;
-        border-radius: 8px;
-        color: var(--gov-gray-dark) !important;
+        border-radius: 6px;
+        color: #212529 !important;
         background: transparent !important;
+        font-size: 0.95rem;
+        transition: background 0.2s ease;
+    }
+
+    #mainNav .navbar-nav .nav-link:hover {
+        background: rgba(99, 132, 210, 0.08) !important;
+    }
+
+    #mainNav .navbar-nav .nav-link.active {
+        color: #285ccd !important;
+        background: rgba(99, 132, 210, 0.12) !important;
+        font-weight: 600;
     }
     
     #mainNav .navbar-nav {

@@ -9,7 +9,7 @@
  const DB_HOST = 'localhost';
  const DB_NAME = 'cprf_facilities_reservation';
  const DB_USER = 'cprf_root';        // default XAMPP user
- const DB_PASS = '#Ej9+LqgMpteCp17'; 
+ const DB_PASS = '#Ej9+LqgMpteCp17';
 /**
  * Returns a shared PDO instance.
  */
