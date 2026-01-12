@@ -17,14 +17,41 @@ $featuredFacilities = $featuredStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Public announcements (system-wide notifications with NULL user_id)
 $announcementsStmt = $pdo->prepare(
-    'SELECT title, message, created_at 
+    'SELECT id, title, message, type, link, created_at 
      FROM notifications 
      WHERE user_id IS NULL 
      ORDER BY created_at DESC 
-     LIMIT 4'
+     LIMIT 6'
 );
 $announcementsStmt->execute();
 $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Map notification types to categories for display
+function getAnnouncementCategory($title, $message, $type) {
+    $titleLower = strtolower($title);
+    $messageLower = strtolower($message);
+    $combined = $titleLower . ' ' . $messageLower;
+    
+    // Determine category based on keywords
+    if (preg_match('/\b(emergency|urgent|alert|warning|disaster|evacuation|flood|fire)\b/i', $combined)) {
+        return ['type' => 'emergency', 'icon' => 'exclamation-triangle', 'color' => 'danger'];
+    } elseif (preg_match('/\b(event|celebration|festival|conference|meeting|gathering)\b/i', $combined)) {
+        return ['type' => 'event', 'icon' => 'calendar-event', 'color' => 'primary'];
+    } elseif (preg_match('/\b(health|vaccination|vaccine|medical|clinic|hospital|healthcare)\b/i', $combined)) {
+        return ['type' => 'health', 'icon' => 'heart-pulse', 'color' => 'success'];
+    } elseif (preg_match('/\b(deadline|permit|license|application|due|expire|expiration)\b/i', $combined)) {
+        return ['type' => 'deadline', 'icon' => 'clock', 'color' => 'warning'];
+    } elseif (preg_match('/\b(advisory|notice|update|information|reminder)\b/i', $combined)) {
+        return ['type' => 'advisory', 'icon' => 'info-circle', 'color' => 'info'];
+    } else {
+        // Default based on notification type
+        if ($type === 'system') {
+            return ['type' => 'advisory', 'icon' => 'megaphone', 'color' => 'primary'];
+        } else {
+            return ['type' => 'general', 'icon' => 'bell', 'color' => 'secondary'];
+        }
+    }
+}
 
 // Default fallback image
 $defaultImage = $base . '/public/img/cityhall.jpeg';
@@ -132,21 +159,46 @@ ob_start();
 
 <!-- Announcements -->
 <?php if (!empty($announcements)): ?>
-<section class="page-section" id="announcements">
+<section class="page-section announcements-modern" id="announcements">
     <div class="container px-4 px-lg-5">
-        <h2 class="text-center mt-0">Announcements</h2>
-        <hr class="divider" />
-        <p class="text-center text-muted mb-5">Latest advisories from Barangay Culiat</p>
-        <div class="row gx-4 gx-lg-5">
-            <?php foreach ($announcements as $item): ?>
-                <div class="col-lg-6 col-md-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <small class="text-muted d-block mb-2"><?= date('M d, Y', strtotime($item['created_at'])); ?></small>
-                            <h4 class="card-title"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h4>
-                            <p class="card-text text-muted"><?= htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 200, '…')); ?></p>
+        <div class="announcements-header text-center mb-5">
+            <h2 class="mt-0 mb-2">Announcements & Updates</h2>
+            <hr class="divider" />
+            <p class="text-muted mb-0">Stay informed with the latest news, events, and important information from Barangay Culiat</p>
+        </div>
+        <div class="announcements-grid">
+            <?php foreach ($announcements as $item): 
+                $category = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
+                $iconClass = 'bi-' . $category['icon'];
+                $colorClass = $category['color'];
+                $dateFormatted = date('M d, Y', strtotime($item['created_at']));
+                $timeFormatted = date('g:i A', strtotime($item['created_at']));
+                $messagePreview = htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 150, '…'));
+                $link = !empty($item['link']) ? $base . $item['link'] : null;
+            ?>
+                <div class="announcement-card announcement-<?= $category['type']; ?>">
+                    <div class="announcement-card-header">
+                        <div class="announcement-icon announcement-icon-<?= $colorClass; ?>">
+                            <i class="bi <?= $iconClass; ?>"></i>
+                        </div>
+                        <div class="announcement-meta">
+                            <span class="announcement-type"><?= ucfirst($category['type']); ?></span>
+                            <span class="announcement-date">
+                                <i class="bi bi-calendar3"></i> <?= $dateFormatted; ?>
+                            </span>
                         </div>
                     </div>
+                    <div class="announcement-card-body">
+                        <h3 class="announcement-title"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h3>
+                        <p class="announcement-message"><?= $messagePreview; ?></p>
+                    </div>
+                    <?php if ($link): ?>
+                    <div class="announcement-card-footer">
+                        <a href="<?= htmlspecialchars($link); ?>" class="announcement-link">
+                            Read More <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
