@@ -22,7 +22,7 @@ $navLinks = [
             <span id="navbar-date"></span>
             <span id="navbar-time" style="margin-left: 0.5rem;"></span>
         </div>
-        <button class="navbar-toggler navbar-toggler-right" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler navbar-toggler-right" type="button" id="mobileNavToggle" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarResponsive" style="margin-left: auto;">
@@ -70,6 +70,61 @@ $navLinks = [
         </div>
     </div>
 </nav>
+
+<!-- Mobile Sidebar Menu -->
+<aside class="mobile-nav-sidebar" id="mobileNavSidebar">
+    <div class="mobile-nav-header">
+        <img src="<?= $base; ?>/public/img/logocityhall.png" alt="City Hall Logo" style="height: 32px; width: auto; object-fit: contain;">
+        <span>Menu</span>
+        <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
+    </div>
+    <nav class="mobile-nav-menu">
+        <ul class="mobile-nav-list">
+            <?php 
+            $isHomePage = str_contains($currentPage, 'home.php');
+            foreach ($navLinks as $link): 
+                // Determine the correct href based on current page and link type
+                $hrefValue = $link['href'] ?? '';
+                
+                // Check if href is an anchor-only link (starts with #)
+                if (strpos($hrefValue, '#') === 0) {
+                    // Anchor-only link: use anchor if on home page, otherwise navigate to home with anchor
+                    $href = $isHomePage ? $hrefValue : ($base . '/resources/views/pages/public/home.php' . $hrefValue);
+                } elseif (isset($link['anchor'])) {
+                    // Link has both href and anchor
+                    $targetPage = basename($hrefValue);
+                    $isOnTargetPage = str_contains($currentPage, $targetPage);
+                    
+                    if ($isOnTargetPage) {
+                        // On the target page, use anchor for smooth scroll
+                        $href = $link['anchor'];
+                    } else {
+                        // Not on target page, navigate to page with anchor
+                        $href = $hrefValue . $link['anchor'];
+                    }
+                } else {
+                    // No anchor, just use the href
+                    $href = $hrefValue;
+                }
+                
+                // Determine if link is active
+                $isActive = false;
+                if (strpos($hrefValue, '#') !== 0 && !empty($hrefValue)) {
+                    $isActive = str_contains($currentPage, basename($hrefValue));
+                }
+            ?>
+                <li class="mobile-nav-item">
+                    <a class="mobile-nav-link<?= $isActive ? ' active' : ''; ?>" href="<?= htmlspecialchars($href); ?>">
+                        <?= htmlspecialchars($link['label']); ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </nav>
+</aside>
+
+<!-- Mobile Sidebar Backdrop -->
+<div class="mobile-nav-backdrop" id="mobileNavBackdrop"></div>
 
 <script>
 // Update navbar date and time
