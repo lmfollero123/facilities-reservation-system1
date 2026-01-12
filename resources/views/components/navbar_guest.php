@@ -187,6 +187,66 @@ if (document.readyState === 'loading') {
         }
     }, { passive: true });
 })();
+
+// Mobile Navigation Sidebar Toggle
+(function() {
+    const mobileNavToggle = document.getElementById('mobileNavToggle');
+    const mobileNavSidebar = document.getElementById('mobileNavSidebar');
+    const mobileNavClose = document.getElementById('mobileNavClose');
+    const mobileNavBackdrop = document.getElementById('mobileNavBackdrop');
+    
+    if (!mobileNavToggle || !mobileNavSidebar || !mobileNavClose || !mobileNavBackdrop) {
+        console.error('Mobile navigation elements not found');
+        return;
+    }
+    
+    const openMobileNav = () => {
+        mobileNavSidebar.classList.add('active');
+        mobileNavBackdrop.classList.add('active');
+        mobileNavToggle.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden'; // Prevent body scroll when sidebar is open
+    };
+    
+    const closeMobileNav = () => {
+        mobileNavSidebar.classList.remove('active');
+        mobileNavBackdrop.classList.remove('active');
+        mobileNavToggle.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = ''; // Restore body scroll
+    };
+    
+    mobileNavToggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openMobileNav();
+    });
+    
+    mobileNavClose.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMobileNav();
+    });
+    
+    mobileNavBackdrop.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMobileNav();
+    });
+    
+    // Close sidebar when clicking on a nav link
+    const mobileNavLinks = mobileNavSidebar.querySelectorAll('.mobile-nav-link');
+    mobileNavLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            setTimeout(closeMobileNav, 100); // Small delay for smooth transition
+        });
+    });
+    
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mobileNavSidebar.classList.contains('active')) {
+            closeMobileNav();
+        }
+    });
+})();
 </script>
 
 

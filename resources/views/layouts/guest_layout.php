@@ -41,7 +41,7 @@ if ($isHomePage || $isPublicPage) {
         $customCss = '/public/css/style.css';
     }
     // Cache-busting: Update this version number when CSS changes are deployed
-    $cssVersion = '4.0';
+    $cssVersion = '5.0';
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
     <style>
