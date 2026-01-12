@@ -184,6 +184,9 @@ img {
     box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25) !important;
     padding: 0 !important;
     margin: 0 !important;
+    overflow: hidden !important; /* Prevent any internal scrolling */
+    height: auto !important;
+    min-height: 60px !important;
 }
 
 /* Ensure navbar text is visible */
@@ -226,6 +229,8 @@ img {
     justify-content: space-between;
     gap: 0.5rem;
     position: relative;
+    overflow: visible !important;
+    flex-wrap: nowrap !important;
 }
 
 /* Tablet (≥481px) - Increase spacing */
@@ -263,12 +268,15 @@ img {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.85rem;
+    overflow: hidden !important;
+    max-width: 150px;
 }
 
 #mainNav .navbar-brand img {
     height: 32px;
     width: auto;
     object-fit: contain;
+    flex-shrink: 0;
 }
 
 /* Mobile: Hide brand text, show only logo */
@@ -308,6 +316,7 @@ img {
     margin-right: 0 !important;
     flex-shrink: 0;
     order: 3; /* Last item on right */
+    overflow: visible !important;
 }
 
 #mainNav .navbar-nav {
