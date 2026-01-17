@@ -1,0 +1,25 @@
+Testing AI Model Integration...
+Python Path: E:\Capstone_project\facilities_reservation_system\ai\venv\Scripts\python.exe
+AI Path: E:\Capstone_project\facilities_reservation_system\ai
+
+Calling predict_conflict.py...
+
+Result:
+Array
+(
+    [recommendations] => Array
+        (
+            [0] => Array
+                (
+                    [id] => 1
+                    [name] => Court
+                    [amenities] => basketball
+                    [capacity] => 100
+                    [ml_relevance_score] => 1.9163116655795
+                )
+
+        )
+
+)
+
+SUCCESS!

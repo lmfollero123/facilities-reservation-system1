@@ -12,7 +12,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 // Role-based access: Admin/Staff only
 $userRole = $_SESSION['role'] ?? '';
 if (!in_array($userRole, ['Admin', 'Staff'])) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
@@ -462,19 +462,38 @@ foreach ($outcomesMap as $status => $count) {
     $outcomesShare[$status] = $share;
 }
 
-// Charts data (global)
+// Charts data - Reservation Trends (respects filters)
 $monthlyLabels = [];
 $monthlyData = [];
-for ($i = 5; $i >= 0; $i--) {
-    $monthStart = date('Y-m-01', strtotime("-$i months"));
-    $monthEnd = date('Y-m-t', strtotime("-$i months"));
-    $monthLabel = date('M Y', strtotime("-$i months"));
-    $monthlyLabels[] = $monthLabel;
-    $monthStmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
-    );
-    $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
-    $monthlyData[] = (int)$monthStmt->fetchColumn();
+
+if ($reportYear === null || $reportMonth === null) {
+    // All Time: Show last 6 months
+    for ($i = 5; $i >= 0; $i--) {
+        $monthStart = date('Y-m-01', strtotime("-$i months"));
+        $monthEnd = date('Y-m-t', strtotime("-$i months"));
+        $monthLabel = date('M Y', strtotime("-$i months"));
+        $monthlyLabels[] = $monthLabel;
+        $monthStmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
+        );
+        $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+        $monthlyData[] = (int)$monthStmt->fetchColumn();
+    }
+} else {
+    // Specific month selected: Show 6 months centered around selected month (2 before, selected, 3 after)
+    $selectedDate = mktime(0, 0, 0, $reportMonth, 1, $reportYear);
+    for ($i = 2; $i >= -3; $i--) {
+        $monthTimestamp = strtotime("$i months", $selectedDate);
+        $monthStart = date('Y-m-01', $monthTimestamp);
+        $monthEnd = date('Y-m-t', $monthTimestamp);
+        $monthLabel = date('M Y', $monthTimestamp);
+        $monthlyLabels[] = $monthLabel;
+        $monthStmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
+        );
+        $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+        $monthlyData[] = (int)$monthStmt->fetchColumn();
+    }
 }
 
 // Status distribution (for selected period)
@@ -581,8 +600,8 @@ ob_start();
 
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
-        <h2>Reservation Trends (Last 6 Months)</h2>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Total reservations per month</p>
+        <h2>Reservation Trends<?= ($reportYear !== null && $reportMonth !== null) ? ' (Around ' . date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)) . ')' : ' (Last 6 Months)'; ?></h2>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Total reservations per month<?= ($reportYear !== null && $reportMonth !== null) ? ' - showing 6 months around selected period' : ''; ?></p>
         <canvas id="monthlyChart" style="max-height: 320px;"></canvas>
     </section>
     <section class="booking-card">

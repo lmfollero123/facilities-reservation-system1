@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
@@ -19,7 +19,7 @@ $pageTitle = 'Reservation Details | LGU Facilities Reservation';
 
 $reservationId = (int)($_GET['id'] ?? 0);
 if (!$reservationId) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/reservations_manage.php');
+    header('Location: ' . base_path() . '/dashboard/reservations-manage');
     exit;
 }
 
@@ -507,7 +507,7 @@ $stmt->execute(['id' => $reservationId]);
 $reservation = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$reservation) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/reservations_manage.php');
+    header('Location: ' . base_path() . '/dashboard/reservations-manage');
     exit;
 }
 

@@ -47,6 +47,9 @@ try {
     $error = 'Unable to load facilities right now.';
 }
 
+// Prepare base path for AJAX calls
+$basePath = base_path();
+
 // Check if pre-filled from Smart Scheduler (for showing notification)
 $prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
 $prefillTimeSlot = isset($_GET['time_slot']) ? trim($_GET['time_slot']) : null;
@@ -490,13 +493,6 @@ for ($i = 0; $i < 30; $i++) {
         $eventMap[$d] = $holidayList[$d];
     }
 }
-
-$timeline = [
-    ['title' => 'Request Submitted', 'detail' => 'Awaiting LGU staff review'],
-    ['title' => 'Validation', 'detail' => 'Facility manager verifying availability'],
-    ['title' => 'Approval / Denial', 'detail' => 'Resident notified via email + SMS'],
-    ['title' => 'Reservation Confirmed', 'detail' => 'Facility reserved for your use'],
-];
 
 ob_start();
 ?>
@@ -1080,15 +1076,21 @@ ob_start();
     </section>
 
     <aside class="booking-card">
-        <h2>Approval Flow</h2>
-        <ul class="timeline">
-            <?php foreach ($timeline as $step): ?>
-                <li>
-                    <strong><?= $step['title']; ?></strong>
-                    <p><?= $step['detail']; ?></p>
-                </li>
-            <?php endforeach; ?>
-        </ul>
+        <div id="facility-details-container" style="display: none;">
+            <h2 id="facility-details-title">Facility Details</h2>
+            <div id="facility-details-content">
+                <div style="text-align: center; padding: 2rem; color: #8b95b5;">
+                    <p>Select a facility from the dropdown to view details</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="facility-placeholder" style="display: block;">
+            <h2>Facility Details</h2>
+            <div style="text-align: center; padding: 2rem; color: #8b95b5;">
+                <p>Select a facility from the dropdown to view details</p>
+            </div>
+        </div>
 
         <div class="booking-card" style="margin-top:1.5rem;">
             <h3>My Recent Reservations</h3>
@@ -1113,7 +1115,7 @@ ob_start();
                     <?php endforeach; ?>
                     </tbody>
                 </table>
-                <a class="btn-outline" style="margin-top:0.75rem; text-align:center;" href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php">View full history</a>
+                <a class="btn-outline" style="margin-top:0.75rem; text-align:center;" href="<?= base_path(); ?>/dashboard/my-reservations">View full history</a>
             <?php endif; ?>
         </div>
     </aside>
@@ -1176,7 +1178,171 @@ document.addEventListener('DOMContentLoaded', function() {
     const riskLine = document.getElementById('conflict-risk');
 
     const eventMap = <?= json_encode($eventMap); ?>;
-    const basePath = <?= json_encode(base_path()); ?>;
+    const basePath = <?= json_encode($basePath); ?>;
+    
+    // Prefill from query params (facility_id, reservation_date, time_slot) - MUST BE DECLARED EARLY
+    const qp = new URLSearchParams(window.location.search);
+    const preFacility = qp.get('facility_id');
+    const preDate = qp.get('reservation_date');
+    const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
+    
+    // Facility details container elements
+    const facilityDetailsContainer = document.getElementById('facility-details-container');
+    const facilityPlaceholder = document.getElementById('facility-placeholder');
+    const facilityDetailsTitle = document.getElementById('facility-details-title');
+    const facilityDetailsContent = document.getElementById('facility-details-content');
+    
+    // Function to fetch and display facility details
+    async function loadFacilityDetails(facilityId) {
+        if (!facilityId || facilityId === '') {
+            // Hide details, show placeholder
+            if (facilityDetailsContainer) facilityDetailsContainer.style.display = 'none';
+            if (facilityPlaceholder) facilityPlaceholder.style.display = 'block';
+            return;
+        }
+        
+        try {
+            // Show loading state
+            if (facilityDetailsContainer) {
+                facilityDetailsContainer.style.display = 'block';
+                facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #8b95b5;"><p>Loading facility details...</p></div>';
+            }
+            if (facilityPlaceholder) facilityPlaceholder.style.display = 'none';
+            
+            // Fetch facility details via AJAX
+            const response = await fetch(basePath + '/resources/views/pages/dashboard/facility-details-api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'facility_id=' + encodeURIComponent(facilityId)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load facility details');
+            }
+            
+            const facility = await response.json();
+            
+            if (facility.error) {
+                throw new Error(facility.error);
+            }
+            
+            // Build facility details HTML
+            let html = '';
+            
+            // Facility name and status
+            html += '<div style="margin-bottom: 1.5rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<h3 style="margin: 0; font-size: 1.25rem; color: var(--gov-blue-dark);">' + escapeHtml(facility.name) + '</h3>';
+            const statusClass = facility.status === 'available' ? 'status-available' : (facility.status === 'maintenance' ? 'status-maintenance' : 'status-offline');
+            let badgeStyle = 'text-transform: capitalize; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; display: inline-block;';
+            if (facility.status === 'available') {
+                badgeStyle += ' background: #28a745; color: #fff;';
+            } else if (facility.status === 'maintenance') {
+                badgeStyle += ' background: #ff9800; color: #fff;';
+            } else {
+                badgeStyle += ' background: #e53935; color: #fff;';
+            }
+            html += '<span class="status-badge ' + statusClass + '" style="' + badgeStyle + '">' + escapeHtml(facility.status) + '</span>';
+            html += '</div>';
+            html += '</div>';
+            
+            // Location
+            if (facility.location) {
+                html += '<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e8ecf4;">';
+                html += '<div style="display: flex; align-items: flex-start; gap: 0.5rem;">';
+                html += '<span style="font-size: 1.2rem; line-height: 1.5;">📍</span>';
+                html += '<div style="flex: 1;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Location</strong>';
+                html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6;">' + escapeHtml(facility.location) + '</p>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+            
+            // Capacity
+            if (facility.capacity) {
+                html += '<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e8ecf4;">';
+                html += '<div style="display: flex; align-items: flex-start; gap: 0.5rem;">';
+                html += '<span style="font-size: 1.2rem; line-height: 1.5;">👥</span>';
+                html += '<div style="flex: 1;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Capacity</strong>';
+                html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6;">' + escapeHtml(facility.capacity) + '</p>';
+                if (facility.capacity_threshold) {
+                    html += '<small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Auto-approval threshold: ' + escapeHtml(facility.capacity_threshold) + '</small>';
+                }
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+            
+            // Description
+            if (facility.description) {
+                html += '<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e8ecf4;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Description</strong>';
+                html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6; white-space: pre-wrap;">' + escapeHtml(facility.description) + '</p>';
+                html += '</div>';
+            }
+            
+            // Amenities
+            if (facility.amenities) {
+                html += '<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e8ecf4;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Amenities</strong>';
+                html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6; white-space: pre-wrap;">' + escapeHtml(facility.amenities) + '</p>';
+                html += '</div>';
+            }
+            
+            // Rules & Regulations
+            if (facility.rules) {
+                html += '<div style="margin-bottom: 1rem;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Rules & Regulations</strong>';
+                const rules = facility.rules.split(/\r\n|\r|\n/).filter(r => r.trim() !== '');
+                if (rules.length > 0) {
+                    html += '<ol style="margin: 0; padding-left: 1.25rem; color: #1b1b1f; line-height: 1.8;">';
+                    rules.forEach(rule => {
+                        html += '<li style="margin-bottom: 0.5rem;">' + escapeHtml(rule.trim()) + '</li>';
+                    });
+                    html += '</ol>';
+                }
+                html += '</div>';
+            }
+            
+            // Base rate (though facilities are free)
+            if (facility.base_rate) {
+                html += '<div style="margin-top: 1rem; padding: 1rem; background: #f9fafc; border-radius: 8px; border-left: 4px solid var(--gov-blue);">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Usage</strong>';
+                html += '<p style="margin: 0; color: #1b1b1f; font-weight: 600;">Free of Charge</p>';
+                html += '<small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.25rem;">This facility is provided free of charge for public use by the LGU/Barangay.</small>';
+                html += '</div>';
+            }
+            
+            // Update content
+            facilityDetailsContent.innerHTML = html;
+            
+        } catch (error) {
+            console.error('Error loading facility details:', error);
+            facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #b23030;"><p>Unable to load facility details. Please try again.</p></div>';
+        }
+    }
+    
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Load facility details when facility is selected
+    facilitySel?.addEventListener('change', function() {
+        const facilityId = this.value;
+        loadFacilityDetails(facilityId);
+    });
+    
+    // Load facility details if pre-filled
+    if (preFacility && facilitySel) {
+        setTimeout(() => {
+            loadFacilityDetails(preFacility);
+        }, 300);
+    }
 
     // Check facility status when selected
     facilitySel.addEventListener('change', function() {
@@ -1220,22 +1386,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Prefill from query params (facility_id, reservation_date, time_slot)
-    const qp = new URLSearchParams(window.location.search);
-    const preFacility = qp.get('facility_id');
-    const preDate = qp.get('reservation_date');
-    const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
-
     function clearMessage() {
+        if (!messageBox) return;
         // Fade out before hiding
         messageBox.style.opacity = '0';
         setTimeout(() => {
-            messageBox.style.display = 'none';
-            messageText.textContent = '';
-            altWrap.style.display = 'none';
-            altList.innerHTML = '';
-            riskLine.style.display = 'none';
-            riskLine.textContent = '';
+            if (messageBox) {
+                messageBox.style.display = 'none';
+            }
+            if (messageText) messageText.textContent = '';
+            if (altWrap) altWrap.style.display = 'none';
+            if (altList) altList.innerHTML = '';
+            if (riskLine) {
+                riskLine.style.display = 'none';
+                riskLine.textContent = '';
+            }
         }, 300);
     }
 
@@ -1342,16 +1507,30 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Validate that times are valid
+        if (startTime === '' || endTime === '' || startTime === endTime) {
+            clearMessage();
+            return;
+        }
+        
         // Build time slot string in format "HH:MM - HH:MM"
         const timeSlot = startTime + ' - ' + endTime;
+        
+        // Ensure message box exists
+        if (!messageBox) {
+            console.error('Conflict warning message box not found');
+            return;
+        }
         
         // Show loading state with professional styling
         messageBox.style.display = 'block';
         messageBox.style.opacity = '1';
         messageBox.style.background = '#f0f4ff';
         messageBox.style.border = '2px solid #6366f1';
-        messageText.style.color = '#4f46e5';
-        messageText.textContent = 'Checking availability and conflicts...';
+        if (messageText) {
+            messageText.style.color = '#4f46e5';
+            messageText.textContent = 'Checking availability and conflicts...';
+        }
         
         const conflictIcon = document.getElementById('conflict-icon');
         const conflictTitle = document.getElementById('conflict-title');
@@ -1361,12 +1540,14 @@ document.addEventListener('DOMContentLoaded', function() {
             conflictTitle.style.color = '#4f46e5';
         }
         
-        altWrap.style.display = 'none';
-        riskLine.style.display = 'none';
+        if (altWrap) altWrap.style.display = 'none';
+        if (riskLine) riskLine.style.display = 'none';
         
         try {
             const url = basePath + '/resources/views/pages/dashboard/ai_conflict_check.php';
             const body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+            
+            console.log('Checking conflict:', { fid, date, timeSlot, url });
             
             const resp = await fetch(url, {
                 method: 'POST',
@@ -1376,7 +1557,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!resp.ok) {
                 console.error('Conflict check failed:', resp.status, resp.statusText);
-                clearMessage();
+                if (messageBox) {
+                    messageBox.style.display = 'none';
+                }
                 return;
             }
             
@@ -1384,15 +1567,20 @@ document.addEventListener('DOMContentLoaded', function() {
             let data;
             try {
                 data = JSON.parse(text);
+                console.log('Conflict check response:', data);
             } catch (e) {
                 console.error('Failed to parse response:', text);
-                clearMessage();
+                if (messageBox) {
+                    messageBox.style.display = 'none';
+                }
                 return;
             }
             
             if (data.error) {
                 console.error('Conflict check error:', data.error);
-                clearMessage();
+                if (messageBox) {
+                    messageBox.style.display = 'none';
+                }
                 return;
             }
             
@@ -1429,17 +1617,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 showMessage(successMsg, [], data.risk_score ?? null, eventLabel, 'success');
                 lastShown = {fid, date, timeSlot};
                 
-                // Auto-hide success message after 4 seconds (but keep it visible long enough to see)
-                setTimeout(() => {
-                    // Only clear if this is still the last shown (user hasn't changed selection)
-                    if (lastShown && `${lastShown.fid}|${lastShown.date}|${lastShown.timeSlot}` === key) {
-                        clearMessage();
-                    }
-                }, 4000);
+                // Keep success message visible - don't auto-hide
             }
         } catch (e) {
             console.error('Conflict check exception:', e);
-            clearMessage();
+            console.error('Error stack:', e.stack);
+            if (messageBox && messageText) {
+                messageBox.style.display = 'block';
+                messageBox.style.opacity = '1';
+                messageBox.style.background = '#fdecee';
+                messageBox.style.border = '2px solid #b23030';
+                messageText.style.color = '#b23030';
+                messageText.textContent = 'Error checking availability. Please try again.';
+            }
         }
     }
 
@@ -1453,11 +1643,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add event listeners for both 'change' and 'input' events
     // 'change' fires on blur, 'input' fires as user types/selects
-    facilitySel?.addEventListener('change', debouncedCheckConflict);
-    dateInput?.addEventListener('change', debouncedCheckConflict);
-    dateInput?.addEventListener('input', debouncedCheckConflict);
-    startTimeInput?.addEventListener('change', debouncedCheckConflict);
-    endTimeInput?.addEventListener('change', debouncedCheckConflict);
+    if (facilitySel) {
+        facilitySel.addEventListener('change', debouncedCheckConflict);
+    }
+    if (dateInput) {
+        dateInput.addEventListener('change', debouncedCheckConflict);
+        dateInput.addEventListener('input', debouncedCheckConflict);
+    }
+    if (startTimeInput) {
+        startTimeInput.addEventListener('change', debouncedCheckConflict);
+    }
+    if (endTimeInput) {
+        endTimeInput.addEventListener('change', debouncedCheckConflict);
+    }
     
     // Also trigger check when time inputs are updated via time picker
     startTimeInput?.addEventListener('blur', function() {

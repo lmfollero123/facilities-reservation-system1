@@ -1,0 +1,282 @@
+﻿<style>
+/* Standardized card shadow for consistency across page */
+:root {
+    --standard-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --standard-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Hero Title - Dominant */
+.hero-title {
+    font-size: 2rem;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
+}
+
+@media (min-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+}
+
+@media (min-width: 992px) {
+    .hero-title {
+        font-size: 3rem;
+    }
+}
+
+/* Hero Subtitle - Secondary emphasis */
+.hero-subtitle {
+    font-size: 1.125rem;
+    line-height: 1.6;
+    opacity: 0.95;
+    font-weight: 400;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    margin-bottom: 2rem !important;
+}
+
+@media (min-width: 768px) {
+    .hero-subtitle {
+        font-size: 1.25rem;
+    }
+}
+
+/* Hero Button Container - Unified flex container */
+.hero-btn-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 0 auto 2rem;
+    max-width: 500px;
+}
+
+@media (min-width: 481px) {
+    .hero-btn-row {
+        flex-wrap: nowrap;
+        gap: 1.25rem;
+    }
+}
+
+/* Unified Button Styling - Same height, border radius, alignment */
+.hero-btn-primary,
+.hero-btn-secondary {
+    min-height: 48px;
+    padding: 0.875rem 2rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    flex: 1;
+    max-width: 220px;
+    box-shadow: var(--standard-shadow);
+}
+
+/* Primary Button - Filled */
+.hero-btn-primary {
+    background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark));
+    color: #ffffff;
+    border: none;
+}
+
+.hero-btn-primary:hover {
+    background: linear-gradient(135deg, #4d76d6, #1651d0);
+    transform: translateY(-2px);
+    box-shadow: var(--standard-shadow-hover);
+    color: #ffffff;
+}
+
+/* Secondary Button - Outlined */
+.hero-btn-secondary {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.hero-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: translateY(-2px);
+    box-shadow: var(--standard-shadow-hover);
+    color: #ffffff;
+}
+
+@media (max-width: 480px) {
+    .hero-btn-primary,
+    .hero-btn-secondary {
+        width: 100%;
+        max-width: 100%;
+        min-height: 44px;
+    }
+    
+    .hero-btn-row {
+        flex-direction: column;
+        gap: 0.875rem;
+    }
+}
+
+/* Operation Hours Card - De-emphasized with glassmorphism */
+.operation-hours {
+    display: flex;
+    justify-content: center;
+    margin: 1rem 0 0;
+    opacity: 0.8;
+}
+
+.hours-card {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    box-shadow: var(--standard-shadow);
+    max-width: 450px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.hours-card i {
+    font-size: 1.5rem;
+    color: #285ccd;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
+.hours-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.hours-info strong {
+    color: #1e3a5f;
+    font-size: 0.875rem;
+    margin-bottom: 0.2rem;
+    opacity: 0.9;
+    font-weight: 600;
+}
+
+.hours-info span {
+    color: #4a5568;
+    font-size: 0.8125rem;
+    opacity: 0.85;
+    line-height: 1.4;
+}
+
+/* Quick FAQs - Improved glassmorphism blending */
+.quick-faqs {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-top: 2.5rem;
+    box-shadow: var(--standard-shadow);
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.quick-faqs h3 {
+    color: #1e3a5f;
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.faq-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .faq-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.faq-item {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 1.25rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-left: 4px solid #285ccd;
+    transition: all 0.2s ease;
+    box-shadow: var(--standard-shadow);
+}
+
+.faq-item:hover {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: var(--standard-shadow-hover);
+    transform: translateY(-2px);
+}
+
+.faq-q {
+    display: block;
+    color: #1e3a5f;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+    font-weight: 600;
+}
+
+.faq-a {
+    color: #4a5568;
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Mobile Responsive */
+@media (max-width: 767px) {
+    .hero-title {
+        font-size: 1.75rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+    
+    .hours-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 0.875rem 1rem;
+        max-width: 100%;
+    }
+    
+    .hours-card i {
+        font-size: 1.25rem;
+    }
+    
+    .operation-hours {
+        opacity: 0.75;
+    }
+    
+    .quick-faqs {
+        padding: 1.5rem 1rem;
+        margin-top: 2rem;
+        background: rgba(255, 255, 255, 0.9);
+    }
+    
+    .faq-item {
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.7);
+    }
+}
+</style>

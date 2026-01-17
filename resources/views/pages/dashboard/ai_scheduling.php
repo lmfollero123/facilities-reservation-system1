@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -152,6 +152,20 @@ ob_start();
 
 <div class="reports-grid">
     <section>
+        <!-- AI Demand Forecast Card - Clickable -->
+        <div class="report-card" style="cursor: pointer; margin-bottom: 1.5rem;" onclick="openAIModal()">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <div class="ai-chip">
+                    <span>AI</span> <span>Demand Forecast</span>
+                </div>
+                <span style="color: #285ccd; font-size: 0.9rem; font-weight: 500;">View Insights →</span>
+            </div>
+            <p class="resource-meta" style="margin: 0; color: #6c757d;">
+                Click to view AI-powered insights about booking patterns, peak times, and demand forecasts.
+            </p>
+        </div>
+        
+        <!-- Recommended Time Slots -->
         <div class="report-card">
             <h2>Recommended Time Slots</h2>
             <p style="color:#6c757d; font-size:0.9rem; margin-bottom:1rem; line-height:1.5;">
@@ -188,7 +202,7 @@ ob_start();
                             <td><?= (int)$slot['count']; ?></td>
                             <td>
                                 <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
-                                   href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php?facility_id=<?= urlencode($slot['facility_id']); ?>&time_slot=<?= urlencode($slot['time']); ?>">
+                                   href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode($slot['facility_id']); ?>&time_slot=<?= urlencode($slot['time']); ?>">
                                     Book this slot
                                 </a>
                             </td>
@@ -199,39 +213,6 @@ ob_start();
             <?php endif; ?>
         </div>
     </section>
-
-    <aside>
-        <div class="ai-panel">
-            <div class="ai-chip">
-                <span>AI</span> <span>Demand Forecast</span>
-            </div>
-            <h3>Insights Overview</h3>
-            <ul style="line-height:1.8;">
-                <?php if ($peakDay): ?>
-                    <li><strong>Peak day:</strong> Most approved reservations fall on <strong><?= htmlspecialchars($peakDay['day_name']); ?>s</strong>.</li>
-                <?php endif; ?>
-                <?php if ($peakTime): ?>
-                    <li><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
-                <?php endif; ?>
-                <li><strong>Recommendation Scores:</strong>
-                    <ul style="margin-top:0.5rem; padding-left:1.5rem; list-style-type:disc;">
-                        <li><strong>High</strong> = 0-1 past bookings (low conflict risk, best choice)</li>
-                        <li><strong>Medium</strong> = 2-3 past bookings (moderate usage)</li>
-                        <li><strong>Low</strong> = 4+ past bookings (high competition, more conflicts)</li>
-                    </ul>
-                </li>
-                <li>Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
-                <li>These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
-            </ul>
-        </div>
-        <div class="report-card" style="margin-top: 1.5rem;">
-            <h2>Smart Scheduling</h2>
-            <p class="resource-meta">
-                This page uses historical booking patterns and AI-powered analysis to recommend optimal time slots. 
-                Recommendations consider seasonality, day-of-week patterns, and historical usage data to help you find the best available times.
-            </p>
-        </div>
-    </aside>
 </div>
 
 <div class="reports-grid" style="margin-top:1.5rem;">
@@ -266,6 +247,141 @@ ob_start();
         </p>
     </section>
 </div>
+<!-- AI Demand Forecast Modal -->
+<div id="aiForecastModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb;">
+            <div>
+                <div class="ai-chip" style="margin-bottom: 0.5rem;">
+                    <span>AI</span> <span>Demand Forecast</span>
+                </div>
+                <h2 style="margin: 0; color: #1e3a5f;">Insights Overview</h2>
+            </div>
+            <button type="button" onclick="closeAIModal()" style="background: none; border: none; font-size: 1.5rem; color: #6c757d; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'; this.style.color='#333';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
+        </div>
+        <div class="modal-body">
+            <ul style="line-height:1.8; margin: 0; padding-left: 1.25rem; color: #4a5568;">
+                <?php if ($peakDay): ?>
+                    <li style="margin-bottom: 1rem;"><strong>Peak day:</strong> Most approved reservations fall on <strong><?= htmlspecialchars($peakDay['day_name']); ?>s</strong>.</li>
+                <?php endif; ?>
+                <?php if ($peakTime): ?>
+                    <li style="margin-bottom: 1rem;"><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
+                <?php endif; ?>
+                <li style="margin-bottom: 1rem;"><strong>Recommendation Scores:</strong>
+                    <ul style="margin-top:0.5rem; padding-left:1.5rem; list-style-type:disc;">
+                        <li><strong>High</strong> = 0-1 past bookings (low conflict risk, best choice)</li>
+                        <li><strong>Medium</strong> = 2-3 past bookings (moderate usage)</li>
+                        <li><strong>Low</strong> = 4+ past bookings (high competition, more conflicts)</li>
+                    </ul>
+                </li>
+                <li style="margin-bottom: 1rem;">Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
+                <li style="margin-bottom: 0;">These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
+            </ul>
+        </div>
+        <div class="modal-footer" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; text-align: right;">
+            <button type="button" onclick="closeAIModal()" class="btn-primary" style="padding: 0.5rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-content {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 2rem;
+    width: 100%;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-overlay.show {
+    display: flex !important;
+}
+
+.ai-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.ai-chip span:first-child {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 700;
+}
+</style>
+
+<script>
+function openAIModal() {
+    const modal = document.getElementById('aiForecastModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // Prevent body scroll
+    }
+}
+
+function closeAIModal() {
+    const modal = document.getElementById('aiForecastModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore body scroll
+    }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('aiForecastModal');
+    if (modal && e.target === modal) {
+        closeAIModal();
+    }
+});
+
+// Close modal on ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('aiForecastModal');
+        if (modal && modal.style.display === 'flex') {
+            closeAIModal();
+        }
+    }
+});
+</script>
+
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';

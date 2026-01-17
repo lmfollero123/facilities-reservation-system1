@@ -15,6 +15,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/ai_helpers.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 
 header('Content-Type: application/json');
@@ -52,6 +53,7 @@ try {
     // Try ML-based recommendations if available
     if (function_exists('recommendFacilitiesML')) {
         try {
+            error_log("Attempting ML recommendations for purpose: $purpose");
             $recommendations = recommendFacilitiesML(
                 facilities: $facilities,
                 userId: $userId,
@@ -64,18 +66,37 @@ try {
                 limit: 5
             );
             
-            if (!isset($recommendations['error']) && !empty($recommendations['recommendations'])) {
+            error_log("ML recommendations result: " . json_encode(['has_recommendations' => !empty($recommendations['recommendations']), 'has_error' => isset($recommendations['error']), 'error' => $recommendations['error'] ?? null]));
+            
+            // Check if we got valid recommendations (even if there was an error, check if recommendations exist)
+            if (!empty($recommendations['recommendations'])) {
+                error_log("Returning ML recommendations (ML enabled: " . (!isset($recommendations['error']) ? 'true' : 'false') . ")");
                 echo json_encode([
                     'recommendations' => $recommendations['recommendations'],
-                    'ml_enabled' => true
+                    'ml_enabled' => !isset($recommendations['error']),
+                    'ml_error' => $recommendations['error'] ?? null
                 ]);
                 exit;
             }
+            
+            // If error occurred and no recommendations, log it and fall through
+            if (isset($recommendations['error'])) {
+                error_log("Facility recommendation ML error: " . $recommendations['error']);
+            } else {
+                error_log("ML returned empty recommendations array - falling back to rule-based");
+            }
         } catch (Exception $e) {
-            error_log("Facility recommendation ML error: " . $e->getMessage());
+            error_log("Facility recommendation ML exception: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            // Fall through to rule-based recommendations
+        } catch (Throwable $e) {
+            error_log("Facility recommendation ML fatal error: " . $e->getMessage());
             // Fall through to rule-based recommendations
         }
+    } else {
+        error_log("recommendFacilitiesML function not available - ML recommendations disabled");
     }
+    
+    error_log("Using rule-based recommendations fallback");
     
     // Fallback: Rule-based recommendations (simple keyword matching)
     $purposeLower = strtolower($purpose);

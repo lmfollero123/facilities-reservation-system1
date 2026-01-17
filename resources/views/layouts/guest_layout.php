@@ -3,12 +3,23 @@ require_once __DIR__ . '/../../../config/app.php';
 $pageTitle = $pageTitle ?? 'LGU Facilities Reservation';
 $bodyClass = $bodyClass ?? '';
 // VISUAL CHANGE ONLY - Add landing-page class for home page and public pages
-$isHomePage = strpos($_SERVER['PHP_SELF'] ?? '', 'home.php') !== false;
-$isPublicPage = strpos($_SERVER['PHP_SELF'] ?? '', 'facilities.php') !== false || 
-                strpos($_SERVER['PHP_SELF'] ?? '', 'facility_details.php') !== false ||
-                strpos($_SERVER['PHP_SELF'] ?? '', 'contact.php') !== false ||
-                strpos($_SERVER['PHP_SELF'] ?? '', 'login.php') !== false ||
-                strpos($_SERVER['PHP_SELF'] ?? '', 'register.php') !== false;
+$requestUri = $_SERVER['REQUEST_URI'] ?? '';
+// Remove hash and query string for checking
+$requestPath = parse_url($requestUri, PHP_URL_PATH) ?? $requestUri;
+$phpSelf = $_SERVER['PHP_SELF'] ?? '';
+$isHomePage = strpos($phpSelf, 'home.php') !== false || $requestPath === '/' || (strpos($requestPath, '/home') !== false);
+$isPublicPage = strpos($phpSelf, 'facilities.php') !== false || 
+                strpos($requestPath, '/facilities') !== false ||
+                strpos($phpSelf, 'facility_details.php') !== false ||
+                strpos($requestPath, '/facility-details') !== false ||
+                strpos($phpSelf, 'contact.php') !== false ||
+                strpos($requestPath, '/contact') !== false ||
+                strpos($phpSelf, 'faq.php') !== false ||
+                strpos($requestPath, '/faq') !== false ||
+                strpos($phpSelf, 'login.php') !== false ||
+                strpos($requestPath, '/login') !== false ||
+                strpos($phpSelf, 'register.php') !== false ||
+                strpos($requestPath, '/register') !== false;
 if ($isHomePage || $isPublicPage) {
     $bodyClass = ($bodyClass ? $bodyClass . ' ' : '') . 'landing-page';
 }
@@ -41,7 +52,7 @@ if ($isHomePage || $isPublicPage) {
         $customCss = '/public/css/style.css';
     }
     // Cache-busting: Update this version number when CSS changes are deployed
-    $cssVersion = '3.0';
+    $cssVersion = '5.2';
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
     <style>

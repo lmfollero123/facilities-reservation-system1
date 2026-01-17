@@ -5,36 +5,38 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../config/app.php';
 $base = base_path();
 $role = $_SESSION['role'] ?? 'Resident';
-$current = $_SERVER['PHP_SELF'] ?? '';
+// Get current page from URL path for clean URL detection
+$currentPath = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+$current = $currentPath;
 
 $primaryLinks = [
-    ['label' => 'Dashboard', 'href' => $base . '/resources/views/pages/dashboard/index.php', 'icon' => 'dashboard'],
-    ['label' => 'Book a Facility', 'href' => $base . '/resources/views/pages/dashboard/book_facility.php', 'icon' => 'calendar-plus'],
-    ['label' => 'My Reservations', 'href' => $base . '/resources/views/pages/dashboard/my_reservations.php', 'icon' => 'calendar'],
-    ['label' => 'Smart Scheduler', 'href' => $base . '/resources/views/pages/dashboard/ai_scheduling.php', 'icon' => 'robot'],
+    ['label' => 'Dashboard', 'href' => $base . '/dashboard', 'icon' => 'dashboard', 'page' => 'index'],
+    ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'],
+    ['label' => 'My Reservations', 'href' => $base . '/dashboard/my-reservations', 'icon' => 'calendar', 'page' => 'my_reservations'],
+    ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'],
 ];
 
 $opsLinks = [];
 if (in_array($role, ['Admin', 'Staff'], true)) {
     $opsLinks = [
-        ['label' => 'Reservation Approvals', 'href' => $base . '/resources/views/pages/dashboard/reservations_manage.php', 'icon' => 'check-circle'],
-        ['label' => 'Announcements', 'href' => $base . '/resources/views/pages/dashboard/announcements_manage.php', 'icon' => 'megaphone'],
-        ['label' => 'Facility Management', 'href' => $base . '/resources/views/pages/dashboard/facility_management.php', 'icon' => 'building'],
-        ['label' => 'Maintenance Integration', 'href' => $base . '/resources/views/pages/dashboard/maintenance_integration.php', 'icon' => 'wrench'],
-        ['label' => 'Infrastructure Projects', 'href' => $base . '/resources/views/pages/dashboard/infrastructure_projects_integration.php', 'icon' => 'hammer'],
-        ['label' => 'Utilities Integration', 'href' => $base . '/resources/views/pages/dashboard/utilities_integration.php', 'icon' => 'bolt'],
-        ['label' => 'Reports & Analytics', 'href' => $base . '/resources/views/pages/dashboard/reports.php', 'icon' => 'chart-bar'],
-        ['label' => 'User Management', 'href' => $base . '/resources/views/pages/dashboard/user_management.php', 'icon' => 'users'],
-        ['label' => 'Document Management', 'href' => $base . '/resources/views/pages/dashboard/document_management.php', 'icon' => 'folder'],
-        ['label' => 'Contact Inquiries', 'href' => $base . '/resources/views/pages/dashboard/contact_inquiries.php', 'icon' => 'envelope'],
+        ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'],
+        ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'],
+        ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'],
+        ['label' => 'Maintenance Integration', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'],
+        ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'],
+        ['label' => 'Utilities Integration', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'],
+        ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'],
+        ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
+        ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'],
+        ['label' => 'Contact Information', 'href' => $base . '/dashboard/contact-info', 'icon' => 'telephone', 'page' => 'contact_info_manage'],
     ];
 }
 
 $bottomLinks = [];
 if (in_array($role, ['Admin', 'Staff'], true)) {
-    $bottomLinks[] = ['label' => 'Audit Trail', 'href' => $base . '/resources/views/pages/dashboard/audit_trail.php', 'icon' => 'file-text'];
+    $bottomLinks[] = ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
 }
-$bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/pages/dashboard/profile.php', 'icon' => 'user'];
+$bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/dashboard/profile', 'icon' => 'user', 'page' => 'profile'];
 ?>
 
 <aside class="sidebar">
@@ -47,7 +49,9 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
         <div class="sidebar-section">
             <div class="sidebar-section-title">Main</div>
             <?php foreach ($primaryLinks as $link):
-                $isActive = str_contains($current, basename($link['href']));
+                // Check if current path matches the link's clean URL or page name
+                $linkPath = trim(parse_url($link['href'], PHP_URL_PATH), '/');
+                $isActive = ($current === $linkPath || $current === 'dashboard/' . str_replace('_', '-', $link['page'])) || str_contains($current, $link['page']);
                 ?>
                 <a href="<?= $link['href']; ?>" class="<?= $isActive ? 'active' : ''; ?>" data-icon="<?= $link['icon']; ?>">
                     <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -77,7 +81,9 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
                 </div>
                 <div class="collapsible-content" id="operations-menu" data-collapsed="false">
                     <?php foreach ($opsLinks as $link):
-                        $isActive = str_contains($current, basename($link['href']));
+                        // Check if current path matches the link's clean URL or page name
+                        $linkPath = trim(parse_url($link['href'], PHP_URL_PATH), '/');
+                        $isActive = ($current === $linkPath || $current === 'dashboard/' . str_replace('_', '-', $link['page'])) || str_contains($current, $link['page']);
                         ?>
                         <a href="<?= $link['href']; ?>" class="<?= $isActive ? 'active' : ''; ?>" data-icon="<?= $link['icon']; ?>">
                             <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -96,6 +102,7 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
                                     'users' => '<path d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M21 21V19C20.9993 17.1 20.1 15.3 18.6 14.1M3 21V19C3.00068 17.1 3.9 15.3 5.4 14.1M12 11C13.6569 11 15 9.65685 15 8C15 6.34315 13.6569 5 12 5C10.3431 5 9 6.34315 9 8C9 9.65685 10.3431 11 12 11ZM12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11ZM18 13C19.6569 13 21 11.6569 21 10C21 8.34315 19.6569 7 18 7M6 13C4.34315 13 3 11.6569 3 10C3 8.34315 4.34315 7 6 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'envelope' => '<path d="M3 8L12 13L21 8M3 8L3 16C3 17.1 3.9 18 5 18H19C20.1 18 21 17.1 21 16V8M3 8L12 3L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                     'folder' => '<path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+                                    'telephone' => '<path d="M3 5C3 3.89543 3.89543 3 5 3H8.27924C8.70967 3 9.09181 3.27543 9.22792 3.68377L10.7257 8.17721C10.8831 8.64932 10.6694 9.16531 10.2243 9.38787L7.96701 10.5165C9.06925 12.9612 11.0388 14.9308 13.4835 16.033L14.6121 13.7757C14.8347 13.3306 15.3507 13.1169 15.8228 13.2743L20.3162 14.7721C20.7246 14.9082 21 15.2903 21 15.7208V19C21 20.1046 20.1046 21 19 21H18C9.71573 21 3 14.2843 3 6V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
                                 ];
                                 echo $iconPaths[$link['icon']] ?? '';
                                 ?>
@@ -110,7 +117,9 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/resources/views/page
         <div class="sidebar-section sidebar-bottom">
             <div class="sidebar-section-title">Account</div>
             <?php foreach ($bottomLinks as $link):
-                $isActive = str_contains($current, basename($link['href']));
+                // Check if current path matches the link's clean URL or page name
+                $linkPath = trim(parse_url($link['href'], PHP_URL_PATH), '/');
+                $isActive = ($current === $linkPath || $current === 'dashboard/' . str_replace('_', '-', $link['page'])) || str_contains($current, $link['page']);
                 ?>
                 <a href="<?= $link['href']; ?>" class="<?= $isActive ? 'active' : ''; ?>" data-icon="<?= $link['icon']; ?>">
                     <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

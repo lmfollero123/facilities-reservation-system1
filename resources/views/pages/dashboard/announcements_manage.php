@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 
 // Verify user is authenticated and has admin/staff role
 if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 

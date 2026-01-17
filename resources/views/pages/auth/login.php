@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     if ($next && str_starts_with($next, '/')) {
                                         header('Location: ' . $next);
                                     } else {
-                                        header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+                                        header('Location: ' . base_path() . '/dashboard');
                                     }
                                     exit;
                                 }
@@ -238,7 +238,7 @@ ob_start();
             </label>
             
             <div style="text-align: right; margin-bottom: 1rem;">
-                <a href="<?= base_path(); ?>/resources/views/pages/auth/forgot_password.php" style="color: #2864ef; font-size: 0.85rem; text-decoration: none;">
+                <a href="<?= base_path(); ?>/forgot-password" style="color: #2864ef; font-size: 0.85rem; text-decoration: none;">
                     Forgot Password?
                 </a>
             </div>
@@ -247,7 +247,7 @@ ob_start();
         </form>
         
         <div class="auth-footer">
-            Need an account? <a href="<?= base_path(); ?>/resources/views/pages/auth/register.php">Register here</a>
+            Need an account? <a href="<?= base_path(); ?>/register">Register here</a>
         </div>
     </div>
 </div>

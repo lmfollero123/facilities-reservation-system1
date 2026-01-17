@@ -26,8 +26,8 @@ if __name__ == "__main__":
         is_commercial = input_data.get('is_commercial', False)
         user_booking_count = input_data.get('user_booking_count', 0)
         limit = input_data.get('limit', 5)
-    except:
-        print(json.dumps({'error': 'Invalid input'}))
+    except Exception as e:
+        print(json.dumps({'error': 'Invalid input: ' + str(e)}))
         sys.exit(1)
     
     if not facilities or not reservation_date:

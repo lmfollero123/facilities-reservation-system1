@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
@@ -112,47 +112,211 @@ ob_start();
     </section>
 
     <!-- Retention Policies -->
-    <section class="booking-card">
+    <section class="booking-card" style="grid-column: 1 / -1;">
         <h2>Retention Policies</h2>
-        <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1rem;">
-            Document retention periods based on Philippine legal requirements (Data Privacy Act, BIR, Local Government retention policies).
-        </p>
-        <div style="display:flex; flex-direction:column; gap:0.75rem;">
-            <?php foreach ($policies as $policy): ?>
-                <div style="padding:1rem; background:#f8f9fa; border-radius:6px; border-left:4px solid #2563eb;">
-                    <div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:0.5rem;">
-                        <div style="flex:1;">
-                            <h4 style="margin:0 0 0.25rem; color:#1b1b1f; font-size:1rem; font-weight:600;">
-                                <?= ucwords(str_replace('_', ' ', htmlspecialchars($policy['document_type']))); ?>
-                            </h4>
-                            <p style="margin:0 0 0.5rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
-                                <?= htmlspecialchars($policy['description'] ?? 'No description'); ?>
-                            </p>
-                            <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.85rem;">
-                                <div>
-                                    <span style="color:#5b6888;">Retention:</span>
-                                    <strong style="color:#1b1b1f;"><?= $policy['retention_days']; ?> days</strong>
-                                </div>
-                                <div>
-                                    <span style="color:#5b6888;">Archive After:</span>
-                                    <strong style="color:#2563eb;"><?= $policy['archive_after_days']; ?> days</strong>
-                                </div>
-                                <?php if ($policy['auto_delete_after_days']): ?>
-                                    <div>
-                                        <span style="color:#5b6888;">Auto-Delete:</span>
-                                        <strong style="color:#dc3545;"><?= $policy['auto_delete_after_days']; ?> days</strong>
-                                    </div>
-                                <?php else: ?>
-                                    <div>
-                                        <span style="color:#5b6888;">Auto-Delete:</span>
-                                        <strong style="color:#6b7280;">Never (Manual Review)</strong>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
+        <div style="background: #f0f7ff; border-left: 4px solid #2563eb; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 0.75rem 0; color: #1e3a5f; font-size: 1.1rem;">Legal Basis</h3>
+            <p style="margin: 0 0 0.5rem 0; color: #374151; line-height: 1.6; font-size: 0.95rem;">
+                Document retention periods are aligned with Philippine laws, including:
+            </p>
+            <ul style="margin: 0; padding-left: 1.5rem; color: #4a5568; line-height: 1.8; font-size: 0.9rem;">
+                <li><strong>Republic Act No. 10173</strong> – Data Privacy Act of 2012</li>
+                <li><strong>Republic Act No. 9470</strong> – National Archives of the Philippines Act of 2007</li>
+                <li><strong>COA Circular No. 2012-003</strong> – Prescribes retention of government records for audit and accountability</li>
+                <li><strong>BIR Revenue Regulations No. 9-2009</strong> – Books of accounts and supporting records (minimum 10 years)</li>
+                <li><strong>Local Government Code of 1991 (RA 7160)</strong> – Establishes LGU accountability, transparency, and records management duties</li>
+            </ul>
+            <p style="margin: 0.75rem 0 0 0; color: #6b7280; font-size: 0.85rem; font-style: italic;">
+                <strong>Note:</strong> Final disposal of records is subject to LGU approval and applicable COA and National Archives guidelines.
+            </p>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:1.25rem;">
+            <!-- User Documents -->
+            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #2563eb;">
+                <div style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">1. User Documents (Identity Records)</h3>
+                    <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
+                        <strong style="color:#374151; font-size:0.9rem;">Legal Basis:</strong>
+                        <ul style="margin:0.5rem 0 0 0; padding-left:1.5rem; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+                            <li>RA 10173 (Data Privacy Act)</li>
+                            <li>RA 9470 (National Archives Act)</li>
+                            <li>BIR RR 9-2009 (Supporting records)</li>
+                        </ul>
+                    </div>
+                    <p style="margin:0 0 0.75rem 0; color:#4a5568; line-height:1.6; font-size:0.9rem;">
+                        <strong>Policy:</strong> Identity documents are retained only as long as necessary for verification, accountability, and audit purposes.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1rem;">
+                        <div style="padding:0.75rem; background:#f0f9ff; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Retention Period</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#2563eb;">7 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">2555 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fef3c7; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Archive After</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#d97706;">3 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1095 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fee2e2; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Auto-Delete</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#dc2626;">7 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">2555 days</div>
+                        </div>
+                    </div>
+                    <p style="margin:1rem 0 0 0; padding:0.75rem; background:#e0f2fe; border-radius:6px; color:#0c4a6e; font-size:0.85rem; line-height:1.5;">
+                        <strong>Justification:</strong> Seven years balances audit defensibility and data minimization under the Data Privacy Act.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Reservation Records -->
+            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #10b981;">
+                <div style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">2. Reservation Records</h3>
+                    <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
+                        <strong style="color:#374151; font-size:0.9rem;">Legal Basis:</strong>
+                        <ul style="margin:0.5rem 0 0 0; padding-left:1.5rem; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+                            <li>RA 7160 (Local Government Code)</li>
+                            <li>RA 9470 (National Archives Act)</li>
+                            <li>COA Circular No. 2012-003</li>
+                        </ul>
+                    </div>
+                    <p style="margin:0 0 0.75rem 0; color:#4a5568; line-height:1.6; font-size:0.9rem;">
+                        <strong>Policy:</strong> Reservation records are treated as official LGU transaction records.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1rem;">
+                        <div style="padding:0.75rem; background:#f0f9ff; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Retention Period</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#2563eb;">5 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1825 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fef3c7; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Archive After</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#d97706;">3 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1095 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fee2e2; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Auto-Delete</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#dc2626;">5 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1825 days</div>
+                        </div>
+                    </div>
+                    <p style="margin:1rem 0 0 0; padding:0.75rem; background:#d1fae5; border-radius:6px; color:#065f46; font-size:0.85rem; line-height:1.5;">
+                        <strong>Justification:</strong> Five years is standard for government transaction records unless escalated to audit or dispute.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Reservation History -->
+            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #8b5cf6;">
+                <div style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">3. Reservation History (User-Facing Logs)</h3>
+                    <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
+                        <strong style="color:#374151; font-size:0.9rem;">Legal Basis:</strong>
+                        <ul style="margin:0.5rem 0 0 0; padding-left:1.5rem; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+                            <li>RA 10173 (Data Privacy Act)</li>
+                            <li>RA 9470 (National Archives Act)</li>
+                        </ul>
+                    </div>
+                    <p style="margin:0 0 0.75rem 0; color:#4a5568; line-height:1.6; font-size:0.9rem;">
+                        <strong>Policy:</strong> Reservation history mirrors reservation record retention to maintain consistency.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1rem;">
+                        <div style="padding:0.75rem; background:#f0f9ff; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Retention Period</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#2563eb;">5 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1825 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fef3c7; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Archive After</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#d97706;">3 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1095 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fee2e2; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Auto-Delete</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#dc2626;">5 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1825 days</div>
                         </div>
                     </div>
                 </div>
-            <?php endforeach; ?>
+            </div>
+
+            <!-- Audit Logs -->
+            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #f59e0b;">
+                <div style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">4. Audit Logs</h3>
+                    <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
+                        <strong style="color:#374151; font-size:0.9rem;">Legal Basis:</strong>
+                        <ul style="margin:0.5rem 0 0 0; padding-left:1.5rem; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+                            <li>COA Circular No. 2012-003</li>
+                            <li>RA 7160 (Local Government Code)</li>
+                            <li>RA 9470 (National Archives Act)</li>
+                        </ul>
+                    </div>
+                    <p style="margin:0 0 0.75rem 0; color:#4a5568; line-height:1.6; font-size:0.9rem;">
+                        <strong>Policy:</strong> Audit logs are critical accountability records and must not be automatically deleted.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1rem;">
+                        <div style="padding:0.75rem; background:#f0f9ff; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Retention Period</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#2563eb;">7 years minimum</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">2555 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fef3c7; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Archive After</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#d97706;">5 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1825 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#f3f4f6; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Auto-Delete</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#6b7280;">Not Allowed</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">Manual Review Required</div>
+                        </div>
+                    </div>
+                    <p style="margin:1rem 0 0 0; padding:0.75rem; background:#fef3c7; border-radius:6px; color:#92400e; font-size:0.85rem; line-height:1.5;">
+                        <strong>Justification:</strong> Audit logs may be required beyond 7 years for investigations, COA review, or legal proceedings.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Security Logs -->
+            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #ef4444;">
+                <div style="margin-bottom:1rem;">
+                    <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">5. Security Logs</h3>
+                    <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
+                        <strong style="color:#374151; font-size:0.9rem;">Legal Basis:</strong>
+                        <ul style="margin:0.5rem 0 0 0; padding-left:1.5rem; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+                            <li>RA 10173 (Security of personal data)</li>
+                            <li>NPC Advisory Opinions on breach investigation</li>
+                            <li>RA 9470 (National Archives Act)</li>
+                        </ul>
+                    </div>
+                    <p style="margin:0 0 0.75rem 0; color:#4a5568; line-height:1.6; font-size:0.9rem;">
+                        <strong>Policy:</strong> Security logs are retained for incident response, forensic review, and compliance reporting.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1rem;">
+                        <div style="padding:0.75rem; background:#f0f9ff; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Retention Period</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#2563eb;">3 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">1095 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#fef3c7; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Archive After</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#d97706;">2 years</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">730 days</div>
+                        </div>
+                        <div style="padding:0.75rem; background:#f3f4f6; border-radius:6px;">
+                            <div style="font-size:0.85rem; color:#5b6888; margin-bottom:0.25rem;">Auto-Delete</div>
+                            <div style="font-size:1.25rem; font-weight:700; color:#6b7280;">Not Allowed</div>
+                            <div style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">Manual Review Required</div>
+                        </div>
+                    </div>
+                    <p style="margin:1rem 0 0 0; padding:0.75rem; background:#fee2e2; border-radius:6px; color:#991b1b; font-size:0.85rem; line-height:1.5;">
+                        <strong>Justification:</strong> Logs may be required as evidence in data breach or misuse investigations.
+                    </p>
+                </div>
+            </div>
         </div>
     </section>
 

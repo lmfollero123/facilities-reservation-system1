@@ -52,7 +52,7 @@ ob_start();
                             <h3><?= htmlspecialchars($facility['name']); ?></h3>
                             <p><?= htmlspecialchars($facility['description']); ?></p>
                             <small style="color:#5b6888; font-weight:500;">Free of Charge</small>
-                            <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facility_details.php?id=<?= (int)$facility['id']; ?>">View Details</a>
+                            <a class="btn btn-primary" href="<?= $base; ?>/facility-details?id=<?= (int)$facility['id']; ?>">View Details</a>
                         </div>
                     </article>
                 <?php endforeach; ?>

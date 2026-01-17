@@ -5,9 +5,49 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../config/app.php';
 $isLoggedIn = $_SESSION['user_authenticated'] ?? false;
 if (!$isLoggedIn) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
+
+// Redirect old full paths to clean URLs
+$currentPath = $_SERVER['REQUEST_URI'] ?? '';
+if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
+    // Map old file paths to clean URLs
+    $oldPathMap = [
+        'index.php' => '/dashboard',
+        'book_facility.php' => '/dashboard/book-facility',
+        'my_reservations.php' => '/dashboard/my-reservations',
+        'ai_scheduling.php' => '/dashboard/ai-scheduling',
+        'reservations_manage.php' => '/dashboard/reservations-manage',
+        'announcements_manage.php' => '/dashboard/announcements-manage',
+        'facility_management.php' => '/dashboard/facility-management',
+        'maintenance_integration.php' => '/dashboard/maintenance-integration',
+        'infrastructure_projects_integration.php' => '/dashboard/infrastructure-projects',
+        'utilities_integration.php' => '/dashboard/utilities-integration',
+        'reports.php' => '/dashboard/reports',
+        'user_management.php' => '/dashboard/user-management',
+        'document_management.php' => '/dashboard/document-management',
+        'contact_info_manage.php' => '/dashboard/contact-info',
+        'audit_trail.php' => '/dashboard/audit-trail',
+        'profile.php' => '/dashboard/profile',
+        'calendar.php' => '/dashboard/calendar',
+        'notifications.php' => '/dashboard/notifications',
+    ];
+    
+    foreach ($oldPathMap as $oldFile => $cleanUrl) {
+        if (strpos($currentPath, $oldFile) !== false) {
+            $redirectUrl = base_path() . $cleanUrl;
+            // Preserve query string if present
+            if (strpos($currentPath, '?') !== false) {
+                $queryString = substr($currentPath, strpos($currentPath, '?'));
+                $redirectUrl .= $queryString;
+            }
+            header('Location: ' . $redirectUrl, true, 301);
+            exit;
+        }
+    }
+}
+
 $pageTitle = $pageTitle ?? 'LGU Dashboard';
 $userName = $_SESSION['name'] ?? 'User';
 ?>
@@ -18,7 +58,7 @@ $userName = $_SESSION['name'] ?? 'User';
     <!-- Mobile-first viewport meta tag with proper scaling -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
-    <?php $cssVersion = '3.0'; // Cache-busting: Update when CSS changes are deployed ?>
+    <?php $cssVersion = '5.0'; // Cache-busting: Update when CSS changes are deployed ?>
     <link rel="stylesheet" href="<?= base_path(); ?>/public/css/style.css?v=<?= $cssVersion; ?>">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />

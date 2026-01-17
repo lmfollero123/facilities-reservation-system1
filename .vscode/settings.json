@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^php -l resources/views/pages/public/faq\\.php$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_read'])) {
             'id' => $notifId,
             'user_id' => $userId,
         ]);
-        header('Location: ' . base_path() . '/resources/views/pages/dashboard/notifications.php');
+        header('Location: ' . base_path() . '/dashboard/notifications');
         exit;
     }
 }

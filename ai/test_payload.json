@@ -1,0 +1,7 @@
+{
+    "facilities": [{"id": 1, "name": "Court", "amenities": "basketball", "capacity": "100", "description": "A nice court"}], 
+    "user_id": 1, 
+    "purpose": "basketball", 
+    "expected_attendees": 10, 
+    "reservation_date": "2023-10-27"
+}

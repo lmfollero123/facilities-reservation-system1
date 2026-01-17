@@ -240,7 +240,6 @@ ob_start();
     padding: 4rem 1rem;
     color: white;
     text-align: center;
-    margin-top: 70px;
 }
 
 @media (min-width: 768px) {

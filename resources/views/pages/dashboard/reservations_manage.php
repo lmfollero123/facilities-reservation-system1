@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
@@ -463,28 +463,35 @@ $approvedOffset = ($approvedPage - 1) * $approvedPerPage;
 $approvedSearch = trim($_GET['approved_search'] ?? '');
 
 // Build approved query with filters
+// Use unique parameter names for each occurrence to avoid PDO binding issues
 $approvedWhere = [
     'r.status = "approved"',
     '(' .
-    'r.reservation_date > :current_date' .
+    'r.reservation_date > :approved_current_date1' .
     ' OR (' .
-    'r.reservation_date = :current_date' .
+    'r.reservation_date = :approved_current_date2' .
     ' AND (' .
-    '(r.time_slot LIKE "%Morning%" AND :current_hour < 12)' .
-    ' OR (r.time_slot LIKE "%Afternoon%" AND :current_hour < 17)' .
-    ' OR (r.time_slot LIKE "%Evening%" AND :current_hour < 21)' .
+    '(r.time_slot LIKE "%Morning%" AND :approved_current_hour1 < 12)' .
+    ' OR (r.time_slot LIKE "%Afternoon%" AND :approved_current_hour2 < 17)' .
+    ' OR (r.time_slot LIKE "%Evening%" AND :approved_current_hour3 < 21)' .
     ')' .
     ')' .
     ')'
 ];
 $approvedParams = [
-    'current_date' => $currentDate,
-    'current_hour' => $currentHour,
+    'approved_current_date1' => $currentDate,
+    'approved_current_date2' => $currentDate,
+    'approved_current_hour1' => $currentHour,
+    'approved_current_hour2' => $currentHour,
+    'approved_current_hour3' => $currentHour,
 ];
 
 if (!empty($approvedSearch)) {
-    $approvedWhere[] = '(u.name LIKE :approved_search OR f.name LIKE :approved_search OR r.purpose LIKE :approved_search OR u.email LIKE :approved_search)';
-    $approvedParams['approved_search'] = '%' . $approvedSearch . '%';
+    $approvedWhere[] = '(u.name LIKE :approved_search1 OR f.name LIKE :approved_search2 OR r.purpose LIKE :approved_search3 OR u.email LIKE :approved_search4)';
+    $approvedParams['approved_search1'] = '%' . $approvedSearch . '%';
+    $approvedParams['approved_search2'] = '%' . $approvedSearch . '%';
+    $approvedParams['approved_search3'] = '%' . $approvedSearch . '%';
+    $approvedParams['approved_search4'] = '%' . $approvedSearch . '%';
 }
 
 $approvedWhereClause = 'WHERE ' . implode(' AND ', $approvedWhere);
@@ -521,18 +528,59 @@ $totalStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
 $totalRows = (int)$totalStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
-$historyStmt = $pdo->prepare(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.name AS requester
+// Get all reservations for modal (with search and filters)
+$modalSearch = trim($_GET['modal_search'] ?? '');
+$modalStatus = trim($_GET['modal_status'] ?? '');
+$modalPage = max(1, (int)($_GET['modal_page'] ?? 1));
+$modalPerPage = 10;
+$modalOffset = ($modalPage - 1) * $modalPerPage;
+
+$modalWhere = [];
+$modalParams = [];
+
+if (!empty($modalSearch)) {
+    $modalWhere[] = '(r.id LIKE :modal_search_id OR u.name LIKE :modal_search_name OR u.email LIKE :modal_search_email OR f.name LIKE :modal_search_facility)';
+    $modalParams['modal_search_id'] = '%' . $modalSearch . '%';
+    $modalParams['modal_search_name'] = '%' . $modalSearch . '%';
+    $modalParams['modal_search_email'] = '%' . $modalSearch . '%';
+    $modalParams['modal_search_facility'] = '%' . $modalSearch . '%';
+}
+
+if (!empty($modalStatus) && in_array($modalStatus, ['approved', 'denied', 'cancelled', 'pending', 'postponed'], true)) {
+    $modalWhere[] = 'r.status = :modal_status';
+    $modalParams['modal_status'] = $modalStatus;
+}
+
+$modalWhereClause = !empty($modalWhere) ? 'WHERE ' . implode(' AND ', $modalWhere) : '';
+
+// Count total for modal
+$modalCountStmt = $pdo->prepare(
+    "SELECT COUNT(*) as total FROM reservations r JOIN facilities f ON r.facility_id = f.id JOIN users u ON r.user_id = u.id $modalWhereClause"
+);
+foreach ($modalParams as $key => $value) {
+    $modalCountStmt->bindValue(':' . $key, $value);
+}
+$modalCountStmt->execute();
+$modalTotal = (int)$modalCountStmt->fetch(PDO::FETCH_ASSOC)['total'];
+$modalTotalPages = max(1, ceil($modalTotal / $modalPerPage));
+
+// Fetch modal reservations
+$modalHistoryStmt = $pdo->prepare(
+    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.name AS requester
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
+     $modalWhereClause
      ORDER BY r.updated_at DESC
-     LIMIT :limit OFFSET :offset'
+     LIMIT :modal_limit OFFSET :modal_offset"
 );
-$historyStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-$historyStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-$historyStmt->execute();
-$history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($modalParams as $key => $value) {
+    $modalHistoryStmt->bindValue(':' . $key, $value);
+}
+$modalHistoryStmt->bindValue(':modal_limit', $modalPerPage, PDO::PARAM_INT);
+$modalHistoryStmt->bindValue(':modal_offset', $modalOffset, PDO::PARAM_INT);
+$modalHistoryStmt->execute();
+$modalHistory = $modalHistoryStmt->fetchAll(PDO::FETCH_ASSOC);
 
 ob_start();
 ?>
@@ -540,8 +588,15 @@ ob_start();
     <div class="breadcrumb">
         <span>Reservations</span><span class="sep">/</span><span>Approvals</span>
     </div>
-    <h1>Reservation Approvals</h1>
-    <small>Review pending requests and manage reservation statuses.</small>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1;">
+            <h1>Reservation Approvals</h1>
+            <small>Review pending requests and manage reservation statuses.</small>
+        </div>
+        <button type="button" onclick="openAllReservationsModal()" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap;">
+            All Reservations
+        </button>
+    </div>
 </div>
 
 <?php if ($message): ?>
@@ -594,7 +649,7 @@ ob_start();
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                                     <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
                                         <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
                                             <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
@@ -707,7 +762,7 @@ ob_start();
                             <td><?= htmlspecialchars($reservation['purpose']); ?></td>
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <button class="btn-outline" onclick="openModifyModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Modify</button>
                                     <button class="btn-outline" onclick="openPostponeModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Postpone</button>
                                     <button class="btn-outline" onclick="openCancelModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['facility']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem; color: #dc3545;">Cancel</button>
@@ -974,58 +1029,203 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 });
 </script>
 
-<div class="booking-card" style="margin-top:1.5rem;">
-    <h2>Recent Activity</h2>
-    <?php if (empty($history)): ?>
-        <p>No reservation activity recorded.</p>
-    <?php else: ?>
-        <?php foreach ($history as $record): ?>
-            <?php
-            $historyItems = $pdo->prepare(
-                'SELECT status, note, created_at FROM reservation_history WHERE reservation_id = :id ORDER BY created_at DESC'
-            );
-            $historyItems->execute(['id' => $record['id']]);
-            $timeline = $historyItems->fetchAll(PDO::FETCH_ASSOC);
-            ?>
-            <article class="facility-card-admin" style="margin-bottom:1rem;">
-                <header>
-                    <div>
-                        <h3><?= htmlspecialchars($record['facility']); ?></h3>
-                        <small><?= htmlspecialchars($record['reservation_date']); ?> • <?= htmlspecialchars($record['time_slot']); ?></small>
-                    </div>
-                    <div style="display:flex; gap:0.5rem; align-items:center;">
-                        <span class="status-badge <?= $record['status']; ?>"><?= ucfirst($record['status']); ?></span>
-                        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservation_detail.php?id=<?= $record['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
-                    </div>
-                </header>
-                <p style="margin:0 0 0.75rem;">Requester: <?= htmlspecialchars($record['requester']); ?></p>
-                <?php if ($timeline): ?>
-                    <ul class="timeline">
-                        <?php foreach ($timeline as $event): ?>
-                            <li>
-                                <strong><?= ucfirst($event['status']); ?></strong>
-                                <p style="margin:0;"><?= $event['note'] ? htmlspecialchars($event['note']) : 'No remarks provided.'; ?></p>
-                                <small style="color:#8b95b5;"><?= htmlspecialchars($event['created_at']); ?></small>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                <?php endif; ?>
-            </article>
-        <?php endforeach; ?>
-
-        <?php if ($totalPages > 1): ?>
-            <div class="pagination">
-                <?php if ($page > 1): ?>
-                    <a href="?page=<?= $page - 1; ?>">&larr; Prev</a>
-                <?php endif; ?>
-                <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
-                <?php if ($page < $totalPages): ?>
-                    <a href="?page=<?= $page + 1; ?>">Next &rarr;</a>
+<!-- All Reservations Modal -->
+<div id="allReservationsModal" class="modal-overlay" style="display: <?= (!empty($modalSearch) || !empty($modalStatus)) ? 'flex' : 'none'; ?>;">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb;">
+            <h2 style="margin: 0; color: #1e3a5f;">All Reservations</h2>
+            <button type="button" onclick="closeAllReservationsModal()" style="background: none; border: none; font-size: 1.5rem; color: #6c757d; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'; this.style.color='#333';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
+        </div>
+        
+        <!-- Search and Filter Form -->
+        <form method="GET" id="modalSearchForm" style="margin-bottom: 1.5rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151;">Search Reservations</label>
+                    <input type="text" name="modal_search" value="<?= htmlspecialchars($modalSearch); ?>" placeholder="Search by ID, requester name, email, or facility..." style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151;">Status Filter</label>
+                    <select name="modal_status" style="padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem; min-width: 150px;">
+                        <option value="">All Statuses</option>
+                        <option value="approved" <?= $modalStatus === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                        <option value="denied" <?= $modalStatus === 'denied' ? 'selected' : ''; ?>>Denied</option>
+                        <option value="cancelled" <?= $modalStatus === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                        <option value="pending" <?= $modalStatus === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                        <option value="postponed" <?= $modalStatus === 'postponed' ? 'selected' : ''; ?>>Postponed</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="submit" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Search</button>
+                <?php if (!empty($modalSearch) || !empty($modalStatus)): ?>
+                    <a href="?" class="btn-outline" style="padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 6px;">Clear Filters</a>
                 <?php endif; ?>
             </div>
-        <?php endif; ?>
-    <?php endif; ?>
+            <!-- Preserve other GET parameters -->
+            <input type="hidden" name="pending_page" value="<?= $pendingPage; ?>">
+            <input type="hidden" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>">
+            <input type="hidden" name="approved_page" value="<?= $approvedPage; ?>">
+            <input type="hidden" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>">
+        </form>
+        
+        <!-- Reservations List -->
+        <div class="modal-body">
+            <?php if (empty($modalHistory)): ?>
+                <p style="text-align: center; color: #8b95b5; padding: 2rem;">No reservations found<?= !empty($modalSearch) || !empty($modalStatus) ? ' matching your filters.' : '.'; ?></p>
+            <?php else: ?>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <?php foreach ($modalHistory as $record): ?>
+                        <?php
+                        $historyItems = $pdo->prepare(
+                            'SELECT status, note, created_at FROM reservation_history WHERE reservation_id = :id ORDER BY created_at DESC'
+                        );
+                        $historyItems->execute(['id' => $record['id']]);
+                        $timeline = $historyItems->fetchAll(PDO::FETCH_ASSOC);
+                        ?>
+                        <article class="facility-card-admin" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <header style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
+                                <div>
+                                    <h3 style="margin: 0 0 0.25rem 0; color: #1e3a5f;"><?= htmlspecialchars($record['facility']); ?></h3>
+                                    <small style="color: #6b7280;"><?= htmlspecialchars($record['reservation_date']); ?> • <?= htmlspecialchars($record['time_slot']); ?></small>
+                                </div>
+                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap: wrap;">
+                                    <span class="status-badge <?= $record['status']; ?>"><?= ucfirst($record['status']); ?></span>
+                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $record['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                </div>
+                            </header>
+                            <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong> <?= htmlspecialchars($record['requester']); ?></p>
+                            <?php if ($timeline): ?>
+                                <ul class="timeline" style="margin: 0; padding-left: 1.25rem;">
+                                    <?php foreach ($timeline as $event): ?>
+                                        <li style="margin-bottom: 0.5rem;">
+                                            <strong style="color: #1e3a5f;"><?= ucfirst($event['status']); ?></strong>
+                                            <p style="margin:0.25rem 0; color: #6b7280;"><?= $event['note'] ? htmlspecialchars($event['note']) : 'No remarks provided.'; ?></p>
+                                            <small style="color:#8b95b5;"><?= htmlspecialchars($event['created_at']); ?></small>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                
+                <?php if ($modalTotalPages > 1): ?>
+                    <div class="pagination" style="margin-top: 1.5rem; justify-content: center;">
+                        <?php if ($modalPage > 1): ?>
+                            <a href="?modal_page=<?= $modalPage - 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">&larr; Prev</a>
+                        <?php endif; ?>
+                        <span class="current" style="padding: 0.5rem 1rem;">Page <?= $modalPage; ?> of <?= $modalTotalPages; ?> (<?= $modalTotal; ?> total)</span>
+                        <?php if ($modalPage < $modalTotalPages): ?>
+                            <a href="?modal_page=<?= $modalPage + 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">Next &rarr;</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
+
+<style>
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-content {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 2rem;
+    width: 100%;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-overlay.show {
+    display: flex !important;
+}
+</style>
+
+<script>
+(function() {
+    const modal = document.getElementById('allReservationsModal');
+    if (!modal) return;
+    
+    // Check if modal should be open on page load (when search/filter params exist)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasModalParams = urlParams.has('modal_search') || urlParams.has('modal_status');
+    
+    if (hasModalParams) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function openAllReservationsModal() {
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    window.openAllReservationsModal = openAllReservationsModal;
+    
+    function closeAllReservationsModal() {
+        if (modal) {
+            // Remove modal parameters from URL when closing (without modal_open param)
+            const url = new URL(window.location.href);
+            url.searchParams.delete('modal_search');
+            url.searchParams.delete('modal_status');
+            url.searchParams.delete('modal_page');
+            
+            // Update URL without reload to remove modal params
+            window.history.replaceState({}, '', url);
+            
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    }
+    
+    window.closeAllReservationsModal = closeAllReservationsModal;
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeAllReservationsModal();
+        }
+    });
+    
+    // Close modal on ESC key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            closeAllReservationsModal();
+        }
+    });
+})();
+</script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';

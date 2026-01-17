@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $street,
                                     $houseNumber,
                                     $passwordHash,
-                                    $hasValidId ? 1 : 0  // Set verified to true only if ID is provided
+                                    0  // Always start as unverified - requires admin/staff approval
                                 ]);
                             } elseif ($hasVerifiedColumn) {
                                 // Schema with is_verified but no name/address columns (backward compatibility)
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $mobile ?: null,
                                     $fullAddress,
                                     $passwordHash,
-                                    $hasValidId ? 1 : 0
+                                    0  // Always start as unverified - requires admin/staff approval
                                 ]);
                             } elseif ($hasNameColumns) {
                                 // Schema with name/address columns but no is_verified
@@ -178,11 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         (int)$validIdFile['size']
                                     ]);
                                     
-                                    // Update verification status if document saved successfully (only if column exists)
-                                    if ($hasVerifiedColumn) {
-                                        $updateStmt = $pdo->prepare("UPDATE users SET is_verified = TRUE WHERE id = ?");
-                                        $updateStmt->execute([$userId]);
-                                    }
+                                    // Note: Verification status must be manually approved by admin/staff
+                                    // We do NOT auto-verify users even if they upload an ID during registration
                                 } else {
                                     $message = 'Registration successful, but failed to save your ID document. You can upload it later from your profile.';
                                     $messageType = 'warning';
@@ -362,15 +359,14 @@ ob_start();
         </form>
         
         <div class="auth-footer">
-            Already registered? <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php">Sign in here</a>
+            Already registered? <a href="<?= base_path(); ?>/login">Sign in here</a>
         </div>
     </div>
 </div>
 
 <!-- Terms and Conditions Modal -->
 <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-lg" style="max-width: 700px; margin: 0; max-height: 65vh; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <div class="modal-content" style="background: #ffffff; border-radius: 18px; border: none; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3); max-height: 65vh; display: flex; flex-direction: column;">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg terms-modal-dialog terms-modal-content">
             <div class="modal-header" style="border-bottom: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem; flex-shrink: 0;">
                 <h5 class="modal-title" id="termsModalLabel" style="color: #1e3a5f; font-weight: 700; font-size: 1.5rem;">
                     Terms and Conditions & Data Privacy Policy
@@ -423,53 +419,95 @@ ob_start();
 </div>
 
 <style>
-/* Terms modal - no backdrop, fully interactive */
+/* Terms modal styling - Fixed and improved */
 #termsModal {
     z-index: 1055 !important;
 }
 
-/* Hide backdrops when terms modal is showing (Bootstrap shouldn't create them with backdrop: false, but just in case) */
-body:has(#termsModal.show) .modal-backdrop {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
+#termsModal .terms-modal-dialog {
+    max-width: 650px;
+    margin: 5rem auto 2rem;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Prevent body scroll lock */
-body:has(#termsModal.show),
-body.modal-open {
-    overflow: auto !important;
-    padding-right: 0 !important;
+#termsModal .terms-modal-content {
+    background: #ffffff;
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-#termsModal.show {
-    display: block !important;
+#termsModal .modal-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+    padding: 1.25rem 1.5rem;
+    flex-shrink: 0;
+    background: #ffffff;
+    border-radius: 16px 16px 0 0;
 }
 
-#termsModal .modal-dialog {
-    pointer-events: auto !important;
-    margin: 0 !important;
-    max-height: 65vh !important;
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    z-index: 1056 !important;
-}
-
-#termsModal .modal-content {
-    pointer-events: auto !important;
-    position: relative !important;
+#termsModal .modal-title {
+    color: #1e3a5f;
+    font-weight: 700;
+    font-size: 1.375rem;
+    margin: 0;
 }
 
 #termsModal .modal-body {
-    pointer-events: auto !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
+    padding: 1.5rem;
+    color: #333;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
-#termsModal .btn {
-    cursor: pointer !important;
+#termsModal .modal-footer {
+    border-top: 2px solid rgba(0, 0, 0, 0.1);
+    padding: 1.25rem 1.5rem;
+    flex-shrink: 0;
+    background: #ffffff;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Ensure modal is clickable */
+#termsModal.show {
+    pointer-events: auto;
+}
+
+#termsModal.show .modal-dialog {
+    pointer-events: auto;
+}
+
+#termsModal.show .modal-content {
+    pointer-events: auto;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    #termsModal .terms-modal-dialog {
+        max-width: 95%;
+        margin: 3rem auto 1rem;
+        max-height: 80vh;
+    }
+    
+    #termsModal .terms-modal-content {
+        max-height: 80vh;
+    }
+    
+    #termsModal .modal-header,
+    #termsModal .modal-footer {
+        padding: 1rem;
+    }
+    
+    #termsModal .modal-title {
+        font-size: 1.125rem;
+    }
 }
 </style>
 
@@ -490,17 +528,28 @@ window.addEventListener('load', function() {
     }
 
     const termsModal = new bootstrap.Modal(modalElement, {
-        backdrop: false,  // No backdrop
-        keyboard: true    // Allow ESC to close
+        backdrop: false,     // No backdrop to avoid stacked appearance
+        keyboard: true,      // Allow ESC to close
+        focus: true          // Focus on modal when shown
     });
 
-    // Helper to remove backdrops and unlock scroll
+    // Helper to remove duplicate backdrops and ensure proper functionality
+    // Note: Since backdrop is disabled, this is mainly for cleanup if any remnants exist
     const cleanupBackdrop = () => {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        // Remove all backdrops since we don't want any
+        backdrops.forEach(backdrop => backdrop.remove());
+        // Ensure body can scroll (but modal prevents it)
+        document.body.style.overflow = 'hidden';
+    };
+    
+    // Clean up on modal hide
+    modalElement.addEventListener('hidden.bs.modal', () => {
         document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
         document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-    };
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    });
 
     // Check if user has already accepted terms
     const termsAcceptedKey = 'lgu_facilities_terms_accepted';

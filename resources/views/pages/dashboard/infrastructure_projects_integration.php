@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 
 $role = $_SESSION['role'] ?? 'Resident';
 if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 

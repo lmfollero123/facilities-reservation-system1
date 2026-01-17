@@ -74,7 +74,7 @@ try {
             if ($redirect && str_starts_with($redirect, '/')) {
                 header('Location: ' . $redirect);
             } else {
-                header('Location: ' . base_path() . '/resources/views/pages/dashboard/index.php');
+                header('Location: ' . base_path() . '/dashboard');
             }
             exit;
         }

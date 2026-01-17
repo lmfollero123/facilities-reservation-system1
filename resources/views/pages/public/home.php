@@ -68,22 +68,37 @@ ob_start();
 <header class="masthead" style="background: linear-gradient(to bottom, rgba(92, 77, 66, 0.8) 0%, rgba(92, 77, 66, 0.8) 100%), url('<?= $defaultImage; ?>'); background-position: center; background-repeat: no-repeat; background-size: cover;">
     <div class="container px-4 px-lg-5 h-100">
         <div class="row gx-4 gx-lg-5 h-100 align-items-center justify-content-center text-center">
-            <div class="col-lg-8 align-self-end">
+            <div class="col-lg-10 align-self-end">
                 <h1 class="text-white font-weight-bold">Barangay Culiat Public Facilities Reservation System</h1>
                 <hr class="divider" />
             </div>
-            <div class="col-lg-8 align-self-baseline hero-cta">
-            <p class="text-white mb-5">
-  Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.
-</p>
+            <div class="col-lg-10 align-self-baseline hero-cta">
+                <p class="text-white mb-5">
+                    Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.
+                </p>
+                
                 <div class="hero-btn-row">
-                    <a class="btn btn-primary" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Browse Facilities</a>
-                    <a class="btn btn-light" href="<?= $base; ?>/resources/views/pages/auth/register.php">Create Account</a>
+                    <a class="btn btn-primary" href="<?= $base; ?>/facilities">Browse Facilities</a>
+                    <a class="btn btn-light" href="<?= $base; ?>/register">Create Account</a>
                 </div>
             </div>
         </div>
     </div>
 </header>
+
+<style>
+/* Hero button row: center on masthead */
+.hero-btn-row {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.hero-btn-row .btn {
+    min-width: 160px;
+}
+</style>
 
 <!-- Announcements -->
 <?php if (!empty($announcements)): ?>
@@ -330,58 +345,6 @@ ob_start();
 </style>
 <?php endif; ?>
 
-<!-- About -->
-<section class="page-section bg-primary" id="about">
-    <div class="container px-4 px-lg-5">
-        <div class="row gx-4 gx-lg-5 justify-content-center">
-            <div class="col-lg-8 text-center">
-                <h2 class="text-white mt-0">About Barangay Culiat</h2>
-                <hr class="divider divider-light" />
-                <p class="text-white-75 mb-4">The Barangay Culiat Public Facilities Reservation System is dedicated to managing, maintaining, and improving essential public facilities to ensure safe, reliable, and efficient community services. Our goal is to streamline reservation operations, enhance facility accessibility, and provide residents with transparent access to facility bookings and support.</p>
-                <a class="btn btn-light btn-xl" href="<?= $base; ?>/resources/views/pages/public/facilities.php">Browse Facilities</a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Services -->
-<section class="page-section" id="services">
-    <div class="container px-4 px-lg-5">
-        <h2 class="text-center mt-0">Our Services & Features</h2>
-        <hr class="divider" />
-        <div class="row gx-4 gx-lg-5">
-            <div class="col-lg-3 col-md-6 text-center">
-                <div class="mt-5">
-                    <div class="mb-2"><i class="bi-shield-check fs-1 text-primary"></i></div>
-                    <h3 class="h4 mb-2">OTP-Secured Login</h3>
-                    <p class="text-muted mb-0">Multi-step authentication with rate limits and account lockout for safer resident access.</p>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 text-center">
-                <div class="mt-5">
-                    <div class="mb-2"><i class="bi-file-earmark-check fs-1 text-primary"></i></div>
-                    <h3 class="h4 mb-2">Document Verification</h3>
-                    <p class="text-muted mb-0">Barangay Culiat validation with required IDs and approvals before access.</p>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 text-center">
-                <div class="mt-5">
-                    <div class="mb-2"><i class="bi-geo-alt fs-1 text-primary"></i></div>
-                    <h3 class="h4 mb-2">Smart Recommendations</h3>
-                    <p class="text-muted mb-0">Location-aware facility suggestions and conflict-aware booking guidance.</p>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 text-center">
-                <div class="mt-5">
-                    <div class="mb-2"><i class="bi-calendar-check fs-1 text-primary"></i></div>
-                    <h3 class="h4 mb-2">Easy Reservations</h3>
-                    <p class="text-muted mb-0">Streamlined booking process with real-time availability and approval tracking.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
 <!-- Portfolio (Facilities) -->
 <?php if (!empty($featuredFacilities)): ?>
 <div id="portfolio">
@@ -391,7 +354,7 @@ ob_start();
                 $img = !empty($facility['image_path'])
                     ? $base . $facility['image_path']
                     : $defaultImage;
-                $detailUrl = $base . '/resources/views/pages/public/facility_details.php?id=' . (int)$facility['id'];
+                $detailUrl = $base . '/facility-details?id=' . (int)$facility['id'];
             ?>
                 <div class="col-lg-4 col-sm-6">
                     <a class="portfolio-box" href="<?= htmlspecialchars($detailUrl); ?>" title="<?= htmlspecialchars($facility['name']); ?>">
@@ -411,3 +374,4 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
+?>
