@@ -1,4 +1,8 @@
 erDiagram
+    %% Performance Optimizations (Jan 2025)
+    %% Database indexes created for conflict detection, historical queries, user booking counts
+    %% See: database/performance_indexes.sql
+    
     users ||--o{ reservations : "makes"
     users ||--o{ user_documents : "uploads"
     users ||--o{ reservation_history : "creates"

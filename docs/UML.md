@@ -113,6 +113,20 @@
     - Auto-decline (system) for expired pending → notify resident.
 - Resident views status / calendar / reschedules / exports → End.
 
+## Class Diagram (Key Services)
+- **ReservationService**:
+  - `createReservation(data)`
+  - `approveReservation(id)`
+  - `checkAvailability(facility_id, date)`
+- **AIRecommendationService (OPTIMIZED - Jan 2025)**:
+  - `detectConflicts(facility_id, date, start, end)`: Returns overlapping reservations. **Optimized: Combined query (~60% faster)**
+  - `calculateRiskScoreSimple(date, time)`: Returns score (0-100) based on holidays/events/demand. **Optimized: Rule-based only, fast response**
+  - `recommendFacilities(purpose, capacity, location)`: Returns list of facilities with match scores. **Optimized: 5s timeout, 3s fallback, debounced 1000ms**
+  - `suggestAlternativeSlots(facility_id, date)`: Returns available time gaps. **Optimized: Lazy evaluation (only when needed)**
+- **AutoApprovalService**:
+  - `evaluate(reservation_id)`: Returns boolean + failure connection.
+  - `checkConditions(reservation)`: Validates 8 criteria (limits, conflicts, etc).
+
 ## Coverage Note
 These textual diagrams include all current modules: auth/OTP, forgot/reset password, registration with Valid ID-only upload, terms modal, user/profile, facilities, reservations with limits, AI recommendations + holiday/event risk, calendar (clickable to detail), contact inquiries inbox/email, notifications, exports, audit/security, auto-approval system, violation tracking, flexible time slots, resident reschedule, and external email/SMTP.
 

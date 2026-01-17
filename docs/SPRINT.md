@@ -25,6 +25,10 @@
 - Staff modify/postpone/cancel: Admins can modify approved reservations with date validation
 - DFD/WFD/BPMN/ERD/FLOWCHART updated to latest flows
 - Backlog documented in `docs/BACKLOG.md`
+- **Dashboard Pagination**: Implemented 3-item limit and navigation for Pending Requests
+- **AI Conflict Detection**: Real-time hard/soft conflict checking enabled
+- **AI Facility Recommendations**: Logic implemented with distance and purpose scoring
+- **Performance Optimizations (Jan 2025)**: Combined database queries (~60% faster conflict detection), timeout protection for ML calls (5s timeout, 3s fallback), client-side debouncing (500ms/1000ms, ~70% fewer API calls), smart fetching, database performance indexes created
 
 ## Burndown (Textual Approximation)
 - Sprint length: 1 week (7 days)

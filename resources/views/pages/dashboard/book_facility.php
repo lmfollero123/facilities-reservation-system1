@@ -1634,11 +1634,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function debouncedCheckConflict() {
-        // Debounce: wait 300ms after user stops changing inputs before checking
+        // OPTIMIZED: Debounce: wait 500ms after user stops changing inputs before checking
+        // This reduces API calls when user is still typing/selecting
         if (conflictCheckTimeout) {
             clearTimeout(conflictCheckTimeout);
         }
-        conflictCheckTimeout = setTimeout(checkConflict, 300);
+        conflictCheckTimeout = setTimeout(checkConflict, 500);
     }
 
     // Add event listeners for both 'change' and 'input' events
@@ -1763,9 +1764,16 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const date = dateInput?.value || new Date().toISOString().split('T')[0];
-        const startTime = startTimeInput?.value || '08:00';
-        const endTime = endTimeInput?.value || '12:00';
+        // OPTIMIZED: Skip if essential fields are missing (reduces unnecessary API calls)
+        const date = dateInput?.value;
+        const startTime = startTimeInput?.value;
+        const endTime = endTimeInput?.value;
+        
+        if (!date || !startTime || !endTime) {
+            // Don't fetch recommendations without date/time context
+            return;
+        }
+        
         const timeSlot = startTime + ' - ' + endTime;
         const expectedAttendees = document.querySelector('input[name="expected_attendees"]')?.value || 50;
         const isCommercial = document.getElementById('is-commercial')?.checked || false;
@@ -1814,12 +1822,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Debounced recommendation fetching
+    // OPTIMIZED: Debounced recommendation fetching - longer delay to reduce API calls
     function debouncedFetchRecommendations() {
         if (recommendationTimeout) {
             clearTimeout(recommendationTimeout);
         }
-        recommendationTimeout = setTimeout(fetchRecommendations, 800);
+        // Increased to 1000ms (1 second) - recommendations are less time-sensitive than conflict checks
+        recommendationTimeout = setTimeout(fetchRecommendations, 1000);
     }
     
     purposeInput?.addEventListener('input', debouncedFetchRecommendations);

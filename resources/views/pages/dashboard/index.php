@@ -307,15 +307,27 @@ if (in_array($userRole, ['Admin', 'Staff'])) {
         $pendingListParams['f_end_list'] = $endDateFilter;
     }
     
+    $pendingPerPage = 3;
+    $pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
+    $pendingOffset = ($pendingPage - 1) * $pendingPerPage;
+    $pendingTotalPages = max(1, (int)ceil($pendingCount / $pendingPerPage));
+
     $pendingListWhereClause = ' WHERE ' . implode(' AND ', $pendingListConditions);
     $pendingListSql = 'SELECT r.id, r.reservation_date, r.time_slot, f.name AS facility_name, u.name AS requester_name
          FROM reservations r
          JOIN facilities f ON r.facility_id = f.id
          JOIN users u ON r.user_id = u.id' . $pendingListWhereClause . '
          ORDER BY r.created_at ASC
-         LIMIT 5';
+         LIMIT :limit OFFSET :offset';
+         
     $pendingListStmt = $pdo->prepare($pendingListSql);
-    $pendingListStmt->execute($pendingListParams);
+    foreach ($pendingListParams as $k => $v) {
+        $type = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
+        $pendingListStmt->bindValue(':' . $k, $v, $type);
+    }
+    $pendingListStmt->bindValue(':limit', $pendingPerPage, PDO::PARAM_INT);
+    $pendingListStmt->bindValue(':offset', $pendingOffset, PDO::PARAM_INT);
+    $pendingListStmt->execute();
     $pendingReservations = $pendingListStmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
     // Resident view - user-specific data (with filters)
@@ -761,7 +773,7 @@ ob_start();
         </div>
     </section>
     
-    <?php if (in_array($userRole, ['Admin', 'Staff']) && !empty($pendingReservations)): ?>
+    <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
     <aside class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="pending-requests">
             <span>Recent Pending Requests</span>
@@ -769,28 +781,44 @@ ob_start();
         </button>
         <div class="collapsible-body" id="pending-requests">
         <div style="display: flex; flex-direction: column; gap: 0.75rem;" class="table-responsive" aria-label="Pending requests">
-            <?php foreach ($pendingReservations as $pending): ?>
-                <div style="padding: 0.75rem; background: #f9fafc; border-radius: 8px; border: 1px solid #e8ecf4;">
-                    <strong style="display: block; margin-bottom: 0.25rem; color: var(--gov-blue-dark);">
-                        <?= htmlspecialchars($pending['facility_name']); ?>
-                    </strong>
-                    <small style="color: #8b95b5; display: block; margin-bottom: 0.25rem;">
-                        <?= htmlspecialchars($pending['requester_name']); ?>
-                    </small>
-                    <small style="color: #5b6888;">
-                        <?= date('M j, Y', strtotime($pending['reservation_date'])); ?> - <?= htmlspecialchars($pending['time_slot']); ?>
-                    </small>
-                    <div style="margin-top: 0.5rem;">
-                        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-outline" style="padding: 0.35rem 0.65rem; text-decoration: none; font-size: 0.8rem;">Review</a>
+            <?php if (empty($pendingReservations)): ?>
+                <p style="color: #8b95b5; padding: 1rem 0; text-align: center;">No pending requests found.</p>
+            <?php else: ?>
+                <?php foreach ($pendingReservations as $pending): ?>
+                    <div style="padding: 0.75rem; background: #f9fafc; border-radius: 8px; border: 1px solid #e8ecf4;">
+                        <strong style="display: block; margin-bottom: 0.25rem; color: var(--gov-blue-dark);">
+                            <?= htmlspecialchars($pending['facility_name']); ?>
+                        </strong>
+                        <small style="color: #8b95b5; display: block; margin-bottom: 0.25rem;">
+                            <?= htmlspecialchars($pending['requester_name']); ?>
+                        </small>
+                        <small style="color: #5b6888;">
+                            <?= date('M j, Y', strtotime($pending['reservation_date'])); ?> - <?= htmlspecialchars($pending['time_slot']); ?>
+                        </small>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-outline" style="padding: 0.35rem 0.65rem; text-decoration: none; font-size: 0.8rem;">Review</a>
+                        </div>
                     </div>
-                </div>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-        <?php if ($pendingCount > 5): ?>
-            <div style="margin-top: 1rem; text-align: center;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; min-width: fit-content; text-align: center;">View All (<?= $pendingCount; ?>)</a>
-            </div>
-        <?php endif; ?>
+        <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+            <?php if ($pendingPage > 1): ?>
+                <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage - 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+            <?php endif; ?>
+            
+            <span style="padding: 0.5rem 1rem; color: #5b6888; font-size: 0.9rem;">
+                <?= $pendingPage; ?> / <?= $pendingTotalPages; ?>
+            </span>
+            
+            <?php if ($pendingPage < $pendingTotalPages): ?>
+                <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage + 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+            <?php endif; ?>
+        </div>
+        
+        <div style="margin-top: 0.5rem; text-align: center;">
+            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; min-width: fit-content; text-align: center; font-size: 0.9rem;">View All (<?= $pendingCount; ?>)</a>
+        </div>
         </div>
     </aside>
     <?php endif; ?>

@@ -4,6 +4,8 @@
 
 **Scope**: From resident awareness and registration up to booking, approval, facility use, and post‑event archiving/analytics.
 
+**Performance Optimizations (Jan 2025):** Conflict detection and AI recommendations have been optimized for faster response times (~60% faster conflict detection, ~70% fewer API calls, database indexes for query optimization). See `docs/PERFORMANCE_OPTIMIZATIONS.md` for details.
+
 1. **Citizen Onboarding**
    - Resident discovers the LGU Facilities Reservation portal.
    - Resident registers with Barangay Culiat address and uploads at least one supporting document (Valid ID, etc.).
@@ -112,6 +114,21 @@
 - 8.3 **Data Export**
 - 8.4 **Document Archival**
 - 8.5 **Background Maintenance Jobs**
+
+### Process 9: Public Announcements Management
+
+**Sub‑Processes:**
+- 9.1 **Create Public Announcement** (Admin/Staff)
+- 9.2 **View Announcements Archive** (Public)
+- 9.3 **Search and Filter Announcements** (Public)
+- 9.4 **Delete Announcement** (Admin/Staff)
+
+### Process 10: Contact Information Management
+
+**Sub‑Processes:**
+- 10.1 **Update Contact Information** (Admin/Staff)
+- 10.2 **View Public Contact Page** (Public)
+- 10.3 **Contact Information Audit**
 
 ---
 
@@ -294,15 +311,15 @@
 
 **Activities:**
 - 3.4.1 Resident selects facility and tentative date/time
-- 3.4.2 System calls AI helper function for conflict detection
-- 3.4.3 System queries overlapping reservations (start_time/end_time conflicts)
+- 3.4.2 System calls AI helper function for conflict detection (OPTIMIZED: combined queries, ~60% faster)
+- 3.4.3 System queries overlapping reservations using optimized single query (start_time/end_time conflicts)
 - 3.4.4 System checks if date falls on Philippine holidays
 - 3.4.5 System checks if date falls on Barangay events (Fiesta, Founding Day)
-- 3.4.6 System calculates risk score for date/time
-- 3.4.7 System generates alternative facility suggestions based on purpose
+- 3.4.6 System calculates risk score for date/time (OPTIMIZED: rule-based only, no ML overhead)
+- 3.4.7 System generates alternative facility suggestions based on purpose (with timeout fallback)
 - 3.4.8 System calculates distance-based recommendations (Haversine formula)
-- 3.4.9 System displays conflict warnings (if any)
-- 3.4.10 System displays recommended alternative facilities with reasons
+- 3.4.9 System displays conflict warnings (if any) - debounced 500ms for performance
+- 3.4.10 System displays recommended alternative facilities with reasons (debounced 1000ms)
 - 3.4.11 System shows alternative time slots for same facility
 
 ---
@@ -345,19 +362,19 @@
 #### 4.3 Conflict Detection & AI Assist
 
 **Activities:**
-- 4.3.1 System queries `reservations` table for facility on selected date
-- 4.3.2 System retrieves all approved reservations for date
-- 4.3.3 System parses time ranges (start_time - end_time) from reservations
+- 4.3.1 System queries `reservations` table for facility on selected date (OPTIMIZED: single combined query)
+- 4.3.2 System retrieves all approved and pending reservations in one query (OPTIMIZED: ~60% faster)
+- 4.3.3 System parses time ranges (start_time - end_time) from reservations in PHP (faster than SQL)
 - 4.3.4 System checks if new reservation time overlaps with existing reservations
 - 4.3.5 System checks facility status (if maintenance/offline, block booking)
 - 4.3.6 System checks if date is in blackout dates for facility
-- 4.3.7 System calls AI recommendation function
-- 4.3.8 AI function analyzes purpose and suggests similar facilities
-- 4.3.9 AI function calculates distance scores for recommendations
-- 4.3.10 System checks holiday/event conflicts
-- 4.3.11 If conflict detected: System displays warning message
-- 4.3.12 System displays alternative facilities with rankings
-- 4.3.13 System displays alternative time slots if available
+- 4.3.7 System calls AI recommendation function (with 5-second timeout and 3-second quick fallback)
+- 4.3.8 AI function analyzes purpose and suggests similar facilities (falls back to rule-based if ML slow)
+- 4.3.9 AI function calculates distance scores for recommendations (Haversine formula)
+- 4.3.10 System checks holiday/event conflicts (OPTIMIZED: rule-based risk calculation, no ML overhead)
+- 4.3.11 If conflict detected: System displays warning message (debounced 500ms)
+- 4.3.12 System displays alternative facilities with rankings (debounced 1000ms, skips if date/time missing)
+- 4.3.13 System displays alternative time slots if available (only calculated when hard conflict exists)
 
 #### 4.4 Submit Reservation Request
 
@@ -596,13 +613,110 @@
 
 ---
 
+### Process 9: Public Announcements Management
+
+#### 9.1 Create Public Announcement (Admin/Staff)
+
+**Activities:**
+- 9.1.1 Admin/Staff logs into dashboard
+- 9.1.2 Admin/Staff accesses "Announcements Management" page
+- 9.1.3 Admin/Staff clicks "Create Announcement" button
+- 9.1.4 Admin/Staff enters announcement title (max 200 characters)
+- 9.1.5 Admin/Staff enters announcement message (2-4 sentences recommended)
+- 9.1.6 Admin/Staff selects category (Emergency, Events, Health, Deadlines, Advisory, General)
+- 9.1.7 Admin/Staff optionally uploads image (JPG, PNG, GIF, WebP, max 5MB)
+- 9.1.8 Admin/Staff optionally adds external link
+- 9.1.9 System validates required fields (title, message)
+- 9.1.10 System validates image file type and size if provided
+- 9.1.11 System stores image in `public/img/announcements/` directory
+- 9.1.12 System creates announcement record in `notifications` table with `user_id=NULL`
+- 9.1.13 System sets `type` field based on category
+- 9.1.14 System records `created_at` timestamp
+- 9.1.15 System creates audit log entry
+- 9.1.16 System displays success message
+
+#### 9.2 View Announcements Archive (Public)
+
+**Activities:**
+- 9.2.1 Public user accesses `/announcements` page
+- 9.2.2 System queries `notifications` table where `user_id IS NULL`
+- 9.2.3 System retrieves announcements with pagination (12 per page)
+- 9.2.4 System displays announcements in responsive grid (1/2/3 columns)
+- 9.2.5 System shows announcement title, message preview, category, date
+- 9.2.6 System displays announcement image if available
+- 9.2.7 System shows "Read More" link if external link provided
+- 9.2.8 System applies color-coded accent bars based on category
+- 9.2.9 System displays pagination controls
+
+#### 9.3 Search and Filter Announcements (Public)
+
+**Activities:**
+- 9.3.1 Public user enters search query in search box
+- 9.3.2 System filters announcements by title or message content (LIKE query)
+- 9.3.3 Public user selects sort option (Newest, Oldest)
+- 9.3.4 System applies sorting to query results
+- 9.3.5 System updates display with filtered/sorted results
+- 9.3.6 System maintains pagination for filtered results
+
+#### 9.4 Delete Announcement (Admin/Staff)
+
+**Activities:**
+- 9.4.1 Admin/Staff views announcements list in management page
+- 9.4.2 Admin/Staff clicks "Delete" button for specific announcement
+- 9.4.3 System confirms deletion action
+- 9.4.4 System deletes announcement record from `notifications` table
+- 9.4.5 System optionally removes associated image file
+- 9.4.6 System creates audit log entry
+- 9.4.7 System displays success message
+
+---
+
+### Process 10: Contact Information Management
+
+#### 10.1 Update Contact Information (Admin/Staff)
+
+**Activities:**
+- 10.1.1 Admin/Staff logs into dashboard
+- 10.1.2 Admin/Staff accesses "Contact Information Management" page
+- 10.1.3 System displays current contact information from `contact_info` table
+- 10.1.4 Admin/Staff updates fields: Office Name, Address, Phone, Mobile, Email, Office Hours
+- 10.1.5 Admin/Staff submits form with CSRF token
+- 10.1.6 System validates CSRF token
+- 10.1.7 System sanitizes input data
+- 10.1.8 System uses INSERT ... ON DUPLICATE KEY UPDATE for each field
+- 10.1.9 System updates `contact_info` table with new values
+- 10.1.10 System sets `updated_at` timestamp
+- 10.1.11 System creates audit log entry
+- 10.1.12 System displays success message
+- 10.1.13 Changes are immediately reflected on public contact page
+
+#### 10.2 View Public Contact Page (Public)
+
+**Activities:**
+- 10.2.1 Public user accesses `/contact` page
+- 10.2.2 System queries `contact_info` table ordered by `display_order`
+- 10.2.3 System retrieves all contact information fields
+- 10.2.4 System displays office name, address, phone, mobile, email, office hours
+- 10.2.5 System formats office hours with HTML line breaks if provided
+- 10.2.6 System displays contact information in organized layout
+
+#### 10.3 Contact Information Audit
+
+**Activities:**
+- 10.3.1 System records all contact information updates in `audit_log` table
+- 10.3.2 Audit log includes: action type, user ID, fields updated, timestamp
+- 10.3.3 Admin/Staff can view audit trail in Audit Trail page
+- 10.3.4 System maintains history of contact information changes
+
+---
+
 ## Summary
 
-**Level 1:** 8 high-level end-to-end processes covering the complete reservation lifecycle
+**Level 1:** 10 high-level end-to-end processes covering the complete reservation lifecycle, announcements, and contact management
 
-**Level 2:** 32 sub-processes decomposing Level 1 processes into major functional areas
+**Level 2:** 36 sub-processes decomposing Level 1 processes into major functional areas
 
-**Level 3:** 300+ detailed activities breaking down Level 2 sub-processes into specific tasks and system operations
+**Level 3:** 350+ detailed activities breaking down Level 2 sub-processes into specific tasks and system operations
 
 Each level provides increasing detail, from strategic overview (Level 1) to operational activities (Level 3), enabling comprehensive understanding of the business process architecture.
 

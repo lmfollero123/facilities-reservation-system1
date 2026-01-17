@@ -4,6 +4,9 @@
  * Routes requests to appropriate pages
  */
 
+// Load app configuration (includes base_path function)
+require_once __DIR__ . '/config/app.php';
+
 // Get the requested path
 $path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $basePath = str_replace(basename(__FILE__), '', $_SERVER['SCRIPT_NAME']);
@@ -36,7 +39,6 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/public/privacy.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
     // Dashboard routes - check if user is logged in
-    session_start();
     if (!isset($_SESSION['user_id'])) {
         $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
         $redirectUrl = $baseUrl . base_path() . '/login';

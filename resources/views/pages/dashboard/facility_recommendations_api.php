@@ -50,10 +50,13 @@ try {
         exit;
     }
     
-    // Try ML-based recommendations if available
+    // OPTIMIZED: Try ML-based recommendations if available, but with quick timeout fallback
     if (function_exists('recommendFacilitiesML')) {
         try {
-            error_log("Attempting ML recommendations for purpose: $purpose");
+            // Set execution time limit for ML call (max 3 seconds)
+            $startTime = microtime(true);
+            $mlTimeLimit = 3.0; // seconds
+            
             $recommendations = recommendFacilitiesML(
                 facilities: $facilities,
                 userId: $userId,
@@ -66,34 +69,28 @@ try {
                 limit: 5
             );
             
-            error_log("ML recommendations result: " . json_encode(['has_recommendations' => !empty($recommendations['recommendations']), 'has_error' => isset($recommendations['error']), 'error' => $recommendations['error'] ?? null]));
+            $mlTime = microtime(true) - $startTime;
             
-            // Check if we got valid recommendations (even if there was an error, check if recommendations exist)
-            if (!empty($recommendations['recommendations'])) {
-                error_log("Returning ML recommendations (ML enabled: " . (!isset($recommendations['error']) ? 'true' : 'false') . ")");
+            // Check if ML call took too long or errored - fallback to rule-based
+            if ($mlTime > $mlTimeLimit || isset($recommendations['error'])) {
+                error_log("ML recommendations too slow ({$mlTime}s) or error - using rule-based fallback");
+                // Fall through to rule-based recommendations below
+            } elseif (!empty($recommendations['recommendations'])) {
+                // ML succeeded quickly and returned results
                 echo json_encode([
                     'recommendations' => $recommendations['recommendations'],
-                    'ml_enabled' => !isset($recommendations['error']),
-                    'ml_error' => $recommendations['error'] ?? null
+                    'ml_enabled' => true,
+                    'ml_time' => round($mlTime, 2)
                 ]);
                 exit;
             }
-            
-            // If error occurred and no recommendations, log it and fall through
-            if (isset($recommendations['error'])) {
-                error_log("Facility recommendation ML error: " . $recommendations['error']);
-            } else {
-                error_log("ML returned empty recommendations array - falling back to rule-based");
-            }
         } catch (Exception $e) {
-            error_log("Facility recommendation ML exception: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            error_log("Facility recommendation ML exception: " . $e->getMessage());
             // Fall through to rule-based recommendations
         } catch (Throwable $e) {
             error_log("Facility recommendation ML fatal error: " . $e->getMessage());
             // Fall through to rule-based recommendations
         }
-    } else {
-        error_log("recommendFacilitiesML function not available - ML recommendations disabled");
     }
     
     error_log("Using rule-based recommendations fallback");

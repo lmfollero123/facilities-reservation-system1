@@ -21,12 +21,12 @@
 19. Facility form: lat/long fields and validation.
 20. Public facility listing with glass-morphism landing background; hero CTAs side-by-side/equal width.
 21. Facility details page with image citation hover behavior (non-intrusive).
-22. Dashboard recent activities pagination.
+22. Dashboard recent activities pagination. (Done)
 23. Audit trail pagination and filtering.
 24. Reports quick-export (CSV/HTML-to-PDF) from sidebar.
 25. Calendar: clickable events to open reservation detail; facility detail calendar dates redirect to login → dashboard calendar.
-26. AI recommendations factoring distance (Haversine) and purpose; holiday/event risk tagging (PH holidays + Brgy. Culiat).
-27. AI conflict detection on booking submit; persistent warning UI (no flicker).
+26. AI recommendations factoring distance (Haversine) and purpose; holiday/event risk tagging (PH holidays + Brgy. Culiat). (Done)
+27. AI conflict detection on booking submit; persistent warning UI (no flicker). (Done)
 28. Collapsible dashboard sections with persisted state (re-enabled).
 29. Mobile sidebar overlay with backdrop and close button.
 30. Responsive tables via `.table-responsive` wrappers on key modules.
@@ -44,8 +44,8 @@
 42. User management filters by role/status; lock reason capture.
 43. Facility management: recent activity pagination.
 44. Facility management: collapsible sections.
-45. Booking form conflict warning UI with alternatives; booking limits (≤3 active/30 days, ≤60-day advance, ≤1/day).
-46. Booking form AI recommendation display with distance labels; holiday/event pills on calendar modal.
+45. Booking form conflict warning UI with alternatives; booking limits (≤3 active/30 days, ≤60-day advance, ≤1/day). (Done)
+46. Booking form AI recommendation display with distance labels; holiday/event pills on calendar modal. (Done)
 47. Public facilities: cityhall background and blur overlay; higher-contrast facility cards.
 48. Guest navbar mobile toggle and background transparency.
 49. Footer/guest layout layering over landing background.

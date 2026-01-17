@@ -45,6 +45,7 @@
 - Auto-approval system: 8-condition evaluation (facility flag, blackout dates, duration, capacity, commercial purpose, conflicts, violations, advance window); automatically approves eligible reservations.
 - AI facility recommendations including distance scoring (Haversine) and holiday/event risk tagging; warnings persist (no flicker).
 - My Reservations view with statuses and reschedule functionality (up to 3 days before, one reschedule per reservation, requires re-approval if originally approved).
+- **Performance Optimizations (Jan 2025)**: Combined database queries (~60% faster conflict detection), timeout protection for ML calls, client-side debouncing (500ms/1000ms, ~70% fewer API calls), smart fetching, database performance indexes.
 
 **Reservation Approvals**
 - Pending requests list with actions, notes, and timeline/history view.

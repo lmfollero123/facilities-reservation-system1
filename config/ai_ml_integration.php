@@ -96,7 +96,7 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
         $inputJson = json_encode($inputData);
     }
     
-    // Execute command
+    // Execute command with timeout (5 seconds max for ML operations)
     $descriptorspec = [
         0 => ['pipe', 'r'],  // stdin
         1 => ['pipe', 'w'],  // stdout
@@ -109,6 +109,10 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
         return ['error' => 'Failed to execute Python script'];
     }
     
+    // Set stream blocking to non-blocking for timeout
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+    
     // Write input data if provided
     if ($inputJson !== null) {
         fwrite($pipes[0], $inputJson);
@@ -117,9 +121,54 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
         fclose($pipes[0]);
     }
     
-    // Read output
-    $output = stream_get_contents($pipes[1]);
-    $error = stream_get_contents($pipes[2]);
+    // Read output with timeout
+    $output = '';
+    $error = '';
+    $timeout = 5; // 5 seconds timeout
+    $startTime = time();
+    
+    while (true) {
+        $read = [$pipes[1], $pipes[2]];
+        $write = null;
+        $except = null;
+        
+        // Check for timeout
+        if (time() - $startTime > $timeout) {
+            proc_terminate($process);
+            proc_close($process);
+            return ['error' => 'Python script execution timeout (>' . $timeout . 's)'];
+        }
+        
+        $numChanged = stream_select($read, $write, $except, 1);
+        
+        if ($numChanged === false || $numChanged === 0) {
+            // Check if process is still running
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                break;
+            }
+            continue;
+        }
+        
+        foreach ($read as $stream) {
+            if ($stream === $pipes[1]) {
+                $output .= stream_get_contents($pipes[1]);
+            } elseif ($stream === $pipes[2]) {
+                $error .= stream_get_contents($pipes[2]);
+            }
+        }
+        
+        // Check if process finished
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            break;
+        }
+    }
+    
+    // Get any remaining output
+    $output .= stream_get_contents($pipes[1]);
+    $error .= stream_get_contents($pipes[2]);
+    
     fclose($pipes[1]);
     fclose($pipes[2]);
     

@@ -31,34 +31,18 @@ if (file_exists(__DIR__ . '/ai_ml_integration.php')) {
 function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservationId = null) {
     $pdo = db();
     
-    // Get APPROVED reservations (hard conflicts - block slot)
-    $approvedReservationsStmt = $pdo->prepare(
-        'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose, r.priority_level,
-                f.name AS facility_name, u.name AS requester_name
-         FROM reservations r
-         JOIN facilities f ON r.facility_id = f.id
-         JOIN users u ON r.user_id = u.id
-         WHERE r.facility_id = :facility_id
-           AND r.reservation_date = :date
-           AND r.status = "approved"
-           ' . ($excludeReservationId ? 'AND r.id != :exclude_id' : '') . '
-         ORDER BY r.created_at DESC'
-    );
-    
-    $params = [
+    // OPTIMIZED: Combine both queries into one for better performance
+    $conflictParams = [
         'facility_id' => $facilityId,
         'date' => $date,
     ];
     
+    $excludeClause = $excludeReservationId ? 'AND r.id != :exclude_id' : '';
     if ($excludeReservationId) {
-        $params['exclude_id'] = $excludeReservationId;
+        $conflictParams['exclude_id'] = $excludeReservationId;
     }
     
-    $approvedReservationsStmt->execute($params);
-    $approvedReservations = $approvedReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get PENDING reservations (soft conflicts - warning only)
-    $pendingReservationsStmt = $pdo->prepare(
+    $combinedStmt = $pdo->prepare(
         'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose, r.priority_level,
                 f.name AS facility_name, u.name AS requester_name, r.created_at, r.expires_at
          FROM reservations r
@@ -66,14 +50,25 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
          JOIN users u ON r.user_id = u.id
          WHERE r.facility_id = :facility_id
            AND r.reservation_date = :date
-           AND r.status = "pending"
-           AND (r.expires_at IS NULL OR r.expires_at > NOW())
-           ' . ($excludeReservationId ? 'AND r.id != :exclude_id' : '') . '
-         ORDER BY r.priority_level ASC, r.created_at ASC'
+           AND r.status IN ("approved", "pending")
+           AND (r.status = "approved" OR (r.status = "pending" AND (r.expires_at IS NULL OR r.expires_at > NOW())))
+           ' . $excludeClause . '
+         ORDER BY r.status DESC, r.priority_level ASC, r.created_at ASC'
     );
     
-    $pendingReservationsStmt->execute($params);
-    $pendingReservations = $pendingReservationsStmt->fetchAll(PDO::FETCH_ASSOC);
+    $combinedStmt->execute($conflictParams);
+    $allReservations = $combinedStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Separate approved and pending in PHP (faster than two queries)
+    $approvedReservations = [];
+    $pendingReservations = [];
+    foreach ($allReservations as $reservation) {
+        if ($reservation['status'] === 'approved') {
+            $approvedReservations[] = $reservation;
+        } else {
+            $pendingReservations[] = $reservation;
+        }
+    }
     
     // Check for overlapping time ranges - HARD conflicts (approved only)
     $hardConflicts = [];
@@ -91,10 +86,10 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
         }
     }
     
-    // Calculate risk score based on historical patterns + holiday/event tags
-    $riskScore = calculateConflictRisk($facilityId, $date, $timeSlot);
+    // Calculate risk score (OPTIMIZED: Skip ML for faster response, use simple calculation)
+    $riskScore = calculateConflictRiskSimple($facilityId, $date, $timeSlot);
     
-    // Find alternative slots if hard conflict exists
+    // Find alternative slots if hard conflict exists (only when needed)
     $alternatives = [];
     if (!empty($hardConflicts)) {
         $alternatives = findAlternativeSlots($facilityId, $date);
@@ -123,56 +118,43 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
 }
 
 /**
- * Calculate conflict risk score based on historical patterns
+ * Calculate conflict risk score - FAST VERSION (no ML, rule-based only)
  * 
  * @param int $facilityId Facility ID
  * @param string $date Reservation date
  * @param string $timeSlot Time slot
  * @return int Risk score (0-100, higher = more risk)
  */
-function calculateConflictRisk($facilityId, $date, $timeSlot) {
+function calculateConflictRiskSimple($facilityId, $date, $timeSlot) {
     $pdo = db();
     
-    // Check historical booking frequency for this facility, day of week, and time slot
+    // OPTIMIZED: Combine both queries into one
     $dayOfWeek = date('l', strtotime($date));
     $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
     
-    $historyStmt = $pdo->prepare(
-        'SELECT COUNT(*) AS booking_count
-         FROM reservations
-         WHERE facility_id = :facility_id
-           AND DAYNAME(reservation_date) = :day_of_week
-           AND time_slot = :time_slot
-           AND reservation_date >= :start_date
-           AND status = "approved"'
-    );
-    
-    $historyStmt->execute([
-        'facility_id' => $facilityId,
-        'day_of_week' => $dayOfWeek,
-        'time_slot' => $timeSlot,
-        'start_date' => $sixMonthsAgo,
-    ]);
-    
-    $historicalCount = (int)$historyStmt->fetchColumn();
-    
-    // Check pending bookings for same slot
-    $pendingStmt = $pdo->prepare(
-        'SELECT COUNT(*) AS pending_count
-         FROM reservations
-         WHERE facility_id = :facility_id
-           AND reservation_date = :date
-           AND time_slot = :time_slot
-           AND status = "pending"'
-    );
-    
-    $pendingStmt->execute([
+    $params = [
         'facility_id' => $facilityId,
         'date' => $date,
+        'day_of_week' => $dayOfWeek,
         'time_slot' => $timeSlot,
-    ]);
+        'time_slot_pending' => $timeSlot, // Fix: Duplicate parameter for second usage
+        'start_date' => $sixMonthsAgo,
+    ];
     
-    $pendingCount = (int)$pendingStmt->fetchColumn();
+    // Combined query for historical + pending counts
+    // OPTIMIZED: Single query with SUM aggregates instead of separate queries
+    $combinedStmt = $pdo->prepare(
+        'SELECT 
+            SUM(CASE WHEN reservation_date >= :start_date AND DAYNAME(reservation_date) = :day_of_week AND time_slot = :time_slot AND status = "approved" THEN 1 ELSE 0 END) AS historical_count,
+            SUM(CASE WHEN reservation_date = :date AND time_slot = :time_slot_pending AND status = "pending" THEN 1 ELSE 0 END) AS pending_count
+         FROM reservations
+         WHERE facility_id = :facility_id'
+    );
+    
+    $combinedStmt->execute($params);
+    $counts = $combinedStmt->fetch(PDO::FETCH_ASSOC);
+    $historicalCount = (int)($counts['historical_count'] ?? 0);
+    $pendingCount = (int)($counts['pending_count'] ?? 0);
     
     // Holiday / local event risk bump (Philippines + Barangay Culiat)
     $year = (int)date('Y', strtotime($date));
@@ -196,52 +178,12 @@ function calculateConflictRisk($facilityId, $date, $timeSlot) {
     
     $isHoliday = isset($holidayList[$date]);
     
-    // Calculate risk score
-    // Base risk from historical frequency (0-60 points)
+    // Calculate risk score (no ML - much faster)
     $historicalRisk = min(60, $historicalCount * 10);
-    
-    // Additional risk from pending bookings (0-30 points)
     $pendingRisk = min(30, $pendingCount * 15);
-    
-    // Holiday/event bump (0 or 20 points)
     $holidayRisk = $isHoliday ? 20 : 0;
     
-    // Calculate base risk score
-    $riskScore = min(100, $historicalRisk + $pendingRisk + $holidayRisk);
-    
-    // Add ML-based conflict prediction if available
-    $mlConflictScore = 0;
-    if (function_exists('predictConflictML')) {
-        try {
-            // Get facility capacity
-            $facilityStmt = $pdo->prepare('SELECT capacity FROM facilities WHERE id = :facility_id');
-            $facilityStmt->execute(['facility_id' => $facilityId]);
-            $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
-            $capacity = $facility['capacity'] ?? '100';
-            
-            $mlPrediction = predictConflictML(
-                $facilityId,
-                $date,
-                $timeSlot,
-                null, // expected_attendees not available in this function
-                false, // is_commercial not available in this function
-                $capacity
-            );
-            
-            if (!isset($mlPrediction['error']) && isset($mlPrediction['conflict_probability'])) {
-                // Convert ML probability (0-1) to risk score (0-100)
-                $mlConflictScore = $mlPrediction['conflict_probability'] * 100;
-                
-                // Combine rule-based and ML scores (weighted average: 60% rule-based, 40% ML)
-                $riskScore = ($riskScore * 0.6) + ($mlConflictScore * 0.4);
-            }
-        } catch (Exception $e) {
-            // Silent fail - continue with rule-based only
-            error_log("ML conflict prediction error in calculateConflictRisk: " . $e->getMessage());
-        }
-    }
-    
-    return min(100, $riskScore);
+    return min(100, $historicalRisk + $pendingRisk + $holidayRisk);
 }
 
 /**
