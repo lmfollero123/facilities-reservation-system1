@@ -1,8 +1,60 @@
 /* MOBILE-RESPONSIVE REFACTOR - Mobile-First Approach */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
 
-/* Core palette - Updated to match NewTemplate */
+/* ============================================
+   THEME VARIABLES - Light & Dark Mode
+   ============================================ */
+
+/* Light Mode (Default) */
 :root {
+    /* Background Colors */
+    --bg-primary: #f5f7fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f9fafc;
+
+    /* Text Colors */
+    --text-primary: #2c3e50;
+    --text-secondary: #5b6888;
+    --text-tertiary: #8b95b5;
+
+    /* Border Colors */
+    --border-color: #e0e6ed;
+    --border-light: #f0f2f5;
+
+    /* Shadow Colors */
+    --shadow: rgba(0, 0, 0, 0.08);
+    --shadow-hover: rgba(0, 0, 0, 0.12);
+    --shadow-strong: rgba(0, 0, 0, 0.15);
+
+    /* Primary Colors */
+    --primary-color: #0047ab;
+    --primary-hover: #003580;
+    --primary-light: #6384d2;
+
+    /* Status Colors - Light Mode */
+    --success-bg: #e8f5e9;
+    --success-text: #2e7d32;
+    --success-border: #4caf50;
+
+    --warning-bg: #fff3e0;
+    --warning-text: #f57c00;
+    --warning-border: #ff9800;
+
+    --error-bg: #ffebee;
+    --error-text: #c62828;
+    --error-border: #f44336;
+
+    --info-bg: #e3f2fd;
+    --info-text: #1976d2;
+    --info-border: #2196f3;
+
+    /* Sidebar Colors */
+    --sidebar-bg: #0c2249;
+    --sidebar-active: #1f3b73;
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: rgba(255, 255, 255, 0.7);
+
+    /* Legacy variables for compatibility */
     --gov-blue: #6384d2;
     --gov-blue-dark: #285ccd;
     --gov-blue-light: #6e84b7;
@@ -11,17 +63,71 @@
     --gov-gray-dark: #4c5b7c;
     --gov-text: #1b1b1f;
     --gov-white: #ffffff;
-    --sidebar-bg: #0c2249;
-    --sidebar-active: #1f3b73;
     --card-bg: rgba(255, 255, 255, 0.25);
     --card-blur: blur(15px);
-    
+
     /* Mobile-first responsive sizing */
     --container-padding: 1rem;
     --container-max-width: 100%;
     --section-padding-mobile: 2rem 1rem;
     --section-padding-tablet: 3rem 1.25rem;
     --section-padding-desktop: 4rem 2rem;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+    /* Background Colors */
+    --bg-primary: #1a1d2e;
+    --bg-secondary: #252837;
+    --bg-tertiary: #2d3142;
+
+    /* Text Colors */
+    --text-primary: #e4e6eb;
+    --text-secondary: #b8bcc8;
+    --text-tertiary: #8b91a3;
+
+    /* Border Colors */
+    --border-color: #3a3f51;
+    --border-light: #2f3342;
+
+    /* Shadow Colors */
+    --shadow: rgba(0, 0, 0, 0.3);
+    --shadow-hover: rgba(0, 0, 0, 0.4);
+    --shadow-strong: rgba(0, 0, 0, 0.5);
+
+    /* Primary Colors */
+    --primary-color: #4a90e2;
+    --primary-hover: #357abd;
+    --primary-light: #6ba3e8;
+
+    /* Status Colors - Dark Mode */
+    --success-bg: #1e3a1e;
+    --success-text: #81c784;
+    --success-border: #66bb6a;
+
+    --warning-bg: #3d2e1e;
+    --warning-text: #ffb74d;
+    --warning-border: #ffa726;
+
+    --error-bg: #3d1e1e;
+    --error-text: #e57373;
+    --error-border: #ef5350;
+
+    --info-bg: #1e2a3d;
+    --info-text: #64b5f6;
+    --info-border: #42a5f5;
+
+    /* Sidebar Colors - Dark Mode */
+    --sidebar-bg: #0f1419;
+    --sidebar-active: #1a2332;
+    --sidebar-text: #e4e6eb;
+    --sidebar-text-muted: rgba(228, 230, 235, 0.6);
+
+    /* Legacy variables for compatibility */
+    --gov-gray: #2d3142;
+    --gov-text: #e4e6eb;
+    --gov-white: #252837;
+    --card-bg: rgba(37, 40, 55, 0.5);
 }
 
 *,
@@ -47,7 +153,12 @@ body {
 }
 
 /* Ensure all major containers don't overflow */
-main, section, .section, .container, .guest-content, .dashboard-content {
+main,
+section,
+.section,
+.container,
+.guest-content,
+.dashboard-content {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -111,14 +222,19 @@ body.landing-page footer,
 footer.bg-light,
 footer {
     position: relative !important;
-    z-index: 100 !important; /* Higher z-index to ensure it's above the blur overlay */
+    z-index: 100 !important;
+    /* Higher z-index to ensure it's above the blur overlay */
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: #f5f6f8 !important;
-    filter: none !important; /* Remove any filter effects */
-    opacity: 1 !important; /* Ensure full opacity */
-    isolation: isolate !important; /* Create new stacking context to isolate from blur */
-    transform: translateZ(0) !important; /* Force hardware acceleration and new stacking context */
+    filter: none !important;
+    /* Remove any filter effects */
+    opacity: 1 !important;
+    /* Ensure full opacity */
+    isolation: isolate !important;
+    /* Create new stacking context to isolate from blur */
+    transform: translateZ(0) !important;
+    /* Force hardware acceleration and new stacking context */
 }
 
 body.landing-page footer::before,
@@ -141,11 +257,13 @@ footer::after {
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
-    padding-top: 80px !important; /* Clearance for fixed navbar */
+    padding-top: 80px !important;
+    /* Clearance for fixed navbar */
 }
 
 body.landing-page .guest-content {
-    padding-top: 0 !important; /* Remove extra padding, handled by sections */
+    padding-top: 0 !important;
+    /* Remove extra padding, handled by sections */
 }
 
 /* Prevent any visual artifacts on main element */
@@ -184,7 +302,8 @@ img {
     box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25) !important;
     padding: 0 !important;
     margin: 0 !important;
-    overflow: visible !important; /* Allow datetime to be visible outside container */
+    overflow: visible !important;
+    /* Allow datetime to be visible outside container */
     height: auto !important;
     min-height: 60px !important;
 }
@@ -240,6 +359,7 @@ img {
 
 /* Tablet (≥481px) - Increase spacing */
 @media (min-width: 481px) {
+
     .guest-navbar .container,
     #mainNav .container {
         padding: 0.9rem 1.25rem;
@@ -249,6 +369,7 @@ img {
 
 /* Desktop (≥1025px) - Full desktop layout */
 @media (min-width: 1025px) {
+
     .guest-navbar .container,
     #mainNav .container {
         max-width: 1400px;
@@ -257,7 +378,7 @@ img {
     }
 }
 
-#mainNav .container > * {
+#mainNav .container>* {
     flex: 0 0 auto;
 }
 
@@ -306,7 +427,7 @@ img {
     #mainNav .navbar-collapse {
         display: flex !important;
     }
-    
+
     #mainNav .navbar-toggler {
         display: none !important;
     }
@@ -319,18 +440,18 @@ img {
         gap: 0.75rem;
         max-width: none;
     }
-    
+
     #mainNav .navbar-brand img {
         height: 40px;
     }
-    
+
     #mainNav .navbar-brand span {
         display: inline-block !important;
         white-space: normal;
         overflow: visible;
         text-overflow: clip;
     }
-    
+
     #mainNav .navbar-nav {
         gap: 1rem;
     }
@@ -472,29 +593,29 @@ img {
     #mainNav .navbar-datetime {
         display: none !important;
     }
-    
+
     /* Hide navigation links on mobile, show toggle button */
     #mainNav .navbar-collapse {
         display: none !important;
     }
-    
+
     #mainNav .navbar-brand {
         left: 1rem;
         font-size: 0.8rem;
     }
-    
+
     #mainNav .navbar-brand span {
         display: none !important;
     }
-    
+
     #mainNav .navbar-toggler {
         display: block !important;
     }
-    
+
     #mainNav .navbar-brand {
         font-size: 0.95rem !important;
     }
-    
+
     /* Hide desktop navbar menu on mobile */
     #mainNav .navbar-collapse {
         display: none !important;
@@ -505,20 +626,21 @@ img {
     #mainNav .container {
         padding: 0.75rem 1rem !important;
     }
-    
+
     #mainNav .navbar-brand {
         font-size: 0.85rem !important;
         max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    
+
     #mainNav .navbar-brand img {
         height: 30px !important;
     }
-    
+
     #mainNav .navbar-brand span {
-        display: none; /* Hide text on very small screens, show only logo */
+        display: none;
+        /* Hide text on very small screens, show only logo */
     }
 }
 
@@ -994,7 +1116,7 @@ img {
     color: var(--gov-white);
     border: none;
     border-radius: 14px;
-    box-shadow: 0 8px 20px rgba(108,117,125,0.18);
+    box-shadow: 0 8px 20px rgba(108, 117, 125, 0.18);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -1008,6 +1130,7 @@ img {
     border-radius: 14px;
     line-height: 1.3;
 }
+
 .dashboard .btn-primary,
 .dashboard .btn-outline,
 .dashboard .btn-secondary {
@@ -1161,8 +1284,10 @@ img {
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 0; /* Critical for flexbox scrolling */
-    overflow: hidden; /* Prevent inner overflow */
+    min-height: 0;
+    /* Critical for flexbox scrolling */
+    overflow: hidden;
+    /* Prevent inner overflow */
 }
 
 .chatbot-panel-header {
@@ -1233,8 +1358,10 @@ img {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    min-height: 0; /* Critical for flexbox scrolling */
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    min-height: 0;
+    /* Critical for flexbox scrolling */
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
 }
 
 .chatbot-messages::-webkit-scrollbar {
@@ -1326,8 +1453,10 @@ img {
     padding: 0.6rem 0.8rem 0.75rem;
     background: #ffffff;
     border-top: 1px solid #e5e7eb;
-    flex-shrink: 0; /* Prevent input area from shrinking */
-    display: block !important; /* Always visible */
+    flex-shrink: 0;
+    /* Prevent input area from shrinking */
+    display: block !important;
+    /* Always visible */
     visibility: visible !important;
     position: relative;
     z-index: 10;
@@ -1421,10 +1550,14 @@ img {
 }
 
 @keyframes typing-bounce {
-    0%, 60%, 100% {
+
+    0%,
+    60%,
+    100% {
         transform: translateY(0);
         opacity: 0.7;
     }
+
     30% {
         transform: translateY(-4px);
         opacity: 1;
@@ -1434,7 +1567,7 @@ img {
 .btn-secondary:hover {
     background: #5f676f;
     transform: translateY(-2px);
-    box-shadow: 0 10px 22px rgba(108,117,125,0.28);
+    box-shadow: 0 10px 22px rgba(108, 117, 125, 0.28);
 }
 
 /* Hero CTA buttons (public hero) */
@@ -1533,7 +1666,7 @@ img {
 .booking-form-control:focus {
     outline: none;
     border-color: #4d76d6;
-    box-shadow: 0 0 0 3px rgba(77,118,214,0.18);
+    box-shadow: 0 0 0 3px rgba(77, 118, 214, 0.18);
 }
 
 /* Confirmation modal buttons */
@@ -1618,6 +1751,7 @@ body.landing-page section#portfolio.section .container {
 
 /* Mobile adjustments */
 @media (max-width: 767px) {
+
     body.landing-page #portfolio.section .container,
     body.landing-page section#portfolio.section .container {
         padding: 1.75rem !important;
@@ -1656,7 +1790,8 @@ body.landing-page section#portfolio.section .container {
 
 /* Homepage Masthead section */
 .masthead {
-    padding-top: 80px !important; /* Clearance for fixed navbar */
+    padding-top: 80px !important;
+    /* Clearance for fixed navbar */
     padding-bottom: 0 !important;
     /* Mobile-first: min-height adjusted */
     min-height: calc(100vh - 80px);
@@ -1701,7 +1836,7 @@ body.landing-page section#portfolio.section .container {
 }
 
 /* First page-section after masthead needs extra top padding */
-.masthead + .page-section {
+.masthead+.page-section {
     padding-top: 6rem;
 }
 
@@ -1823,16 +1958,16 @@ body.landing-page #portfolio:not(.facilities-page) {
     color: #4a5568 !important;
 }
 
-.section + .section {
+.section+.section {
     border-top: none;
 }
 
 /* Remove any border between section and footer */
-.section + footer,
+.section+footer,
 body.landing-page .section:last-of-type,
-body.landing-page #portfolio + footer,
-body.landing-page main + footer,
-body.landing-page .guest-content + footer {
+body.landing-page #portfolio+footer,
+body.landing-page main+footer,
+body.landing-page .guest-content+footer {
     border-top: none !important;
     margin-top: 0 !important;
     padding-top: 0 !important;
@@ -1845,7 +1980,8 @@ body.landing-page #portfolio {
 
 footer.bg-light {
     margin-top: 0 !important;
-    padding-top: 3rem !important; /* Add top padding to footer instead */
+    padding-top: 3rem !important;
+    /* Add top padding to footer instead */
 }
 
 /* Ensure smooth transition from section to footer - no gradient area */
@@ -2132,7 +2268,7 @@ body.landing-page .guest-content::after {
 }
 
 /* Ensure buttons align at the bottom - push button to bottom of card */
-.facility-card .card-body > *:last-child {
+.facility-card .card-body>*:last-child {
     margin-top: auto;
 }
 
@@ -2157,11 +2293,13 @@ body.landing-page .guest-content::after {
     /* Limit height to 3 lines with ellipsis */
     display: -webkit-box;
     -webkit-line-clamp: 3;
-    line-clamp: 3; /* Standard property for compatibility */
+    line-clamp: 3;
+    /* Standard property for compatibility */
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 4.8em; /* Approximately 3 lines */
+    min-height: 4.8em;
+    /* Approximately 3 lines */
 }
 
 .facility-card small {
@@ -2533,6 +2671,7 @@ body.landing-page .guest-content::after {
 
 /* Ensure proper spacing on mobile */
 @media (max-width: 768px) {
+
     .auth-container,
     .contact-section {
         padding-top: 6rem;
@@ -2561,8 +2700,8 @@ section.contact-section::before {
     display: block !important;
 }
 
-.auth-container > *,
-.contact-section > * {
+.auth-container>*,
+.contact-section>* {
     position: relative;
     z-index: 1;
 }
@@ -2653,7 +2792,7 @@ section.contact-section::before {
     margin-bottom: 0;
 }
 
-.auth-form-horizontal .auth-form-row > label {
+.auth-form-horizontal .auth-form-row>label {
     margin-bottom: 0;
 }
 
@@ -2675,8 +2814,8 @@ section.contact-section::before {
 
 /* Exception: Checkbox labels should be horizontal, not vertical */
 .auth-form label:has(input[type="checkbox"]),
-.auth-form > div > label[style*="display: flex"],
-.auth-form > div > label[style*="display:flex"] {
+.auth-form>div>label[style*="display: flex"],
+.auth-form>div>label[style*="display:flex"] {
     flex-direction: row !important;
     align-items: flex-start !important;
 }
@@ -2798,8 +2937,10 @@ section.contact-section::before {
 
 .footer {
     background: #f5f6f8 !important;
-    color: #4c5b7c !important; /* Dark text for readability */
-    padding: 3rem 1.25rem !important; /* Equal top and bottom padding for centering */
+    color: #4c5b7c !important;
+    /* Dark text for readability */
+    padding: 3rem 1.25rem !important;
+    /* Equal top and bottom padding for centering */
     border-top: none !important;
     margin-top: 0 !important;
     min-height: auto;
@@ -2809,8 +2950,10 @@ section.contact-section::before {
     position: relative !important;
     z-index: 100 !important;
     display: flex !important;
-    align-items: center !important; /* Vertically center footer content */
-    justify-content: center !important; /* Horizontally center footer content */
+    align-items: center !important;
+    /* Vertically center footer content */
+    justify-content: center !important;
+    /* Horizontally center footer content */
 }
 
 /* Override Bootstrap bg-light class if used */
@@ -2818,10 +2961,13 @@ footer.bg-light,
 footer.bg-light.py-5,
 footer.py-5 {
     background: #f5f6f8 !important;
-    color: #4c5b7c !important; /* Dark text for readability */
+    color: #4c5b7c !important;
+    /* Dark text for readability */
     border-top: none !important;
-    padding-top: 3.5rem !important; /* Increased top padding */
-    padding-bottom: 3.5rem !important; /* Increased bottom padding */
+    padding-top: 3.5rem !important;
+    /* Increased top padding */
+    padding-bottom: 3.5rem !important;
+    /* Increased bottom padding */
     padding-left: 1.25rem !important;
     padding-right: 1.25rem !important;
     backdrop-filter: none !important;
@@ -2830,8 +2976,10 @@ footer.py-5 {
     position: relative !important;
     z-index: 100 !important;
     display: flex !important;
-    align-items: center !important; /* Vertically center footer content */
-    justify-content: center !important; /* Horizontally center footer content */
+    align-items: center !important;
+    /* Vertically center footer content */
+    justify-content: center !important;
+    /* Horizontally center footer content */
 }
 
 /* Remove any gradient or border that might create a secondary footer effect */
@@ -2853,18 +3001,24 @@ footer .container {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    align-items: center; /* Center content horizontally */
-    justify-content: center; /* Center content vertically */
-    padding: 0 !important; /* Remove any container padding that might affect spacing */
+    align-items: center;
+    /* Center content horizontally */
+    justify-content: center;
+    /* Center content vertically */
+    padding: 0 !important;
+    /* Remove any container padding that might affect spacing */
     width: 100%;
 }
 
 .footer small,
 footer small {
     color: #98a4c4;
-    text-align: center; /* Center the text */
-    margin: 0; /* Remove any default margins */
-    padding: 0; /* Remove any padding */
+    text-align: center;
+    /* Center the text */
+    margin: 0;
+    /* Remove any default margins */
+    padding: 0;
+    /* Remove any padding */
     display: block;
 }
 
@@ -2876,30 +3030,67 @@ footer small {
 }
 
 .sidebar {
-    /* Mobile-first: collapse sidebar on mobile */
-    width: 100%;
-    min-width: 100%;
+    /* Mobile-first: Fixed overlay sidebar that slides in from left */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh !important;
     background: var(--sidebar-bg);
     color: var(--gov-white);
     display: flex;
     flex-direction: column;
-    position: relative;
-    max-height: none;
-    transition: all 0.3s ease;
-    order: -1;
+    z-index: 1100 !important;
+    /* Slide-in animation */
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.4);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-/* Tablet (≥481px) and up - sidebar on left */
+/* Show sidebar when not collapsed (mobile) */
+.sidebar:not(.collapsed) {
+    transform: translateX(0);
+}
+
+/* Sidebar backdrop for mobile */
+.sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1099;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    pointer-events: none;
+}
+
+.sidebar-backdrop.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+}
+
+/* Tablet (≥481px) and up - sidebar on left, static positioning */
 @media (min-width: 481px) {
     .dashboard {
         flex-direction: row;
     }
-    
+
     .sidebar {
+        position: sticky !important;
+        transform: none !important;
         width: 260px;
         min-width: 260px;
-        position: sticky;
-        top: 0;
+        top: 0 !important;
+        left: auto !important;
         max-height: 100vh;
         order: 0;
     }
@@ -2911,7 +3102,7 @@ footer small {
         width: 70px;
         min-width: 70px;
     }
-    
+
     .sidebar.collapsed .brand span:not(.logo) {
         opacity: 0;
         width: 0;
@@ -2919,7 +3110,7 @@ footer small {
         white-space: nowrap;
         display: none;
     }
-    
+
     .sidebar.collapsed .sidebar-section-title span:not(.chevron-icon),
     .sidebar.collapsed nav a span {
         opacity: 0;
@@ -2928,22 +3119,22 @@ footer small {
         white-space: nowrap;
         display: none;
     }
-    
+
     .sidebar.collapsed .brand {
         padding: 1.5rem 0.75rem;
         justify-content: center;
     }
-    
+
     .sidebar.collapsed nav a {
         padding: 0.75rem;
         justify-content: center;
     }
-    
+
     /* Hide section titles when collapsed */
     .sidebar.collapsed .sidebar-section-title {
         display: none !important;
     }
-    
+
     /* Show collapsible content items inline when collapsed (no section title) */
     .sidebar.collapsed .collapsible-content {
         display: block !important;
@@ -2951,7 +3142,7 @@ footer small {
         max-height: none !important;
         margin-bottom: 0.35rem !important;
     }
-    
+
     .sidebar.collapsed .collapsible-content a {
         display: flex !important;
         justify-content: center;
@@ -3013,7 +3204,8 @@ footer small {
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    min-height: 0; /* Allows flex child to shrink below content size */
+    min-height: 0;
+    /* Allows flex child to shrink below content size */
     /* Custom scrollbar styling */
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
@@ -3110,8 +3302,8 @@ footer small {
 }
 
 .sidebar .collapsible-content[data-collapsed="true"] a,
-.sidebar .collapsible-content[data-collapsed="true"] > *,
-.sidebar .collapsible-content[data-collapsed="true"] > a {
+.sidebar .collapsible-content[data-collapsed="true"]>*,
+.sidebar .collapsible-content[data-collapsed="true"]>a {
     max-height: 0 !important;
     height: 0 !important;
     min-height: 0 !important;
@@ -3404,6 +3596,7 @@ footer small {
         opacity: 0;
         transform: translateY(6px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -3504,13 +3697,13 @@ footer small {
     .table {
         font-size: 0.8rem;
     }
-    
+
     .table th,
     .table td {
         padding: 0.5rem 0.4rem;
         word-break: break-word;
     }
-    
+
     .table th {
         font-size: 0.75rem;
     }
@@ -3530,23 +3723,24 @@ footer small {
         display: block;
         width: 100%;
     }
-    
+
     .table-responsive .table {
         display: block;
         width: 100%;
         border-collapse: separate;
         border-spacing: 0;
     }
-    
+
     .table-responsive .table thead {
-        display: none; /* Hide header on mobile */
+        display: none;
+        /* Hide header on mobile */
     }
-    
+
     .table-responsive .table tbody {
         display: block;
         width: 100%;
     }
-    
+
     .table-responsive .table tr {
         display: block;
         width: 100%;
@@ -3557,7 +3751,7 @@ footer small {
         padding: 0.75rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
-    
+
     .table-responsive .table td {
         display: flex;
         justify-content: space-between;
@@ -3567,11 +3761,11 @@ footer small {
         border-bottom: 1px solid #f0f0f0;
         text-align: left !important;
     }
-    
+
     .table-responsive .table td:last-child {
         border-bottom: none;
     }
-    
+
     .table-responsive .table td::before {
         content: attr(data-label);
         font-weight: 600;
@@ -3580,9 +3774,9 @@ footer small {
         flex-shrink: 0;
         min-width: 100px;
     }
-    
+
     /* Hide data-label attribute display for nested elements */
-    .table-responsive .table td > * {
+    .table-responsive .table td>* {
         flex: 1;
         text-align: right;
     }
@@ -3596,7 +3790,7 @@ footer small {
         -webkit-overflow-scrolling: touch;
         position: relative;
     }
-    
+
     .table-wrapper::after {
         content: '→';
         position: absolute;
@@ -3610,7 +3804,7 @@ footer small {
         pointer-events: none;
         opacity: 0.6;
     }
-    
+
     .table-wrapper .table {
         min-width: 600px;
     }
@@ -3621,7 +3815,7 @@ footer small {
     .table-wrapper {
         overflow-x: visible;
     }
-    
+
     .table-wrapper .table {
         min-width: auto;
         width: 100%;
@@ -3766,6 +3960,7 @@ footer small {
 
 /* Ensure touch-friendly input sizes */
 @media (max-width: 480px) {
+
     .booking-form select,
     .booking-form input,
     .booking-form textarea {
@@ -4714,11 +4909,11 @@ footer small {
         width: 95%;
         max-height: 95vh;
     }
-    
+
     .facility-modal-header {
         padding: 1.25rem 1.5rem;
     }
-    
+
     .facility-modal-body {
         padding: 1.5rem;
     }
@@ -4747,7 +4942,7 @@ input[type="checkbox"] {
 
 /* Checkbox in labels - better alignment */
 label input[type="checkbox"],
-label > input[type="checkbox"] {
+label>input[type="checkbox"] {
     margin-right: 0.5rem !important;
     margin-left: 0 !important;
     vertical-align: top;
@@ -4817,8 +5012,8 @@ label[style*="align-items: center"] input[type="checkbox"] {
 /* Book facility checkbox in flex label - align like Terms checkbox */
 .booking-form label[style*="display:flex"] input[type="checkbox"],
 .booking-form label[style*="display: flex"] input[type="checkbox"],
-.booking-form > div > label[style*="display:flex"] input[type="checkbox"],
-.booking-form > div > label[style*="display: flex"] input[type="checkbox"] {
+.booking-form>div>label[style*="display:flex"] input[type="checkbox"],
+.booking-form>div>label[style*="display: flex"] input[type="checkbox"] {
     margin-right: 0 !important;
     margin-left: 0 !important;
     align-self: flex-start;
@@ -4975,7 +5170,7 @@ input[type="checkbox"]:disabled {
     .sidebar.collapsed {
         display: none;
     }
-    
+
     /* On mobile, ensure sidebar maintains full width when visible */
     .sidebar:not(.collapsed) {
         width: 100%;
@@ -4988,12 +5183,12 @@ input[type="checkbox"]:disabled {
     body.landing-page .section:first-of-type:not(.facility-details-section) {
         padding-top: 6rem;
     }
-    
+
     body.landing-page .section:not(.facility-details-section) {
         padding-top: 3rem;
         padding-bottom: 2rem;
     }
-    
+
     /* Ensure facility details section maintains proper spacing on tablet */
     body.landing-page .section.facility-details-section {
         padding: 7rem 1.25rem 3rem 1.25rem !important;
@@ -5013,10 +5208,1730 @@ input[type="checkbox"]:disabled {
     .section:not(.facility-details-section) {
         padding: 2rem 1rem;
     }
-    
+
     /* Ensure facility details section maintains proper spacing on mobile */
     body.landing-page .section.facility-details-section {
         padding: 7rem 1rem 3rem 1rem !important;
     }
+}
+
+/* ============================================
+   PAGE TRANSITION ANIMATIONS
+   ============================================ */
+
+/* Page transition container */
+.page-transition-container {
+    animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Keyframe animations for page transitions */
+@keyframes slideInRight {
+    from {
+        transform: translateX(50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutLeft {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(-50px);
+        opacity: 0;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* Apply slide-out animation when navigating away */
+.page-transition-out {
+    animation: slideOutLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Dashboard content transitions */
+.dashboard-content {
+    animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Guest content transitions */
+.guest-content {
+    animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   LOADING OVERLAY
+   ============================================ */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.loading-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-overlay.fade-out {
+    animation: fadeOut 0.3s ease forwards;
+}
+
+/* Loading spinner container */
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+/* Spinner animation */
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(99, 132, 210, 0.2);
+    border-top-color: var(--gov-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Loading text */
+.loading-text {
+    color: var(--gov-gray-dark);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+/* Dashboard-specific loading overlay (darker background) */
+body.dashboard .loading-overlay {
+    background: rgba(12, 34, 73, 0.95);
+}
+
+body.dashboard .loading-text {
+    color: var(--gov-white);
+}
+
+body.dashboard .spinner {
+    border-color: rgba(255, 255, 255, 0.2);
+    border-top-color: var(--gov-white);
+}
+
+/* ============================================
+   ACCESSIBILITY: REDUCED MOTION
+   ============================================ */
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+
+    .page-transition-container,
+    .dashboard-content,
+    .guest-content,
+    .page-transition-out {
+        animation: none !important;
+    }
+
+    .loading-overlay,
+    .loading-overlay.active,
+    .loading-overlay.fade-out {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .spinner {
+        animation: none !important;
+        border-top-color: transparent;
+        border-right-color: var(--gov-blue);
+    }
+
+    body.dashboard .spinner {
+        border-right-color: var(--gov-white);
+    }
+
+    /* Disable sidebar slide-in animation */
+    .sidebar {
+        transition: none !important;
+    }
+
+    .sidebar-backdrop {
+        transition: none !important;
+    }
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 768px) {
+
+    /* Faster animations on mobile for better perceived performance */
+    .page-transition-container,
+    .dashboard-content,
+    .guest-content {
+        animation-duration: 0.3s;
+    }
+
+    .page-transition-out {
+        animation-duration: 0.25s;
+    }
+
+    /* Smaller spinner on mobile */
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border-width: 3px;
+    }
+
+    .loading-text {
+        font-size: 0.9rem;
+    }
+}
+
+   
+/* ============================================
+   SESSION EXPIRATION WARNING MODAL
+   ============================================ */
+
+.session-warning-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.session-warning-modal[aria-hidden="false"] {
+    opacity: 1;
+    visibility: visible;
+}
+
+.session-warning-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.session-warning-content {
+    position: relative;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 2.5rem 2rem;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.session-warning-modal[aria-hidden="false"] .session-warning-content {
+    transform: scale(1);
+}
+
+.session-warning-icon {
+    margin: 0 auto 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.session-warning-icon svg {
+    filter: drop-shadow(0 4px 12px rgba(245, 158, 11, 0.3));
+}
+
+.session-warning-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.session-warning-message {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    color: #6B7280;
+}
+
+.session-warning-timer {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: #F59E0B;
+    margin: 1rem 0;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    line-height: 1;
+}
+
+/* Pulse animation when time is running out */
+.session-warning-timer.urgent {
+    animation: timerPulse 1s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        color: #F59E0B;
+    }
+
+    50% {
+        transform: scale(1.05);
+        color: #DC2626;
+    }
+}
+
+.session-warning-subtext {
+    margin: 0 0 2rem;
+    font-size: 0.95rem;
+    color: #6B7280;
+}
+
+.session-warning-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.session-warning-actions .btn-primary,
+.session-warning-actions .btn-outline {
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.session-warning-actions .btn-primary {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.session-warning-actions .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.session-warning-actions .btn-outline {
+    background: transparent;
+    color: #6B7280;
+    border: 2px solid #E5E7EB;
+}
+
+.session-warning-actions .btn-outline:hover {
+    background: #F3F4F6;
+    border-color: #D1D5DB;
+    color: #374151;
+}
+
+/* Tablet and up - horizontal button layout */
+@media (min-width: 481px) {
+    .session-warning-actions {
+        flex-direction: row;
+    }
+
+    .session-warning-content {
+        padding: 3rem 2.5rem;
+    }
+}
+
+/* Accessibility: Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+
+    .session-warning-modal,
+    .session-warning-content {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .session-warning-timer.urgent {
+        animation: none !important;
+    }
+}
+
+
+
+/* ============================================
+   FILTERS CONTAINER (My Reservations)
+   ============================================ */
+
+.filters-container {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.filters-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (min-width: 481px) {
+    .filters-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (min-width: 1025px) {
+    .filters-row {
+        grid-template-columns: 2fr 1.5fr 1.5fr auto;
+    }
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-item label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gov-gray-dark);
+}
+
+.filter-item input,
+.filter-item select {
+    padding: 0.65rem 0.85rem;
+    border: 2px solid #e0e6ed;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: #ffffff;
+}
+
+.filter-item input:focus,
+.filter-item select:focus {
+    outline: none;
+    border-color: var(--gov-blue);
+    box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
+}
+
+.filter-item input::placeholder {
+    color: #8b94a8;
+}
+
+.filter-actions {
+    justify-content: flex-end;
+}
+
+.filter-actions button {
+    margin-top: auto;
+    white-space: nowrap;
+}
+
+.custom-date-range {
+    display: none;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e0e6ed;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 481px) {
+    .custom-date-range {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.filter-results {
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--gov-gray-dark);
+    font-weight: 500;
+}
+
+@media (max-width: 480px) {
+    .filters-container {
+        padding: 1rem;
+    }
+
+    .filters-row {
+        gap: 0.75rem;
+    }
+
+    .filter-item input,
+    .filter-item select {
+        font-size: 0.9rem;
+        padding: 0.6rem 0.75rem;
+    }
+
+    .filter-actions button {
+        width: 100%;
+    }
+}
+/* ============================================
+   THEME TOGGLE BUTTON
+   ============================================ */
+
+.theme-toggle-container {
+    display: flex;
+    align-items: center;
+    margin-right: 1rem;
+}
+
+.theme-toggle-btn {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1.2rem;
+    padding: 0;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--bg-tertiary);
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px var(--shadow-hover);
+}
+
+.theme-icon {
+    display: none;
+    line-height: 1;
+}
+
+/* Show sun in light mode */
+:root .theme-icon-light {
+    display: inline;
+}
+
+/* Show moon in dark mode */
+[data-theme="dark"] .theme-icon-light {
+    display: none;
+}
+
+[data-theme="dark"] .theme-icon-dark {
+    display: inline;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .theme-toggle-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+    
+    .theme-toggle-container {
+        margin-right: 0.5rem;
+    }
+}
+
+/* Smooth theme transitions */
+body, .dashboard-header, .sidebar, .dashboard-content,
+.booking-card, .report-card, .facility-card, .table,
+.btn, .status-badge, .page-header, .kpi, .notif-panel {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+
+/* ============================================
+   APPLY THEME VARIABLES TO COMPONENTS
+   ============================================ */
+
+/* Dashboard Main Layout */
+.dashboard-main {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.dashboard-content {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* Dashboard Header/Navbar */
+.dashboard-header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+.dashboard-header span {
+    color: var(--text-primary);
+}
+
+/* Sidebar */
+.sidebar {
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    border-right: 1px solid var(--border-color);
+}
+
+.sidebar a {
+    color: var(--sidebar-text-muted);
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+    background: var(--sidebar-active);
+    color: var(--sidebar-text);
+}
+
+.sidebar-section-title {
+    color: var(--sidebar-text-muted);
+}
+
+/* Cards */
+.booking-card,
+.report-card,
+.facility-card,
+.facility-card-admin,
+.ai-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px var(--shadow);
+    color: var(--text-primary);
+}
+
+.booking-card:hover,
+.facility-card:hover {
+    box-shadow: 0 4px 12px var(--shadow-hover);
+}
+
+/* Page Headers */
+.page-header h1,
+.page-header h2 {
+    color: var(--text-primary);
+}
+
+.page-header small,
+.breadcrumb {
+    color: var(--text-secondary);
+}
+
+/* Tables */
+.table {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.table th {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table td {
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.table tr:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Forms */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="number"],
+textarea,
+select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-secondary);
+}
+
+/* Buttons */
+.btn-primary {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.btn-outline:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Status Badges */
+.status-badge.status-approved,
+.status-badge.approved {
+    background: var(--success-bg);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
+}
+
+.status-badge.status-pending,
+.status-badge.pending {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    border: 1px solid var(--warning-border);
+}
+
+.status-badge.status-denied,
+.status-badge.denied {
+    background: var(--error-bg);
+    color: var(--error-text);
+    border: 1px solid var(--error-border);
+}
+
+.status-badge.status-cancelled,
+.status-badge.cancelled,
+.status-badge.status-on_hold {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+/* KPI Cards */
+.kpi {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.kpi span {
+    color: var(--text-secondary);
+}
+
+.kpi strong {
+    color: var(--primary-color);
+}
+
+/* Notification Panel */
+.notif-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px var(--shadow-strong);
+}
+
+.notif-panel-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notif-panel h3 {
+    color: var(--text-primary);
+}
+
+.notif-item {
+    border-bottom: 1px solid var(--border-light);
+}
+
+.notif-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.notif-item strong {
+    color: var(--text-primary);
+}
+
+.notif-item small {
+    color: var(--text-tertiary);
+}
+
+/* Filters Container */
+.filters-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.filter-item label {
+    color: var(--text-secondary);
+}
+
+.filter-results {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+/* Modals */
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+/* AI Chip */
+.ai-chip {
+    background: var(--primary-color);
+    color: #ffffff;
+}
+
+/* Collapsible Cards */
+.collapsible-header {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.collapsible-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-top: none;
+}
+
+
+/* ============================================
+   FIX: Form Inputs & Dropdowns Dark Mode
+   ============================================ */
+
+/* Ensure all form inputs have proper colors in both modes */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+textarea,
+select {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Placeholder text */
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-tertiary) !important;
+    opacity: 0.7;
+}
+
+/* Focus states */
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--primary-color) !important;
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    outline: none;
+}
+
+/* Select dropdown options */
+select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* Disabled inputs */
+input:disabled,
+textarea:disabled,
+select:disabled {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-tertiary) !important;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   FIX: Sidebar Collapsible Links
+   ============================================ */
+
+/* Sidebar collapsible content links */
+.sidebar .collapsible-content a {
+    color: var(--sidebar-text-muted) !important;
+}
+
+.sidebar .collapsible-content a:hover,
+.sidebar .collapsible-content a.active {
+    background: var(--sidebar-active) !important;
+    color: var(--sidebar-text) !important;
+}
+
+/* Ensure sidebar links are always visible */
+.sidebar nav a,
+.sidebar .sidebar-section a {
+    color: var(--sidebar-text-muted) !important;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active,
+.sidebar .sidebar-section a:hover,
+.sidebar .sidebar-section a.active {
+    background: var(--sidebar-active) !important;
+    color: var(--sidebar-text) !important;
+}
+
+/* ============================================
+   FIX: Additional Form Elements
+   ============================================ */
+
+/* Radio and checkbox labels */
+label {
+    color: var(--text-primary);
+}
+
+/* Form groups */
+.form-group label,
+.filter-item label {
+    color: var(--text-secondary) !important;
+}
+
+/* Input groups */
+.input-group input,
+.input-group select {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+
+/* ============================================
+   FIX: Sidebar Collapsible Links (More Specific)
+   ============================================ */
+
+/* Target collapsible content links specifically */
+.sidebar .sidebar-section .collapsible-content a {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.sidebar .sidebar-section .collapsible-content a:hover {
+    background: var(--sidebar-active) !important;
+    color: #ffffff !important;
+}
+
+.sidebar .sidebar-section .collapsible-content a.active {
+    background: var(--sidebar-active) !important;
+    color: #ffffff !important;
+}
+
+/* Ensure SVG icons inherit color */
+.sidebar .collapsible-content a svg {
+    color: inherit !important;
+}
+
+.sidebar .collapsible-content a span {
+    color: inherit !important;
+}
+
+/* Override any conflicting styles */
+aside.sidebar nav .sidebar-section .collapsible-content a {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+aside.sidebar nav .sidebar-section .collapsible-content a:hover,
+aside.sidebar nav .sidebar-section .collapsible-content a.active {
+    color: #ffffff !important;
+    background: var(--sidebar-active) !important;
+}
+
+
+/* ============================================
+   FIX: Sidebar Collapsible Content Background & Text
+   ============================================ */
+
+/* Ensure collapsible content has proper sidebar background */
+.sidebar .collapsible-content,
+.sidebar .sidebar-section .collapsible-content,
+aside.sidebar .collapsible-content {
+    background: var(--sidebar-bg) !important;
+    background-color: var(--sidebar-bg) !important;
+}
+
+/* Collapsible header should also match sidebar */
+.sidebar .collapsible-header,
+.sidebar .sidebar-section-title.collapsible-header {
+    background: transparent !important;
+    color: var(--sidebar-text-muted) !important;
+}
+
+/* All links inside collapsible content - FORCE white/light color */
+.sidebar .collapsible-content a,
+.sidebar .sidebar-section .collapsible-content a,
+aside.sidebar .collapsible-content a,
+aside.sidebar nav .collapsible-content a {
+    color: rgba(255, 255, 255, 0.7) !important;
+    background: transparent !important;
+}
+
+/* Hover and active states */
+.sidebar .collapsible-content a:hover,
+.sidebar .sidebar-section .collapsible-content a:hover,
+aside.sidebar .collapsible-content a:hover,
+aside.sidebar nav .collapsible-content a:hover {
+    background: var(--sidebar-active) !important;
+    color: rgba(255, 255, 255, 1) !important;
+}
+
+.sidebar .collapsible-content a.active,
+.sidebar .sidebar-section .collapsible-content a.active,
+aside.sidebar .collapsible-content a.active,
+aside.sidebar nav .collapsible-content a.active {
+    background: var(--sidebar-active) !important;
+    color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Ensure spans and SVGs inside collapsible links inherit color */
+.sidebar .collapsible-content a span,
+.sidebar .collapsible-content a svg {
+    color: inherit !important;
+}
+
+/* Remove any white backgrounds from collapsible elements */
+.sidebar .collapsible-content > *,
+.sidebar .collapsible-content div {
+    background: transparent !important;
+}
+
+
+/* ============================================
+   FIX: Remove White Borders from Sidebar
+   ============================================ */
+
+/* Remove borders from sidebar sections */
+.sidebar .sidebar-section,
+.sidebar .sidebar-section-title,
+.sidebar .collapsible-header {
+    border: none !important;
+    outline: none !important;
+}
+
+/* Remove borders from collapsible content */
+.sidebar .collapsible-content {
+    border: none !important;
+    outline: none !important;
+}
+
+/* Remove borders from sidebar links */
+.sidebar a,
+.sidebar .collapsible-content a {
+    border: none !important;
+    outline: none !important;
+}
+
+/* Remove focus outline but keep accessibility */
+.sidebar a:focus-visible {
+    outline: 2px solid var(--primary-color) !important;
+    outline-offset: -2px;
+}
+
+
+/* ============================================
+   FIX: Collapsible Functionality CSS
+   ============================================ */
+
+/* Collapsible content - expanded state */
+.collapsible-content[data-collapsed="false"] {
+    max-height: 2000px;
+    opacity: 1;
+    overflow: visible;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+/* Collapsible content - collapsed state */
+.collapsible-content[data-collapsed="true"] {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+/* Chevron icon rotation */
+.collapsible-header .chevron-icon {
+    transition: transform 0.3s ease;
+}
+
+.collapsible-header[data-collapsed="true"] .chevron-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsible-header[data-collapsed="false"] .chevron-icon {
+    transform: rotate(0deg);
+}
+
+/* Ensure collapsible header is clickable */
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+
+/* ============================================
+   SIDEBAR USER FOOTER - Fixed at Bottom
+   ============================================ */
+
+/* Add padding to sidebar nav to prevent content from being hidden behind footer */
+.sidebar nav {
+    padding-bottom: 100px; /* Space for the fixed footer */
+}
+
+/* User footer - fixed at bottom of sidebar */
+.sidebar-user-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 280px; /* Match sidebar width */
+    background: var(--sidebar-bg);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    z-index: 10;
+    transition: width 0.3s ease, left 0.3s ease;
+}
+
+/* User info container */
+.sidebar-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* User avatar circle */
+.sidebar-user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+/* User details */
+.sidebar-user-details {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.sidebar-user-name {
+    color: var(--sidebar-text);
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-user-role {
+    color: var(--sidebar-text-muted);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* When sidebar is collapsed (desktop) */
+.sidebar.collapsed .sidebar-user-footer {
+    width: 70px;
+}
+
+.sidebar.collapsed .sidebar-user-details {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-user-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+}
+
+/* Mobile - sidebar is off-screen when collapsed */
+@media (max-width: 960px) {
+    .sidebar-user-footer {
+        width: 280px;
+        left: 0;
+    }
+    
+    /* When sidebar is collapsed on mobile, footer moves with it */
+    .sidebar.collapsed .sidebar-user-footer {
+        left: -280px;
+    }
+}
+
+/* Tablet and up - sidebar is always visible */
+@media (min-width: 961px) {
+    .sidebar-user-footer {
+        left: 0;
+    }
+    
+    .sidebar.collapsed .sidebar-user-footer {
+        width: 70px;
+        left: 0;
+    }
+}
+
+
+/* ============================================
+   FIX: Sidebar User Footer Overflow
+   ============================================ */
+
+/* Fix overflow issue - ensure footer stays within sidebar bounds */
+.sidebar-user-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 280px; /* Match sidebar width */
+    max-width: 280px; /* Prevent overflow */
+    background: var(--sidebar-bg);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.875rem 1rem; /* Reduced padding */
+    z-index: 10;
+    transition: width 0.3s ease, left 0.3s ease;
+    box-sizing: border-box; /* Include padding in width calculation */
+    overflow: hidden; /* Prevent content overflow */
+}
+
+/* User avatar - support for profile pictures */
+.sidebar-user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* Ensure user info doesn't overflow */
+.sidebar-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* Ensure details container doesn't overflow */
+.sidebar-user-details {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+    max-width: calc(100% - 56px); /* Account for avatar + gap */
+}
+
+/* When sidebar is collapsed */
+.sidebar.collapsed .sidebar-user-footer {
+    width: 70px;
+    max-width: 70px;
+    padding: 0.875rem 0.5rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 960px) {
+    .sidebar-user-footer {
+        width: 280px;
+        max-width: 280px;
+        left: 0;
+    }
+    
+    .sidebar.collapsed .sidebar-user-footer {
+        left: -280px;
+        width: 280px;
+    }
+}
+
+
+/* ============================================
+   CRITICAL FIX: Sidebar User Footer - Force Correct Width
+   ============================================ */
+
+/* Override all previous styles with !important */
+.sidebar .sidebar-user-footer,
+aside.sidebar .sidebar-user-footer,
+.sidebar-user-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 280px !important;
+    max-width: 280px !important;
+    background: var(--sidebar-bg) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 0.75rem 0.875rem !important;
+    z-index: 10 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+}
+
+/* User info - prevent overflow */
+.sidebar-user-footer .sidebar-user-info {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* Avatar container */
+.sidebar-user-footer .sidebar-user-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    border-radius: 50% !important;
+    background: var(--primary-color) !important;
+    color: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    flex-shrink: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Profile picture */
+.sidebar-user-footer .sidebar-user-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+}
+
+/* User details - force truncation */
+.sidebar-user-footer .sidebar-user-details {
+    flex: 1 !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 45px) !important;
+    overflow: hidden !important;
+}
+
+.sidebar-user-footer .sidebar-user-name {
+    color: var(--sidebar-text) !important;
+    font-weight: 500 !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
+}
+
+.sidebar-user-footer .sidebar-user-role {
+    color: var(--sidebar-text-muted) !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
+}
+
+/* Collapsed state */
+.sidebar.collapsed .sidebar-user-footer {
+    width: 70px !important;
+    max-width: 70px !important;
+    padding: 0.75rem 0.5rem !important;
+}
+
+.sidebar.collapsed .sidebar-user-details {
+    display: none !important;
+}
+
+/* Mobile */
+@media (max-width: 960px) {
+    .sidebar-user-footer {
+        width: 280px !important;
+        max-width: 280px !important;
+        left: 0 !important;
+    }
+    
+    .sidebar.collapsed .sidebar-user-footer {
+        left: -280px !important;
+        width: 280px !important;
+    }
+}
+
+
+/* ============================================
+   FINAL FIX: Sidebar Footer - Absolute Positioning
+   ============================================ */
+
+/* Make sidebar position relative to contain absolute footer */
+.sidebar,
+aside.sidebar {
+    position: relative !important;
+}
+
+/* Change footer to absolute positioning within sidebar */
+.sidebar .sidebar-user-footer,
+aside.sidebar .sidebar-user-footer,
+.sidebar-user-footer {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: var(--sidebar-bg) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 0.75rem 0.875rem !important;
+    z-index: 10 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+}
+
+
+/* ============================================
+   FIX: Sidebar Should Be Fixed/Sticky on Scroll
+   ============================================ */
+
+/* Make sidebar fixed on desktop so it stays visible when scrolling */
+@media (min-width: 961px) {
+    .sidebar,
+    aside.sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+    
+    /* Adjust main content to account for fixed sidebar */
+    .dashboard-main {
+        margin-left: 280px !important;
+    }
+    
+    /* When sidebar is collapsed, reduce margin */
+    .sidebar.collapsed ~ .dashboard-main {
+        margin-left: 70px !important;
+    }
+}
+
+/* Mobile - sidebar slides in/out, no fixed positioning needed */
+@media (max-width: 960px) {
+    .dashboard-main {
+        margin-left: 0 !important;
+    }
+}
+
+
+/* ============================================
+   FIX: Dark Mode - Override Inline Styles
+   ============================================ */
+
+/* Dashboard KPI Cards - Fix text colors */
+.kpi h3,
+.kpi .kpi-value,
+.kpi strong,
+.dashboard-content .kpi h3,
+.dashboard-content .kpi strong {
+    color: var(--text-primary) !important;
+}
+
+.kpi span,
+.kpi small,
+.kpi p {
+    color: var(--text-secondary) !important;
+}
+
+/* Conflict Warning Box - Fix for dark mode */
+#conflict-warning {
+    background: var(--error-bg) !important;
+    border-color: var(--error-border) !important;
+}
+
+#conflict-warning h4,
+#conflict-warning #conflict-title {
+    color: var(--error-text) !important;
+}
+
+#conflict-warning p,
+#conflict-warning #conflict-message,
+#conflict-warning #conflict-risk,
+#conflict-warning li,
+#conflict-warning strong {
+    color: var(--error-text) !important;
+}
+
+#conflict-alternatives p,
+#conflict-alternatives ul,
+#conflict-alternatives li {
+    color: var(--error-text) !important;
+}
+
+/* Facility Details Container */
+#facility-details-container,
+#facility-details-content {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+#facility-details-container h2,
+#facility-details-container h3,
+#facility-details-title {
+    color: var(--text-primary) !important;
+}
+
+#facility-details-container p,
+#facility-details-container li,
+#facility-details-content p,
+#facility-details-content li {
+    color: var(--text-primary) !important;
+}
+
+#facility-details-container strong,
+#facility-details-content strong {
+    color: var(--text-secondary) !important;
+}
+
+#facility-details-container small,
+#facility-details-content small {
+    color: var(--text-tertiary) !important;
+}
+
+/* Facility details borders */
+#facility-details-content > div > div[style*="border-bottom"] {
+    border-bottom-color: var(--border-color) !important;
+}
+
+/* Usage Card - Fix background and text */
+#facility-details-content div[style*="background: #f9fafc"],
+div[style*="background: rgb(249, 250, 252)"] {
+    background: var(--bg-tertiary) !important;
+}
+
+/* Override all hardcoded text colors in facility details */
+#facility-details-content div[style*="color: #1b1b1f"] p,
+#facility-details-content div[style*="color: #1b1b1f"] li,
+#facility-details-content p[style*="color: #1b1b1f"],
+#facility-details-content li[style*="color: #1b1b1f"] {
+    color: var(--text-primary) !important;
+}
+
+#facility-details-content strong[style*="color: #5b6888"],
+#facility-details-content div[style*="color: #5b6888"] strong {
+    color: var(--text-secondary) !important;
+}
+
+#facility-details-content small[style*="color: #8b95b5"],
+#facility-details-content div[style*="color: #8b95b5"] small {
+    color: var(--text-tertiary) !important;
+}
+
+/* AI Recommendation Box (if exists) */
+#ai-recommendation,
+.ai-recommendation-box {
+    background: var(--info-bg) !important;
+    border-color: var(--info-border) !important;
+}
+
+#ai-recommendation h4,
+#ai-recommendation p,
+#ai-recommendation li,
+.ai-recommendation-box h4,
+.ai-recommendation-box p,
+.ai-recommendation-box li {
+    color: var(--info-text) !important;
+}
+
+/* Success messages */
+div[style*="background: rgb(232, 245, 233)"],
+div[style*="background: #e8f5e9"] {
+    background: var(--success-bg) !important;
+}
+
+div[style*="color: rgb(46, 125, 50)"],
+div[style*="color: #2e7d32"] {
+    color: var(--success-text) !important;
+}
+
+/* Error/Conflict messages */
+div[style*="background: rgb(253, 236, 238)"],
+div[style*="background: #fdecee"] {
+    background: var(--error-bg) !important;
+}
+
+div[style*="color: rgb(178, 48, 48)"],
+div[style*="color: #b23030"],
+h4[style*="color: rgb(178, 48, 48)"],
+p[style*="color: rgb(178, 48, 48)"] {
+    color: var(--error-text) !important;
+}
+
+
+/* ============================================
+   FIX: Remove White Border Between Sidebar and Main Content
+   ============================================ */
+
+/* Remove any borders or shadows from sidebar */
+.sidebar,
+aside.sidebar {
+    border-right: none !important;
+    box-shadow: none !important;
+}
+
+/* Ensure no border on dashboard main either */
+.dashboard-main {
+    border-left: none !important;
+}
+
+/* Remove any separator lines */
+.sidebar::after,
+.sidebar::before {
+    display: none !important;
+}
+
+
+/* ============================================
+   CRITICAL FIX: Remove White Line Between Sidebar and Content
+   ============================================ */
+
+/* Force sidebar to have no right border or margin */
+.sidebar,
+aside.sidebar {
+    border-right: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    margin-right: 0 !important;
+    outline: none !important;
+}
+
+/* Force dashboard-main to have no left border or margin */
+.dashboard-main {
+    border-left: 0 !important;
+    border: 0 !important;
+    margin-left: 280px !important;
+    padding-left: 0 !important;
+}
+
+/* Remove any pseudo-elements that might create lines */
+.sidebar::after,
+.sidebar::before,
+.dashboard-main::before,
+.dashboard-main::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* Ensure sidebar background extends fully */
+.sidebar {
+    background: var(--sidebar-bg) !important;
+}
+
+/* Ensure main content background starts immediately */
+.dashboard-main {
+    background: var(--bg-primary) !important;
+}
+
+/* Remove gap between sidebar and main */
+.dashboard {
+    gap: 0 !important;
+}
+
+/* If there's a wrapper causing the issue */
+.dashboard-wrapper,
+.dashboard-container {
+    gap: 0 !important;
+    border: 0 !important;
+}
+
+
+/* ============================================
+   FIX: Dashboard Container Background for Dark Mode
+   ============================================ */
+
+/* The dashboard container background needs to match the theme */
+.dashboard,
+body.dashboard {
+    background: var(--bg-primary) !important;
+    background-color: var(--bg-primary) !important;
+}
+
+/* Ensure body background also matches */
+body {
+    background: var(--bg-primary) !important;
+    background-color: var(--bg-primary) !important;
+}
+
+/* Remove any default white background */
+html {
+    background: var(--bg-primary) !important;
 }
 

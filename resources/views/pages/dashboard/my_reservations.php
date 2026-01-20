@@ -289,6 +289,66 @@ ob_start();
     </div>
 <?php endif; ?>
 
+<!-- Filters Section -->
+<div class="filters-container">
+    <div class="filters-row">
+        <!-- Search Bar -->
+        <div class="filter-item search-filter">
+            <label for="searchInput">Search Facility</label>
+            <input type="text" id="searchInput" placeholder="Search by facility name...">
+        </div>
+        
+        <!-- Status Filter -->
+        <div class="filter-item">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="denied">Denied</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="on_hold">On Hold</option>
+                <option value="postponed">Postponed</option>
+            </select>
+        </div>
+        
+        <!-- Date Filter -->
+        <div class="filter-item">
+            <label for="dateFilter">Date Range</label>
+            <select id="dateFilter">
+                <option value="">All Dates</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="past">Past</option>
+                <option value="custom">Custom Range</option>
+            </select>
+        </div>
+        
+        <!-- Clear Filters Button -->
+        <div class="filter-item filter-actions">
+            <button type="button" class="btn-outline" id="clearFilters">
+                Clear Filters
+            </button>
+        </div>
+    </div>
+    
+    <!-- Custom Date Range (hidden by default) -->
+    <div class="custom-date-range" id="customDateRange" style="display: none;">
+        <div class="filter-item">
+            <label for="dateFrom">From</label>
+            <input type="date" id="dateFrom">
+        </div>
+        <div class="filter-item">
+            <label for="dateTo">To</label>
+            <input type="date" id="dateTo">
+        </div>
+    </div>
+    
+    <!-- Results Count -->
+    <div class="filter-results">
+        <span id="resultsCount">Showing all reservations</span>
+    </div>
+</div>
+
 <?php if (empty($reservations)): ?>
     <p>You have not submitted any reservations yet.</p>
 <?php else: ?>
@@ -454,6 +514,127 @@ ob_start();
 </div>
 
 <script>
+// Filter and Search Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    const customDateRange = document.getElementById('customDateRange');
+    const clearFilters = document.getElementById('clearFilters');
+    const resultsCount = document.getElementById('resultsCount');
+    
+    const reservationCards = document.querySelectorAll('.facility-card-admin');
+    
+    // Show/hide custom date range
+    if (dateFilter) {
+        dateFilter.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customDateRange.style.display = 'grid';
+            } else {
+                customDateRange.style.display = 'none';
+            }
+            applyFilters();
+        });
+    }
+    
+    // Apply filters on input
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+    if (dateFrom) dateFrom.addEventListener('change', applyFilters);
+    if (dateTo) dateTo.addEventListener('change', applyFilters);
+    
+    // Clear all filters
+    if (clearFilters) {
+        clearFilters.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            if (statusFilter) statusFilter.value = '';
+            if (dateFilter) dateFilter.value = '';
+            if (dateFrom) dateFrom.value = '';
+            if (dateTo) dateTo.value = '';
+            if (customDateRange) customDateRange.style.display = 'none';
+            applyFilters();
+        });
+    }
+    
+    function applyFilters() {
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const selectedStatus = statusFilter ? statusFilter.value.toLowerCase() : '';
+        const selectedDateFilter = dateFilter ? dateFilter.value : '';
+        const fromDate = dateFrom && dateFrom.value ? new Date(dateFrom.value) : null;
+        const toDate = dateTo && dateTo.value ? new Date(dateTo.value) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        let visibleCount = 0;
+        
+        reservationCards.forEach(card => {
+            let show = true;
+            
+            // Search filter
+            if (searchTerm) {
+                const facilityNameEl = card.querySelector('h3');
+                if (facilityNameEl) {
+                    const facilityName = facilityNameEl.textContent.toLowerCase();
+                    if (!facilityName.includes(searchTerm)) {
+                        show = false;
+                    }
+                }
+            }
+            
+            // Status filter
+            if (selectedStatus) {
+                const statusBadge = card.querySelector('.status-badge');
+                if (statusBadge) {
+                    const cardStatus = statusBadge.className.split(' ').find(c => c !== 'status-badge');
+                    if (cardStatus && cardStatus.toLowerCase() !== selectedStatus) {
+                        show = false;
+                    }
+                }
+            }
+            
+            // Date filter
+            if (selectedDateFilter) {
+                const smallEl = card.querySelector('small');
+                if (smallEl) {
+                    const dateText = smallEl.textContent.split('•')[0].trim();
+                    const reservationDate = new Date(dateText);
+                    
+                    if (selectedDateFilter === 'upcoming') {
+                        if (reservationDate < today) show = false;
+                    } else if (selectedDateFilter === 'past') {
+                        if (reservationDate >= today) show = false;
+                    } else if (selectedDateFilter === 'custom') {
+                        if (fromDate && reservationDate < fromDate) show = false;
+                        if (toDate && reservationDate > toDate) show = false;
+                    }
+                }
+            }
+            
+            // Show/hide card
+            card.style.display = show ? 'block' : 'none';
+            if (show) visibleCount++;
+        });
+        
+        // Update results count
+        const totalCount = reservationCards.length;
+        if (resultsCount) {
+            if (visibleCount === totalCount) {
+                resultsCount.textContent = `Showing all ${totalCount} reservation${totalCount !== 1 ? 's' : ''}`;
+            } else {
+                resultsCount.textContent = `Showing ${visibleCount} of ${totalCount} reservation${totalCount !== 1 ? 's' : ''}`;
+            }
+        }
+    }
+    
+    // Initial count
+    if (resultsCount && reservationCards.length > 0) {
+        resultsCount.textContent = `Showing all ${reservationCards.length} reservation${reservationCards.length !== 1 ? 's' : ''}`;
+    }
+});
+
+// Reschedule Modal Functions
 function openRescheduleModal(reservationId, currentDate, currentTime, facilityName) {
     document.getElementById('reschedule_reservation_id').value = reservationId;
     document.getElementById('reschedule_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';

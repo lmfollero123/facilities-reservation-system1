@@ -196,6 +196,14 @@ if ($isHomePage || $isPublicPage) {
     </style>
 </head>
 <body id="page-top" class="<?= htmlspecialchars($bodyClass); ?>">
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+</div>
+
 <?php include __DIR__ . '/../components/navbar_guest.php'; ?>
 <main class="guest-content">
     <?= $content ?? ''; ?>

@@ -34,7 +34,12 @@ $unreadCount = $userId ? getUnreadNotificationCount($userId) : 0;
                 </div>
             </div>
         </div>
-        <span>Welcome, <?= htmlspecialchars($username); ?></span>
+        <div class="theme-toggle-container">
+            <button class="theme-toggle-btn" id="themeToggle" type="button" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+                <span class="theme-icon theme-icon-light">☀️</span>
+                <span class="theme-icon theme-icon-dark">🌙</span>
+            </button>
+        </div>
         <a class="btn btn-primary confirm-action" data-message="Are you sure you want to log out?" href="<?= $base; ?>/resources/views/pages/auth/logout.php">Logout</a>
     </div>
 </header>

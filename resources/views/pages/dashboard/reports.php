@@ -273,6 +273,24 @@ if (isset($_GET['export'])) {
 $reportYear = isset($_GET['year']) ? ($_GET['year'] === 'all' ? null : (int)$_GET['year']) : date('Y');
 $reportMonth = isset($_GET['month']) ? ($_GET['month'] === 'all' ? null : (int)$_GET['month']) : date('m');
 
+// Get facility filter parameter
+$facilityFilter = isset($_GET['facility']) && $_GET['facility'] !== 'all' ? (int)$_GET['facility'] : null;
+
+// Fetch all facilities for dropdown
+$facilitiesStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
+$allFacilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get selected facility name for label
+$facilityName = 'All Facilities';
+if ($facilityFilter) {
+    foreach ($allFacilities as $fac) {
+        if ($fac['id'] == $facilityFilter) {
+            $facilityName = $fac['name'];
+            break;
+        }
+    }
+}
+
 if ($reportYear === null || $reportMonth === null) {
     // Show all time data (no date filter)
     $startDate = null;
@@ -287,6 +305,17 @@ if ($reportYear === null || $reportMonth === null) {
     $filterLabel = date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
     $dateFilterClause = 'WHERE reservation_date >= :start AND reservation_date <= :end';
     $dateParams = ['start' => $startDate, 'end' => $endDate];
+}
+
+// Add facility filter to clause
+if ($facilityFilter) {
+    if ($dateFilterClause) {
+        $dateFilterClause .= ' AND facility_id = :facility_id';
+    } else {
+        $dateFilterClause = 'WHERE facility_id = :facility_id';
+    }
+    $dateParams['facility_id'] = $facilityFilter;
+    $filterLabel .= ' - ' . $facilityName;
 }
 
 // Calculate KPIs (Global Statistics for Admin/Staff)
@@ -518,6 +547,9 @@ $statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
 
 // Top facilities by approved bookings (for selected period)
 if ($dateFilterClause) {
+    // Create date-only params (without facility_id) for this query
+    $dateOnlyParams = ['start' => $startDate, 'end' => $endDate];
+    
     $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
          FROM facilities f
          LEFT JOIN reservations r ON f.id = r.facility_id 
@@ -528,7 +560,7 @@ if ($dateFilterClause) {
          ORDER BY booking_count DESC
          LIMIT 5';
     $facilityStmt = $pdo->prepare($facilitySql);
-    $facilityStmt->execute($dateParams);
+    $facilityStmt->execute($dateOnlyParams);
 } else {
     $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
          FROM facilities f
@@ -548,6 +580,12 @@ foreach ($facilityDataChart as $fac) {
     $facilityCounts[] = (int)$fac['booking_count'];
 }
 
+// Handle print view request (after all data is calculated)
+if (isset($_GET['print'])) {
+    include __DIR__ . '/reports_print.php';
+    exit;
+}
+
 ob_start();
 ?>
 <div class="page-header">
@@ -557,10 +595,18 @@ ob_start();
     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h1>Reports & Analytics</h1>
-            <small>Review reservation statistics, usage patterns, and AI-generated scheduling insights.</small>
+            <small>Review reservation statistics and usage patterns.</small>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <form method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
+        <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <select name="facility" id="facility-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                <option value="all" <?= ($facilityFilter === null) ? 'selected' : ''; ?>>All Facilities</option>
+                <?php foreach ($allFacilities as $facility): ?>
+                    <option value="<?= $facility['id']; ?>" <?= ($facilityFilter !== null && $facilityFilter == $facility['id']) ? 'selected' : ''; ?>>
+                        <?= htmlspecialchars($facility['name']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
             <select name="month" id="month-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
                 <option value="all" <?= ($reportMonth === null) ? 'selected' : ''; ?>>All Time</option>
                 <?php for ($m = 1; $m <= 12; $m++): ?>
@@ -579,6 +625,9 @@ ob_start();
             </select>
             <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Update</button>
         </form>
+        <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
+            📄 Print Summary
+        </button>
         <script>
         // Auto-submit when "All Time" is selected in month or year
         document.getElementById('month-filter')?.addEventListener('change', function() {
@@ -593,6 +642,15 @@ ob_start();
                 this.form.submit();
             }
         });
+        
+        // Print Summary function
+        function printSummary() {
+            const facility = document.getElementById('facility-filter').value;
+            const month = document.getElementById('month-filter').value;
+            const year = document.getElementById('year-filter').value;
+            const printUrl = `?print=1&facility=${facility}&month=${month}&year=${year}`;
+            window.open(printUrl, '_blank');
+        }
         </script>
         </div>
     </div>
@@ -619,75 +677,77 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<div class="reports-grid">
-    <section>
-        <div class="report-card">
-            <h2>Monthly Reservation Volume</h2>
-            <div class="kpi-row">
-                <div class="kpi">
-                    <span>Total Reservations (This Month)</span>
-                    <strong><?= number_format($totalReservations); ?></strong>
-                    <small>Across all facilities in <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></small>
+<section>
+    <div class="report-card">
+        <h2>Monthly Reservation Volume</h2>
+        <div class="kpi-row">
+            <div class="kpi">
+                <span>Total Reservations (This Month)</span>
+                <strong><?= number_format($totalReservations); ?></strong>
+                <small>Across all facilities in <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></small>
+            </div>
+            <div class="kpi">
+                <span>Approval Rate</span>
+                <strong><?= $approvalRate; ?>%</strong>
+                <small><?= number_format($approvedCount); ?> of <?= number_format($totalReservations); ?> approved</small>
+            </div>
+            <div class="kpi">
+                <span>Utilization</span>
+                <strong><?= $utilization; ?>%</strong>
+                <small>Occupied time slots vs. available</small>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Global System Statistics</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total Users</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalUsers); ?></div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active this month</div>
                 </div>
-                <div class="kpi">
-                    <span>Approval Rate</span>
-                    <strong><?= $approvalRate; ?>%</strong>
-                    <small><?= number_format($approvedCount); ?> of <?= number_format($totalReservations); ?> approved</small>
+                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Available Facilities</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalFacilities); ?></div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">Facilities in system</div>
                 </div>
-                <div class="kpi">
-                    <span>Utilization</span>
-                    <strong><?= $utilization; ?>%</strong>
-                    <small>Occupied time slots vs. available</small>
+                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total All-Time</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalAllTime); ?></div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">All reservations ever</div>
+                </div>
+                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Avg per User</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= $avgReservationsPerUser; ?></div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">This month</div>
                 </div>
             </div>
-            
-            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-                <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Global System Statistics</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total Users</div>
-                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalUsers); ?></div>
-                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active this month</div>
-                    </div>
-                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Available Facilities</div>
-                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalFacilities); ?></div>
-                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">Facilities in system</div>
-                    </div>
-                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total All-Time</div>
-                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalAllTime); ?></div>
-                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">All reservations ever</div>
-                    </div>
-                    <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Avg per User</div>
-                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= $avgReservationsPerUser; ?></div>
-                        <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">This month</div>
-                    </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (This Month)</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
+                <div style="padding: 0.75rem; background: #e8f5e9; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #388e3c;"><?= number_format($approvedCount); ?></div>
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Approved</div>
+                </div>
+                <div style="padding: 0.75rem; background: #fff3e0; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #f57c00;"><?= number_format($pendingCount); ?></div>
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Pending</div>
+                </div>
+                <div style="padding: 0.75rem; background: #ffebee; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #d32f2f;"><?= number_format($deniedCount); ?></div>
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Denied</div>
+                </div>
+                <div style="padding: 0.75rem; background: #f5f5f5; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #616161;"><?= number_format($cancelledCount); ?></div>
+                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Cancelled</div>
                 </div>
             </div>
-            
-            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-                <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (This Month)</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
-                    <div style="padding: 0.75rem; background: #e8f5e9; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #388e3c;"><?= number_format($approvedCount); ?></div>
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Approved</div>
-                    </div>
-                    <div style="padding: 0.75rem; background: #fff3e0; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #f57c00;"><?= number_format($pendingCount); ?></div>
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Pending</div>
-                    </div>
-                    <div style="padding: 0.75rem; background: #ffebee; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #d32f2f;"><?= number_format($deniedCount); ?></div>
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Denied</div>
-                    </div>
-                    <div style="padding: 0.75rem; background: #f5f5f5; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #616161;"><?= number_format($cancelledCount); ?></div>
-                        <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Cancelled</div>
-                    </div>
-                </div>
-            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Facility Utilization</h3>
             <?php if (empty($facilityData)): ?>
                 <p style="color: #8b95b5; padding: 1rem 0;">No facility data available for this period.</p>
             <?php else: ?>
@@ -707,106 +767,45 @@ ob_start();
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
+    </div>
 
-        <div class="report-card" style="margin-top: 1.5rem;">
-            <h2>Reservation Outcomes</h2>
-            <table class="table">
-                <thead>
-                <tr>
-                    <th>Outcome</th>
-                    <th>Count</th>
-                    <th>Share</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                    <td><span class="status-badge status-approved">Approved</span></td>
-                    <td><strong><?= number_format($outcomesMap['approved']); ?></strong></td>
-                    <td><?= $outcomesShare['approved']; ?>%</td>
-                </tr>
-                <tr>
-                    <td><span class="status-badge status-denied">Denied</span></td>
-                    <td><strong><?= number_format($outcomesMap['denied']); ?></strong></td>
-                    <td><?= $outcomesShare['denied']; ?>%</td>
-                </tr>
-                <tr>
-                    <td><span class="status-badge status-cancelled">Cancelled</span></td>
-                    <td><strong><?= number_format($outcomesMap['cancelled']); ?></strong></td>
-                    <td><?= $outcomesShare['cancelled']; ?>%</td>
-                </tr>
-                <?php if ($outcomesMap['pending'] > 0): ?>
-                <tr>
-                    <td><span class="status-badge status-pending">Pending</span></td>
-                    <td><strong><?= number_format($outcomesMap['pending']); ?></strong></td>
-                    <td><?= $outcomesShare['pending']; ?>%</td>
-                </tr>
-                <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <aside>
-        <div class="ai-panel">
-            <div class="ai-chip">
-                <span>AI</span> <span>Predictive Insight</span>
-            </div>
-            <h3>Usage Patterns (<?= htmlspecialchars($filterLabel); ?>)</h3>
-            <?php
-            // Get peak day of week
-            $dayOfWeekSql = 'SELECT DAYNAME(reservation_date) as day_name, COUNT(*) as count
-                 FROM reservations
-                 WHERE status = "approved"';
-            if ($dateFilterClause) {
-                $dayOfWeekSql .= ' AND reservation_date >= :start AND reservation_date <= :end';
-            }
-            $dayOfWeekSql .= ' GROUP BY DAYNAME(reservation_date)
-                 ORDER BY count DESC
-                 LIMIT 1';
-            $dayOfWeekStmt = $pdo->prepare($dayOfWeekSql);
-            $dayOfWeekStmt->execute($dateParams);
-            $peakDay = $dayOfWeekStmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Get most popular time slot
-            $timeSlotSql = 'SELECT time_slot, COUNT(*) as count
-                 FROM reservations
-                 WHERE status = "approved"';
-            if ($dateFilterClause) {
-                $timeSlotSql .= ' AND reservation_date >= :start AND reservation_date <= :end';
-            }
-            $timeSlotSql .= ' GROUP BY time_slot
-                 ORDER BY count DESC
-                 LIMIT 1';
-            $timeSlotStmt = $pdo->prepare($timeSlotSql);
-            $timeSlotStmt->execute($dateParams);
-            $peakTimeSlot = $timeSlotStmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Get most booked facility
-            $topFacility = !empty($facilityData) ? $facilityData[0] : null;
-            ?>
-            <ul>
-                <?php if ($peakDay): ?>
-                    <li><strong>Peak Day:</strong> <?= htmlspecialchars($peakDay['day_name']); ?>s with <?= $peakDay['count']; ?> approved booking(s).</li>
-                <?php endif; ?>
-                <?php if ($peakTimeSlot): ?>
-                    <li><strong>Popular Time:</strong> "<?= htmlspecialchars($peakTimeSlot['time_slot']); ?>" slot has <?= $peakTimeSlot['count']; ?> approved reservation(s).</li>
-                <?php endif; ?>
-                <?php if ($topFacility && (int)$topFacility['approved_count'] > 0): ?>
-                    <li><strong>Most Active Facility:</strong> <?= htmlspecialchars($topFacility['name']); ?> with <?= $topFacility['approved_count']; ?> approved booking(s).</li>
-                <?php endif; ?>
-                <?php if ($totalReservations == 0): ?>
-                    <li><em>No data available for this period. Insights will appear as reservations are made.</em></li>
-                <?php endif; ?>
-            </ul>
-        </div>
-        <div class="report-card" style="margin-top: 1.5rem;">
-            <h2>Quick Export</h2>
-            <p class="resource-meta">Export reservation data for the selected period.</p>
-            <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'pdf'])); ?>" class="btn btn-primary" style="display: block; text-align: center; text-decoration: none; margin-bottom: 0.75rem;">Download Monthly Report (PDF)</a>
-            <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'csv'])); ?>" class="btn btn-outline" style="display: block; text-align: center; text-decoration: none;">Download Raw Data (CSV)</a>
-        </div>
-    </aside>
-</div>
+    <div class="report-card" style="margin-top: 1.5rem;">
+        <h2>Reservation Outcomes</h2>
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Outcome</th>
+                <th>Count</th>
+                <th>Share</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><span class="status-badge status-approved">Approved</span></td>
+                <td><strong><?= number_format($outcomesMap['approved']); ?></strong></td>
+                <td><?= $outcomesShare['approved']; ?>%</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-denied">Denied</span></td>
+                <td><strong><?= number_format($outcomesMap['denied']); ?></strong></td>
+                <td><?= $outcomesShare['denied']; ?>%</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-cancelled">Cancelled</span></td>
+                <td><strong><?= number_format($outcomesMap['cancelled']); ?></strong></td>
+                <td><?= $outcomesShare['cancelled']; ?>%</td>
+            </tr>
+            <?php if ($outcomesMap['pending'] > 0): ?>
+            <tr>
+                <td><span class="status-badge status-pending">Pending</span></td>
+                <td><strong><?= number_format($outcomesMap['pending']); ?></strong></td>
+                <td><?= $outcomesShare['pending']; ?>%</td>
+            </tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

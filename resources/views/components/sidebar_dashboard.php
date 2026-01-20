@@ -3,8 +3,25 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../config/app.php';
+require_once __DIR__ . '/../../../config/database.php';
 $base = base_path();
 $role = $_SESSION['role'] ?? 'Resident';
+$userName = $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Guest';
+$userId = $_SESSION['user_id'] ?? null;
+
+// Get profile picture from session or database
+$profilePicture = $_SESSION['profile_picture'] ?? null;
+if (!$profilePicture && $userId) {
+    try {
+        $stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $profilePicture = $user['profile_picture'] ?? null;
+    } catch (Exception $e) {
+        $profilePicture = null;
+    }
+}
+
 // Get current page from URL path for clean URL detection
 $currentPath = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $current = $currentPath;
@@ -136,5 +153,22 @@ $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/dashboard/profile', 
             <?php endforeach; ?>
         </div>
     </nav>
+    
+    <!-- User Profile Footer - Fixed at bottom -->
+    <div class="sidebar-user-footer">
+        <div class="sidebar-user-info">
+            <div class="sidebar-user-avatar">
+                <?php if ($profilePicture): ?>
+                    <img src="<?= $base . '/public/uploads/profile_pictures/' . basename(htmlspecialchars($profilePicture)); ?>" alt="<?= htmlspecialchars($userName); ?>" onerror="this.style.display='none'; this.parentElement.innerHTML='<?= strtoupper(substr($userName, 0, 1)); ?>';">
+                <?php else: ?>
+                    <?= strtoupper(substr($userName, 0, 1)); ?>
+                <?php endif; ?>
+            </div>
+            <div class="sidebar-user-details">
+                <div class="sidebar-user-name"><?= htmlspecialchars($userName); ?></div>
+                <div class="sidebar-user-role"><?= htmlspecialchars($role); ?></div>
+            </div>
+        </div>
+    </div>
 </aside>
 

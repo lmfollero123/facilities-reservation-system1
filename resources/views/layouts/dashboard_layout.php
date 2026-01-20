@@ -65,6 +65,14 @@ $userName = $_SESSION['name'] ?? 'User';
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="dashboard">
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+</div>
+
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
     <?php include __DIR__ . '/../components/navbar_dashboard.php'; ?>
