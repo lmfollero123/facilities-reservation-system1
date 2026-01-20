@@ -7010,3 +7010,55 @@ html {
     color: var(--text-secondary) !important;
 }
 
+
+/* ============================================
+   FIX: Conflict Warning Text Colors - More Specific
+   ============================================ */
+
+/* Green (Available) - Override all text elements */
+#conflict-warning[style*="background: rgb(227, 248, 239)"] #conflict-title,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] #conflict-message,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] #conflict-risk,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] p,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] h4,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] li,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] strong,
+#conflict-warning[style*="background: #e3f8ef"] #conflict-title,
+#conflict-warning[style*="background: #e3f8ef"] #conflict-message,
+#conflict-warning[style*="background: #e3f8ef"] #conflict-risk,
+#conflict-warning[style*="background: #e3f8ef"] p,
+#conflict-warning[style*="background: #e3f8ef"] h4,
+#conflict-warning[style*="background: #e3f8ef"] li,
+#conflict-warning[style*="background: #e3f8ef"] strong {
+    color: rgb(13, 122, 67) !important;
+}
+
+/* Red (Conflict) - Override all text elements */
+#conflict-warning[style*="background: rgb(253, 236, 238)"] #conflict-title,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] #conflict-message,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] #conflict-risk,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] p,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] h4,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] li,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] strong,
+#conflict-warning[style*="background: #fdecee"] #conflict-title,
+#conflict-warning[style*="background: #fdecee"] #conflict-message,
+#conflict-warning[style*="background: #fdecee"] #conflict-risk,
+#conflict-warning[style*="background: #fdecee"] p,
+#conflict-warning[style*="background: #fdecee"] h4,
+#conflict-warning[style*="background: #fdecee"] li,
+#conflict-warning[style*="background: #fdecee"] strong {
+    color: rgb(178, 48, 48) !important;
+}
+
+/* Override the general dark mode error text rule for conflict warnings */
+[data-theme="dark"] #conflict-warning[style*="background: rgb(227, 248, 239)"] *,
+[data-theme="dark"] #conflict-warning[style*="background: #e3f8ef"] * {
+    color: rgb(13, 122, 67) !important;
+}
+
+[data-theme="dark"] #conflict-warning[style*="background: rgb(253, 236, 238)"] *,
+[data-theme="dark"] #conflict-warning[style*="background: #fdecee"] * {
+    color: rgb(178, 48, 48) !important;
+}
+
