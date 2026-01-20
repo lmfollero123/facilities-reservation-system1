@@ -6935,3 +6935,78 @@ html {
     background: var(--bg-primary) !important;
 }
 
+
+/* ============================================
+   FIX: Conflict Warning - Preserve Green/Red Colors in Dark Mode
+   ============================================ */
+
+/* When conflict warning has green background (available), keep it green */
+#conflict-warning[style*="background: rgb(227, 248, 239)"],
+#conflict-warning[style*="background: #e3f8ef"] {
+    background: rgb(227, 248, 239) !important;
+    border-color: rgb(13, 122, 67) !important;
+}
+
+#conflict-warning[style*="background: rgb(227, 248, 239)"] h4,
+#conflict-warning[style*="background: rgb(227, 248, 239)"] p,
+#conflict-warning[style*="background: #e3f8ef"] h4,
+#conflict-warning[style*="background: #e3f8ef"] p {
+    color: rgb(13, 122, 67) !important;
+}
+
+/* When conflict warning has red background (conflict), keep it red */
+#conflict-warning[style*="background: rgb(253, 236, 238)"],
+#conflict-warning[style*="background: #fdecee"] {
+    background: rgb(253, 236, 238) !important;
+    border-color: rgb(178, 48, 48) !important;
+}
+
+#conflict-warning[style*="background: rgb(253, 236, 238)"] h4,
+#conflict-warning[style*="background: rgb(253, 236, 238)"] p,
+#conflict-warning[style*="background: #fdecee"] h4,
+#conflict-warning[style*="background: #fdecee"] p {
+    color: rgb(178, 48, 48) !important;
+}
+
+/* ============================================
+   FIX: Collapsible Body Containers - Dark Mode
+   ============================================ */
+
+/* Collapsible body containers should use theme background */
+.collapsible-body {
+    background: var(--bg-secondary) !important;
+}
+
+/* Table responsive containers inside collapsible */
+.collapsible-body .table-responsive {
+    background: var(--bg-secondary) !important;
+}
+
+/* Pending requests cards with hardcoded backgrounds */
+.collapsible-body div[style*="background: #f9fafc"],
+.collapsible-body div[style*="background: rgb(249, 250, 252)"] {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Text colors in pending requests */
+.collapsible-body strong[style*="color: var(--gov-blue-dark)"] {
+    color: var(--text-primary) !important;
+}
+
+.collapsible-body small[style*="color: #8b95b5"],
+.collapsible-body small[style*="color: #5b6888"] {
+    color: var(--text-secondary) !important;
+}
+
+/* Pagination backgrounds */
+.pagination a[style*="background: white"] {
+    background: var(--bg-secondary) !important;
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.pagination span[style*="color: #5b6888"] {
+    color: var(--text-secondary) !important;
+}
+
