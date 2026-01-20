@@ -23,7 +23,7 @@ $contactInfo = [
 ];
 ?>
 <!-- Footer -->
-<footer class="bg-light py-5 lgu-footer">
+<footer class="bg-light lgu-footer">
     <div class="container px-4 px-lg-5">
         <div class="footer-content">
             <!-- LGU Identity Section (Leftmost/Top) -->
@@ -80,21 +80,7 @@ $contactInfo = [
                 </p>
             </div>
 
-            <!-- System Information Section -->
-            <div class="footer-section footer-system">
-                <h3 class="footer-heading">System Information</h3>
-                <p class="system-name">Public Facilities Reservation System</p>
-                <p class="system-version">Version 1.0</p>
-                <p class="system-developer">
-                    <small>Developed by the Barangay Culiat IT Unit</small>
-                </p>
-                <div class="footer-support">
-                    <p class="support-hours">
-                        <strong>Office Hours:</strong><br>
-                        <?= $contactInfo['office_hours']; ?>
-                    </p>
-                </div>
-            </div>
+
         </div>
 
         <!-- Copyright Line (Bottom) -->
@@ -111,8 +97,14 @@ $contactInfo = [
 .lgu-footer {
     background: #f5f6f8 !important;
     border-top: 1px solid #e5e7eb;
-    padding: 2.5rem 0 1.25rem !important;
+    padding: 5rem 0 2rem !important;
     width: 100%;
+}
+
+/* Stronger selector to ensure padding applies */
+footer.lgu-footer {
+    padding-top: 5rem !important;
+    padding-bottom: 2rem !important;
 }
 
 .lgu-footer .container {
@@ -129,6 +121,7 @@ $contactInfo = [
     width: 100%;
     margin: 0 auto 1.5rem;
     align-items: start;
+    padding-top: 2rem;
 }
 
 @media (min-width: 768px) {
@@ -151,7 +144,7 @@ $contactInfo = [
     
     /* Spread sections across full width on wide screens */
     .footer-content {
-        grid-template-columns: 1.8fr 1fr 1fr 1.2fr;
+        grid-template-columns: 1.8fr 1fr 1fr;
         gap: 3rem;
         justify-content: space-between;
     }
