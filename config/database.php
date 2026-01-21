@@ -16,9 +16,9 @@
 //  const DB_NAME = 'facilities_reservation';
 //  const DB_USER = 'root';       // default XAMPP user
 //  const DB_PASS = '';
-/**
- * Returns a shared PDO instance.
- */
+// /**
+//  * Returns a shared PDO instance.
+//  */
 function db()
 {
     static $pdo = null;

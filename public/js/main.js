@@ -28,6 +28,10 @@ document.addEventListener("DOMContentLoaded", () => {
         sidebar.classList.add("collapsed");
         sidebarToggle?.setAttribute("aria-expanded", "false");
         sidebarBackdrop.classList.remove("active");
+        // Restore body scroll on mobile when sidebar closes
+        if (window.innerWidth <= 960) {
+            document.body.style.overflow = '';
+        }
     };
 
     const openSidebar = () => {
@@ -35,6 +39,10 @@ document.addEventListener("DOMContentLoaded", () => {
         sidebar.classList.remove("collapsed");
         sidebarToggle?.setAttribute("aria-expanded", "true");
         sidebarBackdrop.classList.add("active");
+        // Prevent body scroll on mobile when sidebar opens
+        if (window.innerWidth <= 960) {
+            document.body.style.overflow = 'hidden';
+        }
     };
 
     const syncSidebarInitial = () => {

@@ -58,13 +58,13 @@ $userName = $_SESSION['name'] ?? 'User';
     <!-- Mobile-first viewport meta tag with proper scaling -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
-    <?php $cssVersion = '9.2'; // Cache-busting: Update when CSS changes are deployed ?>
+    <?php $cssVersion = '9.6'; // Cache-busting: Update when CSS changes are deployed ?>
     <link rel="stylesheet" href="<?= base_path(); ?>/public/css/style.css?v=<?= $cssVersion; ?>">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
-<body class="dashboard">
+<body class="dashboard dashboard-page">
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner">
