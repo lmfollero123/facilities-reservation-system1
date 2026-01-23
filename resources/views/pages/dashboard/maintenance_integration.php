@@ -12,81 +12,37 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'S
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../services/cimm_api.php';
+
 $pdo = db();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
 
-// Mock data for maintenance schedules (will be replaced with API integration)
-$mockMaintenanceSchedules = [
-    [
-        'id' => 'MAINT-2025-001',
-        'facility_id' => 1,
-        'facility_name' => 'Community Convention Hall',
-        'maintenance_type' => 'Routine Inspection',
-        'scheduled_start' => '2025-01-15 08:00:00',
-        'scheduled_end' => '2025-01-15 12:00:00',
-        'status' => 'scheduled',
-        'priority' => 'medium',
-        'description' => 'Monthly routine inspection of electrical systems and HVAC units.',
-        'assigned_team' => 'Maintenance Team A',
-        'estimated_duration' => '4 hours',
-        'affected_reservations' => 2,
-        'created_at' => '2025-01-10 10:30:00',
-    ],
-    [
-        'id' => 'MAINT-2025-002',
-        'facility_id' => 2,
-        'facility_name' => 'Municipal Sports Complex',
-        'maintenance_type' => 'Emergency Repair',
-        'scheduled_start' => '2025-01-20 09:00:00',
-        'scheduled_end' => '2025-01-22 17:00:00',
-        'status' => 'in_progress',
-        'priority' => 'high',
-        'description' => 'Repair of damaged court flooring and lighting system replacement.',
-        'assigned_team' => 'Maintenance Team B',
-        'estimated_duration' => '3 days',
-        'affected_reservations' => 5,
-        'created_at' => '2025-01-18 14:20:00',
-    ],
-    [
-        'id' => 'MAINT-2025-003',
-        'facility_id' => 3,
-        'facility_name' => 'People\'s Park Amphitheater',
-        'maintenance_type' => 'Preventive Maintenance',
-        'scheduled_start' => '2025-01-25 07:00:00',
-        'scheduled_end' => '2025-01-25 15:00:00',
-        'status' => 'scheduled',
-        'priority' => 'low',
-        'description' => 'Cleaning, stage equipment check, and sound system testing.',
-        'assigned_team' => 'Maintenance Team C',
-        'estimated_duration' => '8 hours',
-        'affected_reservations' => 0,
-        'created_at' => '2025-01-12 09:15:00',
-    ],
-];
+// Fetch maintenance schedules from CIMM API
+$rawSchedules = fetchCIMMMaintenanceSchedules();
+$maintenanceSchedules = mapCIMMToCPRF($rawSchedules);
 
-// Mock maintenance history
-$mockMaintenanceHistory = [
-    [
-        'id' => 'MAINT-2024-045',
-        'facility_name' => 'Community Convention Hall',
-        'maintenance_type' => 'Routine Inspection',
-        'completed_at' => '2024-12-15 12:30:00',
-        'status' => 'completed',
-        'duration' => '4 hours',
-        'technician' => 'John Doe',
-        'notes' => 'All systems operational. No issues found.',
-    ],
-    [
-        'id' => 'MAINT-2024-044',
-        'facility_name' => 'Municipal Sports Complex',
-        'maintenance_type' => 'Equipment Replacement',
-        'completed_at' => '2024-12-10 16:00:00',
-        'status' => 'completed',
-        'duration' => '6 hours',
-        'technician' => 'Jane Smith',
-        'notes' => 'Replaced faulty lighting fixtures. System fully functional.',
-    ],
-];
+// Separate completed schedules for history
+$mockMaintenanceHistory = [];
+$upcomingSchedules = [];
+foreach ($maintenanceSchedules as $schedule) {
+    if (strtolower($schedule['status']) === 'completed') {
+        $mockMaintenanceHistory[] = [
+            'id' => $schedule['id'],
+            'facility_name' => $schedule['facility_name'],
+            'maintenance_type' => $schedule['maintenance_type'],
+            'completed_at' => $schedule['scheduled_end'],
+            'status' => 'completed',
+            'duration' => $schedule['estimated_duration'],
+            'technician' => $schedule['assigned_team'],
+            'notes' => $schedule['description'],
+        ];
+    } else {
+        $upcomingSchedules[] = $schedule;
+    }
+}
+
+// Use upcoming schedules for the main list
+$mockMaintenanceSchedules = $upcomingSchedules;
 
 // Get real facilities for dropdown
 $facilities = [];
@@ -97,12 +53,12 @@ try {
     // Ignore error
 }
 
-// Integration status (mock - will be replaced with actual API health check)
+// Integration status (real check)
 $integrationStatus = [
-    'connected' => true,
-    'last_sync' => '2025-01-20 10:45:23',
-    'sync_status' => 'success',
-    'pending_updates' => 2,
+    'connected' => !empty($maintenanceSchedules) || !empty($rawSchedules),
+    'last_sync' => date('Y-m-d H:i:s'),
+    'sync_status' => empty($rawSchedules) ? 'failed' : 'success',
+    'pending_updates' => 0,
 ];
 
 ob_start();
@@ -236,78 +192,113 @@ ob_start();
         <?php endif; ?>
     </section>
 
-    <!-- Maintenance Calendar -->
-    <aside class="booking-card">
+    <!-- Maintenance Calendar (New Design) -->
+    <aside class="booking-card maintenance-calendar-wrapper">
         <h2>Maintenance Calendar</h2>
-        <div style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Select Facility</label>
-            <select id="calendarFacility" onchange="updateMaintenanceCalendar()" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                <option value="all">All Facilities</option>
-                <?php foreach ($facilities as $facility): ?>
-                    <option value="<?= $facility['id']; ?>"><?= htmlspecialchars($facility['name']); ?></option>
+        
+        <!-- Mobile Controls (Mobile Only) -->
+        <div class="mobile-controls" id="mobileListControls" style="display:none;">
+            <input id="mobileScheduleSearch" type="text" placeholder="Search schedules...">
+            <button id="mobileToCalendarBtn" class="mobile-calendar-btn">📅</button>
+        </div>
+        <div class="mobile-controls" id="mobileCalendarControls" style="display:none;">
+            <button id="mobilePrevMonth" class="mobile-toggle-btn">&#8592;</button>
+            <span id="mobileMonthLabel" title="Click to jump date"></span>
+            <button id="mobileToListBtn" class="mobile-schedule-btn">📋</button>
+            <button id="mobileNextMonth" class="mobile-toggle-btn">&#8594;</button>
+        </div>
+
+        <!-- Calendar View -->
+        <div id="calendarView">
+            <div class="calendar-header">
+                <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
+                <span id="monthLabel" title="Click to jump date"></span>
+                <div style="display:flex; gap:8px;">
+                    <button id="toListBtn" class="schedule-btn" title="Schedule List">📋</button>
+                    <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
+                </div>
+            </div>
+            <div class="calendar-weekdays">
+                <div>Sunday</div>
+                <div>Monday</div>
+                <div>Tuesday</div>
+                <div>Wednesday</div>
+                <div>Thursday</div>
+                <div>Friday</div>
+                <div>Saturday</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-details-card">
+                <div class="calendar-details" id="calendarDetails">
+                    Select a date to view schedule.
+                </div>
+                <div class="scroll-indicator">⌄</div>
+            </div>
+        </div>
+        
+        <!-- List View -->
+        <div id="scheduleView" class="hidden">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input id="scheduleSearch" type="text" placeholder="Search by task, location, category, status, or date..." style="flex:1;">
+                <button id="toCalendarBtn" class="calendar-btn" title="Calendar View">📅</button>
+            </div>
+            <div id="scheduleListHolder">
+                <?php if (empty($mockMaintenanceSchedules)): ?>
+                    <p id="noScheduleMsg">No scheduled maintenance.</p>
+                <?php else: 
+                    foreach ($mockMaintenanceSchedules as $row): 
+                        $scheduleDate = date('Y-m-d', strtotime($row['scheduled_start'] ?? 'now'));
+                ?>
+                    <div class="schedule-item"
+                        data-task="<?= htmlspecialchars(strtolower($row['maintenance_type'] ?? $row['task'] ?? '')) ?>"
+                        data-location="<?= htmlspecialchars(strtolower($row['facility_name'] ?? $row['location'] ?? '')) ?>"
+                        data-category="<?= htmlspecialchars(strtolower($row['category'] ?? '')) ?>"
+                        data-status="<?= htmlspecialchars(strtolower($row['status_label'] ?? $row['status'] ?? '')) ?>"
+                        data-priority="<?= htmlspecialchars(strtolower($row['priority'] ?? '')) ?>"
+                        data-date="<?= htmlspecialchars(strtolower(date("F d, Y", strtotime($scheduleDate)) . '|' . $scheduleDate)) ?>">
+                        <div>
+                            <strong><?= htmlspecialchars($row['maintenance_type'] ?? $row['task'] ?? 'Maintenance') ?></strong><br>
+                            <?= htmlspecialchars($row['facility_name'] ?? $row['location'] ?? '') ?><br>
+                            <?php if (!empty($row['category'])): ?>
+                                <span class="badge badge-category"><?= htmlspecialchars($row['category']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="schedule-date">
+                            <?= date("F d, Y", strtotime($scheduleDate)) ?><br>
+                            <?php
+                                $priorityClass = 'badge-priority-low';
+                                $priorityLower = strtolower($row['priority'] ?? '');
+                                if ($priorityLower === 'medium') {
+                                    $priorityClass = 'badge-priority-medium';
+                                } elseif ($priorityLower === 'high') {
+                                    $priorityClass = 'badge-priority-high';
+                                } elseif ($priorityLower === 'critical') {
+                                    $priorityClass = 'badge-priority-critical';
+                                }
+
+                                $statusClass = 'badge-status-planned';
+                                $statusLower = strtolower($row['status_label'] ?? $row['status'] ?? '');
+                                if ($statusLower === 'completed') {
+                                    $statusClass = 'badge-status-completed';
+                                } elseif ($statusLower === 'in progress' || $statusLower === 'in_progress') {
+                                    $statusClass = 'badge-status-in-progress';
+                                } elseif ($statusLower === 'delayed') {
+                                    $statusClass = 'badge-status-delayed';
+                                } elseif ($statusLower === 'scheduled') {
+                                    $statusClass = 'badge-status-scheduled';
+                                }
+                            ?>
+                            <?php if (!empty($row['status_label'])): ?>
+                                <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($row['status_label']) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($row['priority'])): ?>
+                                <span class="badge <?= $priorityClass ?>"><?= htmlspecialchars($row['priority']) ?> priority</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 <?php endforeach; ?>
-            </select>
-        </div>
-        
-        <div id="maintenanceCalendar" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; margin-top: 1rem;">
-            <!-- Calendar will be populated by JavaScript -->
-            <?php
-            // Generate calendar for current month
-            $currentMonth = date('Y-m');
-            $firstDay = date('w', strtotime($currentMonth . '-01'));
-            $daysInMonth = date('t', strtotime($currentMonth . '-01'));
-            
-            // Calendar header
-            $weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            foreach ($weekDays as $day): ?>
-                <div style="text-align: center; font-weight: 600; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
-                    <?= $day; ?>
-                </div>
-            <?php endforeach;
-            
-            // Empty cells for days before month starts
-            for ($i = 0; $i < $firstDay; $i++): ?>
-                <div style="aspect-ratio: 1; border: 1px solid #e0e6ed; border-radius: 4px;"></div>
-            <?php endfor;
-            
-            // Calendar days
-            for ($day = 1; $day <= $daysInMonth; $day++):
-                $dateStr = $currentMonth . '-' . str_pad($day, 2, '0', STR_PAD_LEFT);
-                $hasMaintenance = false;
-                $maintenanceInfo = null;
-                
-                // Check if this date has maintenance
-                foreach ($mockMaintenanceSchedules as $schedule) {
-                    $startDate = date('Y-m-d', strtotime($schedule['scheduled_start']));
-                    $endDate = date('Y-m-d', strtotime($schedule['scheduled_end']));
-                    if ($dateStr >= $startDate && $dateStr <= $endDate) {
-                        $hasMaintenance = true;
-                        $maintenanceInfo = $schedule;
-                        break;
-                    }
-                }
-                
-                $dayClass = $hasMaintenance ? 'maintenance' : '';
-                $dayStyle = $hasMaintenance ? 'background: #fff3cd; border: 2px solid #ffc107; font-weight: 600;' : '';
-            ?>
-                <div class="calendar-day <?= $dayClass; ?>" 
-                     data-date="<?= $dateStr; ?>"
-                     style="aspect-ratio: 1; border: 1px solid #e0e6ed; border-radius: 4px; padding: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; <?= $dayStyle; ?>"
-                     onclick="viewMaintenanceDetails('<?= $maintenanceInfo ? htmlspecialchars($maintenanceInfo['id']) : ''; ?>', '<?= $dateStr; ?>')">
-                    <span style="font-size: 0.9rem;"><?= $day; ?></span>
-                    <?php if ($hasMaintenance): ?>
-                        <span style="font-size: 0.7rem; color: #856404; margin-top: 0.25rem;">🔧</span>
-                    <?php endif; ?>
-                </div>
-            <?php endfor; ?>
-        </div>
-        
-        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 20px; height: 20px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px;"></div>
-                    <small style="color: #8b95b5;">Maintenance Scheduled</small>
-                </div>
+                    <p id="noResultMsg" style="display:none;">No matching data or result.</p>
+                <?php endif; ?>
             </div>
         </div>
     </aside>
@@ -373,8 +364,15 @@ ob_start();
 
 <script>
 function syncMaintenanceData() {
-    // Placeholder for API call
-    alert('Sync functionality will be implemented when API integration is available.');
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔄 Syncing...';
+    
+    // Reload page to fetch fresh data from API
+    setTimeout(() => {
+        window.location.reload();
+    }, 500);
 }
 
 function filterMaintenance() {
@@ -403,27 +401,42 @@ function updateMaintenanceCalendar() {
 function viewMaintenanceDetails(maintenanceId, date = null) {
     if (!maintenanceId && !date) return;
     
-    // Mock data - will be replaced with API call
     const modal = document.getElementById('maintenanceModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
     
-    modalTitle.textContent = maintenanceId ? `Maintenance: ${maintenanceId}` : `Maintenance on ${date}`;
+    // Find the schedule from window.scheduleData
+    let schedule = null;
+    if (maintenanceId) {
+        const idMatch = maintenanceId.match(/CIMM-(\d+)/);
+        if (idMatch) {
+            schedule = window.scheduleData.find(s => s.sched_id == idMatch[1]);
+        }
+    } else if (date) {
+        schedule = window.scheduleData.find(s => s.schedule_date === date);
+    }
     
-    // Mock content
+    if (!schedule) {
+        modalTitle.textContent = maintenanceId ? `Maintenance: ${maintenanceId}` : `Maintenance on ${date}`;
+        modalContent.innerHTML = '<p>Schedule details not found.</p>';
+        modal.style.display = 'flex';
+        return;
+    }
+    
+    modalTitle.textContent = `Maintenance: ${schedule.task || 'Maintenance'}`;
+    
+    const startDate = schedule.starting_date ? new Date(schedule.starting_date).toLocaleString() : 'N/A';
+    const endDate = schedule.estimated_completion_date ? new Date(schedule.estimated_completion_date).toLocaleString() : 'N/A';
+    
     modalContent.innerHTML = `
         <div style="margin-bottom: 1rem;">
-            <strong>Facility:</strong> Community Convention Hall<br>
-            <strong>Type:</strong> Routine Inspection<br>
-            <strong>Scheduled:</strong> January 15, 2025 08:00 - 12:00<br>
-            <strong>Priority:</strong> Medium<br>
-            <strong>Status:</strong> Scheduled<br>
-            <strong>Team:</strong> Maintenance Team A<br>
-            <strong>Affected Reservations:</strong> 2
-        </div>
-        <div style="margin-bottom: 1rem;">
-            <strong>Description:</strong><br>
-            <p style="color: #8b95b5; margin-top: 0.5rem;">Monthly routine inspection of electrical systems and HVAC units.</p>
+            <strong>Facility:</strong> ${schedule.location || 'N/A'}<br>
+            <strong>Type:</strong> ${schedule.task || 'N/A'}<br>
+            <strong>Scheduled:</strong> ${startDate} - ${endDate}<br>
+            <strong>Priority:</strong> ${schedule.priority || 'N/A'}<br>
+            <strong>Status:</strong> ${schedule.status_label || schedule.status || 'N/A'}<br>
+            <strong>Team:</strong> ${schedule.assigned_team || 'N/A'}<br>
+            <strong>Category:</strong> ${schedule.category || 'General Maintenance'}
         </div>
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
             <small style="color: #8b95b5;">
@@ -471,6 +484,315 @@ document.getElementById('maintenanceModal').addEventListener('click', function(e
         closeMaintenanceModal();
     }
 });
+
+// =============== SCHEDULE DATA FOR CALENDAR ===============
+window.scheduleData = <?= json_encode(array_map(function($schedule) {
+    return [
+        'sched_id' => $schedule['sched_id'] ?? '',
+        'task' => $schedule['maintenance_type'] ?? $schedule['task'] ?? '',
+        'location' => $schedule['facility_name'] ?? $schedule['location'] ?? '',
+        'category' => $schedule['category'] ?? 'General Maintenance',
+        'priority' => ucfirst($schedule['priority'] ?? 'Low'),
+        'status' => $schedule['status_label'] ?? $schedule['status'] ?? 'Scheduled',
+        'status_label' => $schedule['status_label'] ?? $schedule['status'] ?? 'Scheduled',
+        'assigned_team' => $schedule['assigned_team'] ?? '',
+        'starting_date' => $schedule['scheduled_start'] ?? '',
+        'estimated_completion_date' => $schedule['scheduled_end'] ?? '',
+        'schedule_date' => date('Y-m-d', strtotime($schedule['scheduled_start'] ?? 'now'))
+    ];
+}, $maintenanceSchedules), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+// ============ NEW CALENDAR FUNCTIONALITY ============
+(function() {
+    'use strict';
+    
+    function isMobileView() {
+        return window.innerWidth <= 768;
+    }
+    
+    const calendarGrid = document.getElementById('calendarGrid');
+    const calendarDetails = document.getElementById('calendarDetails');
+    const monthLabel = document.getElementById('monthLabel');
+    const mobileMonthLabel = document.getElementById('mobileMonthLabel');
+    const calendarView = document.getElementById('calendarView');
+    const scheduleView = document.getElementById('scheduleView');
+    const scheduleSearch = document.getElementById('scheduleSearch');
+    const scheduleListHolder = document.getElementById('scheduleListHolder');
+    const noResultMsg = document.getElementById('noResultMsg');
+    const toCalendarBtn = document.getElementById('toCalendarBtn');
+    const toListBtn = document.getElementById('toListBtn');
+    const mobileListControls = document.getElementById('mobileListControls');
+    const mobileCalendarControls = document.getElementById('mobileCalendarControls');
+    const mobileToCalendarBtn = document.getElementById('mobileToCalendarBtn');
+    const mobileToListBtn = document.getElementById('mobileToListBtn');
+    const mobilePrevMonth = document.getElementById('mobilePrevMonth');
+    const mobileNextMonth = document.getElementById('mobileNextMonth');
+    const mobileScheduleSearch = document.getElementById('mobileScheduleSearch');
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+    
+    if (!calendarGrid || !calendarDetails) return;
+    
+    let currentDate = new Date();
+    let showingCalendar = true;
+    
+    function getStatusKey(statusLabel) {
+        const s = (statusLabel || '').toLowerCase();
+        if (!s) return 'upcoming';
+        if (s.indexOf('delay') !== -1) return 'delayed';
+        if (s.indexOf('progress') !== -1 || s.indexOf('on-going') !== -1 || s.indexOf('ongoing') !== -1) return 'ongoing';
+        if (s.indexOf('completed') !== -1) return 'completed';
+        return 'upcoming';
+    }
+    
+    function renderCalendar() {
+        if (!calendarGrid || !calendarDetails) return;
+        calendarGrid.innerHTML = '';
+        calendarDetails.innerHTML = 'Select a date to view schedule.';
+        
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const monthText = currentDate.toLocaleString('default', {month: 'long', year: 'numeric'});
+        if (monthLabel) monthLabel.textContent = monthText;
+        if (mobileMonthLabel) mobileMonthLabel.textContent = monthText;
+        
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        for (let i = 0; i < firstDay; i++) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'calendar-day';
+            calendarGrid.appendChild(emptyDiv);
+        }
+        
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const events = Array.isArray(window.scheduleData) && window.scheduleData.length
+                ? window.scheduleData.filter(e => e.schedule_date === dateStr)
+                : [];
+            
+            const dayDiv = document.createElement('div');
+            dayDiv.className = 'calendar-day' + (events.length ? ' has-event' : '');
+            dayDiv.setAttribute('data-date', dateStr);
+            
+            const dayNumDiv = document.createElement('div');
+            dayNumDiv.textContent = d;
+            dayDiv.appendChild(dayNumDiv);
+            
+            if (events.length) {
+                const tasksDiv = document.createElement('div');
+                tasksDiv.className = 'day-tasks';
+                
+                if (events.length === 1) {
+                    const e = events[0];
+                    const btn = document.createElement('button');
+                    btn.className = 'task-btn';
+                    btn.textContent = isMobileView() ? '1' : (e.task || 'Maintenance');
+                    btn.title = `${e.task || 'Maintenance'} (${e.status_label || ''})`;
+                    const key = getStatusKey(e.status_label);
+                    if (key) btn.classList.add('status-' + key + '-bg');
+                    btn.onclick = function(ev) {
+                        ev.stopPropagation();
+                        viewMaintenanceDetails(e.sched_id ? 'CIMM-' + e.sched_id : '', dateStr);
+                    };
+                    tasksDiv.appendChild(btn);
+                } else if (events.length > 1) {
+                    const first = events[0];
+                    const firstBtn = document.createElement('button');
+                    firstBtn.className = 'task-btn';
+                    firstBtn.textContent = isMobileView() ? '1' : (first.task || 'Maintenance');
+                    firstBtn.title = `${first.task || 'Maintenance'} (${first.status_label || ''})`;
+                    const firstKey = getStatusKey(first.status_label);
+                    if (firstKey) firstBtn.classList.add('status-' + firstKey + '-bg');
+                    firstBtn.onclick = function(ev) {
+                        ev.stopPropagation();
+                        viewMaintenanceDetails(first.sched_id ? 'CIMM-' + first.sched_id : '', dateStr);
+                    };
+                    tasksDiv.appendChild(firstBtn);
+                    
+                    const moreWrap = document.createElement('div');
+                    moreWrap.className = 'more-tasks-wrap';
+                    const arrowBtn = document.createElement('button');
+                    arrowBtn.className = 'more-tasks-btn';
+                    arrowBtn.innerHTML = '▾';
+                    arrowBtn.onclick = function(ev) {
+                        ev.stopPropagation();
+                        const tasks = events.map(e => ({
+                            sched_id: e.sched_id,
+                            task: e.task,
+                            location: e.location,
+                            category: e.category,
+                            priority: e.priority,
+                            status_label: e.status_label,
+                            assigned_team: e.assigned_team,
+                            schedule_date: dateStr
+                        }));
+                        openTaskChooser(dateStr, tasks);
+                    };
+                    moreWrap.appendChild(arrowBtn);
+                    if (!isMobileView()) {
+                        const counter = document.createElement('span');
+                        counter.className = 'task-counter';
+                        counter.textContent = `+${events.length - 1}`;
+                        moreWrap.appendChild(counter);
+                    }
+                    tasksDiv.appendChild(moreWrap);
+                }
+                dayDiv.appendChild(tasksDiv);
+            }
+            
+            dayDiv.addEventListener('click', function() {
+                if (events.length) {
+                    let detailsHtml = `<strong>${dateStr}</strong><br>`;
+                    detailsHtml += events.map(e => `• ${e.task || 'Maintenance'} – ${e.location || ''}`).join('<br>');
+                    calendarDetails.innerHTML = detailsHtml;
+                } else {
+                    calendarDetails.innerHTML = `<strong>${dateStr}</strong><br>No scheduled maintenance.`;
+                }
+            });
+            
+            calendarGrid.appendChild(dayDiv);
+        }
+    }
+    
+    function openTaskChooser(date, tasks) {
+        const modal = document.getElementById('maintenanceModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        
+        modalTitle.textContent = `Select a Task - ${date}`;
+        modalContent.innerHTML = '';
+        
+        tasks.forEach(t => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-outline';
+            btn.style.cssText = 'width: 100%; margin: 0.5rem 0; padding: 0.75rem; text-align: left;';
+            btn.textContent = `${t.task || 'Maintenance'} – ${t.location || ''}`;
+            btn.onclick = () => {
+                modal.style.display = 'none';
+                viewMaintenanceDetails(t.sched_id ? 'CIMM-' + t.sched_id : '', date);
+            };
+            modalContent.appendChild(btn);
+        });
+        
+        modal.style.display = 'flex';
+    }
+    
+    function showCalendarView() {
+        if (!calendarView || !scheduleView) return;
+        calendarView.classList.remove('hidden');
+        scheduleView.classList.add('hidden');
+        showingCalendar = true;
+        updateMobileControls();
+    }
+    
+    function showListView() {
+        if (!calendarView || !scheduleView) return;
+        calendarView.classList.add('hidden');
+        scheduleView.classList.remove('hidden');
+        showingCalendar = false;
+        updateMobileControls();
+    }
+    
+    function updateMobileControls() {
+        if (!mobileListControls || !mobileCalendarControls) return;
+        if (!isMobileView()) {
+            mobileListControls.style.display = 'none';
+            mobileCalendarControls.style.display = 'none';
+            return;
+        }
+        if (showingCalendar) {
+            mobileCalendarControls.style.display = '';
+            mobileListControls.style.display = 'none';
+            if (mobileMonthLabel && monthLabel) {
+                mobileMonthLabel.textContent = monthLabel.textContent;
+            }
+        } else {
+            mobileListControls.style.display = '';
+            mobileCalendarControls.style.display = 'none';
+        }
+    }
+    
+    if (prevMonthBtn) prevMonthBtn.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+    };
+    if (nextMonthBtn) nextMonthBtn.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+    };
+    if (toCalendarBtn) toCalendarBtn.onclick = showCalendarView;
+    if (toListBtn) toListBtn.onclick = showListView;
+    if (mobileToCalendarBtn) mobileToCalendarBtn.onclick = showCalendarView;
+    if (mobileToListBtn) mobileToListBtn.onclick = showListView;
+    if (mobilePrevMonth) mobilePrevMonth.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+        updateMobileControls();
+    };
+    if (mobileNextMonth) mobileNextMonth.onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+        updateMobileControls();
+    };
+    
+    if (scheduleSearch && scheduleListHolder) {
+        scheduleSearch.addEventListener('input', function() {
+            const searchVal = this.value.trim().toLowerCase();
+            const items = scheduleListHolder.querySelectorAll('.schedule-item');
+            let shownCount = 0;
+            if (!searchVal.length) {
+                items.forEach(i => i.style.display = '');
+                if (noResultMsg) noResultMsg.style.display = 'none';
+                return;
+            }
+            items.forEach(item => {
+                const task = item.getAttribute('data-task') || '';
+                const loc = item.getAttribute('data-location') || '';
+                const date = item.getAttribute('data-date') || '';
+                const cat = item.getAttribute('data-category') || '';
+                const stat = item.getAttribute('data-status') || '';
+                const prio = item.getAttribute('data-priority') || '';
+                if (task.includes(searchVal) || loc.includes(searchVal) || date.includes(searchVal) || 
+                    cat.includes(searchVal) || stat.includes(searchVal) || prio.includes(searchVal)) {
+                    item.style.display = '';
+                    shownCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            if (noResultMsg) {
+                noResultMsg.style.display = shownCount === 0 ? '' : 'none';
+            }
+        });
+    }
+    
+    if (mobileScheduleSearch && scheduleSearch) {
+        mobileScheduleSearch.addEventListener('input', e => {
+            scheduleSearch.value = e.target.value;
+            scheduleSearch.dispatchEvent(new Event('input'));
+        });
+    }
+    
+    window.addEventListener('resize', updateMobileControls);
+    renderCalendar();
+    updateMobileControls();
+    
+    function updateWeekdayLabels() {
+        const desktopDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const shortDays = ['S','M','T','W','T','F','S'];
+        const weekdayDivs = document.querySelectorAll('.calendar-weekdays div');
+        if (!weekdayDivs.length) return;
+        if (window.innerWidth <= 768) {
+            weekdayDivs.forEach((el, i) => el.textContent = shortDays[i]);
+        } else {
+            weekdayDivs.forEach((el, i) => el.textContent = desktopDays[i]);
+        }
+    }
+    
+    window.addEventListener('load', updateWeekdayLabels);
+    window.addEventListener('resize', updateWeekdayLabels);
+})();
 </script>
 
 <?php

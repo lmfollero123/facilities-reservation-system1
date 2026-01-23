@@ -4,10 +4,7 @@
  * Routes requests to appropriate pages
  */
 
-// Load app configuration (includes base_path function)
-require_once __DIR__ . '/config/app.php';
-
-// Get the requested path
+// Get the requested path FIRST (before loading app.php to avoid session/header issues)
 $path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $basePath = str_replace(basename(__FILE__), '', $_SERVER['SCRIPT_NAME']);
 $basePath = trim($basePath, '/');
@@ -17,6 +14,27 @@ if ($basePath && strpos($path, $basePath) === 0) {
     $path = substr($path, strlen($basePath));
 }
 $path = trim($path, '/');
+
+// Route the request - API routes FIRST (before loading app.php)
+// Check for API route - handle various path formats
+$apiPath = ltrim($path, '/');
+$isApiRoute = (
+    $apiPath === 'api/public/availability' || 
+    strpos($apiPath, 'api/public/availability') === 0 ||
+    $path === 'api/public/availability' ||
+    strpos($path, 'api/public/availability') === 0 ||
+    strpos($path, 'api/public/availability') !== false
+);
+
+if ($isApiRoute) {
+    // Public API endpoint for facility availability
+    // Don't load app.php to avoid session/header issues
+    require_once __DIR__ . '/resources/views/pages/public/api/availability.php';
+    exit;
+}
+
+// Load app configuration (includes base_path function) - AFTER API routes
+require_once __DIR__ . '/config/app.php';
 
 // Route the request
 if ($path === 'announcements') {

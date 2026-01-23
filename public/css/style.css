@@ -7448,3 +7448,1068 @@ html[data-theme="dark"] body.dashboard-page .dashboard-header .header-right,
 html[data-theme="dark"] .dashboard-header .header-right {
     color: var(--text-primary) !important;
 }
+
+/* ============================================
+   FACILITY ASSISTANT CHATBOT - Mobile Responsive
+   ============================================ */
+
+.facility-assistant-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Toggle Button */
+.assistant-toggle-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1f3a5f, #285ccd);
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(31, 58, 95, 0.3);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 20px;
+    padding: 0;
+    position: relative;
+}
+
+.assistant-toggle-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(31, 58, 95, 0.4);
+}
+
+.assistant-toggle-btn.active {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+.assistant-toggle-text {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1;
+}
+
+/* Chatbot Container */
+.assistant-container {
+    position: absolute;
+    bottom: 80px;
+    right: 0;
+    width: 380px;
+    max-width: calc(100vw - 40px);
+    height: 500px;
+    max-height: calc(100vh - 120px);
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.assistant-header {
+    background: linear-gradient(135deg, #1f3a5f, #285ccd);
+    color: #ffffff;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.assistant-header-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.assistant-header-content i {
+    font-size: 20px;
+}
+
+.assistant-close-btn {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s;
+    width: 32px;
+    height: 32px;
+}
+
+.assistant-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Messages Area */
+.assistant-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+.assistant-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.assistant-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.assistant-messages::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.assistant-messages::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.assistant-message {
+    display: flex;
+    flex-direction: column;
+}
+
+.assistant-message.bot {
+    align-items: flex-start;
+}
+
+.assistant-bubble {
+    background: #ffffff;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #2c3e50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.assistant-bubble b {
+    font-weight: 600;
+    color: #1f3a5f;
+}
+
+.assistant-bubble small {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+/* Controls */
+.assistant-controls {
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.assistant-btn {
+    flex: 1;
+    min-width: calc(33.333% - 6px);
+    padding: 10px 12px;
+    border: 1px solid #1f3a5f;
+    background: #ffffff;
+    color: #1f3a5f;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.assistant-btn:hover {
+    background: #1f3a5f;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.assistant-btn i {
+    font-size: 14px;
+}
+
+/* Date Picker */
+.assistant-date-picker {
+    padding: 12px;
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.assistant-date-picker input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.assistant-date-picker input:focus {
+    outline: none;
+    border-color: #1f3a5f;
+    box-shadow: 0 0 0 3px rgba(31, 58, 95, 0.1);
+}
+
+/* Dark Mode Support */
+html[data-theme="dark"] .assistant-container {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .assistant-messages {
+    background: var(--bg-primary);
+}
+
+html[data-theme="dark"] .assistant-bubble {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="dark"] .assistant-bubble b {
+    color: var(--primary-color);
+}
+
+html[data-theme="dark"] .assistant-controls {
+    background: var(--bg-secondary);
+    border-top-color: var(--border-color);
+}
+
+html[data-theme="dark"] .assistant-btn {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .assistant-btn:hover {
+    background: var(--primary-color);
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .assistant-date-picker {
+    background: var(--bg-secondary);
+    border-top-color: var(--border-color);
+}
+
+html[data-theme="dark"] .assistant-date-picker input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .assistant-date-picker input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+}
+
+html[data-theme="dark"] .assistant-messages::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+}
+
+html[data-theme="dark"] .assistant-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .facility-assistant-widget {
+        bottom: 16px;
+        right: 16px;
+    }
+
+    .assistant-toggle-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 18px;
+    }
+
+    .assistant-toggle-text {
+        font-size: 8px;
+    }
+
+    .assistant-container {
+        width: calc(100vw - 32px);
+        max-width: 380px;
+        height: calc(100vh - 100px);
+        max-height: 600px;
+        bottom: 72px;
+        right: 0;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .assistant-header {
+        padding: 14px 16px;
+    }
+
+    .assistant-header-content {
+        font-size: 15px;
+    }
+
+    .assistant-messages {
+        padding: 12px;
+    }
+
+    .assistant-bubble {
+        font-size: 13px;
+        padding: 10px 14px;
+        max-width: 90%;
+    }
+
+    .assistant-controls {
+        padding: 10px;
+        gap: 6px;
+    }
+
+    .assistant-btn {
+        min-width: calc(50% - 3px);
+        padding: 9px 10px;
+        font-size: 12px;
+    }
+
+    .assistant-btn i {
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .facility-assistant-widget {
+        bottom: 12px;
+        right: 12px;
+    }
+
+    .assistant-toggle-btn {
+        width: 52px;
+        height: 52px;
+        font-size: 16px;
+    }
+
+    .assistant-container {
+        width: calc(100vw - 24px);
+        height: calc(100vh - 80px);
+        bottom: 64px;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .assistant-header {
+        padding: 12px 14px;
+    }
+
+    .assistant-header-content {
+        font-size: 14px;
+    }
+
+    .assistant-messages {
+        padding: 10px;
+    }
+
+    .assistant-bubble {
+        font-size: 12px;
+        padding: 9px 12px;
+    }
+
+    .assistant-controls {
+        padding: 8px;
+        gap: 4px;
+    }
+
+    .assistant-btn {
+        min-width: 100%;
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+}
+
+/* Ensure chatbot doesn't interfere with footer */
+@media (max-width: 768px) {
+    body.landing-page footer {
+        padding-bottom: 80px;
+    }
+}
+
+/* ============================================
+   MAINTENANCE CALENDAR - New Design from sched.php
+   ============================================ */
+
+/* Calendar Header */
+.maintenance-calendar-wrapper .calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    margin-top: -22px;
+    font-weight: 600;
+}
+
+/* Calendar Weekdays */
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+}
+
+.calendar-weekdays div {
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+/* Calendar Grid */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+
+.calendar-day {
+    padding: 10px;
+    text-align: center;
+    border-radius: 8px;
+    background: #f2f4f8;
+    cursor: pointer;
+    font-size: 13px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 5px;
+    position: relative;
+    overflow: visible;
+}
+
+.calendar-day .day-tasks {
+    font-size: 11px;
+    color: #333;
+    margin-top: auto;
+    text-align: left;
+}
+
+.calendar-day.has-event {
+    background: #e0e7ff;
+    font-weight: 600;
+}
+
+.calendar-day:hover {
+    background: #dbe3ff;
+}
+
+/* Task Buttons */
+.task-btn {
+    background: #3762c8;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin: 2px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    width: 100%;
+    text-align: left;
+}
+
+.task-btn:hover {
+    background: #2a4fa3;
+}
+
+.task-btn.status-delayed-bg {
+    background: #c62828;
+}
+
+.task-btn.status-ongoing-bg {
+    background: #fdd835;
+    color: #000;
+}
+
+.task-btn.status-completed-bg {
+    background: #2e7d32;
+}
+
+.task-btn.status-upcoming-bg {
+    background: #1565c0;
+}
+
+/* More Tasks Wrapper */
+.more-tasks-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.more-tasks-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    color: #333;
+    transition: transform 0.25s ease;
+}
+
+.more-tasks-btn.open {
+    transform: rotate(180deg);
+}
+
+.task-counter {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: #e5e7eb;
+    color: #111;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Task Dropdown */
+.task-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    z-index: 50;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    padding: 6px;
+    max-height: calc(3 * 38px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.task-dropdown .task-btn {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+}
+
+/* Calendar Details Card */
+.calendar-details-card {
+    position: relative;
+    margin-top: 16px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+    border: 1px solid #000;
+    padding: 12px 14px 30px;
+    max-height: 180px;
+    overflow: hidden;
+}
+
+.calendar-details {
+    max-height: 140px;
+    overflow-y: auto;
+    padding-right: 8px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    scroll-behavior: smooth;
+}
+
+.calendar-details::-webkit-scrollbar,
+.task-dropdown::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.calendar-details,
+.task-dropdown {
+    scrollbar-width: none;
+}
+
+.scroll-indicator {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    color: #444;
+    opacity: 0.6;
+    pointer-events: none;
+    animation: scrollHint 1.6s infinite ease-in-out;
+}
+
+@keyframes scrollHint {
+    0%   { transform: translate(-50%, 0); opacity: 0.4; }
+    50%  { transform: translate(-50%, 6px); opacity: 0.8; }
+    100% { transform: translate(-50%, 0); opacity: 0.4; }
+}
+
+/* Schedule List View */
+.schedule-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(0,0,0,.1);
+}
+
+.schedule-date {
+    font-weight: 600;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.badge-category {
+    background: #eef2ff;
+    color: #1f3c88;
+}
+
+.badge-priority-low {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.badge-priority-medium {
+    background: #fff8e1;
+    color: #f9a825;
+}
+
+.badge-priority-high {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.badge-priority-critical {
+    background: #ffebee;
+    color: #b71c1c;
+}
+
+.badge-status-completed {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.badge-status-in-progress {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.badge-status-delayed {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.badge-status-planned,
+.badge-status-scheduled {
+    background: #eceff1;
+    color: #37474f;
+}
+
+/* Calendar Buttons */
+.toggle-btn {
+    min-width: 40px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+    background: #3762c8;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.schedule-btn {
+    width: 38%;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+    margin-right: 5px;
+    background: #3762c8;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.calendar-btn {
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    background: #3762c8;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Mobile Controls */
+.mobile-controls {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 4px 12px 4px;
+        padding: 10px 12px;
+        background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(12px);
+        border-radius: 16px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+
+    #mobileListControls input {
+        flex: 1 1 auto;
+        min-width: 100px;
+        max-width: calc(100% - 50px);
+        padding: 8px 8px;
+        border-radius: 10px;
+        border: 1px solid #b1b8d0;
+        font-size: 0.9rem;
+        margin-right: 4px;
+    }
+
+    #mobileListControls button.mobile-calendar-btn {
+        flex: 0 0 38px;
+        height: 38px;
+        background: #3762c8;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        margin: 0;
+        transition: transform 0.1s ease-in-out;
+    }
+
+    #mobileListControls button.mobile-calendar-btn:active {
+        transform: scale(0.95);
+    }
+
+    #mobileCalendarControls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        padding: 8px 10px;
+    }
+
+    #mobileCalendarControls span#mobileMonthLabel {
+        flex: 1 1 auto;
+        min-width: 80px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #mobileCalendarControls button {
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #3762c8;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 0;
+        margin: 0;
+    }
+
+    #mobileCalendarControls button:active {
+        transform: scale(0.95);
+    }
+
+    .calendar-weekdays div {
+        font-size: 11px;
+        padding: 4px 0;
+    }
+
+    .calendar-grid {
+        gap: 6px;
+    }
+
+    .calendar-day {
+        min-height: 64px;
+        padding: 6px 4px;
+        font-size: 11px;
+        border-radius: 10px;
+    }
+
+    .calendar-day .task-btn {
+        font-size: 9px;
+        padding: 3px 6px;
+        border-radius: 6px;
+    }
+
+    .calendar-details-card {
+        padding: 4px 4px 14px;
+        max-height: 150px;
+    }
+
+    .calendar-details {
+        font-size: 0.82rem;
+        line-height: 1.35;
+        max-height: 110px;
+    }
+
+    .scroll-indicator {
+        font-size: 14px;
+        bottom: 4px;
+    }
+
+    .schedule-item {
+        padding: 14px;
+        margin-bottom: 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.96);
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .schedule-date {
+        font-size: 13px;
+    }
+}
+
+/* ============================================
+   MAINTENANCE CALENDAR - Dark Mode Support
+   ============================================ */
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-header {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper h2 {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .calendar-weekdays {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+html[data-theme="dark"] .calendar-weekdays div {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+html[data-theme="dark"] .calendar-day {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .calendar-day.has-event {
+    background: rgba(55, 98, 200, 0.25);
+    border-color: var(--primary-color);
+    border-width: 2px;
+}
+
+html[data-theme="dark"] .calendar-day:hover {
+    background: rgba(55, 98, 200, 0.35);
+    border-color: var(--primary-color);
+}
+
+html[data-theme="dark"] .calendar-day > div:first-child {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+html[data-theme="dark"] .calendar-day .day-tasks {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .task-btn {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+html[data-theme="dark"] .task-btn:hover {
+    background: var(--primary-hover);
+}
+
+html[data-theme="dark"] .task-btn.status-delayed-bg {
+    background: #c62828;
+    color: #fff;
+}
+
+html[data-theme="dark"] .task-btn.status-ongoing-bg {
+    background: #fdd835;
+    color: #000;
+}
+
+html[data-theme="dark"] .task-btn.status-completed-bg {
+    background: #2e7d32;
+    color: #fff;
+}
+
+html[data-theme="dark"] .task-btn.status-upcoming-bg {
+    background: #1565c0;
+    color: #fff;
+}
+
+html[data-theme="dark"] .more-tasks-btn {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .task-counter {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+html[data-theme="dark"] .task-dropdown {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="dark"] .calendar-details-card {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme="dark"] .calendar-details {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .scroll-indicator {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .schedule-item {
+    background: var(--bg-secondary);
+    border-bottom-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .schedule-date {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] #scheduleSearch,
+html[data-theme="dark"] #mobileScheduleSearch {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] #scheduleSearch:focus,
+html[data-theme="dark"] #mobileScheduleSearch:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-secondary);
+}
+
+html[data-theme="dark"] .toggle-btn,
+html[data-theme="dark"] .schedule-btn,
+html[data-theme="dark"] .calendar-btn,
+html[data-theme="dark"] .mobile-calendar-btn,
+html[data-theme="dark"] .mobile-toggle-btn {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+html[data-theme="dark"] .toggle-btn:hover,
+html[data-theme="dark"] .schedule-btn:hover,
+html[data-theme="dark"] .calendar-btn:hover,
+html[data-theme="dark"] .mobile-calendar-btn:hover,
+html[data-theme="dark"] .mobile-toggle-btn:hover {
+    background: var(--primary-hover);
+}
+
+html[data-theme="dark"] #monthLabel,
+html[data-theme="dark"] #mobileMonthLabel {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .mobile-controls {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+html[data-theme="dark"] #noScheduleMsg,
+html[data-theme="dark"] #noResultMsg {
+    color: var(--text-secondary);
+}

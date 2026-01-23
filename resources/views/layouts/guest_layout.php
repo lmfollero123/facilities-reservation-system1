@@ -208,6 +208,7 @@ if ($isHomePage || $isPublicPage) {
 <main class="guest-content">
     <?= $content ?? ''; ?>
 </main>
+<?php include __DIR__ . '/../components/facility_assistant.php'; ?>
 <?php include __DIR__ . '/../components/footer.php'; ?>
 <!-- Bootstrap core JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
