@@ -374,10 +374,10 @@ ob_start();
 
 <!-- Maintenance Details Modal (will be implemented with JavaScript) -->
 <div id="maintenanceModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+    <div class="modal-dialog" style="border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h3 id="modalTitle">Maintenance Details</h3>
-            <button onclick="closeMaintenanceModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
+            <button onclick="closeMaintenanceModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
         </div>
         <div id="modalContent">
             <!-- Content will be populated by JavaScript -->
@@ -466,8 +466,8 @@ function viewMaintenanceDetails(maintenanceId, date = null) {
             <strong>Team:</strong> ${schedule.assigned_team || 'N/A'}<br>
             <strong>Category:</strong> ${schedule.category || 'General Maintenance'}
         </div>
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-            <small style="color: #8b95b5;">
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color, #e0e6ed);">
+            <small>
                 <strong>Note:</strong> This facility will be automatically set to 'maintenance' status during this period. 
                 Affected reservations will be notified.
             </small>
@@ -495,7 +495,7 @@ function viewMaintenanceHistory(maintenanceId) {
         </div>
         <div style="margin-bottom: 1rem;">
             <strong>Notes:</strong><br>
-            <p style="color: #8b95b5; margin-top: 0.5rem;">All systems operational. No issues found.</p>
+            <p style="margin-top: 0.5rem;">All systems operational. No issues found.</p>
         </div>
     `;
     
@@ -694,7 +694,7 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         tasks.forEach(t => {
             const btn = document.createElement('button');
             btn.className = 'btn-outline';
-            btn.style.cssText = 'width: 100%; margin: 0.5rem 0; padding: 0.75rem; text-align: left;';
+            btn.style.cssText = 'width: 100%; margin: 0.5rem 0; padding: 0.75rem; text-align: left; background: var(--bg-secondary, #fff); color: var(--text-primary, #2c3e50); border: 1px solid var(--border-color, #e0e6ed);';
             btn.textContent = `${t.task || 'Maintenance'} – ${t.location || ''}`;
             btn.onclick = () => {
                 modal.style.display = 'none';

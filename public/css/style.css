@@ -8459,6 +8459,41 @@ html[data-theme="dark"] .scroll-indicator {
     color: var(--text-secondary);
 }
 
+/* Dark mode for maintenance modal */
+html[data-theme="dark"] #maintenanceModal .modal-dialog {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog h3 {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog button {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog strong {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog small {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog p {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog div {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #maintenanceModal .modal-dialog #modalContent {
+    color: var(--text-primary) !important;
+}
+
 html[data-theme="dark"] .schedule-item {
     background: var(--bg-secondary);
     border-bottom-color: var(--border-color);
