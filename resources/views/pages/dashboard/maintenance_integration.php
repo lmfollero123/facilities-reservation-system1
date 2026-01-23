@@ -18,7 +18,9 @@ $pdo = db();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
 
 // Fetch maintenance schedules from CIMM API
-$rawSchedules = fetchCIMMMaintenanceSchedules();
+$apiResult = fetchCIMMMaintenanceSchedules();
+$rawSchedules = $apiResult['data'] ?? [];
+$apiError = $apiResult['error'] ?? null;
 $maintenanceSchedules = mapCIMMToCPRF($rawSchedules);
 
 // Separate completed schedules for history
@@ -55,10 +57,11 @@ try {
 
 // Integration status (real check)
 $integrationStatus = [
-    'connected' => !empty($maintenanceSchedules) || !empty($rawSchedules),
+    'connected' => !empty($rawSchedules) && empty($apiError),
     'last_sync' => date('Y-m-d H:i:s'),
-    'sync_status' => empty($rawSchedules) ? 'failed' : 'success',
+    'sync_status' => empty($apiError) && !empty($rawSchedules) ? 'success' : (empty($apiError) ? 'no_data' : 'failed'),
     'pending_updates' => 0,
+    'error' => $apiError,
 ];
 
 ob_start();
@@ -89,6 +92,26 @@ ob_start();
                     </span>
                 <?php endif; ?>
             </div>
+            <?php if (!empty($integrationStatus['error'])): ?>
+                <div style="margin-top: 1rem; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #dc2626; border-radius: 4px;">
+                    <strong style="color: #dc2626; display: block; margin-bottom: 0.25rem;">Connection Error:</strong>
+                    <small style="color: #991b1b;"><?= htmlspecialchars($integrationStatus['error']); ?></small>
+                    <div style="margin-top: 0.5rem;">
+                        <small style="color: #991b1b;">
+                            <strong>Solution:</strong> Ensure CIMM has set up their API endpoint at 
+                            <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 2px;">https://cimm.infragovservices.com/api/maintenance-schedules.php</code>
+                            <br>See <code>docs/CIMM_API_INTEGRATION.md</code> for setup instructions.
+                        </small>
+                    </div>
+                </div>
+            <?php elseif (empty($rawSchedules) && empty($integrationStatus['error'])): ?>
+                <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <small style="color: #92400e;">
+                        <strong>Note:</strong> Connected successfully but no maintenance schedules found. 
+                        CIMM may not have any scheduled maintenance yet.
+                    </small>
+                </div>
+            <?php endif; ?>
         </div>
         <button class="btn-outline" onclick="syncMaintenanceData()" style="padding: 0.5rem 1rem;">
             🔄 Sync Now
@@ -373,6 +396,11 @@ function syncMaintenanceData() {
     setTimeout(() => {
         window.location.reload();
     }, 500);
+}
+
+// Test CIMM connection (for debugging)
+function testCIMMConnection() {
+    alert('To test CIMM connection, run: php test_cimm_connection.php\n\nOr check the error message displayed in the Integration Status card.');
 }
 
 function filterMaintenance() {

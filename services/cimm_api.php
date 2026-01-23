@@ -7,7 +7,7 @@
 /**
  * Fetches maintenance schedules from CIMM API
  * 
- * @return array Array of maintenance schedules, or empty array on error
+ * @return array Array with 'data' (schedules) and 'error' (error message if any)
  */
 function fetchCIMMMaintenanceSchedules(): array {
     // API Configuration
@@ -41,25 +41,51 @@ function fetchCIMMMaintenanceSchedules(): array {
     
     // Handle errors
     if ($response === false || !empty($curlError)) {
-        error_log('CIMM API Error: ' . $curlError);
-        return [];
+        $errorMsg = 'Connection failed: ' . ($curlError ?: 'Unable to reach CIMM API');
+        error_log('CIMM API Error: ' . $errorMsg);
+        return ['data' => [], 'error' => $errorMsg];
+    }
+    
+    if ($httpCode === 0) {
+        $errorMsg = 'Connection timeout: CIMM API endpoint may not be accessible';
+        error_log('CIMM API Error: ' . $errorMsg);
+        return ['data' => [], 'error' => $errorMsg];
+    }
+    
+    if ($httpCode === 404) {
+        $errorMsg = 'API endpoint not found: CIMM needs to create /api/maintenance-schedules.php';
+        error_log('CIMM API Error: ' . $errorMsg);
+        return ['data' => [], 'error' => $errorMsg];
+    }
+    
+    if ($httpCode === 401) {
+        $errorMsg = 'Unauthorized: API key may be incorrect or missing';
+        error_log('CIMM API Error: ' . $errorMsg);
+        return ['data' => [], 'error' => $errorMsg];
     }
     
     if ($httpCode !== 200) {
+        $errorMsg = 'HTTP Error ' . $httpCode . ': ' . substr($response, 0, 200);
         error_log('CIMM API HTTP Error: ' . $httpCode);
-        return [];
+        return ['data' => [], 'error' => $errorMsg];
     }
     
     // Decode JSON response
     $json = json_decode($response, true);
     
     if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log('CIMM API JSON Error: ' . json_last_error_msg());
-        return [];
+        $errorMsg = 'Invalid JSON response: ' . json_last_error_msg();
+        error_log('CIMM API JSON Error: ' . $errorMsg);
+        return ['data' => [], 'error' => $errorMsg];
     }
     
-    // Return data array or empty array
-    return $json['data'] ?? [];
+    // Check if response has error field
+    if (isset($json['error'])) {
+        return ['data' => [], 'error' => $json['error']];
+    }
+    
+    // Return data array
+    return ['data' => $json['data'] ?? [], 'error' => null];
 }
 
 /**
