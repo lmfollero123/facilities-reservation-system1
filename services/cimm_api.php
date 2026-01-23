@@ -11,8 +11,8 @@
  */
 function fetchCIMMMaintenanceSchedules(): array {
     // API Configuration
-    $apiUrl = 'https://cimm.infragovservices.com/api/maintenance-schedules.php';
-    $apiKey = 'CIMM_SECURE_KEY_2025'; // TODO: Move to config file for security
+    $apiUrl = 'https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php';
+    $apiKey = 'CIMM_SECURE_KEY_2025'; // TODO: Move to config file for security - Verify with CIMM team
     
     $url = $apiUrl . '?key=' . urlencode($apiKey);
     

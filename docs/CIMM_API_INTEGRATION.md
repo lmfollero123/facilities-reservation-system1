@@ -14,7 +14,12 @@ This document provides instructions for setting up the API endpoint on **CIMM (C
 ### File Location
 Create the following file on your CIMM server:
 ```
-/api/maintenance-schedules.php
+/lgu-portal/public/api/maintenance-schedules.php
+```
+
+**Note**: Based on your server structure, the file should be at:
+```
+C:\xampp\htdocs\LGU\lgu-portal\public\api\maintenance-schedules.php
 ```
 
 ### API Code (READ-ONLY)
@@ -84,7 +89,7 @@ echo json_encode([
 
 ### Endpoint URL
 ```
-https://cimm.infragovservices.com/api/maintenance-schedules.php
+https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php
 ```
 
 ### Request Method
@@ -97,7 +102,7 @@ https://cimm.infragovservices.com/api/maintenance-schedules.php
 
 ### Example Request
 ```
-GET https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
+GET https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
 ```
 
 ---
@@ -191,13 +196,13 @@ GET https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SEC
 
 ### Using cURL
 ```bash
-curl "https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025"
+curl "https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025"
 ```
 
 ### Using Browser
 Open in browser:
 ```
-https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
+https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
 ```
 
 ### Expected Result

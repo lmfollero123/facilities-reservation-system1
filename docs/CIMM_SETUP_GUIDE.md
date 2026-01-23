@@ -11,7 +11,7 @@
    - This tells them exactly how to set up their API endpoint
 
 2. **Wait for CIMM to set up their API**
-   - They need to create: `https://cimm.infragovservices.com/api/maintenance-schedules.php`
+   - They need to create: `https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php`
    - They need to use API key: `CIMM_SECURE_KEY_2025`
 
 3. **Test the connection**
@@ -53,10 +53,10 @@ This document contains:
 ### Step 2: CIMM Sets Up Their API
 
 CIMM needs to:
-1. Create file: `/api/maintenance-schedules.php` on their server
+1. Create file: `/lgu-portal/public/api/maintenance-schedules.php` on their server
 2. Use the code from `CIMM_API_INTEGRATION.md`
 3. Ensure their `maintenance_schedule` table has data
-4. Test the endpoint: `https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025`
+4. Test the endpoint: `https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025`
 
 ### Step 3: Test Connection
 
@@ -74,7 +74,7 @@ php test_cimm_connection.php
 **Option C: Direct API Test**
 Open in browser:
 ```
-https://cimm.infragovservices.com/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
+https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php?key=CIMM_SECURE_KEY_2025
 ```
 
 Should return JSON like:
@@ -95,7 +95,7 @@ Should return JSON like:
 **Solution**: Ask CIMM to create the API endpoint
 
 ### Error: "API endpoint not found: 404"
-**Cause**: CIMM hasn't created `/api/maintenance-schedules.php` yet  
+**Cause**: CIMM hasn't created `/lgu-portal/public/api/maintenance-schedules.php` yet  
 **Solution**: Share `CIMM_API_INTEGRATION.md` with CIMM team
 
 ### Error: "Unauthorized: API key incorrect"
@@ -129,7 +129,7 @@ Should return JSON like:
 ### Current API Settings (in `services/cimm_api.php`):
 
 ```php
-$apiUrl = 'https://cimm.infragovservices.com/api/maintenance-schedules.php';
+$apiUrl = 'https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php';
 $apiKey = 'CIMM_SECURE_KEY_2025';
 ```
 

@@ -9,7 +9,7 @@ require_once __DIR__ . '/services/cimm_api.php';
 
 echo "=== CIMM API Connection Test ===\n\n";
 
-echo "Testing connection to: https://cimm.infragovservices.com/api/maintenance-schedules.php\n";
+echo "Testing connection to: https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-schedules.php\n";
 echo "API Key: CIMM_SECURE_KEY_2025\n\n";
 
 $result = fetchCIMMMaintenanceSchedules();
