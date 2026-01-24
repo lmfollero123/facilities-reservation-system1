@@ -23,15 +23,22 @@ This document outlines all security features implemented in the Facilities Reser
 ### Features
 - **Password Hashing**: Uses PHP's `password_hash()` with `PASSWORD_DEFAULT` (bcrypt)
 - **Password Verification**: Uses `password_verify()` for secure password checking
-- **Role-Based Access Control (RBAC)**: Admin, Staff, and Resident roles
+- **Two-Factor Authentication (2FA)**:
+  - **Email OTP**: 6-digit codes sent via email (10-minute expiry)
+  - **Google Authenticator (TOTP)**: Time-based one-time passwords for Admin/Staff (NEW ✅)
+- **Role-Based Access Control (RBAC)**: Admin, Staff, and Resident roles with granular permissions
 - **Account Status**: Users must have `status = 'active'` to log in
 - **Session-Based Authentication**: Secure session management
 
 ### Implementation
 - Login credentials are verified against the database
+- OTP verification required if email OTP or TOTP is enabled
+- TOTP codes accepted from authenticator apps (Google Authenticator, Authy, etc.)
 - Session variables store user information securely
 - Protected pages check `$_SESSION['user_authenticated']`
 - Role-based access enforced on sensitive pages
+- Admin-only pages: User Management, Document Management, Audit Trail
+- Staff/Admin pages: Reservation Approvals, Facility Management, Reports, etc.
 
 ---
 
@@ -408,8 +415,34 @@ If you discover a security vulnerability, please:
 
 ---
 
-**Last Updated**: 2024
-**Version**: 1.0
+**Last Updated**: January 2026
+**Version**: 2.0
+
+---
+
+## New in Version 2.0
+
+### Google Authenticator (TOTP) Support ✅
+- **TOTP Implementation**: Time-based One-Time Password (RFC 6238) for Admin and Staff
+- **QR Code Setup**: Automatic QR code generation for easy authenticator app setup
+- **Dual 2FA Support**: Users can use either Email OTP or TOTP code at login
+- **Role-Based**: Available for Admin (mandatory recommended) and Staff (optional)
+- **Library**: `robthree/twofactorauth` v3.0.3
+- **Database**: `users.totp_secret` and `users.totp_enabled` fields
+
+### Enhanced RBAC ✅
+- **Admin-Only Pages**: User Management, Document Management, Audit Trail
+- **Staff Restrictions**: Cannot manage system settings, create Admin accounts, or access full audit logs
+- **Clear Role Separation**: Operational (Staff) vs. Governance (Admin) vs. Service (User)
+
+### Enhanced Security Features ✅
+- **Improved Error Handling**: Better error messages for security events
+- **Enhanced Logging**: TOTP setup/disable events logged
+- **API Security**: CIMM API integration with API key authentication
+
+---
+
+**For comprehensive security documentation including attack prevention details, see: `docs/SECURITY_COMPREHENSIVE.md`**
 
 
 

@@ -3,21 +3,162 @@
  * Geocoding Helper Functions
  * 
  * Converts addresses to coordinates using free geocoding services
- * Uses OpenStreetMap Nominatim API (free, no API key required)
- * Falls back to Google Maps API if configured
+ * Priority: Photon (free, no signup) > OpenStreetMap (free, no signup) > Mapbox > Google Maps
  */
 
 // Geocoding Service Configuration
-// Option 1: OpenStreetMap Nominatim (FREE, no API key needed) - DEFAULT
-define('USE_OSM_GEOCODING', true); // Set to false to use Google Maps instead
+// Priority order: Photon (FREE, no signup) > OSM (FREE, no signup) > Mapbox (requires credit card) > Google Maps (paid)
+// Set to 'photon', 'osm', 'mapbox', or 'google'
+if (!defined('GEOCODING_PROVIDER')) {
+    define('GEOCODING_PROVIDER', 'photon'); // Default: Photon (free, no signup, no credit card)
+}
 
-// Option 2: Google Maps API (requires API key and credit card)
-define('GOOGLE_MAPS_API_KEY', ''); // Set your API key here if using Google Maps
-define('GOOGLE_MAPS_GEOCODING_URL', 'https://maps.googleapis.com/maps/api/geocode/json');
+// Load optional config (copy geocoding_config.example.php → geocoding_config.php)
+$geocodeCfg = __DIR__ . '/geocoding_config.php';
+if (file_exists($geocodeCfg)) {
+    require_once $geocodeCfg;
+}
 
-// OpenStreetMap Nominatim Configuration
+// Mapbox Configuration (FREE tier: 100,000 requests/month, rooftop accuracy)
+if (!defined('MAPBOX_ACCESS_TOKEN')) {
+    $k = getenv('MAPBOX_ACCESS_TOKEN');
+    define('MAPBOX_ACCESS_TOKEN', $k !== false ? $k : '');
+}
+if (!defined('MAPBOX_GEOCODING_URL')) {
+    define('MAPBOX_GEOCODING_URL', 'https://api.mapbox.com/geocoding/v5/mapbox.places');
+}
+
+// Google Maps API (requires paid API key)
+if (!defined('GOOGLE_MAPS_API_KEY')) {
+    $k = getenv('GOOGLE_MAPS_API_KEY');
+    define('GOOGLE_MAPS_API_KEY', $k !== false ? $k : '');
+}
+if (!defined('GOOGLE_MAPS_GEOCODING_URL')) {
+    define('GOOGLE_MAPS_GEOCODING_URL', 'https://maps.googleapis.com/maps/api/geocode/json');
+}
+
+// Photon Geocoding (Komoot) - FREE, no signup, no credit card, good accuracy
+if (!defined('PHOTON_GEOCODING_URL')) {
+    define('PHOTON_GEOCODING_URL', 'https://photon.komoot.io/api');
+}
+
+// OpenStreetMap Nominatim Configuration (FREE, no API key, improved accuracy with better params)
 define('OSM_NOMINATIM_URL', 'https://nominatim.openstreetmap.org/search');
 define('OSM_USER_AGENT', 'LGU Facilities Reservation System'); // Required by OSM
+
+// Backward compatibility: USE_OSM_GEOCODING
+if (!defined('USE_OSM_GEOCODING')) {
+    define('USE_OSM_GEOCODING', GEOCODING_PROVIDER === 'osm');
+}
+
+/**
+ * Geocode an address to coordinates using Photon (Komoot) - FREE, no signup, no credit card
+ * Good accuracy, often better than basic OSM
+ * 
+ * @param string $address Full address string
+ * @return array|null Array with 'lat' and 'lng' keys, or null on failure
+ */
+function geocodeAddressPhoton($address)
+{
+    if (empty($address)) {
+        return null;
+    }
+    
+    // Photon API: forward geocoding (address → coordinates)
+    // No API key needed, completely free
+    $url = PHOTON_GEOCODING_URL . '?q=' . urlencode($address) . '&limit=1';
+    
+    // Add country bias for Philippines
+    $url .= '&lang=en';
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'User-Agent: LGU Facilities Reservation System',
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200 || !$response) {
+        error_log("Photon Geocoding API error: HTTP $httpCode");
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    // Photon response format: { "features": [ { "geometry": { "coordinates": [lng, lat] } } ] }
+    if (isset($data['features']) && !empty($data['features']) && isset($data['features'][0]['geometry']['coordinates'])) {
+        $coords = $data['features'][0]['geometry']['coordinates'];
+        // Photon returns [longitude, latitude] - we need [latitude, longitude]
+        return [
+            'lat' => (float)$coords[1],
+            'lng' => (float)$coords[0],
+        ];
+    }
+    
+    error_log("Photon Geocoding failed: No results found for address: $address");
+    return null;
+}
+
+/**
+ * Geocode an address to coordinates using Mapbox (requires credit card for signup)
+ * 
+ * @param string $address Full address string
+ * @return array|null Array with 'lat' and 'lng' keys, or null on failure
+ */
+function geocodeAddressMapbox($address)
+{
+    if (empty($address)) {
+        return null;
+    }
+    
+    // If access token is not configured, return null
+    if (empty(MAPBOX_ACCESS_TOKEN)) {
+        return null;
+    }
+    
+    // Mapbox Geocoding API: forward geocoding (address → coordinates)
+    $url = MAPBOX_GEOCODING_URL . '/' . urlencode($address) . '.json?access_token=' . MAPBOX_ACCESS_TOKEN . '&limit=1&country=PH';
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200 || !$response) {
+        error_log("Mapbox Geocoding API error: HTTP $httpCode");
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    // Mapbox response format: { "features": [ { "center": [lng, lat], "relevance": ... } ] }
+    if (isset($data['features']) && !empty($data['features']) && isset($data['features'][0]['center'])) {
+        $center = $data['features'][0]['center'];
+        // Mapbox returns [longitude, latitude] - we need [latitude, longitude]
+        return [
+            'lat' => (float)$center[1],
+            'lng' => (float)$center[0],
+        ];
+    }
+    
+    error_log("Mapbox Geocoding failed: No results found for address: $address");
+    return null;
+}
 
 /**
  * Geocode an address to coordinates using OpenStreetMap Nominatim (FREE)
@@ -31,12 +172,15 @@ function geocodeAddressOSM($address)
         return null;
     }
     
-    // Build request URL
+    // Build request URL with improved parameters for better accuracy
     $params = [
         'q' => $address,
         'format' => 'json',
         'limit' => 1,
         'addressdetails' => 1,
+        'countrycodes' => 'ph', // Bias for Philippines
+        'accept-language' => 'en',
+        'dedupe' => 1, // Remove duplicates
     ];
     
     $url = OSM_NOMINATIM_URL . '?' . http_build_query($params);
@@ -125,7 +269,8 @@ function geocodeAddressGoogle($address)
 }
 
 /**
- * Geocode an address to coordinates (uses configured service)
+ * Geocode an address to coordinates (uses configured service with fallback chain)
+ * Priority: Photon (free, no signup) > OSM (free, no signup) > Mapbox > Google Maps
  * 
  * @param string $address Full address string
  * @return array|null Array with 'lat' and 'lng' keys, or null on failure
@@ -136,29 +281,58 @@ function geocodeAddress($address)
         return null;
     }
     
-    // Use OpenStreetMap by default (free, no API key needed)
-    if (USE_OSM_GEOCODING) {
+    $provider = defined('GEOCODING_PROVIDER') ? GEOCODING_PROVIDER : 'photon';
+    
+    // Try Photon first (free, no signup, no credit card, good accuracy)
+    if ($provider === 'photon' || (empty($provider) && $provider !== 'mapbox' && $provider !== 'google' && $provider !== 'osm')) {
+        $result = geocodeAddressPhoton($address);
+        if ($result) {
+            return $result;
+        }
+    }
+    
+    // Try OpenStreetMap (free, no signup, improved parameters)
+    if ($provider === 'osm' || USE_OSM_GEOCODING || ($provider === 'photon' && !$result)) {
         $result = geocodeAddressOSM($address);
         if ($result) {
             return $result;
         }
-        // Fallback to Google Maps if OSM fails and Google is configured
-        if (!empty(GOOGLE_MAPS_API_KEY)) {
-            return geocodeAddressGoogle($address);
-        }
-        return null;
     }
     
-    // Use Google Maps if configured
-    if (!empty(GOOGLE_MAPS_API_KEY)) {
+    // Try Mapbox if configured (requires credit card for signup)
+    if ($provider === 'mapbox' && !empty(MAPBOX_ACCESS_TOKEN)) {
+        $result = geocodeAddressMapbox($address);
+        if ($result) {
+            return $result;
+        }
+    }
+    
+    // Try Google Maps if configured (paid)
+    if ($provider === 'google' && !empty(GOOGLE_MAPS_API_KEY)) {
         $result = geocodeAddressGoogle($address);
         if ($result) {
             return $result;
         }
     }
     
-    // Fallback to OSM if Google fails
-    return geocodeAddressOSM($address);
+    // Last resort fallback chain: Photon → OSM → Mapbox → Google
+    $result = geocodeAddressPhoton($address);
+    if ($result) return $result;
+    
+    $result = geocodeAddressOSM($address);
+    if ($result) return $result;
+    
+    if (!empty(MAPBOX_ACCESS_TOKEN)) {
+        $result = geocodeAddressMapbox($address);
+        if ($result) return $result;
+    }
+    
+    if (!empty(GOOGLE_MAPS_API_KEY)) {
+        $result = geocodeAddressGoogle($address);
+        if ($result) return $result;
+    }
+    
+    return null;
 }
 
 /**

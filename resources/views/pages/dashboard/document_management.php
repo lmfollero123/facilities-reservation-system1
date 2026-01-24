@@ -4,7 +4,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../../config/app.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+// RBAC: Document Management is Admin-only (archive/purge, data governance)
+if (!($_SESSION['user_authenticated'] ?? false) || ($_SESSION['role'] ?? '') !== 'Admin') {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }

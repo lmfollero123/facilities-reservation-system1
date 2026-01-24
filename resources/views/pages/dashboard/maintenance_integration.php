@@ -43,8 +43,26 @@ foreach ($maintenanceSchedules as $schedule) {
     }
 }
 
-// Use upcoming schedules for the main list
+// Use upcoming schedules for the main list (full set for calendar/schedule list)
 $mockMaintenanceSchedules = $upcomingSchedules;
+
+// Filters and pagination for "Upcoming Maintenance Schedules" table only
+$statusFilter = $_GET['status'] ?? 'all';
+$priorityFilter = $_GET['priority'] ?? 'all';
+$upcomingFiltered = $upcomingSchedules;
+if ($statusFilter !== 'all') {
+    $upcomingFiltered = array_filter($upcomingFiltered, fn($s) => (strtolower($s['status'] ?? '') === $statusFilter));
+}
+if ($priorityFilter !== 'all') {
+    $upcomingFiltered = array_filter($upcomingFiltered, fn($s) => (strtolower($s['priority'] ?? '') === $priorityFilter));
+}
+$totalFiltered = count($upcomingFiltered);
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$totalPages = max(1, (int)ceil($totalFiltered / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+$upcomingPaginated = array_slice(array_values($upcomingFiltered), $offset, $perPage);
 
 // Get real facilities for dropdown
 $facilities = [];
@@ -131,27 +149,27 @@ ob_start();
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h2>Upcoming Maintenance Schedules</h2>
             <div style="display: flex; gap: 0.5rem;">
-                <select id="filterStatus" onchange="filterMaintenance()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all">All Status</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                <select id="filterStatus" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+                    <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
+                    <option value="scheduled" <?= $statusFilter === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
+                    <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                    <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                    <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                 </select>
-                <select id="filterPriority" onchange="filterMaintenance()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all">All Priorities</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
+                <select id="filterPriority" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+                    <option value="all" <?= $priorityFilter === 'all' ? 'selected' : ''; ?>>All Priorities</option>
+                    <option value="high" <?= $priorityFilter === 'high' ? 'selected' : ''; ?>>High</option>
+                    <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                    <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
                 </select>
             </div>
         </div>
 
-        <?php if (empty($mockMaintenanceSchedules)): ?>
+        <?php if ($totalFiltered === 0): ?>
             <p style="color: #8b95b5; text-align: center; padding: 2rem;">No upcoming maintenance schedules.</p>
         <?php else: ?>
-            <div class="table-responsive">
-                <table class="table">
+            <div class="table-responsive table-responsive--maintenance">
+                <table class="table table--maintenance-schedules">
                     <thead>
                         <tr>
                             <th>Maintenance ID</th>
@@ -159,19 +177,19 @@ ob_start();
                             <th>Type</th>
                             <th>Scheduled Date</th>
                             <th>Duration</th>
-                            <th>Priority</th>
-                            <th>Status</th>
+                            <th class="th-badge">Priority</th>
+                            <th class="th-badge">Status</th>
                             <th>Affected</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="maintenanceTableBody">
-                        <?php foreach ($mockMaintenanceSchedules as $schedule): 
+                        <?php foreach ($upcomingPaginated as $schedule): 
                             $priorityClass = $schedule['priority'] === 'high' ? 'offline' : ($schedule['priority'] === 'medium' ? 'maintenance' : 'active');
                             $statusClass = $schedule['status'] === 'in_progress' ? 'maintenance' : ($schedule['status'] === 'completed' ? 'active' : 'offline');
                             $statusDisplay = ucfirst(str_replace('_', ' ', $schedule['status']));
                         ?>
-                            <tr data-status="<?= $schedule['status']; ?>" data-priority="<?= $schedule['priority']; ?>">
+                            <tr>
                                 <td><strong><?= htmlspecialchars($schedule['id']); ?></strong></td>
                                 <td><?= htmlspecialchars($schedule['facility_name']); ?></td>
                                 <td><?= htmlspecialchars($schedule['maintenance_type']); ?></td>
@@ -183,13 +201,13 @@ ob_start();
                                     </small>
                                 </td>
                                 <td><?= htmlspecialchars($schedule['estimated_duration']); ?></td>
-                                <td>
-                                    <span class="status-badge <?= $priorityClass; ?>" style="text-transform: capitalize;">
+                                <td class="td-badge">
+                                    <span class="status-badge status-badge--cell <?= $priorityClass; ?>" style="text-transform: capitalize;" title="<?= htmlspecialchars($schedule['priority']); ?>">
                                         <?= htmlspecialchars($schedule['priority']); ?>
                                     </span>
                                 </td>
-                                <td>
-                                    <span class="status-badge <?= $statusClass; ?>">
+                                <td class="td-badge">
+                                    <span class="status-badge status-badge--cell <?= $statusClass; ?>" title="<?= htmlspecialchars($statusDisplay); ?>">
                                         <?= $statusDisplay; ?>
                                     </span>
                                 </td>
@@ -211,6 +229,29 @@ ob_start();
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+            <?php
+            $linkParams = array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'priority' => $priorityFilter !== 'all' ? $priorityFilter : null]);
+            $prevQuery = $page > 1 ? http_build_query($linkParams + ['page' => $page - 1]) : '';
+            $nextQuery = $page < $totalPages ? http_build_query($linkParams + ['page' => $page + 1]) : '';
+            ?>
+            <div class="pagination-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
+                <span style="color: #6b7280; font-size: 0.9rem;">
+                    Showing <?= $totalFiltered ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalFiltered); ?> of <?= $totalFiltered; ?>
+                </span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <?php if ($prevQuery): ?>
+                        <a href="?<?= htmlspecialchars($prevQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
+                    <?php else: ?>
+                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">← Prev</span>
+                    <?php endif; ?>
+                    <span style="font-size: 0.9rem; color: #4b5563;">Page <?= $page; ?> of <?= $totalPages; ?></span>
+                    <?php if ($nextQuery): ?>
+                        <a href="?<?= htmlspecialchars($nextQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
+                    <?php else: ?>
+                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">Next →</span>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endif; ?>
     </section>
@@ -403,20 +444,12 @@ function testCIMMConnection() {
     alert('To test CIMM connection, run: php test_cimm_connection.php\n\nOr check the error message displayed in the Integration Status card.');
 }
 
-function filterMaintenance() {
-    const statusFilter = document.getElementById('filterStatus').value;
-    const priorityFilter = document.getElementById('filterPriority').value;
-    const rows = document.querySelectorAll('#maintenanceTableBody tr');
-    
-    rows.forEach(row => {
-        const rowStatus = row.dataset.status;
-        const rowPriority = row.dataset.priority;
-        
-        const statusMatch = statusFilter === 'all' || rowStatus === statusFilter;
-        const priorityMatch = priorityFilter === 'all' || rowPriority === priorityFilter;
-        
-        row.style.display = (statusMatch && priorityMatch) ? '' : 'none';
-    });
+function applyMaintenanceFilters() {
+    var params = new URLSearchParams(window.location.search);
+    params.set('status', document.getElementById('filterStatus').value);
+    params.set('priority', document.getElementById('filterPriority').value);
+    params.set('page', '1');
+    window.location.href = window.location.pathname + '?' + params.toString();
 }
 
 function updateMaintenanceCalendar() {

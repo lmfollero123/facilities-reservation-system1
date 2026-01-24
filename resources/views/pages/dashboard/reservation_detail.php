@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
@@ -370,15 +371,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 
                 // Send email notification
                 if (!empty($reservationInfo['requester_email']) && !empty($reservationInfo['requester_name'])) {
-                    $emailSubject = 'Reservation Postponed - ' . $reservationInfo['facility_name'];
-                    $emailBody = '<p>Hi ' . htmlspecialchars($reservationInfo['requester_name']) . ',</p>';
-                    $emailBody .= '<p>Your approved reservation for <strong>' . htmlspecialchars($reservationInfo['facility_name']) . '</strong> has been postponed.</p>';
-                    $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
-                    $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
-                    $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-                    $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
-                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
-                    sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], $emailSubject, $emailBody);
+                    $emailBody = getReservationPostponedEmailTemplate(
+                        $reservationInfo['requester_name'],
+                        $reservationInfo['facility_name'],
+                        $oldDate,
+                        $oldTimeSlot,
+                        $newDate,
+                        $newTimeSlot,
+                        $reason
+                    );
+                    sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], 'Reservation Postponed', $emailBody);
                 }
                 
                 $message = 'Reservation postponed successfully. It is now pending re-approval.';
@@ -670,7 +672,7 @@ ob_start();
 <?php if ($reservation['status'] === 'pending'): ?>
     <div class="booking-card" style="margin-top:1.5rem;">
         <h2>Actions</h2>
-        <form method="POST" style="display:flex;gap:1rem;align-items:flex-start;">
+        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" style="display:flex;gap:1rem;align-items:flex-start;">
             <div style="flex:1;">
                 <label style="display:block;margin-bottom:0.5rem;color:#5b6888;font-size:0.9rem;">Add Remarks (Optional)</label>
                 <textarea name="note" placeholder="Enter any notes or remarks for this action..." style="width:100%;padding:0.75rem;border:1px solid #dfe3ef;border-radius:8px;font-family:inherit;font-size:0.95rem;resize:vertical;min-height:80px;"></textarea>
@@ -753,7 +755,7 @@ ob_start();
             <h3>Modify Approved Reservation</h3>
             <button onclick="closeModifyModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="modifyForm">
+        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="modifyForm">
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
             
@@ -798,7 +800,7 @@ ob_start();
             <h3>Postpone Approved Reservation</h3>
             <button onclick="closePostponeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="postponeForm">
+        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="postponeForm">
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
             
@@ -847,7 +849,7 @@ ob_start();
             <h3>Cancel Approved Reservation</h3>
             <button onclick="closeCancelModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="cancelForm">
+        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="cancelForm">
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
             <input type="hidden" name="action" value="cancelled">
             

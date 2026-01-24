@@ -84,23 +84,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Send reset email - token is hex (URL-safe)
                     $resetUrl = base_url() . '/resources/views/pages/auth/reset_password.php?token=' . $token;
                     error_log('Reset URL (first 100 chars): ' . substr($resetUrl, 0, 100) . '...');
-                    $subject = "Password Reset Request - Barangay Culiat Facilities";
-                    $htmlBody = "
-                    <html>
-                    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                        <h2 style='color: #285ccd;'>Password Reset Request</h2>
-                        <p>Dear " . htmlspecialchars($user['name']) . ",</p>
-                        <p>You have requested to reset your password for your Barangay Culiat Facilities Reservation account.</p>
-                        <p>Click the button below to reset your password. This link will expire in 1 hour.</p>
-                        <p><a href='" . $resetUrl . "' style='background: #285ccd; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;'>Reset Password</a></p>
-                        <p>Or copy and paste this link into your browser:</p>
-                        <p style='color: #666; word-break: break-all;'>" . $resetUrl . "</p>
-                        <p>If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
-                        <p>Best regards,<br>Barangay Culiat Facilities Management Office</p>
-                    </body>
-                    </html>";
                     
-                    sendEmail($user['email'], $user['name'], $subject, $htmlBody);
+                    require_once __DIR__ . '/../../../../config/email_templates.php';
+                    $htmlBody = getPasswordResetEmailTemplate($user['name'], $resetUrl);
+                    sendEmail($user['email'], $user['name'], 'Password Reset Request', $htmlBody);
                 }
                 
                 // Always show success (security best practice)

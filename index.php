@@ -5,8 +5,9 @@
  */
 
 // Get the requested path FIRST (before loading app.php to avoid session/header issues)
-$path = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-$basePath = str_replace(basename(__FILE__), '', $_SERVER['SCRIPT_NAME']);
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$path = trim(parse_url($requestUri, PHP_URL_PATH), '/');
+$basePath = str_replace(basename(__FILE__), '', $_SERVER['SCRIPT_NAME'] ?? '');
 $basePath = trim($basePath, '/');
 
 // Remove base path from requested path if present
@@ -58,8 +59,13 @@ if ($path === 'announcements') {
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
     // Dashboard routes - check if user is logged in
     if (!isset($_SESSION['user_id'])) {
-        $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-        $redirectUrl = $baseUrl . base_path() . '/login';
+        // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $isLocal = (strpos($host, 'localhost') !== false || 
+                   strpos($host, '127.0.0.1') !== false || 
+                   strpos($host, 'lgu.test') !== false);
+        $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        $redirectUrl = $protocol . '://' . $host . base_path() . '/login';
         header('Location: ' . $redirectUrl);
         exit;
     }

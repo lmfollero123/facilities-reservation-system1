@@ -4,7 +4,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../../config/app.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+// RBAC: User Management is Admin-only (create/deactivate Admin/Staff, system governance)
+if (!($_SESSION['user_authenticated'] ?? false) || ($_SESSION['role'] ?? '') !== 'Admin') {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -12,6 +13,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
 $pdo = db();
 $pageTitle = 'User Management | LGU Facilities Reservation';
 
@@ -45,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     
                     // Send approval email
                     if ($userInfo && !empty($userInfo['email'])) {
-                        $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p><p>Your account has been approved. You can now sign in and book facilities.</p>";
-                        sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been approved', $body);
+                        $body = getAccountApprovedEmailTemplate($userInfo['name']);
+                        sendEmail($userInfo['email'], $userInfo['name'], 'Account Approved', $body);
                     }
                     break;
                     
@@ -92,10 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                                 base_path() . '/resources/views/pages/dashboard/profile.php'
                             );
                             
-                            $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p>"
-                                  . "<p>Your account has been verified by an administrator. You can now use <strong>auto-approval features</strong> for facility bookings.</p>"
-                                  . "<p>This means eligible reservations will be automatically approved without manual review.</p>";
-                            sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been verified', $body);
+                            $body = getAccountVerifiedEmailTemplate($userInfo['name']);
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Account Verified', $body);
                         } catch (Exception $e) {
                             // ignore notification/email failures
                         }
@@ -146,12 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     // Notify user via email
                     if ($userInfo && !empty($userInfo['email'])) {
                         try {
-                            $reasonText = $lockReason !== '' ? "<p><strong>Reason:</strong> " . htmlspecialchars($lockReason) . "</p>" : '';
-                            $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p>"
-                                  . "<p>Your account has been locked by an administrator. You will be unable to sign in until it is reviewed and unlocked.</p>"
-                                  . $reasonText
-                                  . "<p>If you believe this is a mistake or need access restored, please reply to this email or contact the admin team.</p>";
-                            sendEmail($userInfo['email'], $userInfo['name'], 'Your account has been locked', $body);
+                            $body = getAccountLockedEmailTemplate($userInfo['name'], $lockReason);
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Account Locked', $body);
                         } catch (Exception $e) {
                             // ignore email failures here
                         }
@@ -190,6 +186,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     } else {
                         $message = 'Invalid role selected.';
                         $messageType = 'error';
+                    }
+                    break;
+                    
+                case 'reset_password':
+                    // Get user info for email
+                    $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
+                    $userStmt->execute(['id' => $userId]);
+                    $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if (!$userInfo) {
+                        $message = 'User not found.';
+                        $messageType = 'error';
+                        break;
+                    }
+                    
+                    // Generate a secure random password (12 characters with mixed case, numbers, and symbols)
+                    $newPassword = bin2hex(random_bytes(6)); // 12 character hex string
+                    $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    
+                    // Update password in database
+                    $stmt = $pdo->prepare('UPDATE users SET password_hash = :password_hash, failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['password_hash' => $newPasswordHash, 'id' => $userId]);
+                    
+                    logAudit('Reset user password', 'User Management', $userInfo['name'] . ' (' . $userInfo['email'] . ')');
+                    $message = 'Password reset successfully. New credentials have been sent to the user\'s email.';
+                    
+                    // Send email with new credentials
+                    if (!empty($userInfo['email'])) {
+                        try {
+                            $body = "<p>Hi " . htmlspecialchars($userInfo['name']) . ",</p>"
+                                  . "<p>Your password has been reset by an administrator. Here are your new login credentials:</p>"
+                                  . "<div style='background: #f5f7fa; padding: 1rem; border-radius: 8px; margin: 1rem 0;'>"
+                                  . "<p style='margin: 0.5rem 0;'><strong>Email:</strong> " . htmlspecialchars($userInfo['email']) . "</p>"
+                                  . "<p style='margin: 0.5rem 0;'><strong>New Password:</strong> <code style='background: #fff; padding: 0.25rem 0.5rem; border-radius: 4px; font-family: monospace;'>" . htmlspecialchars($newPassword) . "</code></p>"
+                                  . "</div>"
+                                  . "<p><strong>Important:</strong> For security reasons, please change your password immediately after logging in.</p>"
+                                  . "<p>If you did not request this password reset, please contact the administrator immediately.</p>";
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Your Password Has Been Reset', $body);
+                        } catch (Exception $e) {
+                            // Log but don't fail the operation
+                            error_log('Failed to send password reset email: ' . $e->getMessage());
+                            $message .= ' However, the email could not be sent. Please provide the new password manually.';
+                        }
                     }
                     break;
                     
@@ -440,6 +479,14 @@ ob_start();
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="unlock">
                                         <button class="btn-primary confirm-action" data-message="Unlock this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Unlock</button>
+                                    </form>
+                                <?php endif; ?>
+                                <!-- Password Reset Button (available for all active/locked users) -->
+                                <?php if (in_array($user['status'], ['active', 'locked'])): ?>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
+                                        <input type="hidden" name="action" value="reset_password">
+                                        <button class="btn-outline confirm-action" data-message="Reset password for this user? New credentials will be sent to their email." type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem; background:#ff9800; color:#fff; border-color:#ff9800;">Reset Password</button>
                                     </form>
                                 <?php endif; ?>
                             </div>

@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
@@ -283,15 +284,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 
                 // Send email notification
                 if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
-                    $emailSubject = 'Reservation Postponed - ' . $reservation['facility_name'];
-                    $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>';
-                    $emailBody .= '<p>Your approved reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> has been postponed.</p>';
-                    $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
-                    $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
-                    $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-                    $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
-                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
-                    sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
+                    $emailBody = getReservationPostponedEmailTemplate(
+                        $reservation['requester_name'],
+                        $reservation['facility_name'],
+                        $oldDate,
+                        $oldTimeSlot,
+                        $newDate,
+                        $newTimeSlot,
+                        $reason
+                    );
+                    sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Postponed', $emailBody);
                 }
                 
                 $message = 'Reservation postponed successfully. It is now pending re-approval.';
@@ -391,16 +393,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     
                     // Send email notification
                     if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
-                        $emailSubject = 'Reservation ' . ucfirst($action) . ' - ' . $reservation['facility_name'];
-                        $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>';
-                        $emailBody .= '<p>Your reservation request for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong>';
-                        $emailBody .= ' on <strong>' . date('F j, Y', strtotime($reservation['reservation_date'])) . '</strong> (' . htmlspecialchars($reservation['time_slot']) . ')';
-                        $emailBody .= ' has been <strong>' . $action . '</strong>.</p>';
-                        if (!empty($note)) {
-                            $emailBody .= '<p><strong>Note:</strong> ' . htmlspecialchars($note) . '</p>';
+                        if ($action === 'approved') {
+                            // Use the new professional template for approvals
+                            $emailBody = getReservationApprovedEmailTemplate(
+                                $reservation['requester_name'],
+                                $reservation['facility_name'],
+                                $reservation['reservation_date'],
+                                $reservation['time_slot'],
+                                $note ?? ''
+                            );
+                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Approved', $emailBody);
+                        } elseif ($action === 'denied') {
+                            // Use professional template for denials
+                            $emailBody = getReservationDeniedEmailTemplate(
+                                $reservation['requester_name'],
+                                $reservation['facility_name'],
+                                $reservation['reservation_date'],
+                                $reservation['time_slot'],
+                                $note ?? ''
+                            );
+                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Denied', $emailBody);
+                        } elseif ($action === 'cancelled') {
+                            // Use professional template for cancellations
+                            $emailBody = getReservationCancelledEmailTemplate(
+                                $reservation['requester_name'],
+                                $reservation['facility_name'],
+                                $reservation['reservation_date'],
+                                $reservation['time_slot'],
+                                $note ?? ''
+                            );
+                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Cancelled', $emailBody);
                         }
-                        $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
-                        sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
                     }
                 }
                 
@@ -649,9 +672,9 @@ ob_start();
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                                     <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
-                                        <form method="POST" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                        <form method="POST" action="<?= base_path(); ?>/dashboard/reservations-manage" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
                                             <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
                                             <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
                                             <button class="btn-primary confirm-action" data-message="Approve this reservation?<?= !empty($reservation['postponed_priority']) ? ' (This reservation has priority due to previous postponement.)' : ''; ?>" name="action" value="approved" type="submit">Approve</button>
@@ -762,7 +785,7 @@ ob_start();
                             <td><?= htmlspecialchars($reservation['purpose']); ?></td>
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
+                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <button class="btn-outline" onclick="openModifyModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Modify</button>
                                     <button class="btn-outline" onclick="openPostponeModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Postpone</button>
                                     <button class="btn-outline" onclick="openCancelModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['facility']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem; color: #dc3545;">Cancel</button>

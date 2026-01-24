@@ -19,6 +19,17 @@ define('PASSWORD_REQUIRE_LOWERCASE', true);
 define('PASSWORD_REQUIRE_NUMBER', true);
 define('PASSWORD_REQUIRE_SPECIAL', false); // Set to true for stronger passwords
 
+// HTTPS: Force redirect HTTP -> HTTPS (localhost + live when SSL is available)
+// Set to false for local development (lgu.test, localhost) to avoid SSL issues
+if (!defined('FORCE_HTTPS')) {
+    define('FORCE_HTTPS', false); // Set to true for production when SSL is configured
+}
+// Hosts to NEVER redirect to HTTPS (e.g. plain localhost without SSL). Comma-separated.
+// Add your local development domains here (e.g. lgu.test, app.local, etc.)
+if (!defined('HTTPS_EXCLUDE_HOSTS')) {
+    define('HTTPS_EXCLUDE_HOSTS', 'localhost,127.0.0.1,lgu.test');
+}
+
 /**
  * Generate CSRF token
  */

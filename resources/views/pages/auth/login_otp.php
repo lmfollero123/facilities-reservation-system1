@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../vendor/autoload.php';
 
 $pageTitle = 'Enter OTP | LGU Facilities Reservation';
 $error = '';
@@ -19,7 +20,7 @@ $userName = $_SESSION['pending_otp_name'] ?? '';
 
 try {
     $pdo = db();
-    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status, totp_secret, COALESCE(totp_enabled, 0) AS totp_enabled FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -45,15 +46,47 @@ try {
         $otpInput = trim($_POST['otp']);
 
         if (!$otpInput) {
-            $error = 'Please enter the OTP sent to your email.';
+            $error = 'Please enter the OTP from your email or authenticator app.';
         } elseif ($user['otp_attempts'] >= 5) {
             $error = 'Too many incorrect attempts. Please log in again.';
-        } elseif (!$user['otp_code_hash'] || !$user['otp_expires_at'] || strtotime($user['otp_expires_at']) < time()) {
-            $error = 'OTP has expired. Please request a new code.';
-        } elseif (!password_verify($otpInput, $user['otp_code_hash'])) {
-            $error = 'Incorrect OTP.';
-            $pdo->prepare("UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = ?")->execute([$userId]);
         } else {
+            $valid = false;
+            // 1) If Google Authenticator is enabled, try TOTP first
+            if (($user['totp_enabled'] ?? 0) && !empty($user['totp_secret'])) {
+                try {
+                    if (class_exists('RobThree\Auth\TwoFactorAuth') && class_exists('RobThree\Auth\Providers\Qr\QRServerProvider')) {
+                        $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
+                        $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
+                        $code = preg_replace('/\D/', '', $otpInput);
+                        if (strlen($code) === 6 && $tfa->verifyCode($user['totp_secret'], $code)) {
+                            $valid = true;
+                        }
+                    }
+                } catch (Throwable $e) { 
+                    error_log('TOTP verification error in login: ' . $e->getMessage());
+                    /* fall through to email OTP */ 
+                }
+            }
+            // 2) Otherwise, or if TOTP failed, try email OTP
+            if (!$valid && $user['otp_code_hash'] && $user['otp_expires_at'] && strtotime($user['otp_expires_at']) >= time()) {
+                if (password_verify($otpInput, $user['otp_code_hash'])) {
+                    $valid = true;
+                }
+            }
+            if (!$valid) {
+                $emailOk = $user['otp_code_hash'] && $user['otp_expires_at'] && strtotime($user['otp_expires_at']) >= time();
+                $hasTotp = ($user['totp_enabled'] ?? 0) && !empty($user['totp_secret']);
+                if (!$hasTotp && !$emailOk) {
+                    $error = 'OTP has expired. Please request a new code.';
+                } else {
+                    if ($emailOk) {
+                        $pdo->prepare("UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = ?")->execute([$userId]);
+                    }
+                    $error = 'Incorrect OTP.';
+                }
+            }
+        }
+        if (empty($error)) {
             // OTP valid -> finalize login
             $pdo->prepare("UPDATE users SET otp_code_hash = NULL, otp_expires_at = NULL, otp_attempts = 0 WHERE id = ?")->execute([$userId]);
 
@@ -109,7 +142,7 @@ ob_start();
         <div class="auth-header">
             <div class="auth-icon">🔐</div>
             <h1>Enter One-Time Passcode</h1>
-            <p>We sent a 6-digit code to <?= htmlspecialchars($userEmail); ?></p>
+            <p>We sent a 6-digit code to <?= htmlspecialchars($userEmail); ?>. You can also use the code from your authenticator app if you have it enabled.</p>
         </div>
 
         <?php if ($error): ?>

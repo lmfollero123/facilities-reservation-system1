@@ -55,8 +55,12 @@ if (!function_exists('base_url')) {
      */
     function base_url(): string
     {
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
+        $isLocal = (strpos($host, 'localhost') !== false || 
+                   strpos($host, '127.0.0.1') !== false || 
+                   strpos($host, 'lgu.test') !== false);
+        $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
         $base = base_path();
         return $protocol . '://' . $host . $base;
     }

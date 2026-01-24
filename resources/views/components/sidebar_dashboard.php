@@ -43,14 +43,17 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'],
         ['label' => 'Utilities Integration', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'],
         ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'],
-        ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
-        ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'],
         ['label' => 'Contact Information', 'href' => $base . '/dashboard/contact-info', 'icon' => 'telephone', 'page' => 'contact_info_manage'],
     ];
+    // Admin-only: User Management, Document Management (RBAC: system governance, data governance)
+    if ($role === 'Admin') {
+        $opsLinks[] = ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
+        $opsLinks[] = ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'];
+    }
 }
 
 $bottomLinks = [];
-if (in_array($role, ['Admin', 'Staff'], true)) {
+if ($role === 'Admin') {
     $bottomLinks[] = ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
 }
 $bottomLinks[] = ['label' => 'Profile', 'href' => $base . '/dashboard/profile', 'icon' => 'user', 'page' => 'profile'];

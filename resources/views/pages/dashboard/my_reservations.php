@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
 
@@ -223,17 +224,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
         
         if ($userInfo && !empty($userInfo['email'])) {
-            $emailSubject = 'Reservation Rescheduled - ' . $reservation['facility_name'];
-            $emailBody = '<p>Hi ' . htmlspecialchars($userInfo['name']) . ',</p>';
-            $emailBody .= '<p>Your reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> has been rescheduled.</p>';
-            $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
-            $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
-            $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-            if ($oldStatus === 'approved') {
-                $emailBody .= '<p><strong>Note:</strong> The new date requires re-approval. You will be notified once it is reviewed.</p>';
-            }
-            $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
-            sendEmail($userInfo['email'], $userInfo['name'], $emailSubject, $emailBody);
+            $requiresApproval = ($oldStatus === 'approved' || $oldStatus === 'postponed');
+            $emailBody = getReservationRescheduledEmailTemplate(
+                $userInfo['name'],
+                $reservation['facility_name'],
+                $oldDate,
+                $oldTimeSlot,
+                $newDate,
+                $newTimeSlot,
+                $reason,
+                $requiresApproval
+            );
+            sendEmail($userInfo['email'], $userInfo['name'], 'Reservation Rescheduled', $emailBody);
         }
         
         $message = 'Reservation rescheduled successfully.' . ($oldStatus === 'approved' ? ' It is now pending re-approval.' : '');

@@ -13,6 +13,25 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/data_export.php';
 
+// Load Composer autoload for TOTP library
+// Try multiple possible paths
+$possiblePaths = [
+    __DIR__ . '/../../../../vendor/autoload.php',  // From resources/views/pages/dashboard/
+    __DIR__ . '/../../../vendor/autoload.php',      // Alternative path
+    dirname(__DIR__, 4) . '/vendor/autoload.php', // Using dirname with levels
+];
+$autoloadLoaded = false;
+foreach ($possiblePaths as $autoloadPath) {
+    if (file_exists($autoloadPath)) {
+        require_once $autoloadPath;
+        $autoloadLoaded = true;
+        break;
+    }
+}
+if (!$autoloadLoaded) {
+    error_log('Composer autoload not found. Tried: ' . implode(', ', $possiblePaths) . ' | Current dir: ' . __DIR__);
+}
+
 $pdo = db();
 $pageTitle = 'Profile | LGU Facilities Reservation';
 $userId = $_SESSION['user_id'] ?? null;
@@ -93,6 +112,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account'])
     }
 }
 
+// Handle TOTP (Google Authenticator) - Admin/Staff only
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId && in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+    if (isset($_POST['totp_disable'])) {
+        if (isset($_POST[CSRF_TOKEN_NAME]) && verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            try {
+                $pdo->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')->execute([$userId]);
+                $success = 'Authenticator app has been disabled. You will use email OTP only.';
+            } catch (Throwable $e) {
+                $error = 'Failed to disable authenticator.';
+            }
+        }
+    } elseif (isset($_POST['totp_enable_request'])) {
+        if (isset($_POST[CSRF_TOKEN_NAME]) && verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            try {
+                // Check if autoload is working
+                if (!class_exists('RobThree\Auth\TwoFactorAuth')) {
+                    throw new Exception('TwoFactorAuth class not found. Please run: composer install');
+                }
+                if (!class_exists('RobThree\Auth\Providers\Qr\QRServerProvider')) {
+                    throw new Exception('QRServerProvider class not found. Please run: composer install');
+                }
+                $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
+                $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
+                $secret = $tfa->createSecret();
+                $_SESSION['totp_pending_secret'] = $secret;
+                header('Location: ' . base_path() . '/dashboard/profile?totp_setup=1');
+                exit;
+            } catch (Throwable $e) {
+                error_log('TOTP setup error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
+                $error = 'Could not start authenticator setup: ' . htmlspecialchars($e->getMessage());
+            }
+        }
+    } elseif (isset($_POST['totp_verify']) && isset($_POST['totp_code']) && !empty($_SESSION['totp_pending_secret'])) {
+        if (isset($_POST[CSRF_TOKEN_NAME]) && verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            $code = trim(preg_replace('/\D/', '', $_POST['totp_code']));
+            try {
+                if (!class_exists('RobThree\Auth\TwoFactorAuth')) {
+                    throw new Exception('TwoFactorAuth class not available');
+                }
+                $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
+                $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
+                if (strlen($code) === 6 && $tfa->verifyCode($_SESSION['totp_pending_secret'], $code)) {
+                    $pdo->prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')->execute([$_SESSION['totp_pending_secret'], $userId]);
+                    unset($_SESSION['totp_pending_secret']);
+                    header('Location: ' . base_path() . '/dashboard/profile?totp_success=1');
+                    exit;
+                }
+            } catch (Throwable $e) {
+                error_log('TOTP verification error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
+            }
+            unset($_SESSION['totp_pending_secret']);
+            $error = 'Invalid verification code. Please try enabling again.';
+        }
+    }
+}
+
 // Handle data export request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
     $exportType = $_POST['export_type'] ?? 'full';
@@ -116,7 +191,7 @@ $exportHistory = getUserExportHistory($userId);
 // Check if deactivated_at column exists for backward compatibility
 $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
 $hasDeactivatedAt = $checkColumn->rowCount() > 0;
-$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp';
+$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled';
 if ($hasDeactivatedAt) {
     $selectFields .= ', deactivated_at, deactivation_reason';
 }
@@ -145,6 +220,30 @@ if (!$user) {
     $error = 'Unable to load your profile information.';
 }
 
+if (isset($_GET['totp_success'])) {
+    $success = 'Google Authenticator is now enabled. You can use your authenticator app code at login instead of email OTP.';
+}
+
+$totpQrUri = null;
+$totpSecret = null;
+if (isset($_SESSION['totp_pending_secret']) && $user && !empty($user['email'])) {
+    try {
+        if (!class_exists('RobThree\Auth\TwoFactorAuth')) {
+            throw new Exception('TwoFactorAuth class not available');
+        }
+        $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
+        $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
+        $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $_SESSION['totp_pending_secret']);
+        $totpSecret = $_SESSION['totp_pending_secret'];
+    } catch (Throwable $e) {
+        error_log('TOTP QR generation error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
+        unset($_SESSION['totp_pending_secret']);
+        if (empty($error)) {
+            $error = 'Could not generate QR code: ' . htmlspecialchars($e->getMessage());
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     // Handle OTP preference update separately (if only OTP toggle is changed)
     if (isset($_POST['enable_otp']) && !isset($_POST['name']) && !isset($_POST['current_password'])) {
@@ -157,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
             // Refresh user data with same select fields as loaded earlier
             $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
             $hasDeactivatedAt = $checkColumn->rowCount() > 0;
-            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp';
+            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled';
             if ($hasDeactivatedAt) {
                 $refreshFields .= ', deactivated_at, deactivation_reason';
             }
@@ -322,7 +421,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     ]);
 
                     // Refresh user data
-                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp FROM users WHERE id = :id LIMIT 1');
+                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled FROM users WHERE id = :id LIMIT 1');
                     $stmt->execute(['id' => $userId]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
@@ -443,13 +542,17 @@ ob_start();
                     <div style="flex:1;">
                         <h2 style="margin:0 0 0.5rem; color:#1b1b1f; font-size:1.75rem; font-weight:700;"><?= htmlspecialchars($user['name'] ?? 'LGU Account Holder'); ?></h2>
                         <p style="margin:0 0 1rem; color:#5b6888; font-size:1.05rem; font-weight:500;"><?= htmlspecialchars($user['email'] ?? 'official@lgu.gov.ph'); ?></p>
-                        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+                        <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
                             <?php if (!empty($user['role'])): ?>
                                 <span class="status-badge <?= strtolower($user['role']); ?>" style="font-size:0.85rem; padding:0.35rem 0.85rem;"><?= htmlspecialchars($user['role']); ?></span>
                             <?php endif; ?>
                             <?php if (!empty($user['status'])): ?>
                                 <span class="status-badge <?= $user['status'] === 'active' ? 'active' : 'pending'; ?>" style="font-size:0.85rem; padding:0.35rem 0.85rem;"><?= ucfirst(htmlspecialchars($user['status'])); ?></span>
                             <?php endif; ?>
+                            <button type="button" onclick="openSecurityModal()" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem; display:inline-flex; align-items:center; gap:0.5rem; margin-left:0.5rem;">
+                                <span>🛡️</span>
+                                <span>Account Security</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -488,28 +591,29 @@ ob_start();
                     <span class="profile-label-text">Address</span>
                     <div class="input-wrapper">
                         <span class="input-icon">📍</span>
-                        <input type="text" name="address" value="<?= htmlspecialchars($user['address'] ?? ''); ?>" placeholder="e.g., Barangay Culiat, Quezon City" class="profile-input">
+                        <input type="text" name="address" id="profile-address" value="<?= htmlspecialchars($user['address'] ?? ''); ?>" placeholder="e.g., Barangay Culiat, Quezon City" class="profile-input" autocomplete="address-line1">
                     </div>
-                    <small class="profile-help-text">Your address helps us recommend nearby facilities.</small>
+                    <small class="profile-help-text">Your address helps us recommend nearby facilities. Latitude and longitude update automatically when you type and blur.</small>
                 </label>
                 
                 <label class="profile-form-label">
                     <span class="profile-label-text">Latitude (Optional - for location-based recommendations)</span>
                     <div class="input-wrapper">
                         <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="latitude" value="<?= htmlspecialchars($user['latitude'] ?? ''); ?>" placeholder="14.6760" class="profile-input">
+                        <input type="number" step="any" name="latitude" id="profile-latitude" value="<?= htmlspecialchars($user['latitude'] ?? ''); ?>" placeholder="14.6760" class="profile-input">
                     </div>
-                    <small class="profile-help-text">Will be auto-filled if Google Maps API is configured, or enter manually. Find coordinates: <a href="https://www.google.com/maps" target="_blank">Google Maps</a> (right-click location → coordinates)</small>
+                    <small class="profile-help-text">Auto-filled from address via Google Geocoding, or enter manually. <a href="https://www.google.com/maps" target="_blank">Google Maps</a> (right-click → coordinates)</small>
                 </label>
                 
                 <label class="profile-form-label">
                     <span class="profile-label-text">Longitude (Optional - for location-based recommendations)</span>
                     <div class="input-wrapper">
                         <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="longitude" value="<?= htmlspecialchars($user['longitude'] ?? ''); ?>" placeholder="121.0437" class="profile-input">
+                        <input type="number" step="any" name="longitude" id="profile-longitude" value="<?= htmlspecialchars($user['longitude'] ?? ''); ?>" placeholder="121.0437" class="profile-input">
                     </div>
-                    <small class="profile-help-text">Will be auto-filled if Google Maps API is configured, or enter manually.</small>
+                    <small class="profile-help-text">Auto-filled from address.</small>
                 </label>
+                <div id="profile-geocode-status" class="profile-help-text" style="margin-top:0.25rem; display:none;"></div>
                 
                 <?php if (!empty($user['latitude']) && !empty($user['longitude'])): ?>
                     <div style="background:#e3f8ef; color:#0d7a43; padding:0.75rem; border-radius:6px; margin-top:0.5rem; font-size:0.9rem;">
@@ -593,66 +697,110 @@ ob_start();
             </div>
             <?php endif; ?>
         </section>
-
-        <aside class="booking-card">
-            <h2>Account Security</h2>
-            <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;">
-                Manage your account security settings, change your password, and export your data.
-            </p>
-            
-            <!-- OTP Preference Toggle -->
-            <div id="otp-toggle-container" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
-                <div style="display:flex; align-items:flex-start; gap:1rem;">
-                    <div style="flex:1;">
-                        <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem; font-size:0.95rem;">
-                            Two-Factor Authentication (OTP)
-                        </label>
-                        <p id="otp-status-text" style="color:#5b6888; font-size:0.85rem; margin:0; line-height:1.5;">
-                            <?php if ($user['enable_otp'] ?? true): ?>
-                                OTP is currently <strong>enabled</strong>. You'll receive a code via email each time you log in.
-                            <?php else: ?>
-                                OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.
-                            <?php endif; ?>
-                        </p>
-                        <div id="otp-status-message" style="margin-top:0.5rem; font-size:0.85rem; display:none;"></div>
+        
+        <!-- Account Security Modal -->
+        <div id="securityModal" class="facility-modal">
+            <div class="facility-modal-backdrop" onclick="closeSecurityModal()"></div>
+            <div class="facility-modal-dialog" style="max-width: 600px;">
+                <div class="facility-modal-content">
+                    <div class="facility-modal-header">
+                        <h2>🛡️ Account Security</h2>
+                        <button type="button" class="facility-modal-close" onclick="closeSecurityModal()" aria-label="Close">×</button>
                     </div>
-                    <label style="position:relative; display:inline-block; width:48px; height:26px; cursor:pointer; flex-shrink:0;">
-                        <input 
-                            type="checkbox" 
-                            id="otp-toggle-checkbox" 
-                            value="1" 
-                            <?= ($user['enable_otp'] ?? true) ? 'checked' : ''; ?> 
-                            onchange="toggleOTPPreference(this);" 
-                            style="opacity:0; width:0; height:0;"
-                        >
-                        <span id="otp-toggle-switch" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:<?= ($user['enable_otp'] ?? true) ? '#2563eb' : '#ccc'; ?>; border-radius:26px; transition:background-color 0.3s;">
-                            <span id="otp-toggle-knob" style="position:absolute; content:''; height:20px; width:20px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:transform 0.3s; transform:translateX(<?= ($user['enable_otp'] ?? true) ? '22px' : '0'; ?>); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></span>
-                        </span>
-                    </label>
+                    <div class="facility-modal-body">
+                        <p style="color:#5b6888; font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;">
+                            Manage your account security settings, change your password, and export your data.
+                        </p>
+                        
+                        <!-- OTP Preference Toggle -->
+                        <div id="otp-toggle-container" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
+                            <div style="display:flex; align-items:flex-start; gap:1rem;">
+                                <div style="flex:1;">
+                                    <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem; font-size:0.95rem;">
+                                        Two-Factor Authentication (OTP)
+                                    </label>
+                                    <p id="otp-status-text" style="color:#5b6888; font-size:0.85rem; margin:0; line-height:1.5;">
+                                        <?php if ($user['enable_otp'] ?? true): ?>
+                                            OTP is currently <strong>enabled</strong>. You'll receive a code via email each time you log in.
+                                        <?php else: ?>
+                                            OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.
+                                        <?php endif; ?>
+                                    </p>
+                                    <div id="otp-status-message" style="margin-top:0.5rem; font-size:0.85rem; display:none;"></div>
+                                </div>
+                                <label style="position:relative; display:inline-block; width:48px; height:26px; cursor:pointer; flex-shrink:0;">
+                                    <input 
+                                        type="checkbox" 
+                                        id="otp-toggle-checkbox" 
+                                        value="1" 
+                                        <?= ($user['enable_otp'] ?? true) ? 'checked' : ''; ?> 
+                                        onchange="toggleOTPPreference(this);" 
+                                        style="opacity:0; width:0; height:0;"
+                                    >
+                                    <span id="otp-toggle-switch" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:<?= ($user['enable_otp'] ?? true) ? '#2563eb' : '#ccc'; ?>; border-radius:26px; transition:background-color 0.3s;">
+                                        <span id="otp-toggle-knob" style="position:absolute; content:''; height:20px; width:20px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:transform 0.3s; transform:translateX(<?= ($user['enable_otp'] ?? true) ? '22px' : '0'; ?>); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <?php if (in_array($user['role'] ?? '', ['Admin', 'Staff'], true)): ?>
+                        <div class="totp-section" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
+                            <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem;">Google Authenticator</label>
+                            <?php if ($user['totp_enabled'] ?? 0): ?>
+                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">You can enter the 6-digit code from your authenticator app at login instead of the email OTP.</p>
+                                <form method="POST" style="margin:0;">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="totp_disable" value="1">
+                                    <button type="submit" class="btn-outline" style="padding:0.5rem 1rem;">Disable Authenticator</button>
+                                </form>
+                            <?php elseif ($totpQrUri): ?>
+                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">Scan the QR code with your app, then enter the 6-digit code below to verify.</p>
+                                <div id="totp-setup-modal" style="display:block;">
+                                    <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="TOTP QR" style="display:block; margin:0.75rem 0; max-width:200px;">
+                                    <p style="font-size:0.8rem; color:#6b7280; margin:0.5rem 0;">Or enter manually: <code style="background:#eee; padding:2px 6px; border-radius:4px;"><?= htmlspecialchars($totpSecret); ?></code></p>
+                                    <form method="POST" style="margin-top:0.75rem;">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="totp_verify" value="1">
+                                        <input type="text" name="totp_code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:8em; padding:0.5rem; font-size:1.1rem; letter-spacing:0.2em; text-align:center;" required>
+                                        <button type="submit" class="btn-primary" style="margin-left:0.5rem; padding:0.5rem 1rem;">Verify and enable</button>
+                                    </form>
+                                </div>
+                            <?php else: ?>
+                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">Use an authenticator app (e.g. Google Authenticator) for 2FA. At login you can enter the app code instead of the email OTP.</p>
+                                <form method="POST" style="margin:0;">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="totp_enable_request" value="1">
+                                    <button type="submit" class="btn-primary" style="padding:0.5rem 1rem;">Enable Google Authenticator</button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <div style="display:flex; flex-direction:column; gap:1rem;">
+                            <button type="button" class="btn-primary" onclick="closeSecurityModal(); setTimeout(openPasswordModal, 300);" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
+                                <span>🔑</span>
+                                <span>Change Password</span>
+                            </button>
+                            
+                            <button type="button" class="btn-outline" onclick="closeSecurityModal(); setTimeout(openExportModal, 300);" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
+                                <span>📥</span>
+                                <span>Data Export</span>
+                            </button>
+                        </div>
+
+                        <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
+                            <h3 style="font-size:0.95rem; color:#1b1b1f; margin-bottom:0.75rem;">Security Tips</h3>
+                            <ul class="audit-list" style="margin:0;">
+                                <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>OTP Security:</strong> We recommend keeping OTP enabled for better account protection.</li>
+                                <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Password tip:</strong> Avoid reusing passwords from other systems.</li>
+                                <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Account access:</strong> Contact the LGU IT office if you suspect unauthorized activity.</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
-            
-            <div style="display:flex; flex-direction:column; gap:1rem;">
-                <button type="button" class="btn-primary" onclick="openPasswordModal()" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
-                    <span>🔑</span>
-                    <span>Change Password</span>
-                </button>
-                
-                <button type="button" class="btn-outline" onclick="openExportModal()" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;">
-                    <span>📥</span>
-                    <span>Data Export</span>
-                </button>
-            </div>
-
-            <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
-                <h3 style="font-size:0.95rem; color:#1b1b1f; margin-bottom:0.75rem;">Security Tips</h3>
-                <ul class="audit-list" style="margin:0;">
-                    <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>OTP Security:</strong> We recommend keeping OTP enabled for better account protection.</li>
-                    <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Password tip:</strong> Avoid reusing passwords from other systems.</li>
-                    <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Account access:</strong> Contact the LGU IT office if you suspect unauthorized activity.</li>
-                </ul>
-            </div>
-        </aside>
+        </div>
         
         <!-- Change Password Modal -->
         <div id="passwordModal" class="facility-modal">
@@ -749,12 +897,13 @@ ob_start();
                                                 </div>
                                                 <div style="display:flex; gap:0.5rem; align-items:center;">
                                                     <?php if ($canDownload): ?>
-                                                        <a href="<?= base_path() . '/resources/views/pages/dashboard/export_view.php?id=' . $export['id']; ?>" 
+                                                        <a href="<?= base_path() . '/dashboard/export-pdf?id=' . $export['id']; ?>" 
+                                                           target="_blank"
                                                            class="btn-primary" 
-                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">View</a>
+                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">📄 View PDF</a>
                                                         <a href="<?= base_path() . '/resources/views/pages/dashboard/download_export.php?id=' . $export['id']; ?>" 
                                                            class="btn-outline" 
-                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Download JSON</a>
+                                                           style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">📥 JSON</a>
                                                     <?php else: ?>
                                                         <span style="color:#8b95b5; font-size:0.8rem;">
                                                             <?= $isExpired ? 'Expired' : 'Unavailable'; ?>
@@ -928,6 +1077,18 @@ function closePasswordModal() {
     document.getElementById('passwordForm').reset();
 }
 
+function openSecurityModal() {
+    const modal = document.getElementById('securityModal');
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSecurityModal() {
+    const modal = document.getElementById('securityModal');
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
 function openExportModal() {
     const modal = document.getElementById('exportModal');
     modal.classList.add('open');
@@ -944,6 +1105,7 @@ function closeExportModal() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closePasswordModal();
+        closeSecurityModal();
         closeExportModal();
     }
 });
@@ -981,6 +1143,59 @@ function confirmDeactivation(event) {
     
     return false;
 }
+
+(function() {
+    const base = (typeof window !== 'undefined' && window.APP_BASE_PATH) ? window.APP_BASE_PATH : '';
+    const addressEl = document.getElementById('profile-address');
+    const latEl = document.getElementById('profile-latitude');
+    const lngEl = document.getElementById('profile-longitude');
+    const statusEl = document.getElementById('profile-geocode-status');
+    if (!addressEl || !latEl || !lngEl) return;
+
+    let geocodeTimer = null;
+    function showGeocodeStatus(msg, isError) {
+        if (!statusEl) return;
+        statusEl.textContent = msg;
+        statusEl.style.display = msg ? 'block' : 'none';
+        statusEl.style.color = isError ? '#c00' : '#0d7a43';
+    }
+
+    function fetchGeocode() {
+        const addr = (addressEl.value || '').trim();
+        if (addr.length < 5) {
+            showGeocodeStatus('', false);
+            return;
+        }
+        showGeocodeStatus('Looking up coordinates…', false);
+        const form = new URLSearchParams();
+        form.append('address', addr);
+        fetch(base + '/resources/views/pages/dashboard/geocode_api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: form
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.lat != null && data.lng != null) {
+                    latEl.value = data.lat;
+                    lngEl.value = data.lng;
+                    showGeocodeStatus('✓ Coordinates updated from address', false);
+                    setTimeout(function() { showGeocodeStatus('', false); }, 3000);
+                } else {
+                    showGeocodeStatus(data.error || 'Could not find coordinates for this address', true);
+                }
+            })
+            .catch(function() {
+                showGeocodeStatus('Geocoding unavailable. Enter coordinates manually.', true);
+            });
+    }
+
+    addressEl.addEventListener('blur', fetchGeocode);
+    addressEl.addEventListener('input', function() {
+        if (geocodeTimer) clearTimeout(geocodeTimer);
+        geocodeTimer = setTimeout(fetchGeocode, 800);
+    });
+})();
 </script>
 
 <?php

@@ -5,7 +5,14 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $isLocal = (strpos($host, 'localhost') !== false || 
+               strpos($host, '127.0.0.1') !== false || 
+               strpos($host, 'lgu.test') !== false);
+    $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+    $redirectUrl = $protocol . '://' . $host . base_path() . '/login';
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
@@ -40,7 +47,7 @@ $hasValidIdDocStmt->execute(['user_id' => $userId]);
 $hasValidIdDocument = (bool)$hasValidIdDocStmt->fetch();
 
 try {
-    $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status FROM facilities ORDER BY name');
+    $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status, operating_hours FROM facilities ORDER BY name');
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $facilities = [];
@@ -539,7 +546,9 @@ ob_start();
                     <select name="facility_id" id="facility-select" required>
                         <option value="">Select a facility...</option>
                         <?php foreach ($facilities as $facility): ?>
-                            <option value="<?= $facility['id']; ?>" data-status="<?= htmlspecialchars($facility['status']); ?>">
+                            <option value="<?= $facility['id']; ?>" 
+                                    data-status="<?= htmlspecialchars($facility['status']); ?>"
+                                    data-operating-hours="<?= htmlspecialchars($facility['operating_hours'] ?? ''); ?>">
                                 <?= htmlspecialchars($facility['name']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -666,7 +675,9 @@ ob_start();
                 <h4 style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
                     <span>🤖</span> AI Recommendations
                 </h4>
-                <p style="margin:0 0 0.75rem; color:#0d7a43; font-size:0.85rem;">Based on your purpose, here are recommended facilities:</p>
+                <p id="recommendations-intro" style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.85rem;">Based on your purpose, here are recommended facilities:</p>
+                <p id="recommendations-best-times" style="margin:0 0 0.75rem; color:#0d7a43; font-size:0.82rem; font-weight:600; display:none;"></p>
+                <div id="recommendations-loading" style="display:none; color:#0d7a43; font-size:0.85rem; font-style:italic;">Loading recommendations...</div>
                 <div id="recommendations-list" style="color:#0d7a43; font-size:0.85rem;"></div>
             </div>
 
@@ -1778,6 +1789,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const expectedAttendees = document.querySelector('input[name="expected_attendees"]')?.value || 50;
         const isCommercial = document.getElementById('is-commercial')?.checked || false;
         
+        // Show loading indicator
+        const loadingEl = document.getElementById('recommendations-loading');
+        const listEl = document.getElementById('recommendations-list');
+        if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (listEl) listEl.innerHTML = '';
+        
         try {
             const formData = new URLSearchParams();
             formData.append('purpose', purpose);
@@ -1798,17 +1816,75 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const data = await response.json();
             
+            // Store recommendations data for use in selectRecommendation
+            currentRecommendationsData = data;
+            
+            // Hide loading indicator
+            if (loadingEl) loadingEl.style.display = 'none';
+            
             if (data.recommendations && data.recommendations.length > 0) {
                 if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+                const bestTimesEl = document.getElementById('recommendations-best-times');
+                if (bestTimesEl) {
+                    if (data.best_times_label) {
+                        bestTimesEl.textContent = '🕐 ' + data.best_times_label;
+                        bestTimesEl.style.display = 'block';
+                    } else {
+                        bestTimesEl.style.display = 'none';
+                    }
+                }
                 if (recommendationsList) {
                     recommendationsList.innerHTML = data.recommendations.map((rec, idx) => {
-                        const score = rec.ml_relevance_score ? rec.ml_relevance_score.toFixed(1) : 'N/A';
-                        const reason = rec.reason || 'Recommended based on your event purpose';
+                        const score = rec.ml_relevance_score != null ? Number(rec.ml_relevance_score).toFixed(1) : 'N/A';
+                        let reason = rec.reason || 'Recommended based on your event purpose';
+                        if (rec.distance && reason.indexOf(rec.distance) === -1) {
+                            reason += ' · ' + rec.distance + ' from you';
+                        }
+                        
+                        // Format operating hours for display
+                        let operatingHoursDisplay = '';
+                        if (rec.operating_hours) {
+                            const hours = rec.operating_hours;
+                            // Try to format nicely
+                            if (hours.includes('-')) {
+                                const parts = hours.split('-').map(h => h.trim());
+                                if (parts.length === 2) {
+                                    // Convert 24-hour to 12-hour if needed
+                                    const formatTime = (timeStr) => {
+                                        if (timeStr.match(/^\d{2}:\d{2}$/)) {
+                                            const [h, m] = timeStr.split(':').map(Number);
+                                            const period = h >= 12 ? 'PM' : 'AM';
+                                            const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+                                            return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+                                        }
+                                        return timeStr;
+                                    };
+                                    operatingHoursDisplay = `🕐 ${formatTime(parts[0])} - ${formatTime(parts[1])}`;
+                                } else {
+                                    operatingHoursDisplay = `🕐 ${hours}`;
+                                }
+                            } else {
+                                operatingHoursDisplay = `🕐 ${hours}`;
+                            }
+                        } else {
+                            operatingHoursDisplay = '🕐 8:00 AM - 9:00 PM (default)';
+                        }
+                        
                         return `
-                            <div style="padding:0.5rem; margin-bottom:0.5rem; background:white; border-radius:4px;">
-                                <strong>${idx + 1}. ${rec.name}</strong>
-                                <span style="float:right; color:#0d7a43; font-weight:bold;">Score: ${score}</span>
-                                <div style="font-size:0.8rem; color:#666; margin-top:0.25rem;">${reason}</div>
+                            <div class="recommendation-item" 
+                                 data-facility-id="${rec.id}" 
+                                 data-facility-name="${rec.name.replace(/"/g, '&quot;')}"
+                                 style="padding:0.75rem; margin-bottom:0.5rem; background:white; border-radius:6px; border:1px solid #d0e8d0; cursor:pointer; transition:all 0.2s ease;"
+                                 onmouseover="this.style.background='#f0f8f0'; this.style.borderColor='#0d7a43';"
+                                 onmouseout="this.style.background='white'; this.style.borderColor='#d0e8d0';"
+                                 onclick="selectRecommendation(${rec.id}, '${rec.name.replace(/'/g, "\\'")}')">
+                                <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.25rem;">
+                                    <strong style="color:#0d7a43; font-size:0.95rem;">${idx + 1}. ${rec.name}</strong>
+                                    <span style="color:#0d7a43; font-weight:bold; font-size:0.9rem;">Score: ${score}</span>
+                                </div>
+                                <div style="font-size:0.8rem; color:#666; margin-top:0.25rem; margin-bottom:0.25rem;">${reason}</div>
+                                <div style="font-size:0.75rem; color:#0d7a43; font-weight:500; margin-top:0.25rem;">${operatingHoursDisplay}</div>
+                                <div style="font-size:0.7rem; color:#8b95b5; margin-top:0.25rem; font-style:italic;">Click to select this facility</div>
                             </div>
                         `;
                     }).join('');
@@ -1818,17 +1894,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('Recommendation error:', error);
+            if (loadingEl) loadingEl.style.display = 'none';
             if (recommendationsDiv) recommendationsDiv.style.display = 'none';
         }
     }
     
-    // OPTIMIZED: Debounced recommendation fetching - longer delay to reduce API calls
+    // OPTIMIZED: Debounced recommendation fetching - reduced delay for faster response
     function debouncedFetchRecommendations() {
         if (recommendationTimeout) {
             clearTimeout(recommendationTimeout);
         }
-        // Increased to 1000ms (1 second) - recommendations are less time-sensitive than conflict checks
-        recommendationTimeout = setTimeout(fetchRecommendations, 1000);
+        // Reduced to 600ms for faster response while still debouncing rapid typing
+        recommendationTimeout = setTimeout(fetchRecommendations, 600);
     }
     
     purposeInput?.addEventListener('input', debouncedFetchRecommendations);
@@ -1836,6 +1913,185 @@ document.addEventListener('DOMContentLoaded', function() {
     dateInput?.addEventListener('change', fetchRecommendations);
     startTimeInput?.addEventListener('change', fetchRecommendations);
     endTimeInput?.addEventListener('change', fetchRecommendations);
+    
+    // Function to select a recommendation and auto-fill facility and suggested time
+    // Make it globally accessible for inline onclick handlers
+    window.selectRecommendation = function(facilityId, facilityName) {
+        if (!facilitySel || !startTimeInput || !endTimeInput) return;
+        
+        // Set the facility
+        facilitySel.value = facilityId;
+        filterTimeSlotsByOperatingHours(); // Filter time slots first
+        
+        // Try to set suggested time from recommendations if available
+        if (currentRecommendationsData && currentRecommendationsData.suggested_times && currentRecommendationsData.suggested_times.length > 0) {
+            // Use the first suggested time slot (format: "HH:MM - HH:MM")
+            const suggestedSlot = currentRecommendationsData.suggested_times[0];
+            if (suggestedSlot && suggestedSlot.includes(' - ')) {
+                const [start, end] = suggestedSlot.split(' - ').map(t => t.trim());
+                // Times are already in 24-hour format (e.g., "08:00", "12:00")
+                if (start && end && start.match(/^\d{2}:\d{2}$/) && end.match(/^\d{2}:\d{2}$/)) {
+                    // Set times after filtering is done
+                    setTimeout(() => {
+                        // Check if the times are still available after filtering
+                        const startOpt = startTimeInput.querySelector(`option[value="${start}"]`);
+                        const endOpt = endTimeInput.querySelector(`option[value="${end}"]`);
+                        if (startOpt && !startOpt.disabled && endOpt && !endOpt.disabled) {
+                            startTimeInput.value = start;
+                            endTimeInput.value = end;
+                            startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        } else {
+                            // If suggested time is not available, use first available time
+                            const firstStartOpt = startTimeInput.querySelector('option:not([disabled]):not([value=""])');
+                            if (firstStartOpt) {
+                                startTimeInput.value = firstStartOpt.value;
+                                startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }
+                    }, 150);
+                }
+            }
+        }
+        
+        facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Scroll to facility select to show it's been selected
+        facilitySel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // Show a brief notification
+        const notification = document.createElement('div');
+        notification.style.cssText = 'position:fixed; top:20px; right:20px; background:#0d7a43; color:white; padding:1rem 1.5rem; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:10000; font-size:0.9rem;';
+        notification.textContent = `✓ Selected: ${facilityName}`;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 2000);
+    };
+    
+    // Function to parse operating hours and return start/end times in 24-hour format
+    function parseOperatingHours(operatingHours) {
+        if (!operatingHours || operatingHours.trim() === '') {
+            return { start: 8, end: 21 }; // Default: 8:00 AM - 9:00 PM
+        }
+        
+        const hours = operatingHours.trim();
+        
+        // Try to parse formats like "09:00-16:00" or "9:00-16:00"
+        const match24 = hours.match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+        if (match24) {
+            const startHour = parseInt(match24[1]);
+            const endHour = parseInt(match24[3]);
+            return { start: startHour, end: endHour };
+        }
+        
+        // Try to parse formats like "8:00 AM - 4:00 PM"
+        const match12 = hours.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (match12) {
+            let startHour = parseInt(match12[1]);
+            const startPeriod = match12[3].toUpperCase();
+            let endHour = parseInt(match12[4]);
+            const endPeriod = match12[6].toUpperCase();
+            
+            if (startPeriod === 'PM' && startHour !== 12) startHour += 12;
+            if (startPeriod === 'AM' && startHour === 12) startHour = 0;
+            
+            if (endPeriod === 'PM' && endHour !== 12) endHour += 12;
+            if (endPeriod === 'AM' && endHour === 12) endHour = 0;
+            
+            return { start: startHour, end: endHour };
+        }
+        
+        // Fallback to default
+        return { start: 8, end: 21 };
+    }
+    
+    // Function to filter time slots based on facility operating hours
+    function filterTimeSlotsByOperatingHours() {
+        if (!facilitySel || !startTimeInput || !endTimeInput) return;
+        
+        const selectedOption = facilitySel.options[facilitySel.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            // Reset to default if no facility selected
+            const startOptions = startTimeInput.querySelectorAll('option');
+            const endOptions = endTimeInput.querySelectorAll('option');
+            startOptions.forEach(opt => opt.style.display = '');
+            endOptions.forEach(opt => opt.style.display = '');
+            return;
+        }
+        
+        const operatingHours = selectedOption.getAttribute('data-operating-hours') || '';
+        const { start: openHour, end: closeHour } = parseOperatingHours(operatingHours);
+        
+        // Filter start time options
+        const startOptions = startTimeInput.querySelectorAll('option');
+        startOptions.forEach(opt => {
+            if (opt.value === '') {
+                opt.style.display = '';
+                return;
+            }
+            const [hour, minute] = opt.value.split(':').map(Number);
+            const isWithinHours = hour >= openHour && hour < closeHour;
+            opt.style.display = isWithinHours ? '' : 'none';
+            opt.disabled = !isWithinHours;
+        });
+        
+        // Filter end time options
+        const endOptions = endTimeInput.querySelectorAll('option');
+        endOptions.forEach(opt => {
+            if (opt.value === '') {
+                opt.style.display = '';
+                return;
+            }
+            const [hour, minute] = opt.value.split(':').map(Number);
+            // End time can be at closeHour:00 (inclusive)
+            const isWithinHours = hour >= openHour && hour <= closeHour;
+            opt.style.display = isWithinHours ? '' : 'none';
+            opt.disabled = !isWithinHours;
+        });
+        
+        // Update help text
+        const startHelp = startTimeInput.parentElement.nextElementSibling;
+        const endHelp = endTimeInput.parentElement.nextElementSibling;
+        if (startHelp && startHelp.tagName === 'SMALL') {
+            if (operatingHours) {
+                const { start, end } = parseOperatingHours(operatingHours);
+                const formatHour = (h) => {
+                    const period = h >= 12 ? 'PM' : 'AM';
+                    const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+                    return `${hour12}:00 ${period}`;
+                };
+                startHelp.textContent = `Facility operating hours: ${formatHour(start)} - ${formatHour(end)}`;
+            } else {
+                startHelp.textContent = 'Facility operating hours: 8:00 AM - 9:00 PM';
+            }
+        }
+        
+        // Clear invalid selections
+        const currentStart = startTimeInput.value;
+        if (currentStart) {
+            const [hour, minute] = currentStart.split(':').map(Number);
+            if (hour < openHour || hour >= closeHour) {
+                startTimeInput.value = '';
+            }
+        }
+        
+        const currentEnd = endTimeInput.value;
+        if (currentEnd) {
+            const [hour, minute] = currentEnd.split(':').map(Number);
+            if (hour < openHour || hour > closeHour) {
+                endTimeInput.value = '';
+            }
+        }
+    }
+    
+    // Filter time slots when facility is selected
+    facilitySel?.addEventListener('change', function() {
+        filterTimeSlotsByOperatingHours();
+        checkConflict();
+    });
 
     // Prefill values and trigger change events
     if (preFacility && facilitySel) {
@@ -1845,15 +2101,22 @@ document.addEventListener('DOMContentLoaded', function() {
             // Only prefill if facility is available (not maintenance/offline)
             if (prefilledStatus === 'available') {
                 facilitySel.value = preFacility;
+                filterTimeSlotsByOperatingHours(); // Filter time slots based on operating hours
                 facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
             } else if (prefilledStatus === 'maintenance' || prefilledStatus === 'offline') {
                 // If pre-filled facility is maintenance/offline, show warning modal
                 setTimeout(() => {
                     facilitySel.value = preFacility;
+                    filterTimeSlotsByOperatingHours(); // Filter time slots based on operating hours
                     facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
                 }, 100);
             }
         }
+    }
+    
+    // Also filter on initial page load if facility is already selected
+    if (facilitySel && facilitySel.value) {
+        setTimeout(() => filterTimeSlotsByOperatingHours(), 100);
     }
     if (preDate && dateInput) {
         dateInput.value = preDate;

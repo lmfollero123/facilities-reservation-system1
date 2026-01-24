@@ -4,8 +4,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../../config/app.php';
 
-if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+// RBAC: Audit Trail is Admin-only (full audit logs, security oversight)
+if (!($_SESSION['user_authenticated'] ?? false) || ($_SESSION['role'] ?? '') !== 'Admin') {
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
@@ -98,21 +99,31 @@ ob_start();
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h2 style="margin: 0;">Activity Log</h2>
             <?php if (!empty($entries) || !empty($whereConditions)): ?>
-                <?php
-                // Build export URL with current filters
-                $exportParams = [];
-                if ($filterModule && $filterModule !== 'all') $exportParams['module'] = $filterModule;
-                if ($filterUser && $filterUser !== 'all') $exportParams['user'] = $filterUser;
-                if ($filterDateFrom) $exportParams['date_from'] = $filterDateFrom;
-                if ($filterDateTo) $exportParams['date_to'] = $filterDateTo;
-                $exportUrl = base_path() . '/resources/views/pages/dashboard/export_audit_trail.php?' . http_build_query($exportParams);
-                ?>
-                <a href="<?= htmlspecialchars($exportUrl); ?>" class="btn-primary" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block;">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    Export to CSV
-                </a>
+                <div style="display: flex; gap: 0.75rem;">
+                    <?php
+                    // Build export URL with current filters
+                    $exportParams = [];
+                    if ($filterModule && $filterModule !== 'all') $exportParams['module'] = $filterModule;
+                    if ($filterUser && $filterUser !== 'all') $exportParams['user'] = $filterUser;
+                    if ($filterDateFrom) $exportParams['date_from'] = $filterDateFrom;
+                    if ($filterDateTo) $exportParams['date_to'] = $filterDateTo;
+                    $exportParams['page'] = $page;
+                    $csvUrl = base_path() . '/resources/views/pages/dashboard/export_audit_trail.php?' . http_build_query($exportParams);
+                    $pdfUrl = base_path() . '/dashboard/audit-trail-pdf?' . http_build_query($exportParams);
+                    ?>
+                    <a href="<?= htmlspecialchars($csvUrl); ?>" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export CSV
+                    </a>
+                    <a href="<?= htmlspecialchars($pdfUrl); ?>" target="_blank" class="btn-primary" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        Export PDF
+                    </a>
+                </div>
             <?php endif; ?>
         </div>
         

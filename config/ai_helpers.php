@@ -454,6 +454,39 @@ function recommendFacilities($purpose = null, $expectedAttendance = null, $requi
 }
 
 /**
+ * Get suggested time slots for a purpose (e.g. zumba → morning/evening).
+ * Used by AI recommendations to show "Great times for X: ..." and optionally boost scoring.
+ *
+ * @param string $purpose Event purpose
+ * @return array { 'slots': string[], 'label': string }
+ */
+function getSuggestedTimesForPurpose($purpose) {
+    $p = strtolower($purpose);
+    $slots = [];
+    $label = '';
+    if (preg_match('/zumba|aerobic|fitness|exercise|workout|gym|dance|dancing|physical\s+activity/i', $p)) {
+        $slots = ['06:00 - 08:00', '17:00 - 19:00'];
+        $label = 'Great for Zumba/fitness: 6–8 AM, 5–7 PM';
+    } elseif (preg_match('/meeting|conference|assembly|seminar|workshop|training|forum/i', $p)) {
+        $slots = ['09:00 - 12:00', '14:00 - 17:00'];
+        $label = 'Great for meetings: 9 AM–12 PM, 2–5 PM';
+    } elseif (preg_match('/sport|game|tournament|basketball|volleyball|athletic/i', $p)) {
+        $slots = ['08:00 - 12:00', '14:00 - 18:00'];
+        $label = 'Great for sports: 8 AM–12 PM, 2–6 PM';
+    } elseif (preg_match('/celebration|party|fiesta|wedding|anniversary|birthday/i', $p)) {
+        $slots = ['10:00 - 14:00', '18:00 - 22:00'];
+        $label = 'Great for celebrations: 10 AM–2 PM, 6–10 PM';
+    } elseif (preg_match('/religious|mass|prayer|worship/i', $p)) {
+        $slots = ['06:00 - 09:00', '17:00 - 20:00'];
+        $label = 'Great for religious events: 6–9 AM, 5–8 PM';
+    } else {
+        $slots = ['08:00 - 12:00', '14:00 - 18:00'];
+        $label = 'Popular times: 8 AM–12 PM, 2–6 PM';
+    }
+    return ['slots' => $slots, 'label' => $label];
+}
+
+/**
  * Match expected attendance with facility capacity
  * 
  * @param string $expectedAttendance Expected attendance (e.g., "100 persons", "50 people")

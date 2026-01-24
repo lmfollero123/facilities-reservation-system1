@@ -40,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $pdo = db();
                     
-                    // Check account record (including enable_otp preference)
-                    $stmt = $pdo->prepare("SELECT *, COALESCE(enable_otp, 1) as enable_otp FROM users WHERE email = ?");
+                    // Check account record (including enable_otp and totp_enabled preferences)
+                    $stmt = $pdo->prepare("SELECT *, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled FROM users WHERE email = ?");
                     $stmt->execute([$email]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
@@ -73,9 +73,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
                                 // Successful password check -> check OTP preference
+                                // Require OTP if email OTP is enabled OR Google Authenticator is enabled
                                 $enableOtp = (bool)($user['enable_otp'] ?? true); // Default to enabled for security
+                                $totpEnabled = (bool)($user['totp_enabled'] ?? false);
+                                $requiresOtp = $enableOtp || $totpEnabled;
                                 
-                                if ($enableOtp) {
+                                if ($requiresOtp) {
                                     // OTP is enabled -> proceed to OTP
                                     $otp = random_int(100000, 999999);
                                     $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
@@ -89,9 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
                                     $logStmt->execute([$email, getClientIP()]);
 
-                                    // Send OTP email
-                                    $otpBody = "<p>Hi " . htmlspecialchars($user['name']) . ",</p><p>Your one-time passcode is <strong>$otp</strong>.</p><p>This code expires in 10 minutes.</p>";
-                                    sendEmail($user['email'], $user['name'], 'Your login OTP', $otpBody);
+                                    // Send OTP email only if email OTP is enabled
+                                    if ($enableOtp) {
+                                        require_once __DIR__ . '/../../../../config/email_templates.php';
+                                        $otpBody = getOTPEmailTemplate($user['name'], $otp, 10);
+                                        sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
+                                    }
 
                                     // Save pending OTP session
                                     session_regenerate_id(true);
@@ -106,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     header('Location: ' . base_path() . '/resources/views/pages/auth/login_otp.php');
                                     exit;
                                 } else {
-                                    // OTP is disabled -> log in directly
+                                    // Both email OTP and Google Authenticator are disabled -> log in directly
                                     $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_ip = ? WHERE id = ?");
                                     $updateStmt->execute([getClientIP(), $user['id']]);
 
@@ -149,13 +155,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     logSecurityEvent('account_locked', "Account locked due to failed attempts: $email", 'warning');
                                     // Send lock notification email (one-time per lock event)
                                     try {
-                                        $body = "<p>Hi " . htmlspecialchars($user['name']) . ",</p>"
-                                              . "<p>Your account has been temporarily locked because of multiple failed login attempts.</p>"
-                                              . "<p>Lock duration: 30 minutes.<br>"
-                                              . "If this wasn't you, please reset your password or contact support.</p>"
-                                              . "<p>Reason: $lockReason</p>"
-                                              . "<p>Need help? Reply to this email or visit the contact page.</p>";
-                                        sendEmail($user['email'], $user['name'], 'Your account has been locked', $body);
+                                        require_once __DIR__ . '/../../../../config/email_templates.php';
+                                        $body = getAccountLockedFailedLoginEmailTemplate($user['name'], 30);
+                                        sendEmail($user['email'], $user['name'], 'Account Temporarily Locked', $body);
                                     } catch (Exception $e) {
                                         // ignore email failures here
                                     }

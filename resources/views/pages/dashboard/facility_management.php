@@ -35,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $autoApprove = isset($_POST['auto_approve']) && $_POST['auto_approve'] === '1';
     $capacityThreshold = !empty($_POST['capacity_threshold']) ? (int)$_POST['capacity_threshold'] : null;
     $maxDurationHours = !empty($_POST['max_duration_hours']) ? (float)$_POST['max_duration_hours'] : null;
+    $operatingHours = trim($_POST['operating_hours'] ?? '');
 
     // Handle image upload (optional) with enhanced security
     $imagePath = null;
@@ -101,8 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ? WHERE id = ?');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $facilityId]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ? WHERE id = ?');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $facilityId]);
                 
                 // Log audit event
                 $details = $name;
@@ -154,8 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours]);
+                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null]);
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
@@ -177,7 +178,7 @@ $offset = ($page - 1) * $perPage;
 $totalFacilities = (int)$pdo->query('SELECT COUNT(*) FROM facilities')->fetchColumn();
 $totalPages = max(1, (int)ceil($totalFacilities / $perPage));
 
-$facilitiesStmt = $pdo->prepare('SELECT *, latitude, longitude FROM facilities ORDER BY updated_at DESC LIMIT :limit OFFSET :offset');
+$facilitiesStmt = $pdo->prepare('SELECT *, latitude, longitude, operating_hours FROM facilities ORDER BY updated_at DESC LIMIT :limit OFFSET :offset');
 $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
@@ -321,6 +322,7 @@ ob_start();
                             <input type="text" name="location" id="form-location" placeholder="e.g., Barangay Culiat, Quezon City">
                         </div>
                         <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Full address for location-based recommendations</small>
+                        <div id="facility-geocode-status" style="margin-top:0.25rem; display:none; font-size:0.85rem;"></div>
                     </label>
                     <label>
                         Latitude (Optional)
@@ -328,7 +330,7 @@ ob_start();
                             <span class="input-icon">🌐</span>
                             <input type="number" step="any" name="latitude" id="form-latitude" placeholder="14.6760">
                         </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled when you enter an address</small>
                     </label>
                     <label>
                         Longitude (Optional)
@@ -336,7 +338,7 @@ ob_start();
                             <span class="input-icon">🌐</span>
                             <input type="number" step="any" name="longitude" id="form-longitude" placeholder="121.0437">
                         </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled if Google Maps API is configured</small>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled when you enter an address</small>
                     </label>
                     <label>
                         Capacity
@@ -375,6 +377,16 @@ ob_start();
                                 <option value="offline">Offline</option>
                             </select>
                         </div>
+                    </label>
+                    <label>
+                        Operating Hours
+                        <div class="input-wrapper">
+                            <span class="input-icon">🕐</span>
+                            <input type="text" name="operating_hours" id="form-operating-hours" placeholder="e.g., 09:00-16:00 or 8:00 AM - 4:00 PM">
+                        </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                            Facility operating hours. Format: HH:MM-HH:MM (24-hour) or HH:MM AM/PM - HH:MM AM/PM. Example: "09:00-16:00" or "8:00 AM - 4:00 PM". Leave blank for default (8:00 AM - 9:00 PM).
+                        </small>
                     </label>
 
                     <!-- Auto-Approval Settings as Collapsible Section -->
@@ -500,6 +512,7 @@ function editFacility(payload) {
     document.getElementById('form-rules').value = facility.rules || '';
     document.getElementById('form-image-citation').value = facility.image_citation || '';
     document.getElementById('form-status').value = facility.status || 'available';
+    document.getElementById('form-operating-hours').value = facility.operating_hours || '';
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
@@ -522,6 +535,7 @@ function resetFacilityForm() {
     document.getElementById('form-rules').value = '';
     document.getElementById('form-image-citation').value = '';
     document.getElementById('form-status').value = 'available';
+    document.getElementById('form-operating-hours').value = '';
     document.getElementById('form-auto-approve').checked = false;
     document.getElementById('form-capacity-threshold').value = '';
     document.getElementById('form-max-duration').value = '';
@@ -614,6 +628,60 @@ function resetFacilityForm() {
     
     // Fallback initialization
     setTimeout(initCollapsibles, 300);
+})();
+
+// Geocoding for facility address
+(function() {
+    const base = (typeof window !== 'undefined' && window.APP_BASE_PATH) ? window.APP_BASE_PATH : '';
+    const addressEl = document.getElementById('form-location');
+    const latEl = document.getElementById('form-latitude');
+    const lngEl = document.getElementById('form-longitude');
+    const statusEl = document.getElementById('facility-geocode-status');
+    if (!addressEl || !latEl || !lngEl) return;
+
+    let geocodeTimer = null;
+    function showGeocodeStatus(msg, isError) {
+        if (!statusEl) return;
+        statusEl.textContent = msg;
+        statusEl.style.display = msg ? 'block' : 'none';
+        statusEl.style.color = isError ? '#c00' : '#0d7a43';
+    }
+
+    function fetchGeocode() {
+        const addr = (addressEl.value || '').trim();
+        if (addr.length < 5) {
+            showGeocodeStatus('', false);
+            return;
+        }
+        showGeocodeStatus('Looking up coordinates…', false);
+        const form = new URLSearchParams();
+        form.append('address', addr);
+        fetch(base + '/resources/views/pages/dashboard/geocode_api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: form
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.lat != null && data.lng != null) {
+                    latEl.value = data.lat;
+                    lngEl.value = data.lng;
+                    showGeocodeStatus('✓ Coordinates updated from address', false);
+                    setTimeout(function() { showGeocodeStatus('', false); }, 3000);
+                } else {
+                    showGeocodeStatus(data.error || 'Could not find coordinates for this address', true);
+                }
+            })
+            .catch(function() {
+                showGeocodeStatus('Geocoding unavailable. Enter coordinates manually.', true);
+            });
+    }
+
+    addressEl.addEventListener('blur', fetchGeocode);
+    addressEl.addEventListener('input', function() {
+        if (geocodeTimer) clearTimeout(geocodeTimer);
+        geocodeTimer = setTimeout(fetchGeocode, 800);
+    });
 })();
 </script>
 <?php
