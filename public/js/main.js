@@ -1,11 +1,25 @@
 // ============================================
-// THEME TOGGLE - Dark/Light Mode
+// THEME TOGGLE - Dark/Light Mode (Dashboard Only)
 // ============================================
 (function () {
-    // Apply saved theme immediately (before DOM loads) to prevent flash
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    if (savedTheme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
+    // Only apply dark mode on dashboard pages, not public pages
+    // Check if we're on a dashboard page by looking for dashboard-specific elements
+    const isDashboardPage = document.querySelector('.dashboard-layout') ||
+        document.querySelector('.sidebar') ||
+        document.querySelector('.dashboard-header');
+
+    if (isDashboardPage) {
+        // Apply saved theme immediately (before DOM loads) to prevent flash
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    } else {
+        // On public pages, always use light mode and remove any dark theme
+        document.documentElement.removeAttribute('data-theme');
+        // Clear the theme from localStorage if on public page to reset
+        // (Optional: comment out if you want to preserve user's dashboard preference)
+        // localStorage.removeItem('theme');
     }
 })();
 

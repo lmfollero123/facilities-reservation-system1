@@ -10,8 +10,8 @@ return [
     'smtp_enabled' => true,
     'host' => 'smtp.gmail.com',
     'port' => 587,
-    'username' => 'follero.luismiguel.noora@gmail.com',
-    'password' => 'ryjy cydm mkky crkg',
+    'username' => 'lgufacilitiesreservationsystem@gmail.com',
+    'password' => 'qcom gfse lybh lrxi',
     'encryption' => 'tls',
 ];
 

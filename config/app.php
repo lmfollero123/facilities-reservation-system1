@@ -12,6 +12,9 @@ setSecurityHeaders();
 // Secure session
 secureSession();
 
+// Set timezone to Philippines (Asia/Manila - UTC+8)
+date_default_timezone_set('Asia/Manila');
+
 if (!function_exists('base_path')) {
     /**
      * Returns the base path of the app relative to the web root.

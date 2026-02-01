@@ -247,28 +247,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-$perPage = 5;
+// Get filter parameters from URL
+$statusFilter = $_GET['status'] ?? '';
+$dateFilter = $_GET['date_range'] ?? '';
+$searchQuery = $_GET['search'] ?? '';
+$dateFrom = $_GET['date_from'] ?? '';
+$dateTo = $_GET['date_to'] ?? '';
+
+// Pagination settings - 6 cards per page for grid layout
+$perPage = 6;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 $reservations = [];
 $totalRows = 0;
 
 if ($userId) {
-    $countStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE user_id = :user_id');
-    $countStmt->execute(['user_id' => $userId]);
+    // Build WHERE clause with filters
+    $whereConditions = ['r.user_id = :user_id'];
+    $params = ['user_id' => $userId];
+    
+    // Status filter
+    if ($statusFilter && in_array($statusFilter, ['pending', 'approved', 'denied', 'cancelled', 'on_hold', 'postponed'])) {
+        $whereConditions[] = 'r.status = :status';
+        $params['status'] = $statusFilter;
+    }
+    
+    // Search filter
+    if ($searchQuery) {
+        $whereConditions[] = 'f.name LIKE :search';
+        $params['search'] = '%' . $searchQuery . '%';
+    }
+    
+    // Date range filter
+    $today = date('Y-m-d');
+    if ($dateFilter === 'upcoming') {
+        $whereConditions[] = 'r.reservation_date >= :today';
+        $params['today'] = $today;
+    } elseif ($dateFilter === 'past') {
+        $whereConditions[] = 'r.reservation_date < :today';
+        $params['today'] = $today;
+    } elseif ($dateFilter === 'custom' && $dateFrom && $dateTo) {
+        $whereConditions[] = 'r.reservation_date BETWEEN :date_from AND :date_to';
+        $params['date_from'] = $dateFrom;
+        $params['date_to'] = $dateTo;
+    }
+    
+    $whereClause = implode(' AND ', $whereConditions);
+    
+    // Count total matching reservations
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM reservations r JOIN facilities f ON r.facility_id = f.id WHERE $whereClause");
+    $countStmt->execute($params);
     $totalRows = (int)$countStmt->fetchColumn();
-
+    
+    // Get paginated reservations
     $stmt = $pdo->prepare(
-        'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.reschedule_count, f.name AS facility_name, f.status AS facility_status
+        "SELECT r.id, r.reservation_date, r.time_slot, r.status, r.reschedule_count, f.name AS facility_name, f.status AS facility_status
          FROM reservations r
          JOIN facilities f ON r.facility_id = f.id
-         WHERE r.user_id = :user_id
+         WHERE $whereClause
          ORDER BY r.reservation_date DESC, r.created_at DESC
-         LIMIT :limit OFFSET :offset'
+         LIMIT :limit OFFSET :offset"
     );
+    
+    foreach ($params as $key => $value) {
+        $stmt->bindValue(":$key", $value);
+    }
     $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
     $stmt->execute();
     $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -292,167 +337,258 @@ ob_start();
 <?php endif; ?>
 
 <!-- Filters Section -->
-<div class="filters-container">
+<form method="GET" class="filters-container" id="filtersForm">
     <div class="filters-row">
         <!-- Search Bar -->
         <div class="filter-item search-filter">
             <label for="searchInput">Search Facility</label>
-            <input type="text" id="searchInput" placeholder="Search by facility name...">
+            <input type="text" name="search" id="searchInput" placeholder="Search by facility name..." value="<?= htmlspecialchars($searchQuery); ?>">
         </div>
         
         <!-- Status Filter -->
         <div class="filter-item">
             <label for="statusFilter">Status</label>
-            <select id="statusFilter">
+            <select name="status" id="statusFilter">
                 <option value="">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="denied">Denied</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="on_hold">On Hold</option>
-                <option value="postponed">Postponed</option>
+                <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                <option value="denied" <?= $statusFilter === 'denied' ? 'selected' : ''; ?>>Denied</option>
+                <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                <option value="on_hold" <?= $statusFilter === 'on_hold' ? 'selected' : ''; ?>>On Hold</option>
+                <option value="postponed" <?= $statusFilter === 'postponed' ? 'selected' : ''; ?>>Postponed</option>
             </select>
         </div>
         
         <!-- Date Filter -->
         <div class="filter-item">
             <label for="dateFilter">Date Range</label>
-            <select id="dateFilter">
+            <select name="date_range" id="dateFilter">
                 <option value="">All Dates</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="past">Past</option>
-                <option value="custom">Custom Range</option>
+                <option value="upcoming" <?= $dateFilter === 'upcoming' ? 'selected' : ''; ?>>Upcoming</option>
+                <option value="past" <?= $dateFilter === 'past' ? 'selected' : ''; ?>>Past</option>
+                <option value="custom" <?= $dateFilter === 'custom' ? 'selected' : ''; ?>>Custom Range</option>
             </select>
         </div>
         
-        <!-- Clear Filters Button -->
+        <!-- Filter Actions -->
         <div class="filter-item filter-actions">
-            <button type="button" class="btn-outline" id="clearFilters">
-                Clear Filters
+            <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">
+                Apply Filters
             </button>
+            <a href="?" class="btn-outline" id="clearFilters" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-block;">
+                Clear Filters
+            </a>
         </div>
     </div>
     
     <!-- Custom Date Range (hidden by default) -->
-    <div class="custom-date-range" id="customDateRange" style="display: none;">
+    <div class="custom-date-range" id="customDateRange" style="display: <?= $dateFilter === 'custom' ? 'grid' : 'none'; ?>;">
         <div class="filter-item">
             <label for="dateFrom">From</label>
-            <input type="date" id="dateFrom">
+            <input type="date" name="date_from" id="dateFrom" value="<?= htmlspecialchars($dateFrom); ?>">
         </div>
         <div class="filter-item">
             <label for="dateTo">To</label>
-            <input type="date" id="dateTo">
+            <input type="date" name="date_to" id="dateTo" value="<?= htmlspecialchars($dateTo); ?>">
         </div>
     </div>
     
     <!-- Results Count -->
     <div class="filter-results">
-        <span id="resultsCount">Showing all reservations</span>
+        <span id="resultsCount">
+            <?php if ($totalRows > 0): ?>
+                Showing <?= count($reservations); ?> of <?= $totalRows; ?> reservation<?= $totalRows !== 1 ? 's' : ''; ?>
+                <?php if ($statusFilter || $searchQuery || $dateFilter): ?>
+                    (filtered)
+                <?php endif; ?>
+            <?php else: ?>
+                No reservations found
+            <?php endif; ?>
+        </span>
     </div>
-</div>
+</form>
 
 <?php if (empty($reservations)): ?>
-    <p>You have not submitted any reservations yet.</p>
+    <div style="text-align: center; padding: 4rem 2rem; background: var(--bg-secondary); border-radius: 12px; border: 2px dashed var(--border-color);">
+        <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;">📋</div>
+        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-primary);">No Reservations Yet</h2>
+        <p style="font-size: 1.125rem; color: var(--text-secondary); margin-bottom: 2rem;">You haven't submitted any facility reservations.</p>
+        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="btn-primary" style="padding: 1rem 2rem; font-size: 1.125rem; display: inline-block; text-decoration: none;">
+            Book a Facility
+        </a>
+    </div>
 <?php else: ?>
-    <?php foreach ($reservations as $reservation): ?>
-        <?php
-        $historyStmt = $pdo->prepare(
-            'SELECT status, note, created_at FROM reservation_history WHERE reservation_id = :id ORDER BY created_at DESC'
-        );
-        $historyStmt->execute(['id' => $reservation['id']]);
-        $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Check if reschedule is allowed
-        $reservationDate = new DateTime($reservation['reservation_date']);
-        $today = new DateTime('today');
-        $currentDate = date('Y-m-d');
-        $currentHour = (int)date('H');
-        $daysUntil = $today->diff($reservationDate)->days;
-        $rescheduleCount = (int)($reservation['reschedule_count'] ?? 0);
-        
-        // Check if reservation has started (ongoing)
-        $isOngoing = false;
-        if ($reservation['reservation_date'] < $currentDate) {
-            $isOngoing = true;
-        } elseif ($reservation['reservation_date'] === $currentDate) {
-            if (strpos($reservation['time_slot'], 'Morning') !== false && $currentHour >= 12) {
+    <!-- Reservation Cards - Elderly-Friendly Design -->
+    <div class="reservations-grid">
+        <?php foreach ($reservations as $reservation): ?>
+            <?php
+            $historyStmt = $pdo->prepare(
+                'SELECT status, note, created_at FROM reservation_history WHERE reservation_id = :id ORDER BY created_at DESC'
+            );
+            $historyStmt->execute(['id' => $reservation['id']]);
+            $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Check if reschedule is allowed
+            $reservationDate = new DateTime($reservation['reservation_date']);
+            $today = new DateTime('today');
+            $currentDate = date('Y-m-d');
+            $currentHour = (int)date('H');
+            $daysUntil = $today->diff($reservationDate)->days;
+            $rescheduleCount = (int)($reservation['reschedule_count'] ?? 0);
+            
+            // Check if reservation has started (ongoing)
+            $isOngoing = false;
+            if ($reservation['reservation_date'] < $currentDate) {
                 $isOngoing = true;
-            } elseif (strpos($reservation['time_slot'], 'Afternoon') !== false && $currentHour >= 17) {
-                $isOngoing = true;
-            } elseif (strpos($reservation['time_slot'], 'Evening') !== false && $currentHour >= 21) {
-                $isOngoing = true;
+            } elseif ($reservation['reservation_date'] === $currentDate) {
+                if (strpos($reservation['time_slot'], 'Morning') !== false && $currentHour >= 12) {
+                    $isOngoing = true;
+                } elseif (strpos($reservation['time_slot'], 'Afternoon') !== false && $currentHour >= 17) {
+                    $isOngoing = true;
+                } elseif (strpos($reservation['time_slot'], 'Evening') !== false && $currentHour >= 21) {
+                    $isOngoing = true;
+                }
             }
-        }
-        
-        $canReschedule = ($daysUntil >= 3) && $rescheduleCount < 1 && in_array($reservation['status'], ['pending', 'approved']) && !$isOngoing && ($reservation['facility_status'] ?? 'available') === 'available';
-        ?>
-        <article class="facility-card-admin" style="margin-bottom:1rem;">
-            <header>
-                <div>
-                    <h3><?= htmlspecialchars($reservation['facility_name']); ?></h3>
-                    <small><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></small>
+            
+            $canReschedule = ($daysUntil >= 3) && $rescheduleCount < 1 && in_array($reservation['status'], ['pending', 'approved']) && !$isOngoing && ($reservation['facility_status'] ?? 'available') === 'available';
+            
+            // Status icon and color
+            $statusIcons = [
+                'pending' => '⏳',
+                'approved' => '✅',
+                'denied' => '❌',
+                'cancelled' => '🚫',
+                'on_hold' => '⏸️',
+                'postponed' => '📅'
+            ];
+            $statusIcon = $statusIcons[$reservation['status']] ?? '📋';
+            ?>
+            
+            <article class="reservation-card-modern facility-card-admin" data-reservation-id="<?= $reservation['id']; ?>">
+                <!-- Card Header -->
+                <div class="reservation-card-header">
+                    <div class="reservation-main-info">
+                        <div class="facility-icon">📍</div>
+                        <div class="facility-details">
+                            <h3 class="facility-name-large"><?= htmlspecialchars($reservation['facility_name']); ?></h3>
+                            <div class="reservation-datetime">
+                                <span class="date-info">📅 <?= date('F j, Y', strtotime($reservation['reservation_date'])); ?></span>
+                                <span class="time-info">🕐 <?= htmlspecialchars($reservation['time_slot']); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-badge-large status-badge <?= $reservation['status']; ?>">
+                        <span class="status-icon"><?= $statusIcon; ?></span>
+                        <span class="status-text"><?= ucfirst(str_replace('_', ' ', $reservation['status'])); ?></span>
+                    </div>
                 </div>
-                <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
-            </header>
-            <?php if ($canReschedule): ?>
-                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-                    <button class="btn-outline" onclick="openRescheduleModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')" style="padding:0.5rem 1rem;">
-                        Reschedule
-                    </button>
-                </div>
-            <?php elseif ($isOngoing && in_array($reservation['status'], ['pending', 'approved'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
-                    <small style="color: #721c24;">This reservation has already started and cannot be rescheduled.</small>
-                </div>
-            <?php elseif (!in_array($reservation['status'], ['pending', 'approved'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
-                    <small style="color: #721c24;">
-                        <?php if ($reservation['status'] === 'denied'): ?>
-                            Rejected reservations cannot be rescheduled. Please create a new reservation request.
-                        <?php elseif ($reservation['status'] === 'cancelled'): ?>
-                            Cancelled reservations cannot be rescheduled. Please create a new reservation request.
+                
+                <!-- Expandable Details Section -->
+                <details class="reservation-details-section">
+                    <summary class="details-toggle">
+                        <span class="toggle-text">View Details</span>
+                        <span class="toggle-icon">▼</span>
+                    </summary>
+                    
+                    <div class="details-content">
+                        <?php if ($history): ?>
+                            <div class="timeline-section">
+                                <h4 class="section-title">📜 Status History</h4>
+                                <ul class="timeline-modern">
+                                    <?php foreach ($history as $entry): ?>
+                                        <li class="timeline-item">
+                                            <div class="timeline-marker"></div>
+                                            <div class="timeline-content">
+                                                <strong class="timeline-status"><?= ucfirst($entry['status']); ?></strong>
+                                                <p class="timeline-note"><?= $entry['note'] ? htmlspecialchars($entry['note']) : 'No remarks provided.'; ?></p>
+                                                <small class="timeline-date"><?= date('M d, Y g:i A', strtotime($entry['created_at'])); ?></small>
+                                            </div>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
                         <?php else: ?>
-                            This reservation cannot be rescheduled due to its current status.
+                            <p class="no-history">No status updates recorded yet.</p>
                         <?php endif; ?>
-                    </small>
+                    </div>
+                </details>
+                
+                <!-- Action Buttons Section -->
+                <div class="reservation-actions">
+                    <?php if ($canReschedule): ?>
+                        <button class="btn-action btn-primary-large" onclick="openRescheduleModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')">
+                            <span class="btn-icon">📅</span>
+                            <span class="btn-text">Reschedule Reservation</span>
+                        </button>
+                    <?php elseif ($isOngoing && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                        <div class="info-message info-error">
+                            <span class="info-icon">⚠️</span>
+                            <span class="info-text">This reservation has already started and cannot be rescheduled.</span>
+                        </div>
+                    <?php elseif (!in_array($reservation['status'], ['pending', 'approved'])): ?>
+                        <div class="info-message info-error">
+                            <span class="info-icon">ℹ️</span>
+                            <span class="info-text">
+                                <?php if ($reservation['status'] === 'denied'): ?>
+                                    Rejected reservations cannot be rescheduled. Please create a new reservation request.
+                                <?php elseif ($reservation['status'] === 'cancelled'): ?>
+                                    Cancelled reservations cannot be rescheduled. Please create a new reservation request.
+                                <?php else: ?>
+                                    This reservation cannot be rescheduled due to its current status.
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                    <?php elseif (($reservation['reschedule_count'] ?? 0) >= 1): ?>
+                        <div class="info-message info-warning">
+                            <span class="info-icon">⚠️</span>
+                            <span class="info-text">This reservation has already been rescheduled once. Only one reschedule is allowed per reservation.</span>
+                        </div>
+                    <?php elseif ($daysUntil < 3 && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                        <div class="info-message info-warning">
+                            <span class="info-icon">⏰</span>
+                            <span class="info-text">Rescheduling is only allowed up to 3 days before the event. (<?= $daysUntil; ?> day(s) remaining)</span>
+                        </div>
+                    <?php elseif (($reservation['facility_status'] ?? 'available') !== 'available' && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                        <div class="info-message info-warning">
+                            <span class="info-icon">🔧</span>
+                            <span class="info-text">The facility is currently <?= htmlspecialchars($reservation['facility_status']); ?> and rescheduling is not available. Please contact support.</span>
+                        </div>
+                    <?php endif; ?>
                 </div>
-            <?php elseif (($reservation['reschedule_count'] ?? 0) >= 1): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
-                    <small style="color: #856404;">This reservation has already been rescheduled once. Only one reschedule is allowed per reservation.</small>
-                </div>
-            <?php elseif ($daysUntil < 3 && in_array($reservation['status'], ['pending', 'approved'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
-                    <small style="color: #856404;">Rescheduling is only allowed up to 3 days before the event. (<?= $daysUntil; ?> day(s) remaining)</small>
-                </div>
-            <?php elseif (($reservation['facility_status'] ?? 'available') !== 'available' && in_array($reservation['status'], ['pending', 'approved'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
-                    <small style="color: #856404;">The facility is currently <?= htmlspecialchars($reservation['facility_status']); ?> and rescheduling is not available. Please contact support.</small>
-                </div>
-            <?php endif; ?>
-            <?php if ($history): ?>
-                <ul class="timeline">
-                    <?php foreach ($history as $entry): ?>
-                        <li>
-                            <strong><?= ucfirst($entry['status']); ?></strong>
-                            <p style="margin:0;"><?= $entry['note'] ? htmlspecialchars($entry['note']) : 'No remarks.'; ?></p>
-                            <small style="color:#8b95b5;"><?= htmlspecialchars($entry['created_at']); ?></small>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php else: ?>
-                <p>No status updates recorded yet.</p>
-            <?php endif; ?>
-        </article>
-    <?php endforeach; ?>
-
+            </article>
+        <?php endforeach; ?>
+    </div>
+    
+    <!-- Pagination -->
     <?php if ($totalPages > 1): ?>
-        <div class="pagination">
+        <?php
+        // Build query string for pagination links
+        $queryParams = [];
+        if ($statusFilter) $queryParams['status'] = $statusFilter;
+        if ($searchQuery) $queryParams['search'] = $searchQuery;
+        if ($dateFilter) $queryParams['date_range'] = $dateFilter;
+        if ($dateFrom) $queryParams['date_from'] = $dateFrom;
+        if ($dateTo) $queryParams['date_to'] = $dateTo;
+        $queryString = http_build_query($queryParams);
+        $separator = $queryString ? '&' : '';
+        ?>
+        <div class="pagination-modern">
             <?php if ($page > 1): ?>
-                <a href="?page=<?= $page - 1; ?>">&larr; Prev</a>
+                <a href="?<?= $queryString . $separator; ?>page=<?= $page - 1; ?>" class="pagination-btn pagination-prev">
+                    <span class="pagination-icon">←</span>
+                    <span class="pagination-text">Previous</span>
+                </a>
             <?php endif; ?>
-            <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
+            
+            <span class="pagination-info">
+                Page <strong><?= $page; ?></strong> of <strong><?= $totalPages; ?></strong>
+            </span>
+            
             <?php if ($page < $totalPages): ?>
-                <a href="?page=<?= $page + 1; ?>">Next &rarr;</a>
+                <a href="?<?= $queryString . $separator; ?>page=<?= $page + 1; ?>" class="pagination-btn pagination-next">
+                    <span class="pagination-text">Next</span>
+                    <span class="pagination-icon">→</span>
+                </a>
             <?php endif; ?>
         </div>
     <?php endif; ?>
@@ -516,18 +652,10 @@ ob_start();
 </div>
 
 <script>
-// Filter and Search Functionality
+// Custom Date Range Toggle
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const statusFilter = document.getElementById('statusFilter');
     const dateFilter = document.getElementById('dateFilter');
-    const dateFrom = document.getElementById('dateFrom');
-    const dateTo = document.getElementById('dateTo');
     const customDateRange = document.getElementById('customDateRange');
-    const clearFilters = document.getElementById('clearFilters');
-    const resultsCount = document.getElementById('resultsCount');
-    
-    const reservationCards = document.querySelectorAll('.facility-card-admin');
     
     // Show/hide custom date range
     if (dateFilter) {
@@ -537,102 +665,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 customDateRange.style.display = 'none';
             }
-            applyFilters();
         });
-    }
-    
-    // Apply filters on input
-    if (searchInput) searchInput.addEventListener('input', applyFilters);
-    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-    if (dateFrom) dateFrom.addEventListener('change', applyFilters);
-    if (dateTo) dateTo.addEventListener('change', applyFilters);
-    
-    // Clear all filters
-    if (clearFilters) {
-        clearFilters.addEventListener('click', function() {
-            if (searchInput) searchInput.value = '';
-            if (statusFilter) statusFilter.value = '';
-            if (dateFilter) dateFilter.value = '';
-            if (dateFrom) dateFrom.value = '';
-            if (dateTo) dateTo.value = '';
-            if (customDateRange) customDateRange.style.display = 'none';
-            applyFilters();
-        });
-    }
-    
-    function applyFilters() {
-        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        const selectedStatus = statusFilter ? statusFilter.value.toLowerCase() : '';
-        const selectedDateFilter = dateFilter ? dateFilter.value : '';
-        const fromDate = dateFrom && dateFrom.value ? new Date(dateFrom.value) : null;
-        const toDate = dateTo && dateTo.value ? new Date(dateTo.value) : null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        let visibleCount = 0;
-        
-        reservationCards.forEach(card => {
-            let show = true;
-            
-            // Search filter
-            if (searchTerm) {
-                const facilityNameEl = card.querySelector('h3');
-                if (facilityNameEl) {
-                    const facilityName = facilityNameEl.textContent.toLowerCase();
-                    if (!facilityName.includes(searchTerm)) {
-                        show = false;
-                    }
-                }
-            }
-            
-            // Status filter
-            if (selectedStatus) {
-                const statusBadge = card.querySelector('.status-badge');
-                if (statusBadge) {
-                    const cardStatus = statusBadge.className.split(' ').find(c => c !== 'status-badge');
-                    if (cardStatus && cardStatus.toLowerCase() !== selectedStatus) {
-                        show = false;
-                    }
-                }
-            }
-            
-            // Date filter
-            if (selectedDateFilter) {
-                const smallEl = card.querySelector('small');
-                if (smallEl) {
-                    const dateText = smallEl.textContent.split('•')[0].trim();
-                    const reservationDate = new Date(dateText);
-                    
-                    if (selectedDateFilter === 'upcoming') {
-                        if (reservationDate < today) show = false;
-                    } else if (selectedDateFilter === 'past') {
-                        if (reservationDate >= today) show = false;
-                    } else if (selectedDateFilter === 'custom') {
-                        if (fromDate && reservationDate < fromDate) show = false;
-                        if (toDate && reservationDate > toDate) show = false;
-                    }
-                }
-            }
-            
-            // Show/hide card
-            card.style.display = show ? 'block' : 'none';
-            if (show) visibleCount++;
-        });
-        
-        // Update results count
-        const totalCount = reservationCards.length;
-        if (resultsCount) {
-            if (visibleCount === totalCount) {
-                resultsCount.textContent = `Showing all ${totalCount} reservation${totalCount !== 1 ? 's' : ''}`;
-            } else {
-                resultsCount.textContent = `Showing ${visibleCount} of ${totalCount} reservation${totalCount !== 1 ? 's' : ''}`;
-            }
-        }
-    }
-    
-    // Initial count
-    if (resultsCount && reservationCards.length > 0) {
-        resultsCount.textContent = `Showing all ${reservationCards.length} reservation${reservationCards.length !== 1 ? 's' : ''}`;
     }
 });
 
