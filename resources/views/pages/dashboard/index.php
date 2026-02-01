@@ -400,9 +400,15 @@ function buildFilterUrl($basePath, $page, $statusFilter, $facilityFilter, $start
 $unreadNotifications = getUnreadNotificationCount($userId);
 
 // Check if user is verified
-$userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+// Note: Staff and Admin are automatically considered verified
+$userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
 $userVerificationStmt->execute(['user_id' => $userId]);
-$isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+$userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
+$isVerified = (bool)($userVerificationData['is_verified'] ?? false);
+$userRole = $userVerificationData['role'] ?? 'Resident';
+
+// Staff and Admin are automatically verified (no ID upload required)
+$isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
 
 // Get recent activity with pagination
 $perPage = 10;

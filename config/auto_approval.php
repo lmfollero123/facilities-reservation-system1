@@ -241,18 +241,26 @@ function evaluateAutoApproval(
     }
     
     // Condition 7.5: User must be verified (have submitted valid ID)
-    $userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+    // Note: Staff and Admin roles are automatically considered verified
+    $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
     $userVerificationStmt->execute(['user_id' => $userId]);
-    $isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+    $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
+    $isVerified = (bool)($userVerificationData['is_verified'] ?? false);
+    $userRole = $userVerificationData['role'] ?? 'Resident';
+    
+    // Staff and Admin are automatically verified (no ID upload required)
+    $isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
     
     $conditions['user_verified'] = [
-        'passed' => $isVerified,
-        'message' => $isVerified 
-            ? 'User account is verified'
+        'passed' => $isVerifiedOrPrivileged,
+        'message' => $isVerifiedOrPrivileged 
+            ? (in_array($userRole, ['Staff', 'Admin'], true) 
+                ? 'User is ' . $userRole . ' (automatically verified)' 
+                : 'User account is verified')
             : 'User account is not verified - valid ID required for auto-approval'
     ];
     
-    if (!$isVerified) {
+    if (!$isVerifiedOrPrivileged) {
         $allPassed = false;
         $reason = $reason ?: 'User account is not verified - valid ID required for auto-approval';
     }

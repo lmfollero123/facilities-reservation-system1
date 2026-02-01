@@ -629,72 +629,125 @@ ob_start();
 
         <section class="booking-card" id="verification">
             <h2>Account Verification</h2>
-            <?php if ($user['is_verified']): ?>
+            
+            <?php 
+            $userRole = $user['role'] ?? 'Resident';
+            $isPrivilegedRole = in_array($userRole, ['Admin', 'Staff'], true);
+            ?>
+            
+            <?php if ($isPrivilegedRole): ?>
+                <!-- Staff/Admin automatic verification notice -->
                 <div style="background:#e3f8ef; border:2px solid #0d7a43; border-radius:8px; padding:1rem; margin-bottom:1rem;">
                     <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
                         <span style="font-size:1.5rem;">✅</span>
-                        <h3 style="margin:0; color:#0d7a43;">Account Verified</h3>
+                        <h3 style="margin:0; color:#0d7a43;">Account Automatically Verified</h3>
                     </div>
                     <p style="margin:0; color:#0d7a43; line-height:1.6;">
-                        Your account has been verified. You can now use auto-approval features for facility bookings.
-                        <?php if ($user['verified_at']): ?>
-                            Verified on: <?= date('F j, Y g:i A', strtotime($user['verified_at'])); ?>
-                        <?php endif; ?>
+                        As a <strong><?= htmlspecialchars($userRole); ?></strong>, your account is automatically verified. You have full access to auto-approval features for facility bookings without needing to upload a valid ID.
                     </p>
                 </div>
-            <?php else: ?>
-                <div style="background:#fff4e5; border:2px solid #ffc107; border-radius:8px; padding:1rem; margin-bottom:1rem;">
-                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
-                        <span style="font-size:1.5rem;">⚠️</span>
-                        <h3 style="margin:0; color:#856404;">Account Not Verified</h3>
-                    </div>
-                    <p style="margin:0; color:#856404; line-height:1.6; margin-bottom:0.75rem;">
-                        Your account is active, but you haven't submitted a valid ID yet. To enable <strong>auto-approval features</strong> for facility bookings, please upload a valid government-issued ID below. Once uploaded, an admin will review and verify your account.
-                    </p>
-                    <p style="margin:0; color:#856404; font-size:0.9rem;">
-                        <strong>Note:</strong> You can still make reservations, but they will require manual approval until your account is verified.
-                    </p>
-                </div>
-            <?php endif; ?>
-            
-            <?php if ($hasValidId): ?>
-                <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
-                    <h4 style="margin:0 0 0.5rem; color:#495057; font-size:1rem;">Current Valid ID Document</h4>
+                
+                <!-- Optional ID upload for Staff/Admin -->
+                <?php if (!$hasValidId): ?>
+                <details style="margin-top:1rem;">
+                    <summary style="cursor:pointer; padding:0.75rem; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; font-weight:600; color:#495057;">
+                        📄 Optional: Upload Valid ID (for record keeping)
+                    </summary>
+                    <form method="POST" class="booking-form" enctype="multipart/form-data" style="margin-top:1rem; padding:1rem; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px;">
+                        <label>
+                            <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
+                            <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%; margin-bottom:0.5rem;">
+                            <small style="color:#6c757d; font-size:0.85rem; display:block;">
+                                Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID is acceptable.
+                            </small>
+                        </label>
+                        
+                        <div style="margin-top:1rem;">
+                            <button class="btn-primary" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">
+                                Upload Valid ID
+                            </button>
+                        </div>
+                    </form>
+                </details>
+                <?php else: ?>
+                <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:1rem; margin-top:1rem;">
+                    <h4 style="margin:0 0 0.5rem; color:#495057; font-size:1rem;">📄 Valid ID on File</h4>
                     <p style="margin:0; color:#6c757d; font-size:0.9rem;">
                         File: <strong><?= htmlspecialchars($validIdDoc['file_name']); ?></strong><br>
                         Uploaded: <?= date('F j, Y g:i A', strtotime($validIdDoc['uploaded_at'])); ?>
                     </p>
-                    <?php if (!$user['is_verified']): ?>
-                        <p style="margin:0.5rem 0 0; color:#856404; font-size:0.85rem;">
-                            Status: Pending admin verification
-                        </p>
-                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
-            
-            <?php if (!$hasValidId): ?>
-            <form method="POST" class="booking-form" enctype="multipart/form-data">
-                <label>
-                    <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
-                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%; margin-bottom:0.5rem;">
-                    <small style="color:#6c757d; font-size:0.85rem; display:block;">
-                        Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
-                    </small>
-                </label>
+                <?php endif; ?>
                 
-                <div style="margin-top:1rem; padding-top:1rem; border-top:2px solid #e1e7f0;">
-                    <button class="btn-primary" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">
-                        Upload Valid ID
-                    </button>
-                </div>
-            </form>
             <?php else: ?>
-            <div style="padding:1rem; background:#e7f3ff; border:2px solid #2196F3; border-radius:8px;">
-                <h4 style="margin:0 0 0.5rem; color:#1976D2; font-size:1rem;">📋 Valid ID Submitted</h4>
-                <p style="margin:0; color:#1976D2; font-size:0.9rem; line-height:1.5;">
-                    Your valid ID document has been submitted and is awaiting admin verification. Once verified, you'll be able to use auto-approval features.
-                </p>
-            </div>
+                <!-- Resident verification (original logic) -->
+                <?php if ($user['is_verified']): ?>
+                    <div style="background:#e3f8ef; border:2px solid #0d7a43; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                            <span style="font-size:1.5rem;">✅</span>
+                            <h3 style="margin:0; color:#0d7a43;">Account Verified</h3>
+                        </div>
+                        <p style="margin:0; color:#0d7a43; line-height:1.6;">
+                            Your account has been verified. You can now use auto-approval features for facility bookings.
+                            <?php if ($user['verified_at']): ?>
+                                Verified on: <?= date('F j, Y g:i A', strtotime($user['verified_at'])); ?>
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                <?php else: ?>
+                    <div style="background:#fff4e5; border:2px solid #ffc107; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                            <span style="font-size:1.5rem;">⚠️</span>
+                            <h3 style="margin:0; color:#856404;">Account Not Verified</h3>
+                        </div>
+                        <p style="margin:0; color:#856404; line-height:1.6; margin-bottom:0.75rem;">
+                            Your account is active, but you haven't submitted a valid ID yet. To enable <strong>auto-approval features</strong> for facility bookings, please upload a valid government-issued ID below. Once uploaded, an admin will review and verify your account.
+                        </p>
+                        <p style="margin:0; color:#856404; font-size:0.9rem;">
+                            <strong>Note:</strong> You can still make reservations, but they will require manual approval until your account is verified.
+                        </p>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if ($hasValidId): ?>
+                    <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:1rem; margin-bottom:1rem;">
+                        <h4 style="margin:0 0 0.5rem; color:#495057; font-size:1rem;">Current Valid ID Document</h4>
+                        <p style="margin:0; color:#6c757d; font-size:0.9rem;">
+                            File: <strong><?= htmlspecialchars($validIdDoc['file_name']); ?></strong><br>
+                            Uploaded: <?= date('F j, Y g:i A', strtotime($validIdDoc['uploaded_at'])); ?>
+                        </p>
+                        <?php if (!$user['is_verified']): ?>
+                            <p style="margin:0.5rem 0 0; color:#856404; font-size:0.85rem;">
+                                Status: Pending admin verification
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (!$hasValidId): ?>
+                <form method="POST" class="booking-form" enctype="multipart/form-data">
+                    <label>
+                        <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
+                        <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%; margin-bottom:0.5rem;">
+                        <small style="color:#6c757d; font-size:0.85rem; display:block;">
+                            Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
+                        </small>
+                    </label>
+                    
+                    <div style="margin-top:1rem; padding-top:1rem; border-top:2px solid #e1e7f0;">
+                        <button class="btn-primary" type="submit" style="width:100%; padding:0.85rem; font-size:1rem; font-weight:600;">
+                            Upload Valid ID
+                        </button>
+                    </div>
+                </form>
+                <?php else: ?>
+                <div style="padding:1rem; background:#e7f3ff; border:2px solid #2196F3; border-radius:8px;">
+                    <h4 style="margin:0 0 0.5rem; color:#1976D2; font-size:1rem;">📋 Valid ID Submitted</h4>
+                    <p style="margin:0; color:#1976D2; font-size:0.9rem; line-height:1.5;">
+                        Your valid ID document has been submitted and is awaiting admin verification. Once verified, you'll be able to use auto-approval features.
+                    </p>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
         </section>
         

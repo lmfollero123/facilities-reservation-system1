@@ -171,18 +171,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                     $newRole = $_POST['new_role'] ?? '';
                     if (in_array($newRole, ['Admin', 'Staff', 'Resident'], true)) {
                         // Get user info and old role for audit log
-                        $userStmt = $pdo->prepare('SELECT name, email, role FROM users WHERE id = :id');
+                        $userStmt = $pdo->prepare('SELECT name, email, role, is_verified FROM users WHERE id = :id');
                         $userStmt->execute(['id' => $userId]);
                         $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
                         $oldRole = $userInfo['role'] ?? 'Unknown';
                         
-                        $stmt = $pdo->prepare('UPDATE users SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                        $stmt->execute(['role' => $newRole, 'id' => $userId]);
+                        // Determine verification status based on new role
+                        $shouldBeVerified = null;
+                        $adminId = $_SESSION['user_id'] ?? null;
+                        
+                        if (in_array($newRole, ['Admin', 'Staff'], true)) {
+                            // Staff and Admin are automatically verified (no ID required)
+                            $shouldBeVerified = true;
+                            $stmt = $pdo->prepare('UPDATE users SET role = :role, is_verified = TRUE, verified_at = CURRENT_TIMESTAMP, verified_by = :admin_id, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                            $stmt->execute(['role' => $newRole, 'id' => $userId, 'admin_id' => $adminId]);
+                        } else {
+                            // Resident role - check if they have a valid ID uploaded
+                            $docStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
+                            $docStmt->execute(['user_id' => $userId]);
+                            $hasValidId = $docStmt->fetch() !== false;
+                            
+                            if ($hasValidId) {
+                                // Keep current verification status if they have uploaded ID
+                                $stmt = $pdo->prepare('UPDATE users SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                                $stmt->execute(['role' => $newRole, 'id' => $userId]);
+                            } else {
+                                // Unverify if no valid ID uploaded
+                                $shouldBeVerified = false;
+                                $stmt = $pdo->prepare('UPDATE users SET role = :role, is_verified = FALSE, verified_at = NULL, verified_by = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                                $stmt->execute(['role' => $newRole, 'id' => $userId]);
+                            }
+                        }
+                        
+                        $verificationNote = '';
+                        if ($shouldBeVerified === true) {
+                            $verificationNote = ' (automatically verified)';
+                        } elseif ($shouldBeVerified === false) {
+                            $verificationNote = ' (unverified - no valid ID uploaded)';
+                        }
                         
                         logAudit('Changed user role', 'User Management', 
                             ($userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId) . 
-                            ' - Changed from ' . $oldRole . ' to ' . $newRole);
-                        $message = 'User role updated successfully.';
+                            ' - Changed from ' . $oldRole . ' to ' . $newRole . $verificationNote);
+                        $message = 'User role updated successfully.' . $verificationNote;
                     } else {
                         $message = 'Invalid role selected.';
                         $messageType = 'error';

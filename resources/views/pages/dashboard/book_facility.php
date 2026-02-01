@@ -36,10 +36,16 @@ $BOOKING_ADVANCE_MAX_DAYS = 60; // max days ahead
 $BOOKING_PER_DAY = 1; // max bookings per user per day (pending+approved)
 
 // Check if user is verified and if they have uploaded a valid ID
+// Note: Staff and Admin are automatically considered verified
 $userId = $_SESSION['user_id'] ?? null;
-$userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+$userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
 $userVerificationStmt->execute(['user_id' => $userId]);
-$isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+$userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
+$isVerified = (bool)($userVerificationData['is_verified'] ?? false);
+$userRole = $userVerificationData['role'] ?? 'Resident';
+
+// Staff and Admin are automatically verified (no ID upload required)
+$isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
 
 // Check if user has already uploaded a valid ID document
 $hasValidIdDocStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
