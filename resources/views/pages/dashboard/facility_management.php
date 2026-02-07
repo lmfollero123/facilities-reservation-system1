@@ -285,6 +285,14 @@ ob_start();
     </section>
 </div>
 
+<style>
+/* Facility modal: fixed to viewport (not page) - ensures full visibility when scrolled */
+#facilityModal.facility-modal {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100vw !important; height: 100vh !important;
+}
+</style>
 <!-- Facility Modal -->
 <div id="facilityModal" class="facility-modal">
     <div class="facility-modal-backdrop" onclick="closeFacilityModal()"></div>
@@ -443,8 +451,18 @@ ob_start();
 // Disable global collapsible handler for this page to prevent conflicts
 window.DISABLE_GLOBAL_COLLAPSIBLE = true;
 
+// Move facility modal to body so position:fixed works (parent transforms break it)
+(function() {
+    const modal = document.getElementById('facilityModal');
+    if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+})();
+
 function openFacilityModal(resetForm = true) {
     const modal = document.getElementById('facilityModal');
+    if (!modal) return;
+    if (modal.parentNode !== document.body) document.body.appendChild(modal);
     if (resetForm) {
         resetFacilityForm();
     } else {

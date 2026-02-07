@@ -1,0 +1,38 @@
+/**
+ * Shared styles for public pages (Facilities, Login, Register, FAQ, etc.)
+ * Loaded when Tailwind is used on public pages
+ */
+
+/* Page entrance animations */
+.public-fade-in {
+    animation: publicFadeIn 0.5s ease-out forwards;
+}
+
+@keyframes publicFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.public-card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.public-card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15);
+}
+
+/* Icon transition */
+.public-icon-transition {
+    transition: transform 0.25s ease;
+}
+.public-card-hover:hover .public-icon-transition {
+    transform: scale(1.1);
+}
+
+/* FAQ accordion chevron rotate when expanded */
+.faq-question[aria-expanded="true"] .bi-chevron-down {
+    transform: rotate(180deg);
+}
+.faq-question .bi-chevron-down {
+    transition: transform 0.3s ease;
+}

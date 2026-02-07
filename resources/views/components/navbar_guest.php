@@ -44,6 +44,12 @@ $navLinks = [
                     </a>
                 </li>
             <?php endforeach; ?>
+            <li class="nav-item nav-item-theme d-none d-md-flex" style="list-style:none;">
+                <button type="button" class="theme-toggle-btn theme-toggle-nav" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark/light mode" style="pointer-events:auto;">
+                    <i class="bi bi-sun-fill theme-icon-light"></i>
+                    <i class="bi bi-moon-fill theme-icon-dark"></i>
+                </button>
+            </li>
         </ul>
     </div>
     
@@ -67,6 +73,13 @@ $navLinks = [
         <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
     </div>
     <nav class="mobile-nav-menu">
+        <div class="mobile-nav-theme-wrap" style="padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <button type="button" class="theme-toggle-btn mobile-theme-toggle" id="themeToggleMobile" aria-label="Toggle dark mode">
+                <i class="bi bi-sun-fill theme-icon-light"></i>
+                <i class="bi bi-moon-fill theme-icon-dark"></i>
+                <span class="theme-toggle-label ms-2">Dark Mode</span>
+            </button>
+        </div>
         <ul class="mobile-nav-list">
             <?php 
             foreach ($navLinks as $link): 
@@ -157,6 +170,8 @@ if (document.readyState === 'loading') {
         }
     }, { passive: true });
 })();
+
+// Theme toggle is handled by main.js (unified for guest + dashboard)
 
 // Mobile Navigation Sidebar Toggle
 (function() {

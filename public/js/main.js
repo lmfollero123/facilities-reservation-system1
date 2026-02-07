@@ -1,25 +1,11 @@
 // ============================================
-// THEME TOGGLE - Dark/Light Mode (Dashboard Only)
+// THEME TOGGLE - Dark/Light Mode
 // ============================================
 (function () {
-    // Only apply dark mode on dashboard pages, not public pages
-    // Check if we're on a dashboard page by looking for dashboard-specific elements
-    const isDashboardPage = document.querySelector('.dashboard-layout') ||
-        document.querySelector('.sidebar') ||
-        document.querySelector('.dashboard-header');
-
-    if (isDashboardPage) {
-        // Apply saved theme immediately (before DOM loads) to prevent flash
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        if (savedTheme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        }
-    } else {
-        // On public pages, always use light mode and remove any dark theme
-        document.documentElement.removeAttribute('data-theme');
-        // Clear the theme from localStorage if on public page to reset
-        // (Optional: comment out if you want to preserve user's dashboard preference)
-        // localStorage.removeItem('theme');
+    // Apply saved theme immediately (before DOM loads) to prevent flash
+    const savedTheme = localStorage.getItem('publicTheme') || localStorage.getItem('theme') || 'light';
+    if (savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
     }
 })();
 
@@ -175,31 +161,33 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // ============================================
-    // THEME TOGGLE BUTTON
+    // UNIFIED THEME TOGGLE (Guest + Dashboard)
     // ============================================
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function () {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-            // Update DOM
-            if (newTheme === 'dark') {
+    (function initThemeToggle() {
+        function getTheme() { return localStorage.getItem('publicTheme') || localStorage.getItem('theme') || 'light'; }
+        function setTheme(t) { localStorage.setItem('publicTheme', t); localStorage.setItem('theme', t); }
+        function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+        function applyTheme(dark) {
+            if (dark) {
                 document.documentElement.setAttribute('data-theme', 'dark');
+                document.querySelectorAll('.theme-toggle-label').forEach(function(e){ e.textContent = 'Light Mode'; });
             } else {
                 document.documentElement.removeAttribute('data-theme');
+                document.querySelectorAll('.theme-toggle-label').forEach(function(e){ e.textContent = 'Dark Mode'; });
             }
-
-            // Save to localStorage
-            localStorage.setItem('theme', newTheme);
-
-            // Optional: Add transitioning class for smooth animation
-            document.body.classList.add('theme-transitioning');
-            setTimeout(() => {
-                document.body.classList.remove('theme-transitioning');
-            }, 300);
-        });
-    }
+        }
+        function toggleTheme(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            var dark = !isDark();
+            setTheme(dark ? 'dark' : 'light');
+            applyTheme(dark);
+        }
+        applyTheme(getTheme() === 'dark');
+        var btn = document.getElementById('themeToggle');
+        var btnMobile = document.getElementById('themeToggleMobile');
+        if (btn) btn.addEventListener('click', function(e){ toggleTheme(e); });
+        if (btnMobile) btnMobile.addEventListener('click', function(e){ toggleTheme(e); });
+    })();
 
     const notifToggle = document.querySelector("[data-toggle='notif-panel']");
     const notifPanel = document.getElementById("notifPanel");

@@ -165,7 +165,7 @@ section,
 }
 
 body:not(.dashboard) {
-    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #a7f3d0 70%, #f0fdf4 100%);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -180,9 +180,9 @@ body:not(.dashboard) {
     }
 }
 
-/* Landing page background - Glassmorphism with cityhall image */
+/* Landing page background - green gradient (replaces cityhall) */
 body.landing-page {
-    background: url("../img/cityhall.jpeg") center/cover no-repeat scroll;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #a7f3d0 70%, #f0fdf4 100%);
     min-height: 100vh;
     position: relative;
     width: 100%;
@@ -194,7 +194,7 @@ body.landing-page {
     }
 }
 
-/* Glassmorphism overlay - blur effect for landing pages */
+/* Subtle overlay for depth - light green tint */
 body.landing-page::before {
     content: "";
     position: fixed;
@@ -202,9 +202,7 @@ body.landing-page::before {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: linear-gradient(180deg, rgba(236, 253, 245, 0.3) 0%, transparent 50%, rgba(240, 253, 244, 0.2) 100%);
     z-index: 0;
     pointer-events: none;
 }
@@ -283,23 +281,23 @@ img {
     display: block;
 }
 
-/* VISUAL CHANGE ONLY - Guest navigation updated to match template with glassmorphism */
+/* VISUAL CHANGE - Glassmorphism navbar (frosted blur) */
 .guest-navbar,
 #mainNav,
 #mainNav.navbar,
 #mainNav.navbar-expand-lg,
 #mainNav.navbar-light {
-    background: rgba(255, 255, 255, 0.15) !important;
-    backdrop-filter: blur(18px) !important;
-    -webkit-backdrop-filter: blur(18px) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
     z-index: 1000 !important;
-    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08) !important;
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
@@ -308,22 +306,25 @@ img {
     min-height: 60px !important;
 }
 
-/* Ensure navbar text is visible */
+/* Navbar text - dark for contrast on glassmorphism */
 #mainNav .navbar-brand,
 #mainNav .navbar-brand span,
 #mainNav .nav-link,
 #mainNav .navbar-datetime {
-    color: #ffffff !important;
+    color: #1f2937 !important;
+    font-weight: 500;
 }
 
 #mainNav .nav-link {
-    color: rgba(255, 255, 255, 0.9) !important;
+    color: rgba(31, 41, 55, 0.9) !important;
+    font-size: 1rem !important;
 }
 
 #mainNav .nav-link:hover,
 #mainNav .nav-link.active {
-    color: #ffffff !important;
+    color: #1e40af !important;
     opacity: 1 !important;
+    text-decoration: underline !important;
 }
 
 /* Navbar toggle button visibility */
@@ -332,13 +333,13 @@ img {
     right: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    border-color: rgba(255, 255, 255, 0.5);
-    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(31, 41, 55, 0.3);
+    background-color: rgba(255, 255, 255, 0.5);
     z-index: 1002;
 }
 
 #mainNav .navbar-toggler-icon {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(31, 41, 55, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
 
 .guest-navbar .container,
@@ -659,12 +660,12 @@ img {
     }
 }
 
-@media (max-width: 991px) {
+@media (max-width: 767px) {
     #mainNav .navbar-datetime {
         display: none !important;
     }
 
-    /* Hide navigation links on mobile, show toggle button */
+    /* Hide navigation links only on small mobile, show hamburger */
     #mainNav .navbar-collapse {
         display: none !important;
     }
@@ -685,9 +686,14 @@ img {
     #mainNav .navbar-brand {
         font-size: 0.95rem !important;
     }
+}
 
-    /* Hide desktop navbar menu on mobile */
+/* Tablet and up (768px+): show nav links - was 991px, now 768px for better visibility */
+@media (min-width: 768px) and (max-width: 991px) {
     #mainNav .navbar-collapse {
+        display: flex !important;
+    }
+    #mainNav .navbar-toggler {
         display: none !important;
     }
 }
@@ -1784,7 +1790,7 @@ img {
     }
 }
 
-/* Fix for portfolio section on facilities page - blurred background with white container */
+/* Fix for portfolio section on facilities page - green gradient background */
 body.landing-page #portfolio.section,
 body.landing-page section#portfolio.section {
     min-height: 100vh !important;
@@ -1796,12 +1802,11 @@ body.landing-page section#portfolio.section {
     margin-top: 0 !important;
     overflow: visible !important;
     border: none !important;
-    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
-    background-attachment: fixed !important;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #f0fdf4 100%) !important;
     position: relative;
 }
 
-/* Blurred overlay for facilities page background */
+/* Subtle overlay for facilities page */
 body.landing-page #portfolio.section::before,
 body.landing-page section#portfolio.section::before {
     content: "" !important;
@@ -1810,15 +1815,19 @@ body.landing-page section#portfolio.section::before {
     left: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    background: rgba(0, 0, 0, 0.2) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 100%) !important;
     z-index: 0 !important;
     pointer-events: none !important;
     display: block !important;
 }
 
 /* White container for facilities directory - matches auth-card style */
+/* Facilities page - ensure header text is visible (override .section h2 white) */
+body.landing-page #portfolio.section .container h2,
+body.landing-page section#portfolio.section .container h2 {
+    color: #1f2937 !important;
+}
+
 body.landing-page #portfolio.section .container,
 body.landing-page section#portfolio.section .container {
     background: #ffffff !important;
@@ -2005,6 +2014,35 @@ body.landing-page #portfolio:not(.facilities-page) {
 
 .divider-light {
     background-color: #ffffff;
+}
+
+/* Announcements page hero - green gradient */
+.announcements-hero {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #a7f3d0 100%) !important;
+    padding: 4rem 1rem 3rem !important;
+    text-align: center;
+}
+.announcements-hero h1 {
+    color: #065f46 !important;
+    font-weight: 700;
+}
+.announcements-hero p {
+    color: #047857 !important;
+}
+
+/* Contact page hero - green gradient overlay */
+.contact-section-modern {
+    background: linear-gradient(135deg, rgba(236, 253, 245, 0.95) 0%, rgba(209, 250, 229, 0.9) 50%, rgba(167, 243, 208, 0.85) 100%) !important;
+    background-blend-mode: overlay;
+}
+.contact-section-modern::before {
+    background: linear-gradient(135deg, rgba(5, 150, 105, 0.1) 0%, transparent 100%) !important;
+}
+.contact-header-modern .contact-title {
+    color: #065f46 !important;
+}
+.contact-header-modern .contact-subtitle {
+    color: #047857 !important;
 }
 
 /* Improve contrast for announcements section on dark background */
@@ -2457,8 +2495,13 @@ body.landing-page .guest-content::after {
     }
 }
 
+/* Facility details page - ensure green gradient background */
+body.landing-page .section.facility-details-section {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #f0fdf4 100%) !important;
+}
+
 .facility-hero-card {
-    background: linear-gradient(135deg, #0c4fad, #003b80);
+    background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
@@ -2525,7 +2568,7 @@ body.landing-page .guest-content::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at top left, #1b74d8, #003b80);
+    background: radial-gradient(circle at top left, #10b981, #047857);
 }
 
 .facility-hero-placeholder .icon {
@@ -2735,8 +2778,7 @@ body.landing-page .guest-content::after {
     font-family: inherit;
 }
 
-/* Auth form styling */
-/* VISUAL CHANGE ONLY - Auth pages updated to match template */
+/* Auth form styling - green gradient background */
 .auth-container,
 .contact-section {
     min-height: 100vh;
@@ -2747,8 +2789,7 @@ body.landing-page .guest-content::after {
     padding-bottom: 3rem !important;
     padding-left: 1.25rem !important;
     padding-right: 1.25rem !important;
-    background: url("../img/cityhall.jpeg") center/cover no-repeat fixed !important;
-    background-attachment: fixed !important;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #f0fdf4 100%) !important;
     position: relative;
 }
 
@@ -2764,7 +2805,7 @@ body.landing-page .guest-content::after {
     }
 }
 
-/* Glassmorphism overlay effect with blur - override section::before disabling */
+/* Light overlay for auth/contact - subtle depth */
 .auth-container::before,
 .contact-section::before,
 body.landing-page .contact-section::before,
@@ -2775,9 +2816,7 @@ section.contact-section::before {
     left: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    background: rgba(0, 0, 0, 0.2) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 100%) !important;
     z-index: 0 !important;
     pointer-events: none !important;
     display: block !important;
@@ -3018,6 +3057,12 @@ section.contact-section::before {
     text-decoration: underline;
 }
 
+/* Override: modern-footer uses LGU gradient - do NOT apply grey to it */
+footer.modern-footer {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 40%, #3b82f6 100%) !important;
+    color: #ffffff !important;
+}
+
 .footer {
     background: #f5f6f8 !important;
     color: #4c5b7c !important;
@@ -3039,10 +3084,10 @@ section.contact-section::before {
     /* Horizontally center footer content */
 }
 
-/* Override Bootstrap bg-light class if used */
-footer.bg-light,
-footer.bg-light.py-5,
-footer.py-5 {
+/* Override Bootstrap bg-light - but NOT for modern-footer */
+footer.bg-light:not(.modern-footer),
+footer.bg-light.py-5:not(.modern-footer),
+footer.py-5:not(.modern-footer) {
     background: #f5f6f8 !important;
     color: #4c5b7c !important;
     /* Dark text for readability */

@@ -1,0 +1,47 @@
+/**
+ * Dashboard-specific styles: animations, card hovers, utilities
+ * Matches public pages polish (Tailwind-friendly, fade-in, card-hover)
+ */
+
+/* Page entrance animation - same as public */
+.dashboard-fade-in {
+    animation: dashboardFadeIn 0.5s ease-out forwards;
+}
+
+@keyframes dashboardFadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Card hover lift - matches public card feel */
+.dashboard-card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.dashboard-card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.2);
+}
+
+/* Icon transition on hover */
+.dashboard-icon-transition {
+    transition: transform 0.25s ease;
+}
+.dashboard-card-hover:hover .dashboard-icon-transition {
+    transform: scale(1.08);
+}
+
+/* Stat card subtle entrance stagger (for grid children) */
+.dashboard-content .stat-card,
+.dashboard-content .stat-card-clickable,
+.dashboard-content .booking-card,
+.dashboard-content .report-card {
+    animation: dashboardFadeIn 0.5s ease-out forwards;
+}
+.dashboard-content .stat-card:nth-child(1) { animation-delay: 0.05s; }
+.dashboard-content .stat-card:nth-child(2) { animation-delay: 0.1s; }
+.dashboard-content .stat-card:nth-child(3) { animation-delay: 0.15s; }
+.dashboard-content .stat-card:nth-child(4) { animation-delay: 0.2s; }
+.dashboard-content .stat-card:nth-child(5) { animation-delay: 0.25s; }
+.dashboard-content .stat-card:nth-child(6) { animation-delay: 0.3s; }
+.dashboard-content .stat-card:nth-child(7) { animation-delay: 0.35s; }
+.dashboard-content .stat-card:nth-child(8) { animation-delay: 0.4s; }

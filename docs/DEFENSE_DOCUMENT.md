@@ -5,7 +5,7 @@
 **Developed By**: [Your Name/Team]  
 **Institution**: [Your Institution]  
 **Date**: 2025  
-**Version**: 1.0
+**Version**: 1.1
 
 ---
 
@@ -54,9 +54,10 @@ The system addresses the challenges of manual facility reservation management by
 
 - **Backend**: PHP 7.4+ with PDO
 - **Database**: MySQL 8.0 (InnoDB engine)
-- **Frontend**: HTML5, CSS3, JavaScript (Vanilla ES6+)
+- **Frontend**: HTML5, CSS3, Tailwind CSS, JavaScript (Vanilla ES6+), Bootstrap Icons
 - **Security**: Bcrypt password hashing, CSRF protection, SQL injection prevention
 - **Architecture**: Monolithic with modular service boundaries
+- **UI**: Responsive design, dark/light theme toggle (unified across public and dashboard), page animations
 
 ## User Roles
 
@@ -438,26 +439,53 @@ Permissions-Policy: geolocation=(), microphone=(), camera=()
 - **Approved**: Booking confirmed
 - **Denied**: Booking rejected (reason provided)
 - **Cancelled**: User or admin cancelled
+- **Postponed**: Previously approved, moved to new date—requires re-approval (with priority flag)
 - **Completed**: Reservation date has passed
 
-### 3.3 Auto-Approval System
+### 3.3 Modify vs. Postpone (Reservation Approval Page)
+
+Admin/Staff can change the date or time of an **approved** reservation using two distinct actions:
+
+#### Modify
+- **Purpose**: General edits to an approved reservation—date/time, purpose, expected attendees
+- **Effect**: Updates any of: date, time, purpose, expected attendees; reservation **remains approved**—no re-approval needed
+- **Use Case**: Quick corrections, fixing typos, minor schedule adjustments, updating event description or attendee count
+- **Notification**: Resident is notified via email and in-app notification of the change
+
+#### Postpone
+- **Purpose**: Move an approved reservation to a new date when the original date is no longer viable (e.g., facility maintenance, conflict, emergency)
+- **Effect**: Changes the date/time; reservation status becomes **postponed** with **postponed_priority** and **postponed_at** set
+- **Use Case**: Facility unavailable on original date, LGU needs to relocate the event, conflict resolution
+- **Re-approval**: The new date requires staff/admin approval; the reservation appears in the Pending Requests queue with **priority** (ordered before regular pending requests)
+- **Notification**: Resident is notified that the reservation was postponed and requires re-approval
+
+**Key Difference**: Modify keeps the reservation confirmed; Postpone sets status to **postponed** (a distinct state) and requires re-approval with priority in the approval queue.
+
+**Reschedule (resident-initiated)**: On My Reservations, residents submit a **Request Reschedule** (conceptually: user requests; staff reviews and applies changes upon approval). Limited to one reschedule request per reservation, at least 3 days before the event. Approved/postponed reservations require re-approval after staff applies the change. **Edit Purpose / Attendees**: Residents can directly edit purpose and expected attendees; no approval needed unless attendee count exceeds facility capacity threshold (then re-approval required).
+
+### 3.4 Auto-Approval System
 - Evaluates 8 conditions automatically
 - Approves if all conditions met
 - Reduces administrative workload
 - Provides audit trail for auto-approvals
 
-### 3.4 My Reservations (Resident View)
-- View all personal reservations
-- Filter by status (pending/approved/cancelled)
-- Reschedule functionality (with limits)
+### 3.5 My Reservations (Resident View)
+- **Tab Navigation**: Upcoming Reservations (default) | Past Reservations
+- **Upcoming Tab**: Shows approved, pending, postponed, on_hold with `reservation_date >= today`; soonest first
+- **Past Tab**: Shows all statuses (approved, denied, cancelled, etc.) with `reservation_date < today`; most recent first
+- **Highlight**: Reservations within 1 day (today or tomorrow) are visually highlighted with a badge
+- Filter by status, search by facility name
+- Reschedule functionality (up to 3 days before; one reschedule per reservation)
 - Cancellation functionality
-- View reservation details
+- View reservation details and status history
 
-### 3.5 Reservation Management (Admin/Staff)
-- View all reservations
-- Approve/deny pending reservations
-- Modify reservations (date/time changes)
-- Cancel reservations
+### 3.6 Reservation Management (Admin/Staff)
+- **Pending Requests** and **Approved Reservations** sections
+- Approve/deny pending reservations (with remarks)
+- **Modify** approved reservations (keeps status approved)
+- **Postpone** approved reservations (sets to postponed status with priority flag for re-approval)
+- Cancel reservations (reason required for approved)
+- **All Reservations Modal**: Search and filter all reservations across statuses; view timeline/history; fixed to viewport for full visibility
 - View reservation timeline/history
 
 ## 4. Document Management Module
@@ -613,28 +641,45 @@ Permissions-Policy: geolocation=(), microphone=(), camera=()
 - Security events
 - Document access logs
 
-## 10. Calendar Module
+## 10. Dashboard UI & Navigation
 
-### 10.1 Calendar Views
+### 10.1 Sidebar Navigation (Grouped)
+- **Main**: Dashboard
+- **Booking**: Book a Facility, My Reservations, Calendar (collapsible)
+- **AI Tools**: Smart Scheduler (collapsible)
+- **Reservations & Facilities** (Admin/Staff): Reservation Approvals, Facility Management (collapsible)
+- **Communications** (Admin/Staff): Announcements, Contact Information (collapsible)
+- **Integrations** (Admin/Staff): Maintenance, Infrastructure Projects, Utilities—microservices (collapsible)
+- **Reports** (Admin/Staff): Reports & Analytics (collapsible)
+- **Administration** (Admin only): User Management, Document Management, Audit Trail (collapsible)
+- **Account**: Profile
+
+### 10.2 Theme Support
+- **Dark/Light Mode**: Unified toggle on public pages (navbar, mobile sidebar) and dashboard (header)
+- **Persistence**: Theme preference stored in localStorage; applied on load and across navigation
+
+## 11. Calendar Module
+
+### 11.1 Calendar Views
 - Month view: Overall availability
 - Week view: Detailed weekly schedule
 - Day view: Hourly breakdown
 
-### 10.2 Availability Display
+### 11.2 Availability Display
 - Color-coded status (available/pending/approved/maintenance)
 - Event labels (holidays, local events)
 - Hover details
 - Quick booking from calendar
 
-## 11. Data Export & Privacy Module
+## 12. Data Export & Privacy Module
 
-### 11.1 User Data Export
+### 12.1 User Data Export
 - Export personal data (Data Privacy Act compliance)
 - JSON format (machine-readable)
 - HTML/PDF format (human-readable)
 - 7-day expiration on export files
 
-### 11.2 Document Retention
+### 12.2 Document Retention
 - Automatic archival after 3 years
 - 7-year retention for identity documents
 - 5-year retention for reservation records
@@ -806,9 +851,16 @@ The **Barangay Culiat Public Facilities Reservation System** successfully addres
 
 ---
 
-**Document Version**: 1.0  
+**Document Version**: 1.1  
 **Last Updated**: January 2025  
 **Prepared For**: Capstone Defense Presentation
+
+### Recent Updates (v1.1)
+- Added Modify vs. Postpone documentation (Reservation Approval)
+- Documented My Reservations tabs (Upcoming / Past) and within-1-day highlight
+- Documented All Reservations modal (fixed to viewport)
+- Documented Dashboard sidebar grouping (collapsible modules)
+- Documented theme support (dark/light mode)
 
 ---
 

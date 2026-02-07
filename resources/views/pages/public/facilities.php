@@ -1,4 +1,5 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 $pageTitle = 'Facilities | LGU Facilities Reservation';
@@ -35,26 +36,34 @@ foreach ($rows as $idx => $row) {
 
 ob_start();
 ?>
-<section class="section" id="portfolio">
+<section class="section public-fade-in" id="portfolio">
     <div class="container">
-        <h2>Facilities Directory</h2>
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-gray-900 mb-3">Facilities Directory</h2>
+            <div class="h-1 w-16 bg-emerald-600 rounded-full mx-auto mb-4"></div>
+            <p class="text-gray-600">Browse our available barangay facilities</p>
+        </div>
         <?php if (empty($facilities)): ?>
-            <p style="color:#4c5b7c;margin-top:1rem;">No facilities are published yet. Please check again later or contact the LGU Facilities Office.</p>
+            <p class="text-gray-600 text-center py-12">No facilities are published yet. Please check again later or contact the LGU Facilities Office.</p>
         <?php else: ?>
-            <div class="facility-grid">
-                <?php foreach ($facilities as $facility): ?>
-                    <article class="facility-card">
-                        <img src="<?= htmlspecialchars($facility['image']); ?>" alt="<?= htmlspecialchars($facility['name']); ?>">
-                        <div class="card-body">
-                            <div class="status-pill <?= $facility['status_class']; ?>">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                <?php foreach ($facilities as $idx => $facility): ?>
+                    <a href="<?= $base; ?>/facility-details?id=<?= (int)$facility['id']; ?>" class="block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group public-card-hover">
+                        <div class="relative h-56 overflow-hidden">
+                            <img src="<?= htmlspecialchars($facility['image']); ?>" alt="<?= htmlspecialchars($facility['name']); ?>" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                            <span class="absolute top-4 right-4 px-3 py-1.5 rounded-full text-sm font-semibold <?= $facility['status_class'] === 'status-available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'; ?>">
                                 <?= htmlspecialchars($facility['status']); ?>
-                            </div>
-                            <h3><?= htmlspecialchars($facility['name']); ?></h3>
-                            <p><?= htmlspecialchars($facility['description']); ?></p>
-                            <small style="color:#5b6888; font-weight:500;">Free of Charge</small>
-                            <a class="btn btn-primary" href="<?= $base; ?>/facility-details?id=<?= (int)$facility['id']; ?>">View Details</a>
+                            </span>
                         </div>
-                    </article>
+                        <div class="p-6">
+                            <h3 class="text-lg font-bold text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors"><?= htmlspecialchars($facility['name']); ?></h3>
+                            <p class="text-gray-600 text-sm mb-4 line-clamp-2"><?= htmlspecialchars($facility['description']); ?></p>
+                            <span class="text-emerald-600 font-semibold text-sm inline-flex items-center gap-1">
+                                View Details
+                                <svg class="w-5 h-5 public-icon-transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            </span>
+                        </div>
+                    </a>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>

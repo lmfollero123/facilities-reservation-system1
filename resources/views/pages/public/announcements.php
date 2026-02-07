@@ -3,7 +3,7 @@
  * Announcements Archive Page
  * Modern public-facing announcements listing with filters, search, and pagination
  */
-
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 
@@ -101,7 +101,7 @@ ob_start();
 ?>
 
 <!-- Hero Section -->
-<section class="announcements-hero">
+<section class="announcements-hero public-fade-in">
     <div class="container px-4 px-lg-5">
         <div class="hero-content">
             <h1>Announcements & Updates</h1>

@@ -55,11 +55,24 @@ $userName = $_SESSION['name'] ?? 'User';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script>
+    (function(){var t;try{t=localStorage.getItem('publicTheme')||localStorage.getItem('theme')||'light';}catch(e){t='light';}
+    if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
+    </script>
     <!-- Mobile-first viewport meta tag with proper scaling -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
-    <?php $cssVersion = '9.8'; // Cache-busting: Update when CSS changes are deployed ?>
+    <?php 
+    $cssVersion = '9.8';
+    $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
+    $tailwindVersion = file_exists($appRoot . '/public/css/tailwind.css') ? filemtime($appRoot . '/public/css/tailwind.css') : time();
+    $publicPagesVersion = file_exists($appRoot . '/public/css/public-pages.css') ? filemtime($appRoot . '/public/css/public-pages.css') : time();
+    $dashboardPagesVersion = file_exists($appRoot . '/public/css/dashboard-pages.css') ? filemtime($appRoot . '/public/css/dashboard-pages.css') : time();
+    ?>
     <link rel="stylesheet" href="<?= base_path(); ?>/public/css/style.css?v=<?= $cssVersion; ?>">
+    <link rel="stylesheet" href="<?= base_path(); ?>/public/css/tailwind.css?v=<?= $tailwindVersion; ?>">
+    <link rel="stylesheet" href="<?= base_path(); ?>/public/css/public-pages.css?v=<?= $publicPagesVersion; ?>">
+    <link rel="stylesheet" href="<?= base_path(); ?>/public/css/dashboard-pages.css?v=<?= $dashboardPagesVersion; ?>">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -76,7 +89,7 @@ $userName = $_SESSION['name'] ?? 'User';
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
     <?php include __DIR__ . '/../components/navbar_dashboard.php'; ?>
-    <section class="dashboard-content">
+    <section class="dashboard-content dashboard-fade-in">
         <?= $content ?? ''; ?>
     </section>
 </div>

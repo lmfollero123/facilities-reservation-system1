@@ -25,7 +25,75 @@ $userId = $_SESSION['user_id'] ?? null;
 $message = '';
 $messageType = 'success';
 
-// Handle reschedule request
+// Handle edit details (purpose, expected_attendees) - no approval unless capacity exceeded
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_details' && $userId) {
+    $reservationId = (int)($_POST['reservation_id'] ?? 0);
+    $newPurpose = trim($_POST['purpose'] ?? '');
+    $newAttendees = isset($_POST['expected_attendees']) && $_POST['expected_attendees'] !== '' ? (int)$_POST['expected_attendees'] : null;
+    
+    try {
+        if (empty($newPurpose)) {
+            throw new Exception('Purpose is required.');
+        }
+        if ($newAttendees !== null && $newAttendees < 0) {
+            $newAttendees = null;
+        }
+        
+        $resStmt = $pdo->prepare(
+            'SELECT r.id, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.capacity_threshold
+             FROM reservations r
+             JOIN facilities f ON r.facility_id = f.id
+             WHERE r.id = :id AND r.user_id = :user_id'
+        );
+        $resStmt->execute(['id' => $reservationId, 'user_id' => $userId]);
+        $reservation = $resStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$reservation) {
+            throw new Exception('Reservation not found or you do not have permission to edit it.');
+        }
+        
+        if (!in_array($reservation['status'], ['pending', 'approved', 'postponed'], true)) {
+            throw new Exception('Only pending, approved, or postponed reservations can be edited.');
+        }
+        
+        $capacityThreshold = isset($reservation['capacity_threshold']) && $reservation['capacity_threshold'] !== null && $reservation['capacity_threshold'] !== '' ? (int)$reservation['capacity_threshold'] : null;
+        $requiresReapproval = ($capacityThreshold !== null && $newAttendees !== null && $newAttendees > $capacityThreshold);
+        
+        $newStatus = ($requiresReapproval && $reservation['status'] === 'approved') ? 'pending' : $reservation['status'];
+        
+        $updateStmt = $pdo->prepare('UPDATE reservations SET purpose = :purpose, expected_attendees = :expected_attendees, status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+        $updateStmt->execute([
+            'purpose' => $newPurpose,
+            'expected_attendees' => $newAttendees,
+            'status' => $newStatus,
+            'id' => $reservationId
+        ]);
+        
+        $historyNote = 'Purpose and/or expected attendees updated by user.';
+        if ($requiresReapproval) {
+            $historyNote .= ' Re-approval required: attendee count (' . $newAttendees . ') exceeds facility threshold (' . $capacityThreshold . ').';
+        }
+        
+        $histStmt = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:reservation_id, :status, :note, :user_id)');
+        $histStmt->execute([
+            'reservation_id' => $reservationId,
+            'status' => $newStatus,
+            'note' => $historyNote,
+            'user_id' => $userId
+        ]);
+        
+        logAudit('Edited reservation details (purpose/attendees)', 'Reservations', 'RES-' . $reservationId . ' – ' . $reservation['facility_name']);
+        
+        $message = 'Details updated successfully.' . ($requiresReapproval ? ' Re-approval is required because attendee count exceeds facility capacity threshold.' : '');
+        $messageType = 'success';
+        
+    } catch (Throwable $e) {
+        $message = $e->getMessage();
+        $messageType = 'error';
+    }
+}
+
+// Handle reschedule request (conceptually: user requests; staff applies changes upon approval)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'reschedule' && $userId) {
     $reservationId = (int)($_POST['reservation_id'] ?? 0);
     $newDate = $_POST['new_date'] ?? '';
@@ -109,6 +177,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception('New date and time slot are required.');
         }
         
+        if ($newDate === $reservation['reservation_date'] && $newTimeSlot === $reservation['time_slot']) {
+            throw new Exception('You are already scheduled for this date and time. Please select a different date or time slot to reschedule.');
+        }
+        
         if (empty($reason)) {
             throw new Exception('Reason for rescheduling is required.');
         }
@@ -134,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
              WHERE facility_id = :facility_id
              AND reservation_date = :new_date
              AND time_slot = :new_time_slot
-             AND status IN ("pending", "approved")
+             AND status IN ("pending", "approved", "postponed")
              AND id != :reservation_id'
         );
         $conflictCheck->execute([
@@ -205,7 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         // Log audit event
         $auditDetails = 'RES-' . $reservationId . ' – ' . $reservation['facility_name'] . ' – Rescheduled from ' . $oldDate . ' ' . $oldTimeSlot . ' to ' . $newDate . ' ' . $newTimeSlot . '. Reason: ' . $reason;
-        logAudit('Rescheduled own reservation', 'Reservations', $auditDetails);
+        logAudit('Requested reschedule (own reservation)', 'Reservations', $auditDetails);
         
         // Create notification
         $notifMessage = 'Your reservation for ' . $reservation['facility_name'];
@@ -215,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $notifMessage .= ' The new date requires re-approval.';
         }
         
-        createNotification($userId, 'booking', 'Reservation Rescheduled', $notifMessage, 
+        createNotification($userId, 'booking', 'Reschedule Request Submitted', $notifMessage, 
             base_path() . '/resources/views/pages/dashboard/my_reservations.php');
         
         // Send email notification
@@ -235,10 +307,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $reason,
                 $requiresApproval
             );
-            sendEmail($userInfo['email'], $userInfo['name'], 'Reservation Rescheduled', $emailBody);
+            sendEmail($userInfo['email'], $userInfo['name'], 'Reschedule Request Submitted', $emailBody);
         }
         
-        $message = 'Reservation rescheduled successfully.' . ($oldStatus === 'approved' ? ' It is now pending re-approval.' : '');
+        $message = 'Reschedule request submitted successfully. ' . ($oldStatus === 'approved' || $oldStatus === 'postponed' ? 'Staff will review and apply changes upon approval.' : '');
         $messageType = 'success';
         
     } catch (Throwable $e) {
@@ -247,12 +319,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Get filter parameters from URL
+// Tab: upcoming (default) | past
+$tab = isset($_GET['tab']) && $_GET['tab'] === 'past' ? 'past' : 'upcoming';
 $statusFilter = $_GET['status'] ?? '';
-$dateFilter = $_GET['date_range'] ?? '';
 $searchQuery = $_GET['search'] ?? '';
-$dateFrom = $_GET['date_from'] ?? '';
-$dateTo = $_GET['date_to'] ?? '';
 
 // Pagination settings - 6 cards per page for grid layout
 $perPage = 6;
@@ -260,13 +330,25 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 $reservations = [];
 $totalRows = 0;
+$today = date('Y-m-d');
 
 if ($userId) {
-    // Build WHERE clause with filters
+    // Build WHERE clause: tab determines date filter
     $whereConditions = ['r.user_id = :user_id'];
     $params = ['user_id' => $userId];
     
-    // Status filter
+    // Tab-based date filter: upcoming = date >= today, past = date < today
+    if ($tab === 'upcoming') {
+        $whereConditions[] = 'r.reservation_date >= :today';
+        $params['today'] = $today;
+        $orderBy = 'r.reservation_date ASC, r.created_at ASC'; // Soonest first
+    } else {
+        $whereConditions[] = 'r.reservation_date < :today';
+        $params['today'] = $today;
+        $orderBy = 'r.reservation_date DESC, r.created_at DESC'; // Most recent first
+    }
+    
+    // Status filter (optional, within tab)
     if ($statusFilter && in_array($statusFilter, ['pending', 'approved', 'denied', 'cancelled', 'on_hold', 'postponed'])) {
         $whereConditions[] = 'r.status = :status';
         $params['status'] = $statusFilter;
@@ -278,20 +360,6 @@ if ($userId) {
         $params['search'] = '%' . $searchQuery . '%';
     }
     
-    // Date range filter
-    $today = date('Y-m-d');
-    if ($dateFilter === 'upcoming') {
-        $whereConditions[] = 'r.reservation_date >= :today';
-        $params['today'] = $today;
-    } elseif ($dateFilter === 'past') {
-        $whereConditions[] = 'r.reservation_date < :today';
-        $params['today'] = $today;
-    } elseif ($dateFilter === 'custom' && $dateFrom && $dateTo) {
-        $whereConditions[] = 'r.reservation_date BETWEEN :date_from AND :date_to';
-        $params['date_from'] = $dateFrom;
-        $params['date_to'] = $dateTo;
-    }
-    
     $whereClause = implode(' AND ', $whereConditions);
     
     // Count total matching reservations
@@ -301,11 +369,11 @@ if ($userId) {
     
     // Get paginated reservations
     $stmt = $pdo->prepare(
-        "SELECT r.id, r.reservation_date, r.time_slot, r.status, r.reschedule_count, f.name AS facility_name, f.status AS facility_status
+        "SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.reschedule_count, r.facility_id, f.name AS facility_name, f.status AS facility_status, f.capacity_threshold, f.operating_hours
          FROM reservations r
          JOIN facilities f ON r.facility_id = f.id
          WHERE $whereClause
-         ORDER BY r.reservation_date DESC, r.created_at DESC
+         ORDER BY $orderBy
          LIMIT :limit OFFSET :offset"
     );
     
@@ -336,16 +404,36 @@ ob_start();
     </div>
 <?php endif; ?>
 
+<!-- Tab Buttons: Upcoming | Past -->
+<div class="my-reservations-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border-color, #e5e7eb); padding-bottom: 0;">
+    <a href="?tab=upcoming<?= $statusFilter ? '&status=' . urlencode($statusFilter) : ''; ?><?= $searchQuery ? '&search=' . urlencode($searchQuery) : ''; ?>" 
+       class="my-reservations-tab <?= $tab === 'upcoming' ? 'active' : ''; ?>" 
+       style="padding: 0.75rem 1.5rem; font-weight: 600; text-decoration: none; color: var(--text-secondary, #6b7280); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s ease;">
+        Upcoming Reservations
+    </a>
+    <a href="?tab=past<?= $statusFilter ? '&status=' . urlencode($statusFilter) : ''; ?><?= $searchQuery ? '&search=' . urlencode($searchQuery) : ''; ?>" 
+       class="my-reservations-tab <?= $tab === 'past' ? 'active' : ''; ?>" 
+       style="padding: 0.75rem 1.5rem; font-weight: 600; text-decoration: none; color: var(--text-secondary, #6b7280); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s ease;">
+        Past Reservations
+    </a>
+</div>
+<style>
+.my-reservations-tab.active { color: var(--gov-blue, #2563eb) !important; border-bottom-color: var(--gov-blue, #2563eb) !important; }
+.my-reservations-tab:hover { color: var(--gov-blue, #2563eb) !important; }
+[data-theme="dark"] .my-reservations-tab.active { color: #60a5fa !important; border-bottom-color: #60a5fa !important; }
+[data-theme="dark"] .my-reservations-tab:hover { color: #93c5fd !important; }
+.reservation-card-highlight { border-left: 4px solid #059669 !important; background: rgba(5, 150, 105, 0.08) !important; }
+[data-theme="dark"] .reservation-card-highlight { border-left-color: #34d399 !important; background: rgba(52, 211, 153, 0.12) !important; }
+</style>
+
 <!-- Filters Section -->
 <form method="GET" class="filters-container" id="filtersForm">
+    <input type="hidden" name="tab" value="<?= htmlspecialchars($tab); ?>">
     <div class="filters-row">
-        <!-- Search Bar -->
         <div class="filter-item search-filter">
             <label for="searchInput">Search Facility</label>
             <input type="text" name="search" id="searchInput" placeholder="Search by facility name..." value="<?= htmlspecialchars($searchQuery); ?>">
         </div>
-        
-        <!-- Status Filter -->
         <div class="filter-item">
             <label for="statusFilter">Status</label>
             <select name="status" id="statusFilter">
@@ -358,49 +446,16 @@ ob_start();
                 <option value="postponed" <?= $statusFilter === 'postponed' ? 'selected' : ''; ?>>Postponed</option>
             </select>
         </div>
-        
-        <!-- Date Filter -->
-        <div class="filter-item">
-            <label for="dateFilter">Date Range</label>
-            <select name="date_range" id="dateFilter">
-                <option value="">All Dates</option>
-                <option value="upcoming" <?= $dateFilter === 'upcoming' ? 'selected' : ''; ?>>Upcoming</option>
-                <option value="past" <?= $dateFilter === 'past' ? 'selected' : ''; ?>>Past</option>
-                <option value="custom" <?= $dateFilter === 'custom' ? 'selected' : ''; ?>>Custom Range</option>
-            </select>
-        </div>
-        
-        <!-- Filter Actions -->
         <div class="filter-item filter-actions">
-            <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">
-                Apply Filters
-            </button>
-            <a href="?" class="btn-outline" id="clearFilters" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-block;">
-                Clear Filters
-            </a>
+            <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Apply Filters</button>
+            <a href="?tab=<?= htmlspecialchars($tab); ?>" class="btn-outline" id="clearFilters" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-block;">Clear Filters</a>
         </div>
     </div>
-    
-    <!-- Custom Date Range (hidden by default) -->
-    <div class="custom-date-range" id="customDateRange" style="display: <?= $dateFilter === 'custom' ? 'grid' : 'none'; ?>;">
-        <div class="filter-item">
-            <label for="dateFrom">From</label>
-            <input type="date" name="date_from" id="dateFrom" value="<?= htmlspecialchars($dateFrom); ?>">
-        </div>
-        <div class="filter-item">
-            <label for="dateTo">To</label>
-            <input type="date" name="date_to" id="dateTo" value="<?= htmlspecialchars($dateTo); ?>">
-        </div>
-    </div>
-    
-    <!-- Results Count -->
     <div class="filter-results">
         <span id="resultsCount">
             <?php if ($totalRows > 0): ?>
                 Showing <?= count($reservations); ?> of <?= $totalRows; ?> reservation<?= $totalRows !== 1 ? 's' : ''; ?>
-                <?php if ($statusFilter || $searchQuery || $dateFilter): ?>
-                    (filtered)
-                <?php endif; ?>
+                <?php if ($statusFilter || $searchQuery): ?>(filtered)<?php endif; ?>
             <?php else: ?>
                 No reservations found
             <?php endif; ?>
@@ -411,11 +466,17 @@ ob_start();
 <?php if (empty($reservations)): ?>
     <div style="text-align: center; padding: 4rem 2rem; background: var(--bg-secondary); border-radius: 12px; border: 2px dashed var(--border-color);">
         <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;">📋</div>
-        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-primary);">No Reservations Yet</h2>
-        <p style="font-size: 1.125rem; color: var(--text-secondary); margin-bottom: 2rem;">You haven't submitted any facility reservations.</p>
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="btn-primary" style="padding: 1rem 2rem; font-size: 1.125rem; display: inline-block; text-decoration: none;">
+        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-primary);">
+            <?= $tab === 'upcoming' ? 'No Upcoming Reservations' : 'No Past Reservations'; ?>
+        </h2>
+        <p style="font-size: 1.125rem; color: var(--text-secondary); margin-bottom: 2rem;">
+            <?= $tab === 'upcoming' ? 'You have no upcoming reservations. Book a facility to get started.' : 'Your past reservations will appear here.'; ?>
+        </p>
+        <?php if ($tab === 'upcoming'): ?>
+        <a href="<?= base_path(); ?>/dashboard/book-facility" class="btn-primary" style="padding: 1rem 2rem; font-size: 1.125rem; display: inline-block; text-decoration: none;">
             Book a Facility
         </a>
+        <?php endif; ?>
     </div>
 <?php else: ?>
     <!-- Reservation Cards - Elderly-Friendly Design -->
@@ -450,7 +511,10 @@ ob_start();
                 }
             }
             
-            $canReschedule = ($daysUntil >= 3) && $rescheduleCount < 1 && in_array($reservation['status'], ['pending', 'approved']) && !$isOngoing && ($reservation['facility_status'] ?? 'available') === 'available';
+            $canReschedule = ($daysUntil >= 3) && $rescheduleCount < 1 && in_array($reservation['status'], ['pending', 'approved', 'postponed']) && !$isOngoing && ($reservation['facility_status'] ?? 'available') === 'available';
+            
+            // Highlight: within 1 day (today or tomorrow) for upcoming tab
+            $withinOneDay = ($tab === 'upcoming' && $daysUntil <= 1 && !$isOngoing);
             
             // Status icon and color
             $statusIcons = [
@@ -464,7 +528,7 @@ ob_start();
             $statusIcon = $statusIcons[$reservation['status']] ?? '📋';
             ?>
             
-            <article class="reservation-card-modern facility-card-admin" data-reservation-id="<?= $reservation['id']; ?>">
+            <article class="reservation-card-modern facility-card-admin<?= $withinOneDay ? ' reservation-card-highlight' : ''; ?>" data-reservation-id="<?= $reservation['id']; ?>">
                 <!-- Card Header -->
                 <div class="reservation-card-header">
                     <div class="reservation-main-info">
@@ -474,6 +538,9 @@ ob_start();
                             <div class="reservation-datetime">
                                 <span class="date-info">📅 <?= date('F j, Y', strtotime($reservation['reservation_date'])); ?></span>
                                 <span class="time-info">🕐 <?= htmlspecialchars($reservation['time_slot']); ?></span>
+                                <?php if ($withinOneDay): ?>
+                                <span class="highlight-badge" style="display: inline-block; margin-left: 0.5rem; padding: 0.15rem 0.5rem; background: #059669; color: white; font-size: 0.75rem; font-weight: 600; border-radius: 4px;">Within 1 day</span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -515,17 +582,26 @@ ob_start();
                 
                 <!-- Action Buttons Section -->
                 <div class="reservation-actions">
-                    <?php if ($canReschedule): ?>
-                        <button class="btn-action btn-primary-large" onclick="openRescheduleModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')">
+                    <?php 
+                    $canEditDetails = in_array($reservation['status'], ['pending', 'approved', 'postponed']) && !$isOngoing;
+                    if ($canReschedule): ?>
+                        <button class="btn-action btn-primary-large" onclick="openRescheduleModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars($reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars($reservation['facility_name'], ENT_QUOTES, 'UTF-8'); ?>" data-operating-hours="<?= htmlspecialchars($reservation['operating_hours'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                             <span class="btn-icon">📅</span>
-                            <span class="btn-text">Reschedule Reservation</span>
+                            <span class="btn-text">Request Reschedule</span>
                         </button>
-                    <?php elseif ($isOngoing && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                    <?php endif; ?>
+                    <?php if ($canEditDetails): ?>
+                        <button class="btn-action btn-outline" onclick="openEditDetailsModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-purpose="<?= htmlspecialchars($reservation['purpose'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>" data-capacity-threshold="<?= (int)($reservation['capacity_threshold'] ?? 0); ?>" style="margin-top: 0.5rem;">
+                            <span class="btn-icon">✏️</span>
+                            <span class="btn-text">Edit Purpose / Attendees</span>
+                        </button>
+                    <?php endif; ?>
+                    <?php if ($isOngoing && in_array($reservation['status'], ['pending', 'approved'])): ?>
                         <div class="info-message info-error">
                             <span class="info-icon">⚠️</span>
                             <span class="info-text">This reservation has already started and cannot be rescheduled.</span>
                         </div>
-                    <?php elseif (!in_array($reservation['status'], ['pending', 'approved'])): ?>
+                    <?php elseif (!in_array($reservation['status'], ['pending', 'approved', 'postponed'])): ?>
                         <div class="info-message info-error">
                             <span class="info-icon">ℹ️</span>
                             <span class="info-text">
@@ -543,12 +619,12 @@ ob_start();
                             <span class="info-icon">⚠️</span>
                             <span class="info-text">This reservation has already been rescheduled once. Only one reschedule is allowed per reservation.</span>
                         </div>
-                    <?php elseif ($daysUntil < 3 && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                    <?php elseif ($daysUntil < 3 && in_array($reservation['status'], ['pending', 'approved', 'postponed'])): ?>
                         <div class="info-message info-warning">
                             <span class="info-icon">⏰</span>
                             <span class="info-text">Rescheduling is only allowed up to 3 days before the event. (<?= $daysUntil; ?> day(s) remaining)</span>
                         </div>
-                    <?php elseif (($reservation['facility_status'] ?? 'available') !== 'available' && in_array($reservation['status'], ['pending', 'approved'])): ?>
+                    <?php elseif (($reservation['facility_status'] ?? 'available') !== 'available' && in_array($reservation['status'], ['pending', 'approved', 'postponed'])): ?>
                         <div class="info-message info-warning">
                             <span class="info-icon">🔧</span>
                             <span class="info-text">The facility is currently <?= htmlspecialchars($reservation['facility_status']); ?> and rescheduling is not available. Please contact support.</span>
@@ -563,14 +639,11 @@ ob_start();
     <?php if ($totalPages > 1): ?>
         <?php
         // Build query string for pagination links
-        $queryParams = [];
+        $queryParams = ['tab' => $tab];
         if ($statusFilter) $queryParams['status'] = $statusFilter;
         if ($searchQuery) $queryParams['search'] = $searchQuery;
-        if ($dateFilter) $queryParams['date_range'] = $dateFilter;
-        if ($dateFrom) $queryParams['date_from'] = $dateFrom;
-        if ($dateTo) $queryParams['date_to'] = $dateTo;
         $queryString = http_build_query($queryParams);
-        $separator = $queryString ? '&' : '';
+        $separator = '&';
         ?>
         <div class="pagination-modern">
             <?php if ($page > 1): ?>
@@ -594,23 +667,53 @@ ob_start();
     <?php endif; ?>
 <?php endif; ?>
 
-<!-- Reschedule Modal -->
+<!-- Edit Purpose / Attendees Modal -->
+<div id="editDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>Edit Purpose / Attendees</h3>
+            <button onclick="closeEditDetailsModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
+        </div>
+        <form method="POST" id="editDetailsForm" data-capacity-threshold="0">
+            <input type="hidden" name="action" value="edit_details">
+            <input type="hidden" name="reservation_id" id="edit_details_reservation_id">
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
+                <strong>ℹ️ No approval needed</strong> unless attendee count exceeds the facility&apos;s capacity threshold.
+            </div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Purpose / Event Description <span style="color: #dc3545;">*</span></label>
+            <textarea name="purpose" id="edit_details_purpose" required placeholder="Purpose or event description" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem; min-height: 80px; font-family: inherit; resize: vertical;"></textarea>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Expected Attendees</label>
+            <input type="number" name="expected_attendees" id="edit_details_expected_attendees" min="0" placeholder="Optional" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <small id="edit_details_capacity_warning" style="display: none; color: #f59e0b; margin-top: -0.5rem; margin-bottom: 1rem; font-size: 0.85rem;"></small>
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn-outline" onclick="closeEditDetailsModal()" style="flex: 1;">Cancel</button>
+                <button type="submit" class="btn-primary" style="flex: 1;">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Request Reschedule Modal -->
 <div id="rescheduleModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h3>Reschedule Reservation</h3>
+            <h3>Request Reschedule</h3>
             <button onclick="closeRescheduleModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
         <form method="POST" id="rescheduleForm">
             <input type="hidden" name="action" value="reschedule">
             <input type="hidden" name="reservation_id" id="reschedule_reservation_id">
+            <input type="hidden" id="reschedule_facility_id" value="">
+            <input type="hidden" id="reschedule_current_date" value="">
+            <input type="hidden" id="reschedule_current_time_slot" value="">
             
             <div style="margin-bottom: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
-                <strong>ℹ️ Reschedule Policy:</strong>
+                <strong>ℹ️ Request Reschedule Policy:</strong>
                 <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0; font-size: 0.9rem;">
-                    <li>Rescheduling is allowed up to <strong>3 days before</strong> the event (same-day rescheduling is not allowed)</li>
-                    <li>Only <strong>one reschedule</strong> per reservation</li>
-                    <li><strong>Approved reservations</strong> will require re-approval after rescheduling</li>
+                    <li>Requests allowed up to <strong>3 days before</strong> the event (same-day not allowed)</li>
+                    <li>Only <strong>one reschedule request</strong> per reservation</li>
+                    <li>Staff will <strong>review and apply changes</strong> upon approval</li>
+                    <li>Approved/postponed reservations will require re-approval after staff applies the change</li>
                     <li>Reservations that have <strong>already started</strong> cannot be rescheduled</li>
                     <li>Rejected or cancelled reservations cannot be rescheduled</li>
                 </ul>
@@ -629,59 +732,324 @@ ob_start();
             <input type="date" name="new_date" id="reschedule_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                New Time Slot <span style="color: #dc3545;">*</span>
+                Start Time <span style="color: #dc3545;">*</span>
             </label>
-            <select name="new_time_slot" id="reschedule_new_time_slot" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
-                <option value="">Select time slot...</option>
-                <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
-                <option value="Afternoon (1:00 PM - 5:00 PM)">Afternoon (1:00 PM - 5:00 PM)</option>
-                <option value="Evening (6:00 PM - 10:00 PM)">Evening (6:00 PM - 10:00 PM)</option>
+            <select name="start_time" id="reschedule_start_time" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+                <option value="">Select start time...</option>
+                <?php for ($hour = 8; $hour <= 21; $hour++): for ($minute = 0; $minute < 60; $minute += 30): if ($hour == 21 && $minute > 0) break; $tv = sprintf('%02d:%02d', $hour, $minute); $td = date('g:i A', strtotime($tv)); ?>
+                <option value="<?= $tv; ?>"><?= $td; ?></option>
+                <?php endfor; endfor; ?>
             </select>
+            <small id="reschedule_start_help" style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:-0.5rem; margin-bottom:1rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
-                Reason for Rescheduling <span style="color: #dc3545;">*</span>
+                End Time <span style="color: #dc3545;">*</span>
             </label>
-            <textarea name="reason" id="reschedule_reason" required placeholder="Enter the reason for rescheduling (e.g., schedule conflict, change of plans, etc.)" style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; min-height: 100px; font-family: inherit; resize: vertical;"></textarea>
+            <select name="end_time" id="reschedule_end_time" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+                <option value="">Select end time...</option>
+                <?php for ($hour = 8; $hour <= 21; $hour++): for ($minute = 0; $minute < 60; $minute += 30): if ($hour == 21 && $minute > 0) break; $tv = sprintf('%02d:%02d', $hour, $minute); $td = date('g:i A', strtotime($tv)); ?>
+                <option value="<?= $tv; ?>"><?= $td; ?></option>
+                <?php endfor; endfor; ?>
+            </select>
+            <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:-0.5rem; margin-bottom:1rem;">Must be after start time. Minimum 30 minutes.</small>
+            <input type="hidden" name="new_time_slot" id="reschedule_new_time_slot">
+            
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                Reason for Reschedule Request <span style="color: #dc3545;">*</span>
+            </label>
+            <textarea name="reason" id="reschedule_reason" required placeholder="Enter the reason for your reschedule request (e.g., schedule conflict, change of plans, etc.)" style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; min-height: 100px; font-family: inherit; resize: vertical;"></textarea>
+            
+            <div id="reschedule-conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
+                <div id="reschedule-conflict-header" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <span id="reschedule-conflict-icon" style="font-size:1.2rem;">⏳</span>
+                    <h4 id="reschedule-conflict-title" style="margin:0; font-size:0.95rem;">Checking Availability...</h4>
+                </div>
+                <p id="reschedule-conflict-message" style="margin:0 0 0.75rem; font-size:0.85rem;"></p>
+                <div id="reschedule-conflict-alternatives" style="display:none;">
+                    <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Alternative time slots:</p>
+                    <ul id="reschedule-alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
+                </div>
+                <p id="reschedule-conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
+            </div>
             
             <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                 <button type="button" class="btn-outline" onclick="closeRescheduleModal()" style="flex: 1;">Cancel</button>
-                <button type="submit" class="btn-primary confirm-action" data-message="Reschedule this reservation? Approved reservations will require re-approval." style="flex: 1;">Reschedule</button>
+                <button type="submit" class="btn-primary confirm-action" data-message="Submit reschedule request? Staff will review and apply changes upon approval." style="flex: 1;">Submit Request</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-// Custom Date Range Toggle
-document.addEventListener('DOMContentLoaded', function() {
-    const dateFilter = document.getElementById('dateFilter');
-    const customDateRange = document.getElementById('customDateRange');
-    
-    // Show/hide custom date range
-    if (dateFilter) {
-        dateFilter.addEventListener('change', function() {
-            if (this.value === 'custom') {
-                customDateRange.style.display = 'grid';
-            } else {
-                customDateRange.style.display = 'none';
-            }
-        });
+// Edit Details Modal
+function openEditDetailsModal(btn) {
+    const id = btn.getAttribute('data-id');
+    const purpose = btn.getAttribute('data-purpose') || '';
+    const attendees = btn.getAttribute('data-attendees') || '';
+    const capacityThreshold = parseInt(btn.getAttribute('data-capacity-threshold') || '0', 10);
+    document.getElementById('edit_details_reservation_id').value = id;
+    document.getElementById('edit_details_purpose').value = purpose;
+    document.getElementById('edit_details_expected_attendees').value = attendees;
+    document.getElementById('editDetailsForm').setAttribute('data-capacity-threshold', capacityThreshold);
+    document.getElementById('edit_details_capacity_warning').style.display = 'none';
+    document.getElementById('editDetailsModal').style.display = 'flex';
+}
+function closeEditDetailsModal() {
+    document.getElementById('editDetailsModal').style.display = 'none';
+}
+document.getElementById('edit_details_expected_attendees').addEventListener('input', function() {
+    const threshold = parseInt(document.getElementById('editDetailsForm').getAttribute('data-capacity-threshold') || '0', 10);
+    const val = parseInt(this.value, 10);
+    const warn = document.getElementById('edit_details_capacity_warning');
+    if (threshold > 0 && !isNaN(val) && val > threshold) {
+        warn.textContent = 'Note: ' + val + ' attendees exceeds facility threshold (' + threshold + '). Re-approval will be required.';
+        warn.style.display = 'block';
+    } else {
+        warn.style.display = 'none';
     }
 });
+document.getElementById('editDetailsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditDetailsModal();
+});
 
-// Reschedule Modal Functions
-function openRescheduleModal(reservationId, currentDate, currentTime, facilityName) {
-    document.getElementById('reschedule_reservation_id').value = reservationId;
-    document.getElementById('reschedule_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
-    document.getElementById('reschedule_new_date').value = '';
+// Reschedule Modal - parse operating hours (same logic as book facility)
+function parseOperatingHoursReschedule(operatingHours) {
+    if (!operatingHours || operatingHours.trim() === '') return { start: 8, end: 21 };
+    const hours = operatingHours.trim();
+    const match24 = hours.match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+    if (match24) return { start: parseInt(match24[1]), end: parseInt(match24[3]) };
+    const match12 = hours.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (match12) {
+        let sh = parseInt(match12[1]); const sp = match12[3].toUpperCase();
+        let eh = parseInt(match12[4]); const ep = match12[6].toUpperCase();
+        if (sp === 'PM' && sh !== 12) sh += 12; if (sp === 'AM' && sh === 12) sh = 0;
+        if (ep === 'PM' && eh !== 12) eh += 12; if (ep === 'AM' && eh === 12) eh = 0;
+        return { start: sh, end: eh };
+    }
+    return { start: 8, end: 21 };
+}
+
+function filterRescheduleTimeSlots(operatingHours) {
+    const { start: openHour, end: closeHour } = parseOperatingHoursReschedule(operatingHours);
+    const startSel = document.getElementById('reschedule_start_time');
+    const endSel = document.getElementById('reschedule_end_time');
+    const helpEl = document.getElementById('reschedule_start_help');
+    [startSel, endSel].forEach((sel, idx) => {
+        sel.querySelectorAll('option').forEach(opt => {
+            if (opt.value === '') { opt.style.display = ''; opt.disabled = false; return; }
+            const [hour, minute] = opt.value.split(':').map(Number);
+            const isStart = idx === 0;
+            const within = isStart ? (hour >= openHour && hour < closeHour) : (hour >= openHour && hour <= closeHour);
+            opt.style.display = within ? '' : 'none';
+            opt.disabled = !within;
+        });
+    });
+    if (helpEl) {
+        const fmt = h => { const p = h >= 12 ? 'PM' : 'AM'; const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h); return h12 + ':00 ' + p; };
+        helpEl.textContent = 'Facility operating hours: ' + fmt(openHour) + ' - ' + fmt(closeHour);
+    }
+}
+
+// Filter end time options to only allow times after start time (min 30 min duration) - same logic as book facility
+function updateRescheduleEndTimeOptions() {
+    const startSel = document.getElementById('reschedule_start_time');
+    const endSel = document.getElementById('reschedule_end_time');
+    if (!startSel || !endSel) return;
+    const startTime = startSel.value;
+    if (!startTime) {
+        endSel.querySelectorAll('option').forEach(opt => { opt.disabled = false; });
+        return;
+    }
+    const [startH, startM] = startTime.split(':').map(Number);
+    const startMinutes = startH * 60 + startM;
+    endSel.querySelectorAll('option').forEach(opt => {
+        if (opt.value === '') { opt.disabled = false; return; }
+        const [endH, endM] = opt.value.split(':').map(Number);
+        const endMinutes = endH * 60 + endM;
+        opt.disabled = endMinutes <= startMinutes;
+    });
+    const endVal = endSel.value;
+    if (endVal) {
+        const [endH, endM] = endVal.split(':').map(Number);
+        if (endH * 60 + endM <= startMinutes) endSel.value = '';
+    }
+}
+
+let rescheduleConflictCheckTimeout = null;
+
+function openRescheduleModal(btn) {
+    const id = btn.getAttribute('data-id');
+    const facilityId = btn.getAttribute('data-facility-id') || '';
+    const date = btn.getAttribute('data-date');
+    const time = btn.getAttribute('data-time');
+    const facility = btn.getAttribute('data-facility');
+    const operatingHours = btn.getAttribute('data-operating-hours') || '';
+    document.getElementById('reschedule_reservation_id').value = id;
+    document.getElementById('reschedule_facility_id').value = facilityId;
+    document.getElementById('reschedule_current_date').value = date;
+    document.getElementById('reschedule_current_time_slot').value = time;
+    document.getElementById('reschedule_current_schedule').textContent = facility + ' on ' + date + ' (' + time + ')';
+    document.getElementById('reschedule_new_date').value = date;
+    document.getElementById('reschedule_start_time').value = '';
+    document.getElementById('reschedule_end_time').value = '';
     document.getElementById('reschedule_new_time_slot').value = '';
     document.getElementById('reschedule_reason').value = '';
+    filterRescheduleTimeSlots(operatingHours);
+    const timeMatch = time.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+        const startVal = timeMatch[1].padStart(2,'0') + ':' + timeMatch[2];
+        const endVal = timeMatch[3].padStart(2,'0') + ':' + timeMatch[4];
+        const startOpt = document.querySelector('#reschedule_start_time option[value="' + startVal + '"]');
+        const endOpt = document.querySelector('#reschedule_end_time option[value="' + endVal + '"]');
+        if (startOpt && !startOpt.disabled) document.getElementById('reschedule_start_time').value = startVal;
+        updateRescheduleEndTimeOptions();
+        if (endOpt && !endOpt.disabled) document.getElementById('reschedule_end_time').value = endVal;
+    }
     document.getElementById('rescheduleModal').style.display = 'flex';
+    // Trigger conflict check after modal opens (debounced)
+    if (rescheduleConflictCheckTimeout) clearTimeout(rescheduleConflictCheckTimeout);
+    rescheduleConflictCheckTimeout = setTimeout(checkRescheduleConflict, 300);
 }
 
 function closeRescheduleModal() {
     document.getElementById('rescheduleModal').style.display = 'none';
 }
+
+function debounceRescheduleConflict() {
+    if (rescheduleConflictCheckTimeout) clearTimeout(rescheduleConflictCheckTimeout);
+    rescheduleConflictCheckTimeout = setTimeout(checkRescheduleConflict, 500);
+}
+
+async function checkRescheduleConflict() {
+    rescheduleConflictCheckTimeout = null;
+    const fid = document.getElementById('reschedule_facility_id')?.value;
+    const date = document.getElementById('reschedule_new_date')?.value;
+    const startTime = document.getElementById('reschedule_start_time')?.value;
+    const endTime = document.getElementById('reschedule_end_time')?.value;
+    const excludeId = document.getElementById('reschedule_reservation_id')?.value;
+    const msgBox = document.getElementById('reschedule-conflict-warning');
+    const msgText = document.getElementById('reschedule-conflict-message');
+    const altWrap = document.getElementById('reschedule-conflict-alternatives');
+    const altList = document.getElementById('reschedule-alternatives-list');
+    const riskLine = document.getElementById('reschedule-conflict-risk');
+    const conflictIcon = document.getElementById('reschedule-conflict-icon');
+    const conflictTitle = document.getElementById('reschedule-conflict-title');
+
+    if (!fid || !date || !startTime || !endTime) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    if (eh * 60 + em <= sh * 60 + sm) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const timeSlot = startTime + ' - ' + endTime;
+
+    msgBox.style.display = 'block';
+    msgBox.style.background = '#f0f4ff';
+    msgBox.style.border = '2px solid #6366f1';
+    if (msgText) msgText.style.color = '#4f46e5';
+    if (msgText) msgText.textContent = 'Checking availability and conflicts...';
+    if (conflictIcon) conflictIcon.textContent = '⏳';
+    if (conflictTitle) { conflictTitle.textContent = 'Checking Availability...'; conflictTitle.style.color = '#4f46e5'; }
+    if (altWrap) altWrap.style.display = 'none';
+    if (riskLine) riskLine.style.display = 'none';
+
+    const basePath = <?= json_encode(base_path()); ?>;
+    try {
+        let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+        if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        });
+        if (!resp.ok) { msgBox.style.display = 'none'; return; }
+        const data = await resp.json();
+        if (data.error) { msgBox.style.display = 'none'; return; }
+
+        if (data.has_conflict) {
+            msgBox.style.background = '#fdecee';
+            msgBox.style.border = '2px solid #b23030';
+            if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = data.message || 'This slot is already booked (approved reservation). Please select an alternative time.'; }
+            if (conflictIcon) conflictIcon.textContent = '✗';
+            if (conflictTitle) { conflictTitle.textContent = 'Conflict Detected'; conflictTitle.style.color = '#b23030'; }
+        } else if (data.soft_conflicts && data.soft_conflicts.length > 0) {
+            const cnt = data.pending_count || data.soft_conflicts.length;
+            msgBox.style.background = '#fff4e5';
+            msgBox.style.border = '2px solid #ffc107';
+            if (msgText) { msgText.style.color = '#856404'; msgText.textContent = 'Warning: ' + cnt + ' pending reservation(s) exist for this slot. You can still submit, but staff will approve only one based on priority.'; }
+            if (conflictIcon) conflictIcon.textContent = '⚠️';
+            if (conflictTitle) { conflictTitle.textContent = 'Warning - Pending Reservations'; conflictTitle.style.color = '#856404'; }
+        } else {
+            msgBox.style.background = '#e8f5e9';
+            msgBox.style.border = '2px solid #0d7a43';
+            if (msgText) { msgText.style.color = '#0d7a43'; msgText.textContent = '✓ This time slot is available for rescheduling!'; }
+            if (conflictIcon) conflictIcon.textContent = '✓';
+            if (conflictTitle) { conflictTitle.textContent = 'Available'; conflictTitle.style.color = '#0d7a43'; }
+        }
+        if (data.alternatives && data.alternatives.length) {
+            altWrap.style.display = 'block';
+            altList.innerHTML = data.alternatives.filter(a => a.available !== false)
+                .map(a => '<li><strong>' + (a.display || a.time_slot || '') + '</strong> — ' + (a.recommendation || 'Available') + '</li>').join('');
+        }
+    } catch (e) {
+        msgBox.style.background = '#fdecee';
+        msgBox.style.border = '2px solid #b23030';
+        if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = 'Error checking availability. Please try again.'; }
+    }
+}
+
+document.getElementById('reschedule_new_date').addEventListener('change', debounceRescheduleConflict);
+document.getElementById('reschedule_start_time').addEventListener('change', function() {
+    updateRescheduleEndTimeOptions();
+    debounceRescheduleConflict();
+});
+document.getElementById('reschedule_end_time').addEventListener('change', function() {
+    this.setCustomValidity('');
+    debounceRescheduleConflict();
+});
+
+document.getElementById('rescheduleForm').addEventListener('submit', function(e) {
+    const startVal = document.getElementById('reschedule_start_time').value;
+    const endVal = document.getElementById('reschedule_end_time').value;
+    const newDate = document.getElementById('reschedule_new_date').value;
+    const currentDate = document.getElementById('reschedule_current_date').value;
+    const currentTimeSlot = document.getElementById('reschedule_current_time_slot').value;
+    const endTimeEl = document.getElementById('reschedule_end_time');
+
+    if (startVal && endVal) {
+        const [sh, sm] = startVal.split(':').map(Number);
+        const [eh, em] = endVal.split(':').map(Number);
+        const startM = sh * 60 + sm;
+        const endM = eh * 60 + em;
+        if (endM <= startM) {
+            e.preventDefault();
+            endTimeEl.setCustomValidity('End time must be after start time');
+            endTimeEl.reportValidity();
+            return false;
+        }
+        if (endM - startM < 30) {
+            e.preventDefault();
+            endTimeEl.setCustomValidity('Reservation must be at least 30 minutes');
+            endTimeEl.reportValidity();
+            return false;
+        }
+        const newTimeSlot = startVal + ' - ' + endVal;
+        document.getElementById('reschedule_new_time_slot').value = newTimeSlot;
+
+        // Block if rescheduling to the exact same date and time
+        if (newDate === currentDate && newTimeSlot === currentTimeSlot) {
+            e.preventDefault();
+            endTimeEl.setCustomValidity('');
+            alert('You are already scheduled for this date and time. Please select a different date or time slot to reschedule.');
+            return false;
+        }
+        endTimeEl.setCustomValidity('');
+    }
+});
 
 // Close modal when clicking outside
 document.getElementById('rescheduleModal').addEventListener('click', function(e) {

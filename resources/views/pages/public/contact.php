@@ -1,4 +1,5 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 $pageTitle = 'Contact | Barangay Culiat Public Facilities Reservation';
@@ -133,9 +134,9 @@ ob_start();
 </section>
 
 <style>
-/* Modern Contact Section */
+/* Modern Contact Section - green gradient */
 .contact-section-modern {
-    background: url("<?= $base; ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #f0fdf4 100%);
     min-height: 100vh;
     position: relative;
     padding: 6rem 0 4rem;
@@ -150,9 +151,7 @@ ob_start();
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: transparent;
     z-index: 0;
 }
 

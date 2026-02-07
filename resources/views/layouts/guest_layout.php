@@ -8,7 +8,9 @@ $requestUri = $_SERVER['REQUEST_URI'] ?? '';
 $requestPath = parse_url($requestUri, PHP_URL_PATH) ?? $requestUri;
 $phpSelf = $_SERVER['PHP_SELF'] ?? '';
 $isHomePage = strpos($phpSelf, 'home.php') !== false || $requestPath === '/' || (strpos($requestPath, '/home') !== false);
-$isPublicPage = strpos($phpSelf, 'facilities.php') !== false || 
+$isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
+                strpos($requestPath, '/announcements') !== false ||
+                strpos($phpSelf, 'facilities.php') !== false || 
                 strpos($requestPath, '/facilities') !== false ||
                 strpos($phpSelf, 'facility_details.php') !== false ||
                 strpos($requestPath, '/facility-details') !== false ||
@@ -28,7 +30,10 @@ if ($isHomePage || $isPublicPage) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Mobile-first viewport meta tag with proper scaling -->
+    <script>
+    (function(){var t;try{t=localStorage.getItem('publicTheme')||localStorage.getItem('theme')||'light';}catch(e){t='light';}
+    if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
     <!-- Bootstrap Icons -->
@@ -47,32 +52,36 @@ if ($isHomePage || $isPublicPage) {
     try {
         $base = base_path();
         $customCss = $base . '/public/css/style.css';
+        $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
     } catch (Exception $e) {
         $base = '';
         $customCss = '/public/css/style.css';
+        $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
     }
-    // Cache-busting: Update this version number when CSS changes are deployed
-    $cssVersion = '9.8';
+    // Cache-busting: Use filemtime so CSS updates on deploy when file changes
+    $stylePath = $appRoot . '/public/css/style.css';
+    $cssVersion = file_exists($stylePath) ? filemtime($stylePath) : time();
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/dark-mode-public.css?v=<?= file_exists($appRoot . '/public/css/dark-mode-public.css') ? filemtime($appRoot . '/public/css/dark-mode-public.css') : time(); ?>">
+    <?php if (!empty($useTailwind)): 
+        $homeCssPath = $appRoot . '/public/css/home.css';
+        $publicCssPath = $appRoot . '/public/css/public-pages.css';
+        $tailwindPath = $appRoot . '/public/css/tailwind.css';
+        $homeCssVersion = file_exists($homeCssPath) ? filemtime($homeCssPath) : time();
+        $publicCssVersion = file_exists($publicCssPath) ? filemtime($publicCssPath) : time();
+        $tailwindVersion = file_exists($tailwindPath) ? filemtime($tailwindPath) : time();
+    ?>
+    <!-- Tailwind CSS (built via CLI) - Preflight/collapse disabled in tailwind.config.js -->
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/tailwind.css?v=<?= $tailwindVersion; ?>">
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/home.css?v=<?= $homeCssVersion; ?>">
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/public-pages.css?v=<?= $publicCssVersion; ?>">
+    <?php endif; ?>
     <style>
         /* Fallback: Ensure critical styles load even if external CSS fails */
         body.landing-page {
-            background: url("<?= base_path(); ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed !important;
+            background: #ffffff !important;
             min-height: 100vh;
-        }
-        body.landing-page::before {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            z-index: 0;
-            pointer-events: none;
         }
         .contact-section {
             min-height: 100vh !important;
@@ -83,7 +92,7 @@ if ($isHomePage || $isPublicPage) {
             padding-bottom: 3rem !important;
             padding-left: 1.25rem !important;
             padding-right: 1.25rem !important;
-            background: url("<?= base_path(); ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed !important;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #f0fdf4 100%) !important;
             position: relative;
         }
         .contact-section::before {
@@ -93,9 +102,7 @@ if ($isHomePage || $isPublicPage) {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: transparent;
             z-index: 0;
             pointer-events: none;
         }
@@ -173,7 +180,7 @@ if ($isHomePage || $isPublicPage) {
         .btn-primary {
             margin-top: 0.5rem;
             padding: 0.95rem;
-            background: linear-gradient(135deg, #6384d2, #285ccd) !important;
+            background: linear-gradient(135deg, #059669, #047857) !important;
             color: #fff !important;
             border: none;
             border-radius: 8px;
@@ -185,7 +192,7 @@ if ($isHomePage || $isPublicPage) {
         }
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 71, 171, 0.3);
+            box-shadow: 0 6px 16px rgba(5, 150, 105, 0.3);
         }
         
         /* Ensure facility details page has proper spacing from navbar */
@@ -193,6 +200,69 @@ if ($isHomePage || $isPublicPage) {
             padding-top: 7rem !important;
             padding-bottom: 3rem !important;
         }
+        
+        /* CRITICAL OVERRIDES - Section Headers Centering */
+        .section-title {
+            text-align: center !important;
+            color: #1f2937 !important;
+        }
+        
+        .section-subtitle {
+            text-align: center !important;
+            color: #6b7280 !important;
+        }
+        
+        .section-divider {
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+        
+        /* CRITICAL - Footer green gradient (overrides Tailwind/Bootstrap) */
+        footer.modern-footer {
+            background: linear-gradient(135deg, #065f46 0%, #047857 40%, #059669 100%) !important;
+            background-color: #1e3a8a !important;
+            color: #ffffff !important;
+            padding: 4rem 0 2rem !important;
+        }
+        footer.modern-footer *,
+        footer.modern-footer a,
+        footer.modern-footer p,
+        footer.modern-footer h3,
+        footer.modern-footer h4,
+        footer.modern-footer small,
+        footer.modern-footer li,
+        footer.modern-footer span {
+            color: #ffffff !important;
+        }
+        footer.modern-footer a:hover {
+            color: #e0e7ff !important;
+        }
+        footer.modern-footer .container,
+        footer.modern-footer .footer-grid,
+        footer.modern-footer .footer-brand,
+        footer.modern-footer .footer-section,
+        footer.modern-footer .footer-bottom {
+            background: transparent !important;
+        }
+        
+        /* CRITICAL OVERRIDES - Hero Section Alignment */
+        .modern-hero {
+            align-items: flex-start !important;
+            padding-top: 12rem !important;
+        }
+        
+        <?php if (!empty($useTailwind)): ?>
+        /* CRITICAL - Ensure navbar links visible on Tailwind pages (fixes Bootstrap .collapse vs Tailwind conflicts) */
+        @media (min-width: 768px) {
+            #mainNav .navbar-collapse { display: flex !important; visibility: visible !important; }
+            #mainNav .navbar-toggler { display: none !important; }
+        }
+        @media (max-width: 767px) {
+            #mainNav .navbar-collapse { display: none !important; }
+        }
+        #mainNav .nav-link { color: rgba(31,41,55,0.9) !important; }
+        #mainNav.navbar-scrolled .nav-link { color: #212529 !important; }
+        <?php endif; ?>
     </style>
 </head>
 <body id="page-top" class="<?= htmlspecialchars($bodyClass); ?>">

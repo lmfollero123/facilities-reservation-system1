@@ -1,0 +1,33 @@
+# Dependencies
+/node_modules
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+config/geocoding_config.php
+
+# Logs & generated data
+logs/
+*.log
+storage/task_logs/
+storage/task_cmd/
+storage/exports/
+storage/private/
+
+# User uploads (regenerated on server)
+public/img/announcements/
+public/img/facilities/
+public/uploads/
+
+# IDE & editor
+.vscode/
+.idea/
+.gemini/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database dumps (may contain sensitive data)
+database/latest-database-inside.sql

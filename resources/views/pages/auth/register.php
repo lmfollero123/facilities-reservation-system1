@@ -1,4 +1,5 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
@@ -213,10 +214,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ob_start();
 ?>
-<div class="auth-container">
+<div class="auth-container public-fade-in">
     <div class="auth-card auth-card-wide">
         <div class="auth-header">
-            <div class="auth-icon">📝</div>
+            <div class="auth-icon flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-100 text-emerald-600 transition-transform duration-300 hover:scale-105">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            </div>
             <h1>Create Account</h1>
             <p>Register for facility reservations</p>
         </div>

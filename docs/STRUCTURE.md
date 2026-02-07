@@ -42,10 +42,6 @@ facilities_reservation_system/
 │   ├── REPORTS_MODULE.md          # Reports & Analytics module documentation
 │   ├── SYSTEM_FLOW.md             # System workflow documentation
 │   └── USER_MODULE.md             # User Management module documentation
-├── NewTemplate/                   # Design reference template
-│   ├── style.css                  # Template design styles
-│   ├── cityhall.jpeg              # Landing page background
-│   └── *.html                     # Template HTML files
 ├── public/
 │   ├── css/
 │   │   └── style.css              # Global styles with glass-morphism design, Poppins font, responsive
@@ -162,7 +158,7 @@ facilities_reservation_system/
 - **Design System**: 
   - Poppins font family (Google Fonts)
   - Glass-morphism cards with backdrop blur
-  - Gradient backgrounds matching NewTemplate design
+  - Gradient backgrounds matching modern glass-morphism design
   - Color palette: Blues (#6384d2, #285ccd), gradients, white text on colored backgrounds
 - **Global LGU Theme**: Color variables, typography, spacing
 - **Responsive Design**: Mobile-first approach, media queries
@@ -432,7 +428,7 @@ facilities_reservation_system/
   - Popularity scoring
 
 ### User Experience
-- **Modern Glass-Morphism Design**: Matching NewTemplate design language
+- **Modern Glass-Morphism Design**: Consistent design language across the application
 - Responsive design (mobile-first)
 - Page transition animations
 - Professional confirmation modals
@@ -545,7 +541,7 @@ facilities_reservation_system/
 ## Recent Updates
 
 ### Visual Design Overhaul
-- Applied NewTemplate design language throughout
+- Applied modern glass-morphism design language throughout
 - Glass-morphism cards and components
 - Poppins font family
 - Cityhall.jpeg background on landing/auth pages

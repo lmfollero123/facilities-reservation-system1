@@ -21,9 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $date = $_POST['date'] ?? '';
     $timeSlot = $_POST['time_slot'] ?? '';
+    $excludeReservationId = !empty($_POST['exclude_reservation_id']) ? (int)$_POST['exclude_reservation_id'] : null;
 
     if ($facilityId && $date && $timeSlot) {
-        $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
+        $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservationId);
         // Lightweight logging for future ML training
         try {
             $logLine = json_encode([

@@ -1,0 +1,12 @@
+{
+  "name": "facilities-reservation-system",
+  "version": "1.0.0",
+  "description": "Barangay Culiat Public Facilities Reservation System",
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./public/css/tailwind-input.css -o ./public/css/tailwind.css --minify",
+    "watch:css": "npx tailwindcss -i ./public/css/tailwind-input.css -o ./public/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

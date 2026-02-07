@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log (including facility status)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -200,13 +200,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     throw new Exception('Reason is required for modifying an approved reservation.');
                 }
                 
-                // Check if new date/time is available (no conflicts)
+                $newPurpose = trim($_POST['purpose'] ?? '') ?: ($reservationInfo['purpose'] ?? '');
+                if (empty($newPurpose)) {
+                    throw new Exception('Purpose is required.');
+                }
+                $newExpectedAttendees = isset($_POST['expected_attendees']) && $_POST['expected_attendees'] !== '' ? (int)$_POST['expected_attendees'] : null;
+                if ($newExpectedAttendees !== null && $newExpectedAttendees < 0) {
+                    $newExpectedAttendees = null;
+                }
+                
+                // Check if new date/time is available (include postponed - they also occupy slots)
                 $conflictCheck = $pdo->prepare(
                     'SELECT id FROM reservations 
                      WHERE facility_id = (SELECT facility_id FROM reservations WHERE id = ?)
                      AND reservation_date = ?
                      AND time_slot = ?
-                     AND status IN ("pending", "approved")
+                     AND status IN ("pending", "approved", "postponed")
                      AND id != ?'
                 );
                 $conflictCheck->execute([$reservationId, $newDate, $newTimeSlot, $reservationId]);
@@ -218,10 +227,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $oldDate = $reservationInfo['reservation_date'];
                 $oldTimeSlot = $reservationInfo['time_slot'];
                 
-                $stmt = $pdo->prepare('UPDATE reservations SET reservation_date = :new_date, time_slot = :new_time, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                $stmt = $pdo->prepare('UPDATE reservations SET reservation_date = :new_date, time_slot = :new_time, purpose = :purpose, expected_attendees = :expected_attendees, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                 $stmt->execute([
                     'new_date' => $newDate,
                     'new_time' => $newTimeSlot,
+                    'purpose' => $newPurpose,
+                    'expected_attendees' => $newExpectedAttendees,
                     'id' => $reservationId,
                 ]);
                 
@@ -322,13 +333,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     throw new Exception('Reason is required for postponing an approved reservation.');
                 }
                 
-                // Check if new date/time is available
+                // Check if new date/time is available (include postponed - they also occupy slots)
                 $conflictCheck = $pdo->prepare(
                     'SELECT id FROM reservations 
                      WHERE facility_id = (SELECT facility_id FROM reservations WHERE id = ?)
                      AND reservation_date = ?
                      AND time_slot = ?
-                     AND status IN ("pending", "approved")
+                     AND status IN ("pending", "approved", "postponed")
                      AND id != ?'
                 );
                 $conflictCheck->execute([$reservationId, $newDate, $newTimeSlot, $reservationId]);
@@ -336,11 +347,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     throw new Exception('The selected date and time slot is already booked. Please choose another time.');
                 }
                 
-                // Update reservation - set to pending for re-approval
+                // Update reservation - set to postponed with priority (distinct state, requires re-approval)
                 $oldDate = $reservationInfo['reservation_date'];
                 $oldTimeSlot = $reservationInfo['time_slot'];
                 
-                $stmt = $pdo->prepare('UPDATE reservations SET reservation_date = :new_date, time_slot = :new_time, status = "pending", updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                $stmt = $pdo->prepare('UPDATE reservations SET reservation_date = :new_date, time_slot = :new_time, status = "postponed", postponed_priority = TRUE, postponed_at = NOW(), updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                 $stmt->execute([
                     'new_date' => $newDate,
                     'new_time' => $newTimeSlot,
@@ -351,7 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)');
                 $hist->execute([
                     'id' => $reservationId,
-                    'status' => 'pending',
+                    'status' => 'postponed',
                     'note' => 'Postponed from ' . $oldDate . ' ' . $oldTimeSlot . ' to ' . $newDate . ' ' . $newTimeSlot . '. Reason: ' . $reason,
                     'user' => $_SESSION['user_id'] ?? null,
                 ]);
@@ -383,7 +394,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], 'Reservation Postponed', $emailBody);
                 }
                 
-                $message = 'Reservation postponed successfully. It is now pending re-approval.';
+                $message = 'Reservation postponed successfully. It now has postponed status with priority and requires re-approval.';
                 header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $reservationId);
                 exit;
                 
@@ -497,7 +508,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Fetch reservation details
 $stmt = $pdo->prepare(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.created_at, r.updated_at,
+    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
             f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status
      FROM reservations r
@@ -711,7 +722,7 @@ ob_start();
             In case of emergencies or schedule conflicts, you can modify, postpone, or cancel this approved reservation.
         </p>
         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-            <button class="btn-outline" onclick="openModifyModalDetail(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')" style="padding:0.5rem 1rem;">Modify Date/Time</button>
+            <button class="btn-outline" onclick="openModifyModalDetail(this)" data-id="<?= (int)$reservationId; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars($reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars($reservation['facility_name'], ENT_QUOTES, 'UTF-8'); ?>" data-purpose="<?= htmlspecialchars($reservation['purpose'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>" style="padding:0.5rem 1rem;">Modify</button>
             <button class="btn-outline" onclick="openPostponeModalDetail(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')" style="padding:0.5rem 1rem;">Postpone</button>
             <button class="btn-outline" onclick="openCancelModalDetail(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['facility_name']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.5rem 1rem; color: #dc3545;">Cancel</button>
         </div>
@@ -758,6 +769,7 @@ ob_start();
         <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="modifyForm">
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
+            <input type="hidden" id="modify_facility_id" value="<?= (int)($reservation['facility_id'] ?? 0); ?>">
             
             <div style="margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
                 <strong>Current Schedule:</strong><br>
@@ -780,10 +792,28 @@ ob_start();
             </label>
             <input type="time" name="end_time" id="modify_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Purpose / Event Description</label>
+            <textarea name="purpose" id="modify_purpose" placeholder="Purpose or event description" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem; min-height: 80px; font-family: inherit; resize: vertical;"></textarea>
+            
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Expected Attendees</label>
+            <input type="number" name="expected_attendees" id="modify_expected_attendees" min="0" placeholder="Optional" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Reason for Modification <span style="color: #dc3545;">*</span>
             </label>
             <textarea name="reason" id="modify_reason" required placeholder="Enter the reason for modifying this reservation (e.g., emergency, facility maintenance, etc.)" style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; min-height: 100px; font-family: inherit; resize: vertical;"></textarea>
+            
+            <div id="modify-conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
+                <div id="modify-conflict-header" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <span id="modify-conflict-icon" style="font-size:1.2rem;">⏳</span>
+                    <h4 id="modify-conflict-title" style="margin:0; font-size:0.95rem;">Checking Availability...</h4>
+                </div>
+                <p id="modify-conflict-message" style="margin:0 0 0.75rem; font-size:0.85rem;"></p>
+                <div id="modify-conflict-alternatives" style="display:none;">
+                    <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Alternative time slots:</p>
+                    <ul id="modify-alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
+                </div>
+            </div>
             
             <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                 <button type="button" class="btn-outline" onclick="closeModifyModal()" style="flex: 1;">Cancel</button>
@@ -805,7 +835,7 @@ ob_start();
             <input type="hidden" name="action" value="postpone">
             
             <div style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
-                <strong>⚠️ Note:</strong> Postponing will change the reservation status back to "pending" and require re-approval.
+                <strong>⚠️ Note:</strong> Postponing will set the reservation status to "postponed" with priority and require re-approval.
             </div>
             
             <div style="margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
@@ -876,23 +906,127 @@ ob_start();
 </div>
 
 <script>
-function openModifyModalDetail(reservationId, currentDate, currentTime, facilityName) {
-    document.getElementById('modify_reservation_id').value = reservationId;
-    document.getElementById('modify_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
-    document.getElementById('modify_new_date').value = '';
-    document.getElementById('modify_start_time').value = '';
-    document.getElementById('modify_end_time').value = '';
+let modifyConflictCheckTimeout = null;
+
+function openModifyModalDetail(btn) {
+    const id = btn.getAttribute('data-id');
+    const facilityId = btn.getAttribute('data-facility-id') || '';
+    const date = btn.getAttribute('data-date');
+    const time = btn.getAttribute('data-time');
+    const facility = btn.getAttribute('data-facility');
+    const purpose = btn.getAttribute('data-purpose') || '';
+    const attendees = btn.getAttribute('data-attendees') || '';
+    
+    document.getElementById('modify_reservation_id').value = id;
+    document.getElementById('modify_facility_id').value = facilityId;
+    document.getElementById('modify_current_schedule').textContent = facility + ' on ' + date + ' (' + time + ')';
+    document.getElementById('modify_new_date').value = date;
+    document.getElementById('modify_purpose').value = purpose;
+    document.getElementById('modify_expected_attendees').value = attendees;
     document.getElementById('modify_reason').value = '';
     
-    // Try to parse current time slot and prefill if in "HH:MM - HH:MM" format
-    const timeMatch = currentTime.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    const timeMatch = time.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
     if (timeMatch) {
         document.getElementById('modify_start_time').value = timeMatch[1].padStart(2, '0') + ':' + timeMatch[2];
         document.getElementById('modify_end_time').value = timeMatch[3].padStart(2, '0') + ':' + timeMatch[4];
+    } else {
+        document.getElementById('modify_start_time').value = '';
+        document.getElementById('modify_end_time').value = '';
     }
     
     document.getElementById('modifyModal').style.display = 'flex';
+    if (modifyConflictCheckTimeout) clearTimeout(modifyConflictCheckTimeout);
+    modifyConflictCheckTimeout = setTimeout(checkModifyConflict, 300);
 }
+
+function debounceModifyConflict() {
+    if (modifyConflictCheckTimeout) clearTimeout(modifyConflictCheckTimeout);
+    modifyConflictCheckTimeout = setTimeout(checkModifyConflict, 500);
+}
+
+async function checkModifyConflict() {
+    modifyConflictCheckTimeout = null;
+    const fid = document.getElementById('modify_facility_id')?.value;
+    const date = document.getElementById('modify_new_date')?.value;
+    const startTime = document.getElementById('modify_start_time')?.value;
+    const endTime = document.getElementById('modify_end_time')?.value;
+    const excludeId = document.getElementById('modify_reservation_id')?.value;
+    const msgBox = document.getElementById('modify-conflict-warning');
+    const msgText = document.getElementById('modify-conflict-message');
+    const altWrap = document.getElementById('modify-conflict-alternatives');
+    const altList = document.getElementById('modify-alternatives-list');
+    const conflictIcon = document.getElementById('modify-conflict-icon');
+    const conflictTitle = document.getElementById('modify-conflict-title');
+
+    if (!fid || !date || !startTime || !endTime) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    if (eh * 60 + em <= sh * 60 + sm) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const timeSlot = startTime + ' - ' + endTime;
+
+    msgBox.style.display = 'block';
+    msgBox.style.background = '#f0f4ff';
+    msgBox.style.border = '2px solid #6366f1';
+    if (msgText) msgText.style.color = '#4f46e5';
+    if (msgText) msgText.textContent = 'Checking availability and conflicts...';
+    if (conflictIcon) conflictIcon.textContent = '⏳';
+    if (conflictTitle) { conflictTitle.textContent = 'Checking Availability...'; conflictTitle.style.color = '#4f46e5'; }
+    if (altWrap) altWrap.style.display = 'none';
+
+    const basePath = <?= json_encode(base_path()); ?>;
+    try {
+        let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+        if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        });
+        if (!resp.ok) { msgBox.style.display = 'none'; return; }
+        const data = await resp.json();
+        if (data.error) { msgBox.style.display = 'none'; return; }
+
+        if (data.has_conflict) {
+            msgBox.style.background = '#fdecee';
+            msgBox.style.border = '2px solid #b23030';
+            if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = data.message || 'This slot is already booked (approved reservation). Please select an alternative time.'; }
+            if (conflictIcon) conflictIcon.textContent = '✗';
+            if (conflictTitle) { conflictTitle.textContent = 'Conflict Detected'; conflictTitle.style.color = '#b23030'; }
+        } else if (data.soft_conflicts && data.soft_conflicts.length > 0) {
+            const cnt = data.pending_count || data.soft_conflicts.length;
+            msgBox.style.background = '#fff4e5';
+            msgBox.style.border = '2px solid #ffc107';
+            if (msgText) { msgText.style.color = '#856404'; msgText.textContent = 'Warning: ' + cnt + ' pending reservation(s) exist for this slot. You can still modify, but only one can be approved based on priority.'; }
+            if (conflictIcon) conflictIcon.textContent = '⚠️';
+            if (conflictTitle) { conflictTitle.textContent = 'Warning - Pending Reservations'; conflictTitle.style.color = '#856404'; }
+        } else {
+            msgBox.style.background = '#e8f5e9';
+            msgBox.style.border = '2px solid #0d7a43';
+            if (msgText) { msgText.style.color = '#0d7a43'; msgText.textContent = '✓ This time slot is available for modification!'; }
+            if (conflictIcon) conflictIcon.textContent = '✓';
+            if (conflictTitle) { conflictTitle.textContent = 'Available'; conflictTitle.style.color = '#0d7a43'; }
+        }
+        if (data.alternatives && data.alternatives.length) {
+            altWrap.style.display = 'block';
+            altList.innerHTML = data.alternatives.filter(a => a.available !== false)
+                .map(a => '<li><strong>' + (a.display || a.time_slot || '') + '</strong> — ' + (a.recommendation || 'Available') + '</li>').join('');
+        }
+    } catch (e) {
+        msgBox.style.background = '#fdecee';
+        msgBox.style.border = '2px solid #b23030';
+        if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = 'Error checking availability. Please try again.'; }
+    }
+}
+
+document.getElementById('modify_new_date').addEventListener('change', debounceModifyConflict);
+document.getElementById('modify_start_time').addEventListener('change', debounceModifyConflict);
+document.getElementById('modify_end_time').addEventListener('change', debounceModifyConflict);
 
 function closeModifyModal() {
     document.getElementById('modifyModal').style.display = 'none';

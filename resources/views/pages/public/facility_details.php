@@ -1,4 +1,5 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 
@@ -63,7 +64,7 @@ for ($i = 0; $i < 14; $i++) {
 
 ob_start();
 ?>
-<section class="section facility-details-section">
+<section class="section facility-details-section public-fade-in">
     <div class="container facility-detail-layout">
         <div class="facility-detail-main">
             <div class="facility-hero-card">

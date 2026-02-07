@@ -6,16 +6,16 @@
  * Recommended DB name: facilities_reservation
  */
 
- const DB_HOST = 'localhost';
- const DB_NAME = 'cprf_facilities_reservation';
- const DB_USER = 'cprf_root';        // default XAMPP user
- const DB_PASS = '#Ej9+LqgMpteCp17';
-
-
 //  const DB_HOST = 'localhost';
-//  const DB_NAME = 'facilities_reservation';
-//  const DB_USER = 'root';       // default XAMPP user
-//  const DB_PASS = '';
+//  const DB_NAME = 'cprf_facilities_reservation';
+//  const DB_USER = 'cprf_root';        // default XAMPP user
+//  const DB_PASS = '#Ej9+LqgMpteCp17';
+
+
+ const DB_HOST = 'localhost';
+ const DB_NAME = 'facilities_reservation';
+ const DB_USER = 'root';       // default XAMPP user
+ const DB_PASS = '';
 // /**
 //  * Returns a shared PDO instance.
 //  */
@@ -35,6 +35,9 @@ function db()
         
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            
+            // Set MySQL timezone to Philippines (UTC+8)
+            $pdo->exec("SET time_zone = '+08:00'");
         } catch (PDOException $e) {
             // Handle authentication method errors
             $errorMsg = $e->getMessage();

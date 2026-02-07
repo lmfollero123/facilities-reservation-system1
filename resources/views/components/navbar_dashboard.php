@@ -30,7 +30,7 @@ $unreadCount = $userId ? getUnreadNotificationCount($userId) : 0;
             <div class="notif-panel" id="notifPanel">
                 <div class="notif-panel-header">
                     <h3>Notifications</h3>
-                    <a href="<?= $base; ?>/resources/views/pages/dashboard/notifications.php" class="view-all-link">View All</a>
+                    <a href="<?= $base; ?>/dashboard/notifications" class="view-all-link">View All</a>
                 </div>
                 <div class="notif-panel-content" id="notifPanelContent">
                     <div class="notif-loading">Loading...</div>

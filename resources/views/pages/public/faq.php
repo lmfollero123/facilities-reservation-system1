@@ -1,11 +1,12 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 $pageTitle = 'Frequently Asked Questions | Barangay Culiat Public Facilities Reservation';
 $base = base_path();
 ob_start();
 ?>
 
-<section class="page-section faq-section" id="faq">
+<section class="page-section faq-section public-fade-in" id="faq">
     <div class="container px-4 px-lg-5">
         <div class="faq-wrapper">
             <div class="text-center mb-5">
@@ -245,9 +246,9 @@ ob_start();
 </section>
 
 <style>
-/* FAQ Section with Glassmorphism Background */
+/* FAQ Section - green gradient background */
 .faq-section {
-    background: url("<?= $base; ?>/public/img/cityhall.jpeg") center/cover no-repeat fixed;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #f0fdf4 100%);
     min-height: 100vh;
     position: relative;
     padding: 4rem 0;
@@ -260,9 +261,7 @@ ob_start();
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: transparent;
     z-index: 0;
 }
 
@@ -326,7 +325,7 @@ ob_start();
     background: #ffffff !important;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
@@ -380,6 +379,18 @@ ob_start();
     color: #4a5568;
     line-height: 1.8;
     font-size: 0.95rem;
+}
+
+/* Fix: Bootstrap collapse content must stay visible when expanded */
+.faq-answer.collapse.show {
+    display: block !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+.faq-answer.collapse.show p {
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 /* Mobile Responsive */
