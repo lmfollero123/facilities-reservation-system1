@@ -31,3 +31,7 @@ Thumbs.db
 
 # Database dumps (may contain sensitive data)
 database/latest-database-inside.sql
+
+# Stray logo asset (proper copy is in public/img/infragov-logo.png)
+599746247_1396112291886318_566174000779487152_n.png
+config/database.php

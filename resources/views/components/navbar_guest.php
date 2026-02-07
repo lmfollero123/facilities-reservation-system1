@@ -16,7 +16,7 @@ $navLinks = [
 <nav class="navbar navbar-expand-lg navbar-light fixed-top py-3" id="mainNav">
     <!-- Navbar Brand - positioned absolutely on the leftmost -->
     <a class="navbar-brand" href="<?= $base; ?>/" style="display: flex; align-items: center; gap: 0.75rem;">
-        <img src="<?= $base; ?>/public/img/logocityhall.png" alt="City Hall Logo" style="height: 40px; width: auto;">
+        <img src="<?= $base; ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 40px; width: auto;">
         <span>Barangay Culiat Public Facilities Reservation System</span>
     </a>
     
@@ -68,7 +68,7 @@ $navLinks = [
 <!-- Mobile Sidebar Menu -->
 <aside class="mobile-nav-sidebar" id="mobileNavSidebar">
     <div class="mobile-nav-header">
-        <img src="<?= $base; ?>/public/img/logocityhall.png" alt="City Hall Logo" style="height: 32px; width: auto; object-fit: contain;">
+        <img src="<?= $base; ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
         <span>Menu</span>
         <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
     </div>

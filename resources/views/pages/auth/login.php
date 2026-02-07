@@ -196,9 +196,7 @@ ob_start();
 <div class="auth-container public-fade-in">
     <div class="auth-card">
         <div class="auth-header">
-            <div class="auth-icon flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-100 text-emerald-600 transition-transform duration-300 hover:scale-105">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-            </div>
+            <img src="<?= base_path(); ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 64px; width: auto; display: block; margin: 0 auto 1.25rem; object-fit: contain;">
             <h1>Welcome Back</h1>
             <p>Sign in to access your reservations</p>
         </div>
