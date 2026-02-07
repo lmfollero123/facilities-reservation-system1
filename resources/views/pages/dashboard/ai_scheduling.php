@@ -286,11 +286,11 @@ ob_start();
 
 <style>
 .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(4px);
     z-index: 10000;
@@ -348,6 +348,7 @@ ob_start();
 function openAIModal() {
     const modal = document.getElementById('aiForecastModal');
     if (modal) {
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
         modal.classList.add('show');
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden'; // Prevent body scroll

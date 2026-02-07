@@ -1118,8 +1118,11 @@ function toggleOTPPreference(checkbox) {
 
 function openPasswordModal() {
     const modal = document.getElementById('passwordModal');
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (modal) {
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
 }
 
 function closePasswordModal() {
@@ -1132,8 +1135,11 @@ function closePasswordModal() {
 
 function openSecurityModal() {
     const modal = document.getElementById('securityModal');
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (modal) {
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
 }
 
 function closeSecurityModal() {
@@ -1144,8 +1150,11 @@ function closeSecurityModal() {
 
 function openExportModal() {
     const modal = document.getElementById('exportModal');
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (modal) {
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
 }
 
 function closeExportModal() {
