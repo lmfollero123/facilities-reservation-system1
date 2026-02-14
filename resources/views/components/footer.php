@@ -61,6 +61,24 @@ $base = base_path();
                 </ul>
             </div>
             
+            <!-- Location Map -->
+            <div class="footer-section footer-map-section">
+                <h4 class="footer-title">Location</h4>
+                <p class="footer-map-label">Barangay Culiat, Quezon City, Philippines</p>
+                <div class="footer-map-wrapper">
+                    <iframe 
+                        src="https://www.google.com/maps?q=Barangay+Culiat,Quezon+City,Philippines&output=embed" 
+                        width="100%" 
+                        height="200" 
+                        style="border:0; border-radius: 8px;" 
+                        allowfullscreen="" 
+                        loading="lazy" 
+                        referrerpolicy="no-referrer-when-downgrade"
+                        title="Barangay Culiat Location">
+                    </iframe>
+                </div>
+            </div>
+            
             <!-- Legal & Compliance -->
             <div class="footer-section">
                 <h4 class="footer-title">Legal & Compliance</h4>
@@ -131,8 +149,47 @@ $base = base_path();
 
 @media (min-width: 1024px) {
     .footer-grid {
-        grid-template-columns: 1.5fr 1fr 1fr;
+        grid-template-columns: 1.5fr 1fr 1fr 1fr;
         gap: 4rem;
+    }
+}
+
+/* Footer Map */
+.footer-map-section {
+    grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+    .footer-map-section {
+        grid-column: auto;
+    }
+}
+
+.footer-map-label {
+    font-size: 0.9375rem;
+    color: rgba(255, 255, 255, 0.9) !important;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.5;
+}
+
+.footer-map-wrapper {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    min-height: 200px;
+}
+
+.footer-map-wrapper iframe {
+    display: block;
+}
+
+@media (max-width: 767px) {
+    .footer-map-wrapper {
+        min-height: 180px;
+    }
+    
+    .footer-map-wrapper iframe {
+        height: 180px !important;
     }
 }
 

@@ -7,6 +7,12 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 require_once __DIR__ . '/../../../../config/chatbot_responses.php';
+// Load Gemini config explicitly (gemini_config.php is gitignored)
+$geminiConfigPath = dirname(__DIR__, 4) . '/config/gemini_config.php';
+if (file_exists($geminiConfigPath)) {
+    require_once $geminiConfigPath;
+}
+require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +31,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($message === '') {
         echo json_encode(['reply' => getRandomResponse(getEmptyMessageResponses())]);
         exit;
+    }
+
+    // --- Gemini AI (try first when available) ---
+    if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
+        try {
+            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location FROM facilities ORDER BY name LIMIT 50");
+            $facilities = $facStmt ? $facStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            $userBookings = [];
+            if ($userId) {
+                $bStmt = $pdo->prepare("
+                    SELECT r.reservation_date, r.time_slot, f.name AS facility_name
+                    FROM reservations r
+                    JOIN facilities f ON r.facility_id = f.id
+                    WHERE r.user_id = :uid
+                    ORDER BY r.reservation_date DESC
+                    LIMIT 5
+                ");
+                $bStmt->execute(['uid' => $userId]);
+                $userBookings = $bStmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId);
+
+            // Conversation memory (last 10 messages = 5 exchanges)
+            $historyKey = 'chatbot_history_' . ($userId ?? 'guest');
+            $history = $_SESSION[$historyKey] ?? [];
+            if (!is_array($history)) $history = [];
+            $history = array_slice($history, -10);
+
+            $geminiResult = geminiChatbotResponse($prompt, $message, $history);
+            if ($geminiResult && !empty($geminiResult['reply'])) {
+                $reply = $geminiResult['reply'];
+                $out = ['reply' => $reply];
+
+                // Save to conversation history
+                $history[] = ['role' => 'user', 'parts' => [['text' => $message]]];
+                $history[] = ['role' => 'model', 'parts' => [['text' => $reply]]];
+                $_SESSION[$historyKey] = array_slice($history, -10);
+
+                if (!empty($geminiResult['booking']) && is_array($geminiResult['booking'])) {
+                    $b = $geminiResult['booking'];
+                    if (empty($b['facility_id']) && !empty($b['facility_name'])) {
+                        foreach ($facilities as $f) {
+                            if (stripos($f['name'], $b['facility_name']) !== false || stripos($b['facility_name'], $f['name']) !== false) {
+                                $b['facility_id'] = (int)$f['id'];
+                                break;
+                            }
+                        }
+                    }
+                    // Allow prefill with any partial data (facility, date, time, purpose, etc.)
+                    $hasUsefulData = isset($b['facility_id']) || isset($b['reservation_date']) || isset($b['start_time']) || isset($b['end_time']) || isset($b['time_slot']) || isset($b['purpose']);
+                    if ($hasUsefulData) {
+                        $out['action'] = 'prefill_booking';
+                        $out['data'] = $b;
+                    }
+                }
+                echo json_encode($out);
+                exit;
+            }
+        } catch (Throwable $e) {
+            error_log('Gemini chatbot error: ' . $e->getMessage());
+        }
     }
 
     // Classify intent using ML model

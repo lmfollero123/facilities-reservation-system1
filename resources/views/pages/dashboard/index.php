@@ -928,10 +928,7 @@ ob_start();
             });
         });
     }
-    
-    // Disable global collapsible handler for dashboard page
-    window.DISABLE_GLOBAL_COLLAPSIBLE = true;
-    
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

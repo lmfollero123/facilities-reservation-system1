@@ -4,6 +4,74 @@
  * Loaded only on home page (after Tailwind)
  */
 
+/* Hero Section - Main Bg with blur and dimmed overlay (no tint) */
+.home-hero {
+    position: relative;
+}
+
+/* Auth pages (login, register) - same Main Bg as home */
+.auth-page-hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6rem 1rem 3rem;
+    overflow: hidden;
+}
+.auth-page-hero .home-hero-bg,
+.auth-page-hero .home-hero-overlay {
+    position: absolute;
+    inset: 0;
+}
+.auth-page-hero .home-hero-bg {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(5px);
+    opacity: 0.55;
+    transform: scale(1.05);
+}
+.auth-page-hero .home-hero-overlay {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+/* Override auth-container green background when using Main Bg - use transparent instead */
+.auth-page-hero .auth-container {
+    background: transparent !important;
+    min-height: auto !important;
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+    width: 100%;
+    max-width: 100%;
+}
+.auth-page-hero .auth-container::before {
+    display: none !important;
+}
+.home-hero-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(5px);
+    opacity: 0.55;
+    transform: scale(1.05); /* Prevents blur edge artifacts */
+}
+.home-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35); /* Neutral dim overlay */
+}
+.home-hero .text-gray-900 { color: #fff !important; }
+.home-hero .text-gray-600 { color: rgba(255, 255, 255, 0.9) !important; }
+.home-hero .text-gray-400 { color: rgba(255, 255, 255, 0.7) !important; }
+.home-hero .h-1.bg-emerald-600 { background-color: rgba(255, 255, 255, 0.9) !important; }
+.home-hero .border-emerald-600 { border-color: rgba(255, 255, 255, 0.9) !important; }
+.home-hero .text-emerald-700 { color: #fff !important; }
+.home-hero a.border-emerald-600:hover { background-color: rgba(255, 255, 255, 0.15) !important; }
+
 /* Scroll-triggered animations */
 .home-animate {
     opacity: 0;

@@ -448,9 +448,6 @@ ob_start();
 </div>
 
 <script>
-// Disable global collapsible handler for this page to prevent conflicts
-window.DISABLE_GLOBAL_COLLAPSIBLE = true;
-
 // Move facility modal to body so position:fixed works (parent transforms break it)
 (function() {
     const modal = document.getElementById('facilityModal');
@@ -587,7 +584,7 @@ function resetFacilityForm() {
     function initCollapsibles() {
         if (initialized) return; // Prevent duplicate initialization
         
-        document.querySelectorAll('.collapsible-header').forEach(header => {
+        document.querySelectorAll('.collapsible-card .collapsible-header').forEach(header => {
             const targetId = header.getAttribute('data-collapse-target');
             if (!targetId) return;
             

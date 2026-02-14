@@ -212,8 +212,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$base = base_path();
 ob_start();
 ?>
+<section class="auth-page-hero">
+    <div class="home-hero-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+    <div class="home-hero-overlay"></div>
+    <div class="relative z-10 w-full flex flex-col items-center justify-center flex-1">
 <div class="auth-container public-fade-in">
     <div class="auth-card auth-card-wide">
         <div class="auth-header">
@@ -366,6 +371,8 @@ ob_start();
         </div>
     </div>
 </div>
+    </div>
+</section>
 
 <!-- Terms and Conditions Modal -->
 <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">

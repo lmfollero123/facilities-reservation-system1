@@ -97,20 +97,14 @@ function getAnnouncementCategory($title, $message) {
     return array_merge(['type' => 'general'], $categoryConfig['general']);
 }
 
+$pageHeaderIcon = 'bi-megaphone';
+$pageHeaderTitle = 'Barangay Announcements';
+$pageHeaderTagline = 'Stay updated with our latest barangay events, programs, and notices. Your community, your stories.';
 ob_start();
 ?>
 
-<!-- Hero Section -->
-<section class="announcements-hero public-fade-in">
-    <div class="container px-4 px-lg-5">
-        <div class="hero-content">
-            <h1>Announcements & Updates</h1>
-            <p>Important news, events, and advisories from Barangay Culiat</p>
-        </div>
-    </div>
-</section>
-
-<div class="announcements-container">
+<?php include __DIR__ . '/../../components/page_header.php'; ?>
+<div class="announcements-container public-fade-in">
     <div class="container px-4 px-lg-5">
         <!-- Search Bar -->
         <div class="search-section">
@@ -140,7 +134,7 @@ ob_start();
         </div>
 
         <!-- Announcements Grid -->
-        <div class="announcements-grid">
+        <div class="announcements-grid page-content-animate">
             <?php if (!empty($announcements)): ?>
                 <?php foreach ($announcements as $item):
                     $category = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '');

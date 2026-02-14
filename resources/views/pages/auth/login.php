@@ -191,8 +191,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$base = base_path();
 ob_start();
 ?>
+<section class="auth-page-hero">
+    <div class="home-hero-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+    <div class="home-hero-overlay"></div>
+    <div class="relative z-10 w-full flex flex-col items-center justify-center flex-1">
 <div class="auth-container public-fade-in">
     <div class="auth-card">
         <div class="auth-header">
@@ -254,6 +259,8 @@ ob_start();
         </div>
     </div>
 </div>
+    </div>
+</section>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';

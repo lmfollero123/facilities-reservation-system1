@@ -6,6 +6,7 @@
 .env.local
 .env.*.local
 config/geocoding_config.php
+config/gemini_config.php
 
 # Logs & generated data
 logs/

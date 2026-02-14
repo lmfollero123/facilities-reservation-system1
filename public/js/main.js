@@ -361,6 +361,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             document.querySelectorAll('.collapsible-header').forEach(header => {
+                // Let dashboard page handle its own booking/card collapsibles
+                if (header.closest('.booking-card') || header.closest('.collapsible-card')) return;
+
                 const targetId = header.getAttribute('data-collapse-target');
                 if (!targetId) return;
 
@@ -374,10 +377,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 const isSidebarCollapsible = body.hasAttribute('data-collapsed');
 
                 if (isSidebarCollapsible) {
-                    // Sidebar collapsible - use data-collapsed attribute
+                    // Sidebar collapsible - use data-collapsed attribute, persist in localStorage
                     const chevron = header.querySelector('.chevron-icon');
                     const savedState = state[targetId];
-                    const shouldBeCollapsed = savedState === true;
+                    // Use saved state if we have it; otherwise keep PHP/server default
+                    const shouldBeCollapsed = savedState !== undefined ? (savedState === true) : (body.getAttribute('data-collapsed') === 'true');
 
                     // Initialize state - ensure it's set correctly
                     if (shouldBeCollapsed) {

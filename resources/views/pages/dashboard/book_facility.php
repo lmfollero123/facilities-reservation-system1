@@ -1197,11 +1197,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const eventMap = <?= json_encode($eventMap); ?>;
     const basePath = <?= json_encode($basePath); ?>;
     
-    // Prefill from query params (facility_id, reservation_date, time_slot) - MUST BE DECLARED EARLY
+    // Prefill from query params (facility_id, reservation_date, time_slot, purpose, expected_attendees) - MUST BE DECLARED EARLY
     const qp = new URLSearchParams(window.location.search);
     const preFacility = qp.get('facility_id');
     const preDate = qp.get('reservation_date');
     const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
+    const prePurpose = qp.get('purpose');
+    const preAttendees = qp.get('expected_attendees');
     
     // Facility details container elements
     const facilityDetailsContainer = document.getElementById('facility-details-container');
@@ -2137,6 +2139,10 @@ document.addEventListener('DOMContentLoaded', function() {
             startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
+    const prefillPurposeEl = document.getElementById('purpose-input');
+    const prefillAttendeesEl = document.getElementById('expected-attendees');
+    if (prePurpose && prefillPurposeEl) prefillPurposeEl.value = prePurpose;
+    if (preAttendees && prefillAttendeesEl) prefillAttendeesEl.value = preAttendees;
 
     // If all fields are pre-filled, trigger conflict check after a short delay
     if (preFacility && preDate && startTimeInput?.value && endTimeInput?.value) {

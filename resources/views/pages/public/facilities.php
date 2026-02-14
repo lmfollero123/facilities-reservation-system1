@@ -34,19 +34,18 @@ foreach ($rows as $idx => $row) {
     ];
 }
 
+$pageHeaderIcon = 'bi-building';
+$pageHeaderTitle = 'Facilities Directory';
+$pageHeaderTagline = 'Browse and reserve our barangay facilities. Your community spaces, one click away.';
 ob_start();
 ?>
-<section class="section public-fade-in" id="portfolio">
+<?php include __DIR__ . '/../../components/page_header.php'; ?>
+<section class="section public-fade-in facilities-content-section" id="portfolio">
     <div class="container">
-        <div class="text-center mb-12">
-            <h2 class="text-3xl font-bold text-gray-900 mb-3">Facilities Directory</h2>
-            <div class="h-1 w-16 bg-emerald-600 rounded-full mx-auto mb-4"></div>
-            <p class="text-gray-600">Browse our available barangay facilities</p>
-        </div>
         <?php if (empty($facilities)): ?>
             <p class="text-gray-600 text-center py-12">No facilities are published yet. Please check again later or contact the LGU Facilities Office.</p>
         <?php else: ?>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 page-content-animate">
                 <?php foreach ($facilities as $idx => $facility): ?>
                     <a href="<?= $base; ?>/facility-details?id=<?= (int)$facility['id']; ?>" class="block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group public-card-hover">
                         <div class="relative h-56 overflow-hidden">

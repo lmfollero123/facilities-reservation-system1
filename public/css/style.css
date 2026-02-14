@@ -455,42 +455,58 @@ img {
 /* Desktop (≥992px) - Show navigation, hide toggle */
 @media (min-width: 992px) {
 
-    /* Use grid to naturally allocate space: brand | nav | datetime */
+    /* Centered layout: brand | nav links | datetime, grouped in center of navbar */
     #mainNav {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
+        display: flex;
+        justify-content: center;
         align-items: center;
-        column-gap: 1.5rem;
+        flex-wrap: nowrap;
+        gap: 2rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
     }
 
     #mainNav .navbar-brand {
-        position: static;
-        transform: none;
-        max-width: 280px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        position: static !important;
+        transform: none !important;
+        left: auto !important;
+        max-width: none;
+        overflow: visible;
+        flex-shrink: 0;
+        order: 1;
+    }
+
+    #mainNav .navbar-brand span {
+        display: inline-block !important;
     }
 
     #mainNav .navbar-collapse {
-        position: static;
-        transform: none;
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
         display: flex !important;
         justify-content: center;
-        width: 100%;
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 0;
+        order: 2;
     }
 
     #mainNav .navbar-nav {
         justify-content: center;
-        width: 100%;
+        width: auto;
         gap: 1.25rem;
     }
 
     #mainNav .navbar-datetime {
-        position: static;
-        transform: none;
-        justify-self: end;
+        position: static !important;
+        right: auto !important;
+        top: auto !important;
+        transform: none !important;
         display: flex !important;
+        flex-shrink: 0;
+        order: 3;
     }
 
     #mainNav .navbar-toggler {
@@ -498,12 +514,12 @@ img {
     }
 }
 
-/* Desktop (≥1025px) - Full navbar brand */
+/* Desktop (≥1025px) - CPRFS brand styling */
 @media (min-width: 1025px) {
     #mainNav .navbar-brand {
-        font-size: 0.95rem;
+        font-size: 1.1rem;
+        font-weight: 600;
         gap: 0.75rem;
-        max-width: 340px;
     }
 
     #mainNav .navbar-brand img {
@@ -512,19 +528,10 @@ img {
 
     #mainNav .navbar-brand span {
         display: inline-block !important;
-        white-space: normal;
-        overflow: visible;
-        text-overflow: clip;
     }
 
     #mainNav .navbar-nav {
         gap: 1rem;
-    }
-
-    /* Ensure navigation is centered when brand text is shown */
-    #mainNav .navbar-collapse {
-        left: 50%;
-        transform: translate(-50%, -50%);
     }
 }
 

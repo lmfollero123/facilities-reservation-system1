@@ -83,3 +83,28 @@ Dry Run: No
 Found 0 expired pending reservations (48-hour time limit or past date/time)
 
 No expired reservations to decline.
+
+Fatal error: Uncaught PDOException: SQLSTATE[HY000] [1045] Access denied for user 'root'@'localhost' (using password: NO) in E:\Capstone_project\facilities_reservation_system\config\database.php:37
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\config\database.php(37): PDO->__construct('mysql:host=loca...', 'root', Object(SensitiveParameterValue), Array)
+#1 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#2 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 37
+
+Fatal error: Uncaught RuntimeException: Database authentication error. Please run this SQL command in MySQL: ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; Then run: FLUSH PRIVILEGES; See docs/DATABASE_AUTH_FIX.md for detailed instructions. in E:\Capstone_project\facilities_reservation_system\config\database.php:49
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#1 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 49
+
+Fatal error: Uncaught RuntimeException: Database authentication error. Please run this SQL command in MySQL: ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; Then run: FLUSH PRIVILEGES; See docs/DATABASE_AUTH_FIX.md for detailed instructions. in E:\Capstone_project\facilities_reservation_system\config\database.php:49
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#1 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 49
+
+Fatal error: Uncaught RuntimeException: Database authentication error. Please run this SQL command in MySQL: ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY ''; Then run: FLUSH PRIVILEGES; See docs/DATABASE_AUTH_FIX.md for detailed instructions. in E:\Capstone_project\facilities_reservation_system\config\database.php:49
+Stack trace:
+#0 E:\Capstone_project\facilities_reservation_system\scripts\auto_decline_expired.php(17): db()
+#1 {main}
+  thrown in E:\Capstone_project\facilities_reservation_system\config\database.php on line 49

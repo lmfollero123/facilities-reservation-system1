@@ -25,18 +25,16 @@ $contactInfo = [
     'office_hours' => $contactData['office_hours'] ?? 'Monday - Friday: 8:00 AM - 5:00 PM<br>Saturday: 8:00 AM - 12:00 PM<br>Sunday: Closed',
 ];
 
+$pageHeaderIcon = 'bi-telephone';
+$pageHeaderTitle = 'Contact Us';
+$pageHeaderTagline = 'Get in touch with Barangay Culiat Facilities Management Office. We\'re here to help.';
 ob_start();
 ?>
-<section class="contact-section-modern" id="contact">
+<?php include __DIR__ . '/../../components/page_header.php'; ?>
+<section class="contact-section-modern public-fade-in" id="contact">
     <div class="container-modern">
-        <!-- Header -->
-        <div class="contact-header-modern">
-            <h1 class="contact-title">Contact Us</h1>
-            <p class="contact-subtitle">Get in touch with Barangay Culiat Facilities Management Office</p>
-        </div>
-
         <!-- Main Content -->
-        <div class="contact-content-wrapper">
+        <div class="contact-content-wrapper page-content-animate">
             <!-- Office Info Card -->
             <div class="info-card-main">
                 <div class="info-card-header">

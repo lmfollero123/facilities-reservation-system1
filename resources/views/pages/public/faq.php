@@ -3,19 +3,17 @@ $useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 $pageTitle = 'Frequently Asked Questions | Barangay Culiat Public Facilities Reservation';
 $base = base_path();
+$pageHeaderIcon = 'bi-patch-question';
+$pageHeaderTitle = 'Frequently Asked Questions';
+$pageHeaderTagline = 'Find answers to common questions about facility reservations and booking procedures.';
 ob_start();
 ?>
 
+<?php include __DIR__ . '/../../components/page_header.php'; ?>
 <section class="page-section faq-section public-fade-in" id="faq">
     <div class="container px-4 px-lg-5">
         <div class="faq-wrapper">
-            <div class="text-center mb-5">
-                <h2 class="mt-0">Frequently Asked Questions</h2>
-                <hr class="divider" />
-                <p class="text-muted mb-0">Find answers to common questions about facility reservations</p>
-            </div>
-
-            <div class="faq-container">
+            <div class="faq-container page-content-animate">
             <!-- Getting Started -->
             <div class="faq-category">
                 <h3 class="category-title">

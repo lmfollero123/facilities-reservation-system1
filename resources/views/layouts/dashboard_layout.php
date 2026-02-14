@@ -105,7 +105,7 @@ $userName = $_SESSION['name'] ?? 'User';
     <span class="chatbot-fab-icon">🤖</span>
 </button>
 
-<div class="chatbot-panel" id="chatbotWidgetPanel" aria-hidden="true">
+<div class="chatbot-panel" id="chatbotWidgetPanel" aria-hidden="true" data-user-id="<?= htmlspecialchars((string)($_SESSION['user_id'] ?? 'guest')); ?>">
     <div class="chatbot-panel-inner">
         <header class="chatbot-panel-header">
             <div class="chatbot-header-main">
@@ -136,7 +136,7 @@ $userName = $_SESSION['name'] ?? 'User';
                             <li>Guiding you through the booking process</li>
                         </ul>
                         <p class="message-note">
-                            <strong>Note:</strong> AI model integration is in progress. For now, I provide helpful predefined responses.
+                            <strong>Tip:</strong> You can ask me to book a facility—e.g. &quot;Book the Convention Hall for Jan 25, 2pm to 4pm for a birthday party&quot;—and I&apos;ll prefill the form for you!
                         </p>
                     </div>
                     <small class="message-meta">Just now</small>
@@ -187,7 +187,8 @@ $userName = $_SESSION['name'] ?? 'User';
 </div>
 
 <script>
-    window.APP_BASE_PATH = "<?= base_path(); ?>";
+window.APP_BASE_PATH = "<?= base_path(); ?>";
+window.CHATBOT_USER_ID = "<?= htmlspecialchars((string)($_SESSION['user_id'] ?? 'guest')); ?>";
 </script>
 <script src="<?= base_path(); ?>/public/js/main.js"></script>
 <script>
@@ -249,7 +250,7 @@ $userName = $_SESSION['name'] ?? 'User';
 })();
 </script>
 <script>
-// AI Assistant (floating chatbot) - dashboard-only
+// AI Assistant (floating chatbot) - dashboard-only, with localStorage persistence
 document.addEventListener('DOMContentLoaded', function () {
     const fab = document.getElementById('chatbotWidgetFab');
     const panel = document.getElementById('chatbotWidgetPanel');
@@ -263,10 +264,91 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const userId = (panel.getAttribute('data-user-id') || window.CHATBOT_USER_ID || 'guest');
+    const CHAT_STORAGE_KEY = 'chatbot_messages_' + userId;
+    const PANEL_OPEN_KEY = 'chatbot_panel_open_' + userId;
+    const MAX_STORED_MESSAGES = 50;
+
+    function loadStoredMessages() {
+        try {
+            const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+            if (!raw) return null;
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr : null;
+        } catch (e) { return null; }
+    }
+
+    function saveMessages(messages) {
+        try {
+            const toSave = messages.slice(-MAX_STORED_MESSAGES);
+            localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toSave));
+        } catch (e) {}
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatTime(date) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    var chatMessages = []; // in-memory copy for persistence
+
+    function addMessage(text, type, skipSave) {
+        const now = new Date();
+        const timeStr = formatTime(now);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message ' + (type === 'user' ? 'user-message' : 'bot-message');
+        if (type === 'user') {
+            wrapper.innerHTML = '<div class="message-body user-body"><div class="message-content"><p>' + escapeHtml(text) + '</p></div><small class="message-meta">' + timeStr + '</small></div>';
+        } else {
+            wrapper.innerHTML = '<div class="message-avatar">🤖</div><div class="message-body"><div class="message-content"><p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + timeStr + '</small></div>';
+        }
+        messagesContainer.appendChild(wrapper);
+        if (!skipSave) {
+            chatMessages.push({ type: type, text: text, time: timeStr });
+            saveMessages(chatMessages);
+        }
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
+    }
+
+    // Restore conversation on load
+    (function restoreChat() {
+        const stored = loadStoredMessages();
+        if (stored && stored.length > 0) {
+            chatMessages = stored;
+            messagesContainer.innerHTML = '';
+            stored.forEach(function (m) {
+                const w = document.createElement('div');
+                w.className = 'message ' + (m.type === 'user' ? 'user-message' : 'bot-message');
+                if (m.type === 'user') {
+                    w.innerHTML = '<div class="message-body user-body"><div class="message-content"><p>' + escapeHtml(m.text) + '</p></div><small class="message-meta">' + (m.time || '') + '</small></div>';
+                } else {
+                    w.innerHTML = '<div class="message-avatar">🤖</div><div class="message-body"><div class="message-content"><p>' + escapeHtml(m.text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + (m.time || '') + '</small></div>';
+                }
+                messagesContainer.appendChild(w);
+            });
+            setTimeout(scrollToBottom, 50);
+        }
+    })();
+
+    // Restore panel open state so it stays open across page navigations
+    (function restorePanelState() {
+        try {
+            if (localStorage.getItem(PANEL_OPEN_KEY) === '1') {
+                openChat();
+            }
+        } catch (e) {}
+    })();
+
     function openChat() {
         panel.classList.add('open');
         panel.setAttribute('aria-hidden', 'false');
-        // Scroll to bottom and focus input after opening
+        try { localStorage.setItem(PANEL_OPEN_KEY, '1'); } catch (e) {}
         setTimeout(() => {
             scrollToBottom();
             input.focus();
@@ -276,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function closeChat() {
         panel.classList.remove('open');
         panel.setAttribute('aria-hidden', 'true');
+        try { localStorage.setItem(PANEL_OPEN_KEY, '0'); } catch (e) {}
     }
 
     fab.addEventListener('click', function () {
@@ -364,6 +447,26 @@ document.addEventListener('DOMContentLoaded', function () {
             removeTypingIndicator(typingId);
             const responseText = data.reply || 'I apologize, but I couldn\'t process your request. Please try again.';
             addMessage(responseText, 'bot');
+            // Handle prefill_booking action from AI (supports partial data)
+            if (data.action === 'prefill_booking' && data.data && typeof data.data === 'object') {
+                const d = data.data;
+                const basePath = window.APP_BASE_PATH || '';
+                const params = new URLSearchParams();
+                if (d.facility_id) params.set('facility_id', String(d.facility_id));
+                if (d.reservation_date) params.set('reservation_date', d.reservation_date);
+                const timeSlot = (d.start_time && d.end_time) ? (d.start_time + ' - ' + d.end_time) : (d.time_slot || '');
+                if (timeSlot) params.set('time_slot', timeSlot);
+                if (d.purpose) params.set('purpose', d.purpose);
+                if (d.expected_attendees) params.set('expected_attendees', String(d.expected_attendees));
+                if (params.toString()) {
+                    const isBookFacilityPage = window.location.pathname.indexOf('book-facility') !== -1 || window.location.href.indexOf('book_facility') !== -1;
+                    if (isBookFacilityPage) {
+                        fillBookingForm(d);
+                    } else {
+                        window.location.href = basePath + '/dashboard/book-facility?' + params.toString();
+                    }
+                }
+            }
             // Refocus input after bot responds
             setTimeout(function() {
                 if (input && document.body.contains(input)) {
@@ -383,35 +486,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
-
-    function addMessage(text, type) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'message ' + (type === 'user' ? 'user-message' : 'bot-message');
-
-        if (type === 'user') {
-            wrapper.innerHTML = '' +
-                '<div class="message-body user-body">' +
-                '  <div class="message-content">' +
-                '    <p>' + escapeHtml(text) + '</p>' +
-                '  </div>' +
-                '  <small class="message-meta">' + formatTime(new Date()) + '</small>' +
-                '</div>';
-        } else {
-            wrapper.innerHTML = '' +
-                '<div class="message-avatar">🤖</div>' +
-                '<div class="message-body">' +
-                '  <div class="message-content">' +
-                '    <p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>' +
-                '  </div>' +
-                '  <small class="message-meta">' + formatTime(new Date()) + '</small>' +
-                '</div>';
-        }
-
-        messagesContainer.appendChild(wrapper);
-        // Scroll after DOM update - use multiple attempts to ensure it works
-        setTimeout(scrollToBottom, 50);
-        setTimeout(scrollToBottom, 200);
-    }
 
     function showTypingIndicator() {
         const id = 'typing-' + Date.now();
@@ -461,6 +535,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatTime(date) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fillBookingForm(d) {
+        const facilitySel = document.getElementById('facility-select');
+        const dateInput = document.getElementById('reservation-date');
+        const startTimeInput = document.getElementById('start-time');
+        const endTimeInput = document.getElementById('end-time');
+        const purposeInput = document.getElementById('purpose-input');
+        const attendeesInput = document.getElementById('expected-attendees');
+        if (d.facility_id && facilitySel) {
+            const opt = facilitySel.querySelector('option[value="' + d.facility_id + '"]');
+            if (opt) { facilitySel.value = d.facility_id; facilitySel.dispatchEvent(new Event('change', { bubbles: true })); }
+        }
+        if (d.reservation_date && dateInput) { dateInput.value = d.reservation_date; dateInput.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (d.start_time && startTimeInput) { startTimeInput.value = d.start_time; startTimeInput.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (d.end_time && endTimeInput) { endTimeInput.value = d.end_time; }
+        if (d.purpose && purposeInput) purposeInput.value = d.purpose;
+        if (d.expected_attendees && attendeesInput) attendeesInput.value = String(d.expected_attendees);
     }
 
     function getMockResponse(message) {

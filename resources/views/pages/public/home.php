@@ -65,9 +65,11 @@ $defaultImage = $base . '/public/img/cityhall.jpeg';
 ob_start();
 ?>
 
-<!-- Hero Section - Full viewport, green gradient -->
-<section class="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 40%, #a7f3d0 100%);">
-    <div class="max-w-5xl mx-auto text-center flex-1 flex flex-col items-center justify-center">
+<!-- Hero Section - Full viewport, Main Bg with blur + green tint overlay -->
+<section class="home-hero relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16 overflow-hidden">
+    <div class="home-hero-bg" style="background-image: url('<?= $base; ?>/public/uploads/Main%20Bg.jpg');"></div>
+    <div class="home-hero-overlay"></div>
+    <div class="relative z-10 max-w-5xl mx-auto text-center flex-1 flex flex-col items-center justify-center">
         <h1 class="home-animate visible text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight">
             Barangay Culiat Public Facilities Reservation System
         </h1>
@@ -84,7 +86,7 @@ ob_start();
             </a>
         </div>
     </div>
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-10">
         <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
         </svg>
