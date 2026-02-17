@@ -25,9 +25,9 @@ $baseQuery = '
     WHERE user_id IS NULL
 ';
 
-// Add search condition
+// Add search condition (use :search1 and :search2 - some PDO drivers require unique param names)
 if (!empty($search)) {
-    $baseQuery .= " AND (title LIKE :search OR message LIKE :search)";
+    $baseQuery .= " AND (title LIKE :search1 OR message LIKE :search2)";
 }
 
 // Add sorting
@@ -45,7 +45,8 @@ $countQuery = preg_replace('/ ORDER BY.*$/', '', $countQuery);
 
 $countStmt = $pdo->prepare($countQuery);
 if (!empty($search)) {
-    $countStmt->execute(['search' => "%{$search}%"]);
+    $searchTerm = "%{$search}%";
+    $countStmt->execute(['search1' => $searchTerm, 'search2' => $searchTerm]);
 } else {
     $countStmt->execute();
 }
@@ -60,7 +61,9 @@ $stmt = $pdo->prepare($baseQuery);
 $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 if (!empty($search)) {
-    $stmt->bindValue(':search', "%{$search}%", PDO::PARAM_STR);
+    $searchTerm = "%{$search}%";
+    $stmt->bindValue(':search1', $searchTerm, PDO::PARAM_STR);
+    $stmt->bindValue(':search2', $searchTerm, PDO::PARAM_STR);
 }
 $stmt->execute();
 $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
