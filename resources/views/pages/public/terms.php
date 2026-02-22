@@ -2,7 +2,7 @@
 $pageTitle = 'Terms and Conditions | LGU Facilities Reservation';
 ob_start();
 ?>
-<section class="section">
+<section class="section legal-page-section">
     <div class="container legal-content">
         <h2>Terms and Conditions</h2>
         <p>These Terms and Conditions govern the use of the Local Government Unit (LGU) Facilities Reservation System. By accessing the portal, citizens, organizations, and partner agencies agree to observe the policies set by the Municipal Facilities Management Office.</p>

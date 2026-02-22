@@ -266,6 +266,23 @@
     background: linear-gradient(135deg, #065f46 0%, #047857 50%, #0f172a 100%) !important;
 }
 
+/* Legal pages (Privacy, Terms): readable in dark mode – light text on dark card */
+[data-theme="dark"] .legal-page-section .container.legal-content {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .legal-page-section .container.legal-content h2,
+[data-theme="dark"] .legal-page-section .container.legal-content h3,
+[data-theme="dark"] .legal-page-section .container.legal-content h4 {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .legal-page-section .container.legal-content p,
+[data-theme="dark"] .legal-page-section .container.legal-content li,
+[data-theme="dark"] .legal-page-section .container.legal-content strong {
+    color: #e2e8f0 !important;
+}
+
 /* Home page sections & Tailwind-styled content */
 [data-theme="dark"] .guest-content section[style*="linear-gradient"] {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%) !important;

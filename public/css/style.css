@@ -2746,6 +2746,38 @@ body.landing-page .section.facility-details-section {
     color: #e0e0e0;
 }
 
+/* Legal pages (Privacy, Terms): readable in light mode – dark text on white card */
+.legal-page-section .container.legal-content {
+    background: #ffffff !important;
+    color: #1e3a5f;
+}
+.legal-page-section .container.legal-content h2,
+.legal-page-section .container.legal-content h3,
+.legal-page-section .container.legal-content h4 {
+    color: #1e3a5f !important;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+.legal-page-section .container.legal-content h2 { margin-top: 0; margin-bottom: 1.5rem; }
+.legal-page-section .container.legal-content p,
+.legal-page-section .container.legal-content li,
+.legal-page-section .container.legal-content strong {
+    color: #4a5568 !important;
+}
+.legal-page-section .container.legal-content ul {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+.legal-page-section .container.legal-content .legal-content-meta {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+.legal-page-section {
+    padding-top: 6rem;
+    padding-bottom: 3rem;
+}
+
 /* VISUAL CHANGE ONLY - Contact card updated */
 .contact-card {
     /* Mobile-first: responsive width */
