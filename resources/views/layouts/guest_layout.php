@@ -100,6 +100,7 @@ if ($isHomePage || $isPublicPage) {
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
             padding: 2.5rem;
             border: none;
+            color-scheme: light; /* Keep inputs light in dark mode so text stays visible */
         }
         .auth-header {
             text-align: center;
@@ -153,11 +154,31 @@ if ($isHomePage || $isPublicPage) {
             outline: none;
             border-color: #6384d2 !important;
             background: #ffffff !important;
+            color: #1b1b1f !important;
+            -webkit-text-fill-color: #1b1b1f !important;
             box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
         }
         .auth-form input::placeholder,
         .auth-form textarea::placeholder {
             color: #8b94a8 !important;
+        }
+        /* Dark mode: force input text visible on light auth card */
+        @media (prefers-color-scheme: dark) {
+            .auth-card .auth-form input,
+            .auth-card .auth-form textarea {
+                color: #1b1b1f !important;
+                -webkit-text-fill-color: #1b1b1f !important;
+            }
+            .auth-card .auth-form input:focus,
+            .auth-card .auth-form textarea:focus {
+                background: #ffffff !important;
+                color: #1b1b1f !important;
+                -webkit-text-fill-color: #1b1b1f !important;
+            }
+            .auth-card .auth-form input::placeholder,
+            .auth-card .auth-form textarea::placeholder {
+                color: #8b94a8 !important;
+            }
         }
         .btn-primary {
             margin-top: 0.5rem;

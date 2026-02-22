@@ -648,13 +648,13 @@ ALTER TABLE `document_retention_policy`
 --
 -- Indexes for table `facilities`
 --
-ALTER TABLE `facilities`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `idx_facilities_coordinates` (`latitude`,`longitude`),
-  ADD KEY `idx_facilities_status_location` (`status`,`latitude`,`longitude`),
-  ADD KEY `idx_facilities_status` (`status`),
-  ADD KEY `idx_facilities_created` (`created_at`),
-  ADD KEY `idx_facilities_auto_approve` (`auto_approve`,`status`);
+  ALTER TABLE `facilities`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_facilities_coordinates` (`latitude`,`longitude`),
+    ADD KEY `idx_facilities_status_location` (`status`,`latitude`,`longitude`),
+    ADD KEY `idx_facilities_status` (`status`),
+    ADD KEY `idx_facilities_created` (`created_at`),
+    ADD KEY `idx_facilities_auto_approve` (`auto_approve`,`status`);
 
 --
 -- Indexes for table `facility_blackout_dates`

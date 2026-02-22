@@ -78,6 +78,7 @@ body {
     backdrop-filter: blur(15px);
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
     text-align: center;
+    color-scheme: light;         /* Keep inputs light in dark mode so text stays visible */
 }
 
 .icon-top {
@@ -117,6 +118,26 @@ body {
     border: none;
     background: rgba(255,255,255,0.7);
     outline: none;
+    color: #1b1b1f;
+    -webkit-text-fill-color: #1b1b1f;
+}
+
+.input-box input:focus {
+    background: rgba(255,255,255,0.95);
+    color: #1b1b1f;
+    -webkit-text-fill-color: #1b1b1f;
+}
+
+@media (prefers-color-scheme: dark) {
+    .card .input-box input {
+        color: #1b1b1f;
+        -webkit-text-fill-color: #1b1b1f;
+    }
+    .card .input-box input:focus {
+        background: rgba(255,255,255,0.95);
+        color: #1b1b1f;
+        -webkit-text-fill-color: #1b1b1f;
+    }
 }
 
 .icon {

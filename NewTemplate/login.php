@@ -407,12 +407,25 @@ body::before
     background: rgba(255, 255, 255, 0.9);
     outline: none;
     transition: all 0.2s ease;
+    color: #1b1b1f;
+    -webkit-text-fill-color: #1b1b1f;
 }
 
 .otp-input:focus {
     border-color: #6384d2;
     box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
     background: #fff;
+    color: #1b1b1f;
+    -webkit-text-fill-color: #1b1b1f;
+}
+
+@media (prefers-color-scheme: dark) {
+    .otp-input,
+    .otp-input:focus {
+        background: #fff;
+        color: #1b1b1f;
+        -webkit-text-fill-color: #1b1b1f;
+    }
 }
 
 .otp-input.active {

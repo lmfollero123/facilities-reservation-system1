@@ -2610,6 +2610,7 @@ section.contact-section::before {
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     padding: 1.75rem;
     border: none;
+    color-scheme: light; /* Keep inputs light in dark mode so text stays visible */
 }
 
 /* Tablet and up */
@@ -2752,6 +2753,8 @@ section.contact-section::before {
     outline: none;
     border-color: var(--gov-blue);
     background: #ffffff;
+    color: #1b1b1f;
+    -webkit-text-fill-color: #1b1b1f;
     box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
 }
 
@@ -2764,6 +2767,25 @@ section.contact-section::before {
 .auth-form input::placeholder,
 .auth-form textarea::placeholder {
     color: #8b94a8;
+}
+
+/* Dark mode: force input text visible on light auth card when focused */
+@media (prefers-color-scheme: dark) {
+    .auth-card .auth-form input,
+    .auth-card .auth-form textarea {
+        color: #1b1b1f;
+        -webkit-text-fill-color: #1b1b1f;
+    }
+    .auth-card .auth-form input:focus,
+    .auth-card .auth-form textarea:focus {
+        background: #ffffff;
+        color: #1b1b1f;
+        -webkit-text-fill-color: #1b1b1f;
+    }
+    .auth-card .auth-form input::placeholder,
+    .auth-card .auth-form textarea::placeholder {
+        color: #8b94a8;
+    }
 }
 
 .auth-form input[type="file"] {
