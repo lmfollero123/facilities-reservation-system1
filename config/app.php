@@ -20,18 +20,24 @@ if (!function_exists('base_path')) {
      * Returns the base path of the app relative to the web root.
      *
      * Examples:
-     * - If URL is /resources/views/pages/public/home.php   → returns ''
-     * - If URL is /facilities-reservation-system/facilities_reservation_system/resources/... → returns '/facilities-reservation-system/facilities_reservation_system'
+     * - At document root (lgu.test, localhost/): returns ''
+     * - In subdirectory (localhost/facilities_reservation_system1/): returns '/facilities_reservation_system1'
+     * - If URL contains /resources/: extracts base from script path
      */
     function base_path(): string
     {
         $script = $_SERVER['SCRIPT_NAME'] ?? '';
         $pos = strpos($script, '/resources/');
-        if ($pos === false) {
+        if ($pos !== false) {
+            $base = substr($script, 0, $pos);
+            return rtrim($base, '/');
+        }
+        // Front-controller (index.php): use script directory for subdirectory support
+        $dir = dirname($script);
+        if ($dir === '/' || $dir === '.' || $dir === '\\') {
             return '';
         }
-        $base = substr($script, 0, $pos);
-        return rtrim($base, '/');
+        return $dir;
     }
 }
 
