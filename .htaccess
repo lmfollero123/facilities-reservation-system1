@@ -4,7 +4,9 @@
 # Enable Rewrite Engine
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
+    # RewriteBase: omit for portability (works in subdir + vhost at root)
+    # When in subdirectory (e.g. htdocs/facilities_reservation_system1/), Apache
+    # uses the .htaccess directory as base. When at doc root (lgu.test vhost), base is /
     
     # Route requests to index.php for URL-based routing
     RewriteCond %{REQUEST_FILENAME} !-f

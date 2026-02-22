@@ -281,6 +281,7 @@ if ($isHomePage || $isPublicPage) {
 </main>
 <?php include __DIR__ . '/../components/facility_assistant.php'; ?>
 <?php include __DIR__ . '/../components/footer.php'; ?>
+<script>window.APP_BASE_PATH = "<?= htmlspecialchars($base ?? base_path()); ?>";</script>
 <!-- Bootstrap core JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- SimpleLightbox plugin JS -->
