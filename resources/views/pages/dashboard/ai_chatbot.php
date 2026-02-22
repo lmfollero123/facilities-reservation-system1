@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 break;
-                
+                    
             case 'cancel_booking':
                 $reply = getRandomResponse(getCancelBookingResponses());
                 break;
