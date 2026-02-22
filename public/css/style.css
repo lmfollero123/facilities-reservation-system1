@@ -3644,6 +3644,36 @@ footer small {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-shrink: 0;
+}
+
+/* Mobile search trigger: visible only on small screens */
+.dashboard-mobile-search-trigger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem !important;
+    min-width: 40px;
+}
+.dashboard-search-close {
+    display: none;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: 6px;
+}
+.dashboard-search-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
 }
 
 .notif-bell {
@@ -4375,6 +4405,7 @@ body.sidebar-collapsed .sidebar {
     justify-content: center;
     padding: 0.5rem !important;
     min-width: 40px;
+    flex-shrink: 0;
     transition: all 0.2s ease;
 }
 
@@ -8172,6 +8203,57 @@ header.dashboard-header {
     html[data-theme="dark"] body.dashboard-page header.dashboard-header,
     html[data-theme="dark"] body.dashboard-page .dashboard-header {
         background: var(--bg-secondary) !important;
+    }
+
+    /* Mobile header: sidebar toggle first, search as icon that expands */
+    .dashboard-mobile-search-trigger {
+        display: inline-flex !important;
+    }
+    .dashboard-header-left {
+        flex: 0 1 auto;
+        min-width: 0;
+        gap: 0.5rem;
+    }
+    .dashboard-global-search-wrapper {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-width: none;
+        min-width: 0;
+        padding: 0.5rem 1rem;
+        margin: 0;
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        z-index: 100;
+    }
+    html[data-theme="dark"] .dashboard-header .dashboard-global-search-wrapper {
+        background: var(--bg-secondary);
+    }
+    header.dashboard-header.search-open .dashboard-global-search-wrapper {
+        display: block;
+    }
+    header.dashboard-header.search-open .dashboard-global-search {
+        padding-right: 2.5rem;
+    }
+    header.dashboard-header.search-open .dashboard-search-close {
+        display: block;
+    }
+    .header-right {
+        gap: 0.5rem;
+    }
+    .header-right .btn.btn-primary {
+        padding: 0.4rem 0.65rem;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-right .btn.btn-primary.confirm-action {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.8rem;
     }
 }
 

@@ -61,6 +61,17 @@
     color: #ffffff !important;
 }
 
+[data-theme="dark"] #mainNav.public-navbar-modern .public-btn-register {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #059669, #047857) !important;
+    border: none !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .public-btn-register:hover {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #047857, #065f46) !important;
+}
+
 [data-theme="dark"] #mainNav.public-navbar-modern .theme-toggle-nav {
     color: #e2e8f0 !important;
     border-color: rgba(226, 232, 240, 0.4) !important;

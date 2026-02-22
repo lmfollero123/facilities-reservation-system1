@@ -20,6 +20,8 @@ $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/faq') !== false ||
                 strpos($phpSelf, 'login.php') !== false ||
                 strpos($requestPath, '/login') !== false ||
+                strpos($phpSelf, 'login_otp.php') !== false ||
+                strpos($requestPath, '/login-otp') !== false ||
                 strpos($phpSelf, 'register.php') !== false ||
                 strpos($requestPath, '/register') !== false;
 if ($isHomePage || $isPublicPage) {
@@ -43,8 +45,6 @@ if ($isHomePage || $isPublicPage) {
     <link href="https://fonts.googleapis.com/css?family=Merriweather:400,300,300italic,400italic,700,700italic" rel="stylesheet" type="text/css" />
     <!-- SimpleLightbox plugin CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.css" rel="stylesheet" />
-    <!-- Favicon (inline to avoid 404) -->
-    <link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
     <!-- Custom CSS -->
@@ -64,6 +64,7 @@ if ($isHomePage || $isPublicPage) {
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
     <link rel="stylesheet" href="<?= $base; ?>/public/css/dark-mode-public.css?v=<?= file_exists($appRoot . '/public/css/dark-mode-public.css') ? filemtime($appRoot . '/public/css/dark-mode-public.css') : time(); ?>">
+    <link rel="icon" href="<?= $base; ?>/public/img/infragov-logo.png?v=<?= file_exists($appRoot . '/public/img/infragov-logo.png') ? filemtime($appRoot . '/public/img/infragov-logo.png') : time(); ?>" type="image/png">
     <?php if (!empty($useTailwind)): 
         $homeCssPath = $appRoot . '/public/css/home.css';
         $publicCssPath = $appRoot . '/public/css/public-pages.css';

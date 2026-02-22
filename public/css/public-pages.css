@@ -79,9 +79,13 @@
     }
 }
 
-/* Theme toggle - add spacing from nav links */
+/* Theme toggle - add spacing from nav links and Login/Register */
 .public-navbar-modern .nav-item-theme {
-    margin-right: 0.5rem;
+    margin-right: 1rem;
+}
+
+.public-nav-actions {
+    gap: 1rem;
 }
 
 .public-btn-login {

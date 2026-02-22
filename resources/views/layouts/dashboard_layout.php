@@ -64,6 +64,10 @@ $userName = $_SESSION['name'] ?? 'User';
     <title><?= htmlspecialchars($pageTitle); ?></title>
     <?php 
     $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
+    $faviconPath = $appRoot . '/public/img/infragov-logo.png';
+    ?>
+    <link rel="icon" href="<?= base_path(); ?>/public/img/infragov-logo.png?v=<?= file_exists($faviconPath) ? filemtime($faviconPath) : time(); ?>" type="image/png">
+    <?php
     $cssVersion = file_exists($appRoot . '/public/css/style.css') ? filemtime($appRoot . '/public/css/style.css') : time();
     $tailwindVersion = file_exists($appRoot . '/public/css/tailwind.css') ? filemtime($appRoot . '/public/css/tailwind.css') : time();
     $publicPagesVersion = file_exists($appRoot . '/public/css/public-pages.css') ? filemtime($appRoot . '/public/css/public-pages.css') : time();

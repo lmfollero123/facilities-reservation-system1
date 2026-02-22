@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $_SESSION['post_login_redirect'] = $next;
                                     }
 
-                                    header('Location: ' . base_path() . '/resources/views/pages/auth/login_otp.php');
+                                    header('Location: ' . base_path() . '/login-otp');
                                     exit;
                                 } else {
                                     // Both email OTP and Google Authenticator are disabled -> log in directly

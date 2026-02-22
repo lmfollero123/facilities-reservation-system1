@@ -41,19 +41,23 @@ if ($role === 'Admin') {
 }
 $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashboard/notifications', 'keywords' => 'notifications alerts'];
 ?>
-<header class="dashboard-header">
+<header class="dashboard-header" id="dashboardHeader">
     <div class="dashboard-header-left">
-        <div class="dashboard-global-search-wrapper">
-            <input type="search" class="dashboard-global-search" id="dashboardGlobalSearch" placeholder="Search dashboard (e.g. booking, reservations)..." autocomplete="off" aria-label="Search dashboard">
-            <span class="dashboard-global-search-icon" aria-hidden="true">🔍</span>
-            <div class="dashboard-global-search-results" id="dashboardGlobalSearchResults" role="listbox" aria-hidden="true"></div>
-        </div>
         <button class="btn btn-outline sidebar-toggle-btn" data-sidebar-toggle aria-expanded="true" title="Toggle Sidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="9" y1="3" x2="9" y2="21"></line>
             </svg>
         </button>
+        <button type="button" class="btn btn-outline dashboard-mobile-search-trigger" aria-label="Open search" title="Search dashboard" id="dashboardMobileSearchTrigger">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <div class="dashboard-global-search-wrapper" id="dashboardGlobalSearchWrapper">
+            <input type="search" class="dashboard-global-search" id="dashboardGlobalSearch" placeholder="Search dashboard (e.g. booking, reservations)..." autocomplete="off" aria-label="Search dashboard">
+            <span class="dashboard-global-search-icon" aria-hidden="true">🔍</span>
+            <button type="button" class="dashboard-search-close" aria-label="Close search" id="dashboardSearchClose">×</button>
+            <div class="dashboard-global-search-results" id="dashboardGlobalSearchResults" role="listbox" aria-hidden="true"></div>
+        </div>
     </div>
     <div class="header-right">
         <div class="notif-container">
@@ -130,6 +134,21 @@ $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashbo
         var a = e.target.closest('a');
         if (a && a.href) { hideResults(); }
     });
+
+    var header = document.getElementById('dashboardHeader');
+    var mobileTrigger = document.getElementById('dashboardMobileSearchTrigger');
+    var searchClose = document.getElementById('dashboardSearchClose');
+    var wrapper = document.getElementById('dashboardGlobalSearchWrapper');
+    if (header && mobileTrigger && wrapper) {
+        mobileTrigger.addEventListener('click', function() {
+            header.classList.add('search-open');
+            input.focus();
+        });
+        if (searchClose) searchClose.addEventListener('click', function() { header.classList.remove('search-open'); });
+        document.addEventListener('click', function(e) {
+            if (header.classList.contains('search-open') && !wrapper.contains(e.target) && e.target !== mobileTrigger) header.classList.remove('search-open');
+        });
+    }
 })();
 </script>
 

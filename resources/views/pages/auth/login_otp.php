@@ -1,4 +1,5 @@
 <?php
+$useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
@@ -10,7 +11,7 @@ $error = '';
 $success = '';
 
 if (!isset($_SESSION['pending_otp_user_id'])) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -26,14 +27,14 @@ try {
 
     if (!$user) {
         session_destroy();
-        header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+        header('Location: ' . base_path() . '/login');
         exit;
     }
 
     // Check if account is deactivated
     if (strtolower($user['status']) === 'deactivated') {
         session_destroy();
-        header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+        header('Location: ' . base_path() . '/login?deactivated=1');
         exit;
     }
     
@@ -175,7 +176,7 @@ ob_start();
         </form>
 
         <div class="auth-footer">
-            <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php">Back to login</a>
+            <a href="<?= base_path(); ?>/login">Back to login</a>
         </div>
     </div>
 </div>
