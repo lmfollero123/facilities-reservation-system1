@@ -12,31 +12,124 @@
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.5) 0%, transparent 50%, rgba(30, 41, 59, 0.3) 100%) !important;
 }
 
-/* Navbar - dark */
+/* Navbar - dark (solid, no glassmorphism) */
 [data-theme="dark"] #mainNav,
 [data-theme="dark"] #mainNav.navbar-light {
     background: rgba(15, 23, 42, 0.9) !important;
     border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-[data-theme="dark"] #mainNav .navbar-brand,
-[data-theme="dark"] #mainNav .navbar-brand span,
-[data-theme="dark"] #mainNav .nav-link,
-[data-theme="dark"] #mainNav .navbar-datetime {
+[data-theme="dark"] #mainNav.public-navbar-modern {
+    background: #0f172a !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Dark navbar at top: all text/controls light and visible */
+[data-theme="dark"] #mainNav.public-navbar-modern .navbar-brand,
+[data-theme="dark"] #mainNav.public-navbar-modern .navbar-brand span,
+[data-theme="dark"] #mainNav.public-navbar-modern .nav-link,
+[data-theme="dark"] #mainNav.public-navbar-modern .navbar-datetime,
+[data-theme="dark"] #mainNav.public-navbar-modern #navbar-date,
+[data-theme="dark"] #mainNav.public-navbar-modern #navbar-time {
     color: #e2e8f0 !important;
 }
 
-[data-theme="dark"] #mainNav .nav-link:hover,
-[data-theme="dark"] #mainNav .nav-link.active {
+[data-theme="dark"] #mainNav.public-navbar-modern .brand-name {
+    color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .brand-accent {
     color: #34d399 !important;
 }
 
-[data-theme="dark"] #mainNav.navbar-scrolled {
-    background: rgba(15, 23, 42, 0.95) !important;
+[data-theme="dark"] #mainNav.public-navbar-modern .nav-link:hover,
+[data-theme="dark"] #mainNav.public-navbar-modern .nav-link.active {
+    color: #34d399 !important;
 }
 
-[data-theme="dark"] #mainNav.navbar-scrolled .nav-link {
+[data-theme="dark"] #mainNav.public-navbar-modern .public-btn-login {
     color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.6) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .public-btn-login:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: #e2e8f0 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .theme-toggle-nav {
+    color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.4) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .theme-toggle-nav:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .navbar-toggler {
+    border-color: rgba(226, 232, 240, 0.4) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(226, 232, 240, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+}
+
+/* When scrolled in dark mode: keep navbar DARK (override public-pages white) and keep text light */
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled {
+    background: #0f172a !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] #mainNav.navbar-scrolled {
+    background: #0f172a !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+[data-theme="dark"] #mainNav.navbar-scrolled .nav-link,
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .nav-link {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .navbar-brand,
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .navbar-brand span,
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .navbar-datetime,
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled #navbar-date,
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled #navbar-time {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login {
+    color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.6) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: #e2e8f0 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav {
+    color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.4) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
 }
 
 /* Facilities section */
@@ -95,6 +188,25 @@
     background: #334155 !important;
     border-color: #475569 !important;
     color: #f1f5f9 !important;
+}
+
+/* Auth inputs - focus state (prevent white background on click in dark mode) */
+[data-theme="dark"] .auth-form input:focus,
+[data-theme="dark"] .auth-form textarea:focus {
+    background: #334155 !important;
+    border-color: #64748b !important;
+    color: #f1f5f9 !important;
+    box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.25) !important;
+}
+
+/* Auth inputs - autofill override (browsers apply white/yellow bg by default) */
+[data-theme="dark"] .auth-form input:-webkit-autofill,
+[data-theme="dark"] .auth-form input:-webkit-autofill:hover,
+[data-theme="dark"] .auth-form input:-webkit-autofill:focus,
+[data-theme="dark"] .auth-form input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f1f5f9 !important;
+    -webkit-box-shadow: 0 0 0 1000px #334155 inset !important;
+    caret-color: #f1f5f9;
 }
 
 /* FAQ */

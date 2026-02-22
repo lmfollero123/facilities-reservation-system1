@@ -394,12 +394,10 @@ function getPasswordResetEmailTemplate($userName, $resetUrl) {
         
         ' . getEmailButton('Reset Password', $resetUrl, '#6384d2') . '
         
-        <p style="margin: 20px 0 10px; color: #6b7280; font-size: 14px;">
-            Or copy and paste this link into your browser:
-        </p>
-        <p style="margin: 0 0 20px; color: #6b7280; font-size: 12px; word-break: break-all; background: #f5f7fa; padding: 10px; border-radius: 6px;">
-            ' . htmlspecialchars($resetUrl) . '
-        </p>
+        ' . getEmailInfoBox('
+            <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;"><strong>Or copy and paste this link into your browser:</strong></p>
+            <p style="margin: 0; color: #1e3a5f; font-size: 12px; word-break: break-all;">' . htmlspecialchars($resetUrl) . '</p>
+        ', '#f5f7fa', '#6b7280') . '
         
         <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
             If you did not request this password reset, please ignore this email. Your password will remain unchanged.
@@ -464,11 +462,13 @@ function getReservationDeniedEmailTemplate($userName, $facilityName, $date, $tim
 
 /**
  * Reservation Cancelled Email Template
+ * @param string $buttonText Optional. Default "Book Another Facility".
+ * @param string|null $buttonUrl Optional. Default link to book-facility.
  */
-function getReservationCancelledEmailTemplate($userName, $facilityName, $date, $timeSlot, $note = '') {
+function getReservationCancelledEmailTemplate($userName, $facilityName, $date, $timeSlot, $note = '', $buttonText = 'Book Another Facility', $buttonUrl = null) {
     $header = getEmailHeader('Reservation Cancelled');
     $footer = getEmailFooter();
-    $bookAgainUrl = base_url() . '/dashboard/book-facility';
+    $actionUrl = $buttonUrl !== null ? $buttonUrl : (base_url() . '/dashboard/book-facility');
     
     $noteHtml = '';
     if (!empty($note)) {
@@ -505,7 +505,7 @@ function getReservationCancelledEmailTemplate($userName, $facilityName, $date, $
             ' . $noteHtml . '
         ', '#fff4e5', '#ffc107') . '
         
-        ' . getEmailButton('Book Another Facility', $bookAgainUrl, '#6384d2') . '
+        ' . getEmailButton($buttonText, $actionUrl, '#6384d2') . '
         
         <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
             You can submit a new reservation request at any time. We apologize for any inconvenience.

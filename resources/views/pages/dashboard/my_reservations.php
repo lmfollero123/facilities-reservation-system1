@@ -319,6 +319,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Resident self-cancellation: only for own reservations, status pending/approved, and before start time
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_reservation' && $userId) {
+    $reservationId = (int)($_POST['reservation_id'] ?? 0);
+    
+    try {
+        $resStmt = $pdo->prepare(
+            'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.user_id,
+                    f.name AS facility_name
+             FROM reservations r
+             JOIN facilities f ON r.facility_id = f.id
+             WHERE r.id = :id AND r.user_id = :user_id'
+        );
+        $resStmt->execute(['id' => $reservationId, 'user_id' => $userId]);
+        $reservation = $resStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$reservation) {
+            throw new Exception('Reservation not found or you do not have permission to cancel it.');
+        }
+        
+        if (!in_array($reservation['status'], ['pending', 'approved'], true)) {
+            throw new Exception('Only pending or approved reservations can be cancelled. This reservation is already ' . $reservation['status'] . '.');
+        }
+        
+        $currentDate = date('Y-m-d');
+        $currentHour = (int)date('H');
+        $isPast = false;
+        if ($reservation['reservation_date'] < $currentDate) {
+            $isPast = true;
+        } elseif ($reservation['reservation_date'] === $currentDate) {
+            if (strpos($reservation['time_slot'], 'Morning') !== false && $currentHour >= 12) $isPast = true;
+            elseif (strpos($reservation['time_slot'], 'Afternoon') !== false && $currentHour >= 17) $isPast = true;
+            elseif (strpos($reservation['time_slot'], 'Evening') !== false && $currentHour >= 21) $isPast = true;
+        }
+        
+        if ($isPast) {
+            throw new Exception('You cannot cancel a reservation that has already started or passed.');
+        }
+        
+        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+        $stmt->execute(['status' => 'cancelled', 'id' => $reservationId]);
+        
+        $note = 'Cancelled by resident (self-cancellation).';
+        $histStmt = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:reservation_id, :status, :note, :user_id)');
+        $histStmt->execute([
+            'reservation_id' => $reservationId,
+            'status' => 'cancelled',
+            'note' => $note,
+            'user_id' => $userId
+        ]);
+        
+        logAudit('Resident self-cancelled reservation', 'Reservations', 'RES-' . $reservationId . ' – ' . $reservation['facility_name']);
+        
+        createNotification(
+            $userId,
+            'booking',
+            'Reservation Cancelled',
+            'Your reservation for ' . $reservation['facility_name'] . ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ') has been cancelled. The time slot is now available for others.',
+            base_path() . '/dashboard/my-reservations'
+        );
+        
+        $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
+        $userStmt->execute(['id' => $userId]);
+        $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+        if ($userInfo && !empty($userInfo['email'])) {
+            $emailBody = getReservationCancelledEmailTemplate(
+                $userInfo['name'],
+                $reservation['facility_name'],
+                $reservation['reservation_date'],
+                $reservation['time_slot'],
+                'Cancelled by you. The time slot is now available for others.',
+                'View My Reservations',
+                base_url() . '/dashboard/my-reservations'
+            );
+            sendEmail($userInfo['email'], $userInfo['name'], 'Reservation Cancelled', $emailBody);
+        }
+        
+        $message = 'Reservation cancelled successfully. The time slot is now available for others.';
+        $messageType = 'success';
+        
+    } catch (Throwable $e) {
+        $message = $e->getMessage();
+        $messageType = 'error';
+    }
+}
+
 // Tab: upcoming (default) | past
 $tab = isset($_GET['tab']) && $_GET['tab'] === 'past' ? 'past' : 'upcoming';
 $statusFilter = $_GET['status'] ?? '';
@@ -340,6 +425,7 @@ if ($userId) {
     // Tab-based date filter: upcoming = date >= today, past = date < today
     if ($tab === 'upcoming') {
         $whereConditions[] = 'r.reservation_date >= :today';
+        $whereConditions[] = "r.status != 'cancelled'"; // Exclude cancelled from upcoming tab
         $params['today'] = $today;
         $orderBy = 'r.reservation_date ASC, r.created_at ASC'; // Soonest first
     } else {
@@ -513,6 +599,9 @@ ob_start();
             
             $canReschedule = ($daysUntil >= 3) && $rescheduleCount < 1 && in_array($reservation['status'], ['pending', 'approved', 'postponed']) && !$isOngoing && ($reservation['facility_status'] ?? 'available') === 'available';
             
+            // Resident can cancel own reservation only when: status pending/approved, and before start time
+            $canCancel = in_array($reservation['status'], ['pending', 'approved'], true) && !$isOngoing;
+            
             // Highlight: within 1 day (today or tomorrow) for upcoming tab
             $withinOneDay = ($tab === 'upcoming' && $daysUntil <= 1 && !$isOngoing);
             
@@ -584,7 +673,13 @@ ob_start();
                 <div class="reservation-actions">
                     <?php 
                     $canEditDetails = in_array($reservation['status'], ['pending', 'approved', 'postponed']) && !$isOngoing;
-                    if ($canReschedule): ?>
+                    if ($canCancel): ?>
+                        <button type="button" class="btn-action btn-outline" style="border-color: #dc3545; color: #dc3545; margin-right: 0.5rem; margin-bottom: 0.5rem;" onclick="openCancelReservationModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars($reservation['facility_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?= date('F j, Y', strtotime($reservation['reservation_date'])); ?>', '<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>');">
+                            <span class="btn-icon">🚫</span>
+                            <span class="btn-text">Cancel Reservation</span>
+                        </button>
+                    <?php endif; ?>
+                    <?php if ($canReschedule): ?>
                         <button class="btn-action btn-primary-large" onclick="openRescheduleModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars($reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars($reservation['facility_name'], ENT_QUOTES, 'UTF-8'); ?>" data-operating-hours="<?= htmlspecialchars($reservation['operating_hours'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                             <span class="btn-icon">📅</span>
                             <span class="btn-text">Request Reschedule</span>
@@ -666,6 +761,33 @@ ob_start();
         </div>
     <?php endif; ?>
 <?php endif; ?>
+
+<!-- Cancel Reservation Confirmation Modal -->
+<div id="cancelReservationModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="background: var(--bg-primary); border-radius: 8px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="color: var(--text-primary); margin: 0;">Cancel Reservation</h3>
+            <button type="button" onclick="closeCancelReservationModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        </div>
+        <p id="cancelReservationSummary" style="color: var(--text-secondary); margin-bottom: 1rem;"></p>
+        <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 6px; border-left: 4px solid #f59e0b;">
+            <strong style="color: var(--text-primary);">⚠️ Cancellation policy</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; padding: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                <li>You can only cancel <strong>upcoming</strong> reservations (pending or approved).</li>
+                <li>Once cancelled, the time slot becomes available for others.</li>
+                <li>Past or already-started reservations cannot be cancelled.</li>
+            </ul>
+        </div>
+        <form method="POST" id="cancelReservationForm">
+            <input type="hidden" name="action" value="cancel_reservation">
+            <input type="hidden" name="reservation_id" id="cancel_reservation_id">
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                <button type="button" class="btn-outline" onclick="closeCancelReservationModal()" style="flex: 1;">Keep Reservation</button>
+                <button type="submit" class="btn-primary" style="flex: 1; background: #dc3545; border-color: #dc3545;">Cancel Reservation</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Edit Purpose / Attendees Modal -->
 <div id="editDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
@@ -913,6 +1035,17 @@ function openRescheduleModal(btn) {
 
 function closeRescheduleModal() {
     document.getElementById('rescheduleModal').style.display = 'none';
+}
+
+function openCancelReservationModal(reservationId, facilityName, dateStr, timeSlot) {
+    document.getElementById('cancel_reservation_id').value = reservationId;
+    document.getElementById('cancelReservationSummary').textContent =
+        'You are about to cancel: ' + facilityName + ' on ' + dateStr + ' (' + timeSlot + ').';
+    document.getElementById('cancelReservationModal').style.display = 'flex';
+}
+
+function closeCancelReservationModal() {
+    document.getElementById('cancelReservationModal').style.display = 'none';
 }
 
 function debounceRescheduleConflict() {

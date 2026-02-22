@@ -281,12 +281,12 @@ img {
     display: block;
 }
 
-/* VISUAL CHANGE - Glassmorphism navbar (frosted blur) */
+/* Base navbar: fixed, layout. Glassmorphism only for navbars that are NOT .public-navbar-modern */
 .guest-navbar,
-#mainNav,
-#mainNav.navbar,
-#mainNav.navbar-expand-lg,
-#mainNav.navbar-light {
+#mainNav:not(.public-navbar-modern),
+#mainNav.navbar:not(.public-navbar-modern),
+#mainNav.navbar-expand-lg:not(.public-navbar-modern),
+#mainNav.navbar-light:not(.public-navbar-modern) {
     background: rgba(255, 255, 255, 0.2) !important;
     backdrop-filter: blur(20px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
@@ -301,7 +301,6 @@ img {
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
-    /* Allow datetime to be visible outside container */
     height: auto !important;
     min-height: 60px !important;
 }
@@ -598,8 +597,8 @@ img {
     color: #212529 !important;
 }
 
-/* Navbar scroll behavior - turn white when scrolled */
-#mainNav.navbar-scrolled {
+/* Navbar scroll behavior - turn white when scrolled (no glass for .public-navbar-modern; see public-pages.css) */
+#mainNav.navbar-scrolled:not(.public-navbar-modern) {
     background: rgba(255, 255, 255, 0.98) !important;
     backdrop-filter: blur(18px) !important;
     -webkit-backdrop-filter: blur(18px) !important;
@@ -5214,6 +5213,118 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     background: #edf1fb;
     text-align: left;
     color: #5d6a8f;
+}
+
+/* Dark mode: dashboard calendar (day cells, shell, tabs, legend) */
+[data-theme="dark"] .calendar-shell {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .calendar-header h2 {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-controls button,
+[data-theme="dark"] .calendar-controls .btn-outline {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-controls button:hover,
+[data-theme="dark"] .calendar-controls .btn-outline:hover {
+    background: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-tabs {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .calendar-tabs a,
+[data-theme="dark"] .calendar-tabs button {
+    color: var(--text-secondary) !important;
+    border-right-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .calendar-tabs a:hover,
+[data-theme="dark"] .calendar-tabs button:hover {
+    background: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-tabs a.active,
+[data-theme="dark"] .calendar-tabs button.active {
+    background: var(--primary-color) !important;
+    color: #fff !important;
+}
+
+[data-theme="dark"] .calendar-grid-month .day-name {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .calendar-grid-month .day-cell {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-grid-month .day-number {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-grid-month .day-cell a,
+[data-theme="dark"] .calendar-grid-month .day-cell span:not(.day-number):not(.pill-event) {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .pill-event.available {
+    background: var(--success-bg) !important;
+    color: var(--success-text) !important;
+}
+
+[data-theme="dark"] .pill-event.blocked {
+    background: var(--error-bg) !important;
+    color: var(--error-text) !important;
+}
+
+[data-theme="dark"] .pill-event.request {
+    background: var(--warning-bg) !important;
+    color: var(--warning-text) !important;
+}
+
+[data-theme="dark"] .calendar-legend {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .calendar-legend .swatch {
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .calendar-grid-week,
+[data-theme="dark"] .calendar-grid-day {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .calendar-grid-week th,
+[data-theme="dark"] .calendar-grid-day th {
+    background: var(--bg-secondary) !important;
+    color: var(--text-secondary) !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .calendar-grid-week td,
+[data-theme="dark"] .calendar-grid-day td {
+    border-bottom-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .calendar-grid-week td span,
+[data-theme="dark"] .calendar-grid-day td span {
+    color: var(--text-secondary) !important;
 }
 
 .reports-grid {

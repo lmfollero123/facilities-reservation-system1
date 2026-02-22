@@ -3,10 +3,21 @@
  * Loaded when Tailwind is used on public pages
  */
 
-/* ===== Modern Public Navbar (dark style) ===== */
-.public-navbar-modern {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
-    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.15);
+/* ===== Modern Public Navbar – LIGHT MODE (default): light bar, dark text ===== */
+/* Solid bar, no glassmorphism. Dark mode overrides in dark-mode-public.css. */
+#mainNav.public-navbar-modern {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled {
+    background: #ffffff !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
 }
 
 .public-navbar-modern .navbar-brand.public-nav-brand {
@@ -23,38 +34,34 @@
 .public-navbar-modern .brand-name {
     font-size: 1rem;
     font-weight: 600;
-    color: #f1f5f9 !important;
+    color: #1e293b !important;
 }
 
 .public-navbar-modern .brand-accent {
     font-size: 0.95rem;
     font-weight: 700;
-    color: #38bdf8 !important;
+    color: #059669 !important;
 }
 
 .public-navbar-modern .nav-link {
-    color: rgba(241, 245, 249, 0.9) !important;
+    color: #334155 !important;
     font-weight: 500;
 }
 
 .public-navbar-modern .nav-link:hover,
 .public-navbar-modern .nav-link.active {
-    color: #ffffff !important;
+    color: #047857 !important;
     text-decoration: underline !important;
-}
-
-.public-navbar-modern.navbar-scrolled {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
 }
 
 .public-navbar-modern .navbar-datetime,
 .public-navbar-modern #navbar-date,
 .public-navbar-modern #navbar-time {
-    color: rgba(241, 245, 249, 0.95) !important;
+    color: #334155 !important;
 }
 
 .public-navbar-modern .theme-toggle-nav {
-    color: rgba(241, 245, 249, 0.9);
+    color: #475569;
 }
 
 .public-nav-actions {
@@ -78,9 +85,9 @@
 }
 
 .public-btn-login {
-    color: #f1f5f9 !important;
+    color: #1e293b !important;
     background: transparent !important;
-    border: 2px solid rgba(241, 245, 249, 0.5);
+    border: 2px solid #64748b;
     padding: 0.5rem 1.25rem;
     font-weight: 600;
     border-radius: 8px;
@@ -88,9 +95,9 @@
 }
 
 .public-btn-login:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-    border-color: #f1f5f9;
-    color: #ffffff !important;
+    background: rgba(30, 41, 59, 0.06) !important;
+    border-color: #475569;
+    color: #0f172a !important;
 }
 
 .public-btn-register {
@@ -109,16 +116,16 @@
     transform: translateY(-1px);
 }
 
-/* When navbar turns white on scroll - ensure Login, Register, and theme toggle stay visible */
+/* Light mode scrolled – same light bar, keep dark text (no extra overrides needed) */
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login {
     color: #1e293b !important;
     border-color: #64748b !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login:hover {
-    background: rgba(30, 41, 59, 0.08) !important;
-    border-color: #1e293b !important;
-    color: #1e293b !important;
+    background: rgba(30, 41, 59, 0.06) !important;
+    border-color: #475569 !important;
+    color: #0f172a !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-register {
@@ -129,7 +136,7 @@
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav {
     color: #475569 !important;
     border: 1px solid #cbd5e1;
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.04);
     border-radius: 8px;
 }
 

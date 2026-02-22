@@ -661,9 +661,41 @@ ob_start();
         padding: 1rem;
     }
     
-    #termsModal .modal-title {
-        font-size: 1.125rem;
+#termsModal .modal-title {
+    font-size: 1.125rem;
     }
+}
+
+/* Terms modal - dark mode (data-theme="dark" on html) */
+[data-theme="dark"] #termsModal .terms-modal-content,
+[data-theme="dark"] #termsModal .modal-header,
+[data-theme="dark"] #termsModal .modal-footer {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] #termsModal .modal-body {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #termsModal .modal-body h1,
+[data-theme="dark"] #termsModal .modal-body h2,
+[data-theme="dark"] #termsModal .modal-body h3,
+[data-theme="dark"] #termsModal .modal-body h4,
+[data-theme="dark"] #termsModal .modal-body p,
+[data-theme="dark"] #termsModal .modal-body li,
+[data-theme="dark"] #termsModal .modal-body strong {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #termsModal .modal-title {
+    color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] #termsModal .modal-header .btn-close {
+    filter: invert(1);
+    opacity: 0.9;
 }
 </style>
 

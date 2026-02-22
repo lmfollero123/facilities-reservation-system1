@@ -13,9 +13,10 @@ This document details the booking rules, limitations, and anti-abuse mechanisms 
 3. [Auto-Approval Conditions](#3-auto-approval-conditions)
 4. [Reschedule Rules](#4-reschedule-rules)
 5. [Post-Booking Controls](#5-post-booking-controls)
-6. [User Violation Tracking](#6-user-violation-tracking)
-7. [Anti-Abuse & Security](#7-anti-abuse--security)
-8. [Configuration Reference](#8-configuration-reference)
+6. [Cancellation](#6-cancellation)
+7. [User Violation Tracking](#7-user-violation-tracking)
+8. [Anti-Abuse & Security](#8-anti-abuse--security)
+9. [Configuration Reference](#9-configuration-reference)
 
 ---
 
@@ -176,16 +177,54 @@ Reservations that meet **all** of the following conditions may be **automaticall
 - **Note:** *"Automatically denied: Reservation date/time has passed without approval."*
 - Prevents stale pending requests from blocking slots.
 
-### 5.3 Cancellation
+---
 
-- Users can cancel their own reservations (subject to status).
-- Cancellations are logged. Late cancellations (< 3 days before) may be recorded as violations.
+## 6. Cancellation
+
+Cancellation permissions differ by role. There is **no refund or payment logic**; rules focus on governance and fairness.
+
+### 6.1 Residents (Self-Cancellation)
+
+Residents can cancel **only their own** reservations when **all** of the following hold:
+
+| Condition | Description |
+|-----------|-------------|
+| **Status** | `pending` or `approved` only (not `denied`, `cancelled`, `completed`) |
+| **Time** | Current time is **before** the reservation start (no cancelling past or ongoing reservations) |
+| **Ownership** | Reservation belongs to the logged-in user |
+
+**UX flow:** From **My Reservations** → open reservation details → **Cancel Reservation** → confirmation dialog (policy warning) → status updates to `cancelled` and slot becomes available.
+
+**Optional time rule (future):** Cancellation allowed until X hours before start (e.g. 24h). Cancellations after that may be flagged as **late cancellation** and recorded as a violation for fairness.
+
+### 6.2 Staff
+
+- Can cancel **any reservation under their facility**.
+- **Must provide a reason** when cancelling (recorded in reservation history and audit).
+- Used for facility-specific issues (maintenance, overbooking, policy).
+
+### 6.3 Admin
+
+- Can cancel **any reservation system-wide**.
+- Used for emergencies, policy violations, facility closure, or abuse.
+- Reason is recorded for audit.
+
+### 6.4 No-Show Handling
+
+- If reservation time passes and the reservation was **not** cancelled by the user:
+  - Status can be set to **No-Show** (by staff/admin or automated process).
+- No-shows can be tracked and optionally used to restrict booking after repeated occurrences (future enhancement).
+
+### 6.5 Implementation Notes
+
+- Resident self-cancel is handled on **My Reservations** (`my_reservations.php`); staff/admin cancel is on the **Reservation Approval/Management** page (`reservation_detail.php`).
+- All cancellations are logged in `reservation_history` and audit trail. Residents receive an in-app notification and optional email when they cancel.
 
 ---
 
-## 6. User Violation Tracking
+## 7. User Violation Tracking
 
-### 6.1 Violation Types
+### 7.1 Violation Types
 
 | Type | Description |
 |------|-------------|
@@ -195,7 +234,7 @@ Reservations that meet **all** of the following conditions may be **automaticall
 | `damage` | Caused damage to the facility |
 | `other` | Other infractions |
 
-### 6.2 Severity Levels
+### 7.2 Severity Levels
 
 | Severity | Effect |
 |----------|--------|
@@ -204,7 +243,7 @@ Reservations that meet **all** of the following conditions may be **automaticall
 | **High** | Auto-approval **disabled** for the user (365 days) |
 | **Critical** | Auto-approval **disabled**; may lead to account restrictions |
 
-### 6.3 No-Show Recording
+### 7.3 No-Show Recording
 
 - Admins can manually record no-shows from the reservation detail page.
 - A scheduled job or manual process can auto-record no-shows when an approved reservation date has passed and the user did not attend.
@@ -212,9 +251,9 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 ---
 
-## 7. Anti-Abuse & Security
+## 8. Anti-Abuse & Security
 
-### 7.1 Login Rate Limiting
+### 8.1 Login Rate Limiting
 
 | Setting | Value | Description |
 |---------|-------|-------------|
@@ -224,7 +263,7 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 **Effect:** After 5 failed login attempts within 15 minutes, further attempts for that email are blocked until the window expires.
 
-### 7.2 Account Lockout (Failed Logins)
+### 8.2 Account Lockout (Failed Logins)
 
 | Setting | Value | Description |
 |---------|-------|-------------|
@@ -235,7 +274,7 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 **Effect:** User cannot log in until `locked_until` has passed. Admin can also manually lock/unlock accounts.
 
-### 7.3 Registration Rate Limiting
+### 8.3 Registration Rate Limiting
 
 | Setting | Value | Description |
 |---------|-------|-------------|
@@ -244,18 +283,18 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 **Effect:** Prevents mass account creation from a single IP (e.g., bot signups).
 
-### 7.4 CSRF Protection
+### 8.4 CSRF Protection
 
 - All state-changing forms require a valid CSRF token.
 - Token expiry: 1 hour.
 - Invalid or expired tokens cause the request to be rejected.
 
-### 7.5 Session Timeout
+### 8.5 Session Timeout
 
 - **Idle timeout:** 30 minutes (configurable via `SESSION_TIMEOUT`).
 - Expired sessions require re-login.
 
-### 7.6 Password Requirements
+### 8.6 Password Requirements
 
 - Minimum 8 characters.
 - Requires uppercase, lowercase, and number.
@@ -263,9 +302,9 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 ---
 
-## 8. Configuration Reference
+## 9. Configuration Reference
 
-### 8.1 Booking Limits (book_facility.php)
+### 9.1 Booking Limits (book_facility.php)
 
 ```php
 $BOOKING_LIMIT_ACTIVE = 3;        // Max active (pending+approved) in window
@@ -274,7 +313,7 @@ $BOOKING_ADVANCE_MAX_DAYS = 60;   // Max days ahead
 $BOOKING_PER_DAY = 1;             // Max bookings per user per day
 ```
 
-### 8.2 Security (config/security.php)
+### 9.2 Security (config/security.php)
 
 ```php
 RATE_LIMIT_LOGIN_ATTEMPTS = 5;      // Max login attempts per email
@@ -284,7 +323,7 @@ RATE_LIMIT_REGISTER_WINDOW = 3600;  // 1 hour (seconds)
 SESSION_TIMEOUT = 1800;             // 30 minutes (seconds)
 ```
 
-### 8.3 Key Files
+### 9.3 Key Files
 
 | Component | File(s) |
 |-----------|---------|
@@ -292,6 +331,8 @@ SESSION_TIMEOUT = 1800;             // 30 minutes (seconds)
 | Conflict detection | `config/ai_helpers.php` (`detectBookingConflict`) |
 | Auto-approval evaluation | `config/auto_approval.php` |
 | Reschedule logic | `resources/views/pages/dashboard/my_reservations.php` |
+| Resident self-cancel | `resources/views/pages/dashboard/my_reservations.php` |
+| Staff/Admin cancel | `resources/views/pages/dashboard/reservation_detail.php` |
 | Violation recording | `config/violations.php` |
 | Auto-decline expired | `config/reservation_helpers.php` |
 | Rate limiting & security | `config/security.php` |
