@@ -123,7 +123,7 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
 function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string $userName, ?int $userId): string {
     $facList = [];
     foreach ($facilities as $f) {
-        $facList[] = sprintf('- id=%d: %s (status: %s, capacity: %s)', (int)$f['id'], $f['name'], $f['status'] ?? 'available', $f['capacity'] ?? 'N/A');
+        $facList[] = sprintf('- ID %d (internal only): %s (status: %s, capacity: %s)', (int)$f['id'], $f['name'], $f['status'] ?? 'available', $f['capacity'] ?? 'N/A');
     }
     $facilitiesText = implode("\n", $facList);
 
@@ -143,8 +143,10 @@ You are a helpful AI assistant for an LGU (Local Government Unit) Facilities Res
 
 LANGUAGE: Always respond in Tagalog (Filipino). You may mix in English words when natural (Taglish), as commonly used in the Philippines. Be warm and helpful (magalang at matulungin).
 
-## FACILITIES (use these exact IDs when referencing)
+## FACILITIES (IDs are for internal prefill_booking JSON only; do NOT show or mention facility IDs to the user)
 {$facilitiesText}
+
+When listing or describing facilities in your reply, use ONLY facility names and details (e.g. capacity, status). Never write "(id=N)" or "id=N" or similar in the message. Example: say "Bernardo Court - capacity 200" not "Bernardo Court (id=4)".
 
 ## USER'S RECENT BOOKINGS
 {$bookingsText}

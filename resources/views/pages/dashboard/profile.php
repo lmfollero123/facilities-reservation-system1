@@ -540,7 +540,7 @@ ob_start();
                         </form>
                     </div>
                     <div style="flex:1;">
-                        <h2 style="margin:0 0 0.5rem; color:#1b1b1f; font-size:1.75rem; font-weight:700;"><?= htmlspecialchars($user['name'] ?? 'LGU Account Holder'); ?></h2>
+                        <h2 class="profile-user-name" style="margin:0 0 0.5rem; font-size:1.75rem; font-weight:700;"><?= htmlspecialchars($user['name'] ?? 'LGU Account Holder'); ?></h2>
                         <p style="margin:0 0 1rem; color:#5b6888; font-size:1.05rem; font-weight:500;"><?= htmlspecialchars($user['email'] ?? 'official@lgu.gov.ph'); ?></p>
                         <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
                             <?php if (!empty($user['role'])): ?>
@@ -843,7 +843,7 @@ ob_start();
                         </div>
 
                         <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0;">
-                            <h3 style="font-size:0.95rem; color:#1b1b1f; margin-bottom:0.75rem;">Security Tips</h3>
+                            <h3 class="security-tips-header" style="font-size:0.95rem; margin-bottom:0.75rem;">Security Tips</h3>
                             <ul class="audit-list" style="margin:0;">
                                 <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>OTP Security:</strong> We recommend keeping OTP enabled for better account protection.</li>
                                 <li style="color:#5b6888; font-size:0.85rem; line-height:1.6;"><strong>Password tip:</strong> Avoid reusing passwords from other systems.</li>

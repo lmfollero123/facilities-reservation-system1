@@ -222,8 +222,8 @@ ob_start();
 <div class="auth-container public-fade-in">
     <div class="auth-card auth-card-wide">
         <div class="auth-header">
-            <div class="auth-icon flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-100 text-emerald-600 transition-transform duration-300 hover:scale-105">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            <div class="auth-logo-wrapper">
+                <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-logo">
             </div>
             <h1>Create Account</h1>
             <p>Register for facility reservations</p>
@@ -344,7 +344,7 @@ ob_start();
             </label>
 
             <div style="padding:0.75rem 0; border-top:1px solid rgba(255,255,255,0.2); margin-top:1rem;">
-                <p style="margin:0 0 0.5rem; font-weight:600; color:#1b1b1f;">Upload Valid ID (Optional)</p>
+                <p class="auth-card-label">Upload Valid ID (Optional)</p>
                 <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-bottom:0.75rem; font-weight:500; line-height:1.5;">
                     Your account will be activated immediately. To enable auto-approval features for facility bookings, you can upload a valid ID now or later from your profile. Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
                 </small>
@@ -358,7 +358,7 @@ ob_start();
                 <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
                     <input type="checkbox" name="accept_terms" required style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
                     <span style="color: #1b1b1f; font-size: 0.9rem; line-height: 1.6; flex: 1; margin-top: 0;">
-                        I have read and agree to the <a href="#" id="termsLink" style="color: #2864ef; text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: #2864ef; text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).
+                        <span class="auth-terms-text">I have read and agree to the <a href="#" id="termsLink" style="color: #2864ef; text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: #2864ef; text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).</span>
                     </span>
                 </label>
             </div>

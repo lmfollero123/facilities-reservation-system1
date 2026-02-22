@@ -179,20 +179,43 @@
 
 [data-theme="dark"] .auth-header h1,
 [data-theme="dark"] .auth-header p,
-[data-theme="dark"] .auth-form label {
+[data-theme="dark"] .auth-form label,
+[data-theme="dark"] .auth-card-label,
+[data-theme="dark"] .auth-terms-text {
     color: #f1f5f9 !important;
 }
 
+[data-theme="dark"] .auth-terms-text a {
+    color: #93c5fd !important;
+}
+
+.auth-logo-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+.auth-logo {
+    height: 64px;
+    width: auto;
+    object-fit: contain;
+}
+
 [data-theme="dark"] .auth-form input,
-[data-theme="dark"] .auth-form textarea {
+[data-theme="dark"] .auth-form textarea,
+[data-theme="dark"] .auth-form select {
     background: #334155 !important;
     border-color: #475569 !important;
     color: #f1f5f9 !important;
 }
 
 /* Auth inputs - focus state (prevent white background on click in dark mode) */
+[data-theme="dark"] .auth-card small {
+    color: #94a3b8 !important;
+}
+
 [data-theme="dark"] .auth-form input:focus,
-[data-theme="dark"] .auth-form textarea:focus {
+[data-theme="dark"] .auth-form textarea:focus,
+[data-theme="dark"] .auth-form select:focus {
     background: #334155 !important;
     border-color: #64748b !important;
     color: #f1f5f9 !important;

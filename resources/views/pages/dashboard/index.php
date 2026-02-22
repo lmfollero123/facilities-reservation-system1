@@ -563,17 +563,17 @@ ob_start();
 </div>
 
 <?php if (!$isVerified && $userRole === 'Resident'): ?>
-<div class="booking-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1rem; padding: 0.85rem;">
+<div class="booking-card id-verification-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1rem; padding: 0.85rem;">
     <div style="display: flex; align-items: start; gap: 1rem;">
         <div style="font-size: 2rem; flex-shrink: 0;">⚠️</div>
-        <div style="flex: 1;">
+        <div style="flex: 1; min-width: 0;">
             <h3 style="margin: 0 0 0.5rem 0; color: #856404;">Account Verification Required</h3>
             <p style="margin: 0 0 0.75rem 0; color: #856404; line-height: 1.6;">
                 Your account is active, but you haven't submitted a valid ID yet. To enable <strong>auto-approval features</strong> for facility bookings, please upload a valid government-issued ID. You can still make reservations, but they will require manual approval and you'll need to submit an ID during the booking process.
             </p>
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/profile.php#verification" class="btn-primary" style="text-decoration: none;">Upload Valid ID Now</a>
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="btn-outline" style="text-decoration: none;">Book Facility Anyway</a>
+            <div class="id-verification-actions">
+                <a href="<?= base_path(); ?>/dashboard/profile#verification" class="btn-primary" style="text-decoration: none;">Upload Valid ID Now</a>
+                <a href="<?= base_path(); ?>/dashboard/book-facility" class="btn-outline id-verification-btn-outline" style="text-decoration: none;">Book Facility Anyway</a>
             </div>
         </div>
     </div>

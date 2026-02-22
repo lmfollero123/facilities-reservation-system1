@@ -63,8 +63,8 @@ $userName = $_SESSION['name'] ?? 'User';
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
     <?php 
-    $cssVersion = '9.8';
     $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
+    $cssVersion = file_exists($appRoot . '/public/css/style.css') ? filemtime($appRoot . '/public/css/style.css') : time();
     $tailwindVersion = file_exists($appRoot . '/public/css/tailwind.css') ? filemtime($appRoot . '/public/css/tailwind.css') : time();
     $publicPagesVersion = file_exists($appRoot . '/public/css/public-pages.css') ? filemtime($appRoot . '/public/css/public-pages.css') : time();
     $dashboardPagesVersion = file_exists($appRoot . '/public/css/dashboard-pages.css') ? filemtime($appRoot . '/public/css/dashboard-pages.css') : time();
