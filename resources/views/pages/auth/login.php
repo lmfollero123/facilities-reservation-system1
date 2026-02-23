@@ -73,6 +73,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $error = 'Your account is not active. Please contact an administrator.';
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
+                                // Require email verification before proceeding with OTP/login
+                                $emailVerified = isset($user['email_verified']) ? (bool)$user['email_verified'] : true;
+                                if (!$emailVerified) {
+                                    try {
+                                        // Generate a fresh email verification code (6-digit) valid for 24 hours
+                                        $verificationCode = (string)random_int(100000, 999999);
+                                        $verificationHash = password_hash($verificationCode, PASSWORD_DEFAULT);
+                                        $expiry = date('Y-m-d H:i:s', time() + 86400); // 24 hours
+
+                                        $updateStmt = $pdo->prepare(
+                                            "UPDATE users 
+                                             SET email_verification_code_hash = ?, email_verification_expires_at = ?, email_verified = 0 
+                                             WHERE id = ?"
+                                        );
+                                        $updateStmt->execute([$verificationHash, $expiry, $user['id']]);
+
+                                        require_once __DIR__ . '/../../../../config/email_templates.php';
+                                        require_once __DIR__ . '/../../../../config/mail_helper.php';
+                                        $body = getEmailVerificationEmailTemplate($user['name'], $verificationCode, 24);
+                                        sendEmail($user['email'], $user['name'], 'Verify Your Email Address', $body);
+                                    } catch (Exception $e) {
+                                        logSecurityEvent('email_verification_email_error', 'Failed to send email verification on login: ' . $e->getMessage(), 'error');
+                                    }
+
+                                    if (session_status() === PHP_SESSION_NONE) {
+                                        session_start();
+                                    }
+                                    $_SESSION['pending_email_verify_user_id'] = $user['id'];
+                                    $_SESSION['pending_email_verify_email'] = $user['email'];
+
+                                    $error = '';
+                                    header('Location: ' . base_path() . '/verify-email?email=' . urlencode($user['email']));
+                                    exit;
+                                }
+
                                 // Successful password check -> check OTP preference
                                 // Require OTP if email OTP is enabled OR Google Authenticator is enabled
                                 $enableOtp = (bool)($user['enable_otp'] ?? true); // Default to enabled for security

@@ -56,6 +56,8 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/auth/forgot_password.php';
 } elseif ($path === 'login-otp') {
     require_once __DIR__ . '/resources/views/pages/auth/login_otp.php';
+} elseif ($path === 'verify-email') {
+    require_once __DIR__ . '/resources/views/pages/auth/verify_email.php';
 } elseif ($path === 'privacy') {
     require_once __DIR__ . '/resources/views/pages/public/privacy.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {

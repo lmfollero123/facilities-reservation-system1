@@ -127,6 +127,41 @@ function getOTPEmailTemplate($userName, $otpCode, $expiryMinutes = 10) {
 }
 
 /**
+ * Registration Email Verification Template
+ *
+ * Used after a new user registers or when resending the verification code.
+ */
+function getEmailVerificationEmailTemplate($userName, $verificationCode, $expiryHours = 24) {
+    $header = getEmailHeader('Verify Your Email Address');
+    $footer = getEmailFooter();
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">Verify Your Email Address</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            Thank you for registering for the <strong>Barangay Culiat Public Facilities Reservation System</strong>.
+            Before you can sign in, please verify that this email address belongs to you.
+        </p>
+
+        ' . getEmailInfoBox('
+            <p style="margin: 0; text-align: center;">
+                <span style="font-size: 14px; color: #6b7280; display: block; margin-bottom: 8px;">Your Email Verification Code</span>
+                <span style="font-size: 36px; font-weight: 700; color: #285ccd; letter-spacing: 8px; font-family: \'Courier New\', monospace;">' . htmlspecialchars($verificationCode) . '</span>
+            </p>
+        ', '#e3f2fd', '#2196f3') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            <strong>⏱️ This verification code will expire in ' . (int)$expiryHours . ' hours.</strong>
+        </p>
+        <p style="margin: 10px 0 0; color: #6b7280; font-size: 14px;">
+            If this registration was not made by you, you can safely ignore this email. Unverified accounts are automatically removed after the verification window expires.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Account Approved Email Template
  */
 function getAccountApprovedEmailTemplate($userName) {

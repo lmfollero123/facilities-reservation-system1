@@ -141,6 +141,39 @@ if ($type === 'all' || $type === 'rate_limits') {
     echo "\n";
 }
 
+// Clean up unverified user accounts older than 24 hours
+if ($type === 'all' || $type === 'unverified_users') {
+    echo "=== Cleaning up Unverified User Accounts ===\n";
+
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) as count 
+         FROM users 
+         WHERE (email_verified = 0 OR email_verified IS NULL)
+           AND created_at < DATE_SUB(NOW(), INTERVAL 1 DAY)"
+    );
+    $stmt->execute();
+    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+    echo "Found {$count} unverified user accounts older than 24 hours\n";
+
+    if ($dryRun) {
+        echo "[DRY RUN] Would delete {$count} unverified accounts\n";
+    } else {
+        if ($count > 0) {
+            $delStmt = $pdo->prepare(
+                "DELETE FROM users 
+                 WHERE (email_verified = 0 OR email_verified IS NULL)
+                   AND created_at < DATE_SUB(NOW(), INTERVAL 1 DAY)"
+            );
+            $delStmt->execute();
+            $deleted = $delStmt->rowCount();
+            echo "Deleted {$deleted} unverified user accounts\n";
+            $totalDeleted += $deleted;
+        }
+    }
+    echo "\n";
+}
+
 echo "=== Summary ===\n";
 if ($dryRun) {
     echo "Dry run completed - no data was actually deleted\n";

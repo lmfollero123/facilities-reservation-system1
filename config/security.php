@@ -10,8 +10,12 @@ define('CSRF_TOKEN_NAME', 'csrf_token');
 define('CSRF_TOKEN_EXPIRY', 3600); // 1 hour
 define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max login attempts
 define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
-define('RATE_LIMIT_REGISTER_ATTEMPTS', 3); // Max registration attempts
+// Registration rate limit:
+// - Allow up to 5 registrations per IP within a 1-hour rolling window
+// - If more than 5 attempts occur in that window, block registrations from that IP for 6 hours
+define('RATE_LIMIT_REGISTER_ATTEMPTS', 5); // Threshold before IP is blocked
 define('RATE_LIMIT_REGISTER_WINDOW', 3600); // 1 hour in seconds
+define('RATE_LIMIT_REGISTER_BLOCK_WINDOW', 21600); // 6 hours in seconds
 define('SESSION_TIMEOUT', 1800); // 30 minutes
 define('PASSWORD_MIN_LENGTH', 8);
 define('PASSWORD_REQUIRE_UPPERCASE', true);
@@ -133,11 +137,62 @@ function checkLoginRateLimit(string $email): bool
 }
 
 /**
- * Check registration rate limit
+ * Check registration rate limit with IP-based blocking.
+ *
+ * Behaviour:
+ * - Track individual registration attempts as action = 'register' with a 1-hour expiry
+ * - If more than RATE_LIMIT_REGISTER_ATTEMPTS attempts occur within the last hour from the same IP,
+ *   create a 'register_block' record that blocks further registrations for RATE_LIMIT_REGISTER_BLOCK_WINDOW seconds (6 hours).
  */
 function checkRegisterRateLimit(string $ip): bool
 {
-    return checkRateLimit('register', $ip, RATE_LIMIT_REGISTER_ATTEMPTS, RATE_LIMIT_REGISTER_WINDOW);
+    require_once __DIR__ . '/database.php';
+    $pdo = db();
+
+    // First, check if this IP is currently blocked
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) AS cnt
+         FROM rate_limits
+         WHERE action = 'register_block'
+           AND identifier = ?
+           AND expires_at > NOW()"
+    );
+    $stmt->execute([$ip]);
+    $blocked = (int)($stmt->fetch(PDO::FETCH_ASSOC)['cnt'] ?? 0);
+
+    if ($blocked > 0) {
+        return false; // Currently blocked
+    }
+
+    // Count registration attempts in the last RATE_LIMIT_REGISTER_WINDOW seconds (1 hour)
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) AS attempts
+         FROM rate_limits
+         WHERE action = 'register'
+           AND identifier = ?
+           AND expires_at > NOW()"
+    );
+    $stmt->execute([$ip]);
+    $attempts = (int)($stmt->fetch(PDO::FETCH_ASSOC)['attempts'] ?? 0);
+
+    if ($attempts >= RATE_LIMIT_REGISTER_ATTEMPTS) {
+        // Too many attempts in the window – create a block record for this IP
+        $blockStmt = $pdo->prepare(
+            "INSERT INTO rate_limits (action, identifier, expires_at)
+             VALUES ('register_block', ?, DATE_ADD(NOW(), INTERVAL ? SECOND))"
+        );
+        $blockStmt->execute([$ip, RATE_LIMIT_REGISTER_BLOCK_WINDOW]);
+        return false;
+    }
+
+    // Record this registration attempt with a 1-hour expiry
+    $attemptStmt = $pdo->prepare(
+        "INSERT INTO rate_limits (action, identifier, expires_at)
+         VALUES ('register', ?, DATE_ADD(NOW(), INTERVAL ? SECOND))"
+    );
+    $attemptStmt->execute([$ip, RATE_LIMIT_REGISTER_WINDOW]);
+
+    return true;
 }
 
 /**

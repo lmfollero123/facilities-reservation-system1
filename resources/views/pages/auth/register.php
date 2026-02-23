@@ -4,6 +4,8 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/secure_documents.php';
+require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
 
 $pageTitle = 'Register | LGU Facilities Reservation';
 $message = '';
@@ -102,12 +104,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $validIdFile = $_FILES['doc_valid_id'] ?? null;
                             $hasValidId = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
                             
-                            // Insert new user with active status (auto-activated) but unverified
+                            // Insert new user with active status (auto-activated) but:
+                            // - is_verified = 0 (ID/document verification by admin/staff)
+                            // - email_verified = 0 (must verify email via code before login)
                             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
                             
                             if ($hasVerifiedColumn && $hasNameColumns) {
                                 // New schema with is_verified and name/address columns
-                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, street, house_number, password_hash, role, status, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'active', ?)");
+                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, street, house_number, password_hash, role, status, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'active', ?, 0)");
                                 $stmt->execute([
                                     $fullName,
                                     $firstName,
@@ -120,18 +124,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $street,
                                     $houseNumber,
                                     $passwordHash,
-                                    0  // Always start as unverified - requires admin/staff approval
+                                    0  // ID verification handled by admin/staff; email verification handled separately
                                 ]);
                             } elseif ($hasVerifiedColumn) {
                                 // Schema with is_verified but no name/address columns (backward compatibility)
-                                $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, address, password_hash, role, status, is_verified) VALUES (?, ?, ?, ?, ?, 'Resident', 'active', ?)");
+                                $stmt = $pdo->prepare("INSERT INTO users (name, email, mobile, address, password_hash, role, status, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, 'Resident', 'active', ?, 0)");
                                 $stmt->execute([
                                     $fullName,
                                     $email,
                                     $mobile ?: null,
                                     $fullAddress,
                                     $passwordHash,
-                                    0  // Always start as unverified - requires admin/staff approval
+                                    0  // ID verification handled by admin/staff; email verification handled separately
                                 ]);
                             } elseif ($hasNameColumns) {
                                 // Schema with name/address columns but no is_verified
@@ -188,9 +192,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
 
                             if ($messageType !== 'error' && $messageType !== 'warning') {
-                                logSecurityEvent('registration_success', "New user registered: $email", 'info');
-                                $message = 'Registration successful! Your account is now active. To enable auto-approval features, please submit a valid ID from your profile.';
-                                $messageType = 'success';
+                                // Generate email verification code (6-digit) valid for 24 hours
+                                $verificationCode = (string)random_int(100000, 999999);
+                                $verificationHash = password_hash($verificationCode, PASSWORD_DEFAULT);
+                                $expiry = date('Y-m-d H:i:s', time() + 86400); // 24 hours
+
+                                $updateStmt = $pdo->prepare(
+                                    "UPDATE users 
+                                     SET email_verification_code_hash = ?, email_verification_expires_at = ?, email_verified = 0 
+                                     WHERE id = ?"
+                                );
+                                $updateStmt->execute([$verificationHash, $expiry, $userId]);
+
+                                // Send verification email
+                                try {
+                                    $body = getEmailVerificationEmailTemplate($fullName, $verificationCode, 24);
+                                    sendEmail($email, $fullName, 'Verify Your Email Address', $body);
+                                } catch (Exception $e) {
+                                    // Log but don't expose internal error
+                                    logSecurityEvent('registration_email_error', 'Failed to send email verification: ' . $e->getMessage(), 'error');
+                                }
+
+                                logSecurityEvent('registration_success', "New user registered (email verification pending): $email", 'info');
+
+                                // Store context for verification step and redirect
+                                if (session_status() === PHP_SESSION_NONE) {
+                                    session_start();
+                                }
+                                $_SESSION['pending_email_verify_user_id'] = $userId;
+                                $_SESSION['pending_email_verify_email'] = $email;
+
+                                header('Location: ' . base_path() . '/verify-email?email=' . urlencode($email));
+                                exit;
                             }
                         }
                     } catch (Exception $e) {
