@@ -15,8 +15,8 @@ $unreadCount = $userId ? getUnreadNotificationCount($userId) : 0;
 $dashboardSearchItems = [
     ['label' => 'Dashboard', 'url' => $base . '/dashboard', 'keywords' => 'dashboard home main'],
     ['label' => 'Book a Facility', 'url' => $base . '/dashboard/book-facility', 'keywords' => 'booking book facility reserve reservation'],
-    ['label' => 'My Reservations', 'url' => $base . '/dashboard/my-reservations', 'keywords' => 'booking reservations my bookings list'],
-    ['label' => 'Calendar', 'url' => $base . '/dashboard/calendar', 'keywords' => 'calendar schedule view dates'],
+    ['label' => 'My Reservations', 'url' => $base . '/dashboard/book-facility?module=mine', 'keywords' => 'booking reservations my bookings list'],
+    ['label' => 'Check In / Out', 'url' => $base . '/dashboard/time-tracking', 'keywords' => 'check in out time in out attendance clock in out'],
     ['label' => 'Smart Scheduler', 'url' => $base . '/dashboard/ai-scheduling', 'keywords' => 'AI smart scheduler scheduling'],
     ['label' => 'Profile', 'url' => $base . '/dashboard/profile', 'keywords' => 'profile account my profile security'],
 ];
@@ -70,7 +70,12 @@ $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashbo
             <div class="notif-panel" id="notifPanel">
                 <div class="notif-panel-header">
                     <h3>Notifications</h3>
-                    <a href="<?= $base; ?>/dashboard/notifications" class="view-all-link">View All</a>
+                    <div class="notif-panel-actions">
+                        <?php if ($unreadCount > 0): ?>
+                            <button type="button" class="notif-mark-all-btn" id="notifMarkAllBtn" title="Mark all as read">Mark all read</button>
+                        <?php endif; ?>
+                        <a href="<?= $base; ?>/dashboard/notifications" class="view-all-link">View All</a>
+                    </div>
                 </div>
                 <div class="notif-panel-content" id="notifPanelContent">
                     <div class="notif-loading">Loading...</div>
@@ -83,7 +88,7 @@ $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashbo
                 <span class="theme-icon theme-icon-dark">🌙</span>
             </button>
         </div>
-        <a class="btn btn-primary confirm-action" data-message="Are you sure you want to log out?" href="<?= $base; ?>/resources/views/pages/auth/logout.php">Logout</a>
+        <a class="btn btn-primary confirm-action" data-message="Are you sure you want to log out?" href="<?= $base; ?>/logout">Logout</a>
     </div>
 </header>
 <script>

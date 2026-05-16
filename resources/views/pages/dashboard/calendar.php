@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -297,7 +297,7 @@ ob_start();
                                     <?php
                                         $pillClass = $res['status'] === 'approved' ? 'available' :
                                                      ($res['status'] === 'pending' ? 'request' : 'blocked');
-                                        $detailUrl = base_path() . '/resources/views/pages/dashboard/reservation_detail.php?id=' . $res['id'];
+                                        $detailUrl = base_path() . '/dashboard/reservation-detail?id=' . $res['id'];
                                     ?>
                                     <a href="<?= $detailUrl; ?>" class="pill-event <?= $pillClass; ?>" style="display:block; text-decoration:none;" title="View reservation details">
                                         <?= htmlspecialchars($res['facility_name']); ?> — <?= htmlspecialchars(ucfirst($res['status'])); ?>
@@ -338,7 +338,7 @@ ob_start();
                                     foreach ($slotReservations as $reservation):
                                         $statusClass = $reservation['status'] === 'approved' ? 'available' : 
                                                       ($reservation['status'] === 'pending' ? 'request' : 'blocked');
-                                        $detailUrl = base_path() . '/resources/views/pages/dashboard/reservation_detail.php?id=' . $reservation['id'];
+                                        $detailUrl = base_path() . '/dashboard/reservation-detail?id=' . $reservation['id'];
                                         ?>
                                         <a href="<?= $detailUrl; ?>" class="pill-event <?= $statusClass; ?>" style="display:block; margin-bottom:0.25rem; text-decoration:none;" title="View reservation details">
                                             <?= htmlspecialchars($reservation['facility_name']); ?>
@@ -383,7 +383,7 @@ ob_start();
                         </tr>
                     <?php else: ?>
                         <?php foreach ($dayReservations as $reservation): ?>
-                            <?php $detailUrl = base_path() . '/resources/views/pages/dashboard/reservation_detail.php?id=' . $reservation['id']; ?>
+                            <?php $detailUrl = base_path() . '/dashboard/reservation-detail?id=' . $reservation['id']; ?>
                             <tr style="cursor:pointer;" onclick="window.location.href='<?= $detailUrl; ?>';">
                                 <td><?= htmlspecialchars($reservation['time_slot']); ?></td>
                                 <td>

@@ -109,19 +109,19 @@ ob_start();
             <div class="quick-links-card">
                 <h3><i class="bi bi-link-45deg"></i> Quick Links</h3>
                 <div class="quick-links">
-                    <a href="<?= $base; ?>/resources/views/pages/public/faq.php" class="quick-link">
+                    <a href="<?= $base; ?>/faq" class="quick-link">
                         <i class="bi bi-question-circle"></i>
                         <span>Frequently Asked Questions</span>
                     </a>
-                    <a href="<?= $base; ?>/resources/views/pages/public/facilities.php" class="quick-link">
+                    <a href="<?= $base; ?>/facilities" class="quick-link">
                         <i class="bi bi-building"></i>
                         <span>Browse Facilities</span>
                     </a>
-                    <a href="<?= $base; ?>/resources/views/pages/auth/register.php" class="quick-link">
+                    <a href="<?= $base; ?>/register" class="quick-link">
                         <i class="bi bi-person-plus"></i>
                         <span>Create an Account</span>
                     </a>
-                    <a href="<?= $base; ?>/resources/views/pages/auth/login.php" class="quick-link">
+                    <a href="<?= $base; ?>/login" class="quick-link">
                         <i class="bi bi-box-arrow-in-right"></i>
                         <span>Login to Your Account</span>
                     </a>

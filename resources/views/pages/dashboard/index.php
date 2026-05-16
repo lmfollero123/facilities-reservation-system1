@@ -5,13 +5,14 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+require_once __DIR__ . '/../../../../config/time_helpers.php';
 
 $pdo = db();
 
@@ -67,6 +68,34 @@ if (!empty($_GET['end_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end_
 
 $today = date('Y-m-d');
 $weekFromNow = date('Y-m-d', strtotime('+7 days'));
+
+// ===== Prompt: Reservation today (Check In/Out) =====
+$todayPrompt = null;
+try {
+    if (!in_array($userRole, ['Admin', 'Staff'], true)) {
+        $hasAttendanceTable = false;
+        $checkStmt = $pdo->query("SHOW TABLES LIKE 'reservation_attendance'");
+        $hasAttendanceTable = (bool)$checkStmt->fetchColumn();
+
+        if ($hasAttendanceTable) {
+            $stmt = $pdo->prepare(
+                "SELECT r.id, r.reservation_date, r.time_slot, f.name AS facility_name,
+                        a.time_in_at, a.time_out_at
+                 FROM reservations r
+                 JOIN facilities f ON f.id = r.facility_id
+                 LEFT JOIN reservation_attendance a ON a.reservation_id = r.id
+                 WHERE r.user_id = ? AND r.status = 'approved' AND r.reservation_date = ?
+                   AND (a.time_out_at IS NULL)
+                 ORDER BY r.time_slot ASC
+                 LIMIT 1"
+            );
+            $stmt->execute([$userId, $today]);
+            $todayPrompt = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+    }
+} catch (Throwable $e) {
+    $todayPrompt = null;
+}
 
 // Facility options for filter
 $facilityOptionsStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
@@ -562,6 +591,37 @@ ob_start();
     <small>Welcome back, <?= htmlspecialchars($_SESSION['user_name'] ?? 'User'); ?>!</small>
 </div>
 
+<?php if (!empty($todayPrompt) && $userRole === 'Resident'): ?>
+    <?php
+        $slotParsed = parseTimeSlot($todayPrompt['time_slot'] ?? '');
+        $startStr = $slotParsed ? $slotParsed['start']->format('H:i') : null;
+        $endStr = $slotParsed ? $slotParsed['end']->format('H:i') : null;
+        $startDt = ($startStr) ? DateTime::createFromFormat('Y-m-d H:i', $today . ' ' . $startStr) : null;
+        $endDt = ($endStr) ? DateTime::createFromFormat('Y-m-d H:i', $today . ' ' . $endStr) : null;
+        $nowDt = new DateTime();
+        $canTimeIn = $startDt && $endDt && $nowDt >= $startDt && $nowDt <= $endDt && empty($todayPrompt['time_in_at']);
+        $canTimeOut = $endDt && $nowDt >= $endDt && !empty($todayPrompt['time_in_at']) && empty($todayPrompt['time_out_at']);
+        $statusText = $canTimeIn ? 'Time In is available now.' : ($canTimeOut ? 'Time Out is available now.' : 'Your reservation is scheduled today.');
+    ?>
+    <div class="booking-card" style="margin-bottom: 1rem; padding: 0.85rem; border: 1px solid #bfdbfe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);">
+        <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
+            <div style="font-size:1.75rem; line-height:1;">⏱️</div>
+            <div style="flex:1; min-width:240px;">
+                <div style="font-weight:800; color:#1e3a5f; margin-bottom:0.25rem;">
+                    Reservation today: <?= htmlspecialchars($todayPrompt['facility_name'] ?? 'Facility'); ?>
+                </div>
+                <div style="color:#334155;">
+                    <?= htmlspecialchars($todayPrompt['time_slot'] ?? ''); ?> • <?= htmlspecialchars($statusText); ?>
+                </div>
+                <div style="margin-top:0.6rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <a href="<?= base_path(); ?>/dashboard/time-tracking" class="btn-primary" style="text-decoration:none; padding:0.5rem 0.9rem;">Open Check In/Out</a>
+                    <a href="<?= base_path(); ?>/dashboard/book-facility?module=mine" class="btn-outline" style="text-decoration:none; padding:0.5rem 0.9rem;">View Reservations</a>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php if (!$isVerified && $userRole === 'Resident'): ?>
 <div class="booking-card id-verification-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border: 2px solid #ffc107; margin-bottom: 1rem; padding: 0.85rem;">
     <div style="display: flex; align-items: start; gap: 1rem;">
@@ -611,14 +671,14 @@ ob_start();
     </div>
     <div style="display:flex; gap:0.5rem;">
         <button type="submit" class="btn-primary" style="flex:1;">Apply Filters</button>
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/index.php" class="btn-outline" style="flex:1; text-align:center; text-decoration:none;">Reset</a>
+        <a href="<?= base_path(); ?>/dashboard" class="btn-outline" style="flex:1; text-align:center; text-decoration:none;">Reset</a>
     </div>
 </form>
 
 <div class="stat-grid">
     <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
         <!-- Admin/Staff Global Statistics -->
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/reservations-manage', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #1976d2; margin: 0.3rem 0;">
                 <?= number_format($totalReservations); ?>
@@ -629,7 +689,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'pending', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/reservations-manage', 'pending', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); text-decoration: none; color: inherit;">
             <h3>Pending Approvals</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #f57c00; margin: 0.3rem 0;">
                 <?= number_format($pendingCount); ?>
@@ -643,7 +703,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/user_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); text-decoration: none; color: inherit;">
+        <a href="<?= base_path(); ?>/dashboard/user-management" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); text-decoration: none; color: inherit;">
             <h3>Total Users</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #388e3c; margin: 0.3rem 0;">
                 <?= number_format($totalUsers); ?>
@@ -653,7 +713,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/facility_management.php" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); text-decoration: none; color: inherit;">
+        <a href="<?= base_path(); ?>/dashboard/facility-management" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); text-decoration: none; color: inherit;">
             <h3>Available Facilities</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #7b1fa2; margin: 0.3rem 0;">
                 <?= number_format($totalFacilities); ?>
@@ -663,7 +723,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', '', $facilityFilter, date('Y-m-d'), date('Y-m-d')); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%); text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/reservations-manage', '', $facilityFilter, date('Y-m-d'), date('Y-m-d')); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%); text-decoration: none; color: inherit;">
             <h3>Today's Bookings</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #f9a825; margin: 0.3rem 0;">
                 <?= number_format($todayReservations); ?>
@@ -673,7 +733,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/reservations_manage.php', 'approved', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/reservations-manage', 'approved', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); text-decoration: none; color: inherit;">
             <h3>Approval Rate</h3>
             <p style="font-size: 1.5rem; font-weight: 700; color: #00796b; margin: 0.3rem 0;">
                 <?= $approvalRate; ?>%
@@ -684,7 +744,7 @@ ob_start();
         </a>
     <?php else: ?>
         <!-- Resident Statistics -->
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/my-reservations', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>My Upcoming Reservations</h3>
             <p style="font-size: 1.5rem; font-weight: 600; color: var(--gov-blue); margin: 0.3rem 0;">
                 <?= $upcomingCount; ?>
@@ -694,7 +754,7 @@ ob_start();
             </small>
         </a>
         
-        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/my_reservations.php', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/my-reservations', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>Total Reservations</h3>
             <p style="font-size: 1.5rem; font-weight: 600; color: var(--gov-blue-dark); margin: 0.3rem 0;">
                 <?= $totalReservations; ?>
@@ -718,7 +778,7 @@ ob_start();
             <p style="color: #8b95b5; padding: 1rem 0;">
                 No upcoming reservations.
                 <?php if (!in_array($userRole, ['Admin', 'Staff'])): ?>
-                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" style="color: var(--gov-blue);">Book a facility</a> to get started.
+                    <a href="<?= base_path(); ?>/dashboard/book-facility" style="color: var(--gov-blue);">Book a facility</a> to get started.
                 <?php endif; ?>
             </p>
         <?php else: ?>
@@ -751,9 +811,9 @@ ob_start();
                             </td>
                             <td>
                                 <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php?id=<?= (int)$res['id']; ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">Manage</a>
+                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$res['id']; ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">Manage</a>
                                 <?php else: ?>
-                                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">View</a>
+                                    <a href="<?= base_path(); ?>/dashboard/my-reservations" class="btn-outline" style="padding: 0.4rem 0.75rem; text-decoration: none; font-size: 0.85rem;">View</a>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -763,16 +823,16 @@ ob_start();
             <?php if ($upcomingTotalPages > 1): ?>
                 <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                     <?php if ($upcomingPage > 1): ?>
-                        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage - 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage - 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
                     <?php endif; ?>
                     <span style="padding: 0.5rem 1rem; color: #5b6888;">Page <?= $upcomingPage; ?> of <?= $upcomingTotalPages; ?> (<?= $upcomingTotal; ?> total)</span>
                     <?php if ($upcomingPage < $upcomingTotalPages): ?>
-                        <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage + 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage + 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
             <div style="margin-top: 1rem;">
-                <a href="<?= base_path(); ?>/resources/views/pages/dashboard/<?= in_array($userRole, ['Admin', 'Staff']) ? 'reservations_manage.php' : 'my_reservations.php'; ?>" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; min-width: fit-content; text-align: center;">View All Reservations</a>
+                <a href="<?= base_path(); ?>/dashboard/<?= in_array($userRole, ['Admin', 'Staff']) ? 'reservations-manage' : 'my-reservations'; ?>" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 1.5rem; min-width: fit-content; text-align: center;">View All Reservations</a>
             </div>
         <?php endif; ?>
         </div>
@@ -802,7 +862,7 @@ ob_start();
                             <?= date('M j, Y', strtotime($pending['reservation_date'])); ?> - <?= htmlspecialchars($pending['time_slot']); ?>
                         </small>
                         <div style="margin-top: 0.5rem;">
-                            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-outline" style="padding: 0.35rem 0.65rem; text-decoration: none; font-size: 0.8rem;">Review</a>
+                            <a href="<?= base_path(); ?>/dashboard/reservations-manage" class="btn-outline" style="padding: 0.35rem 0.65rem; text-decoration: none; font-size: 0.8rem;">Review</a>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -810,7 +870,7 @@ ob_start();
         </div>
         <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
             <?php if ($pendingPage > 1): ?>
-                <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage - 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage - 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
             <?php endif; ?>
             
             <span style="padding: 0.5rem 1rem; color: #5b6888; font-size: 0.9rem;">
@@ -818,12 +878,12 @@ ob_start();
             </span>
             
             <?php if ($pendingPage < $pendingTotalPages): ?>
-                <a href="<?= buildFilterUrl(base_path(), '/resources/views/pages/dashboard/index.php', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage + 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage + 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
             <?php endif; ?>
         </div>
         
         <div style="margin-top: 0.5rem; text-align: center;">
-            <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; min-width: fit-content; text-align: center; font-size: 0.9rem;">View All (<?= $pendingCount; ?>)</a>
+            <a href="<?= base_path(); ?>/dashboard/reservations-manage" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; min-width: fit-content; text-align: center; font-size: 0.9rem;">View All (<?= $pendingCount; ?>)</a>
         </div>
         </div>
     </aside>
@@ -861,20 +921,20 @@ ob_start();
 <div class="booking-card" style="margin-top: 1rem;">
     <h2>Quick Actions</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-top: 0.75rem;">
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/book_facility.php" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
+        <a href="<?= base_path(); ?>/dashboard/book-facility" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">📅 Book Facility</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">Submit a new reservation request</p>
         </a>
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/my_reservations.php" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
+        <a href="<?= base_path(); ?>/dashboard/my-reservations" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">📋 My Reservations</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View your booking history</p>
         </a>
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/calendar.php" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
+        <a href="<?= base_path(); ?>/dashboard/calendar" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">🗓️ Calendar</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View availability calendar</p>
         </a>
         <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
-        <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reports.php" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
+        <a href="<?= base_path(); ?>/dashboard/reports" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">📊 Reports</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View analytics & insights</p>
         </a>

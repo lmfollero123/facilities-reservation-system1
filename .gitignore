@@ -7,6 +7,7 @@
 .env.*.local
 config/geocoding_config.php
 config/gemini_config.php
+# database.php may contain fallbacks — use .env for production credentials
 
 # Logs & generated data
 logs/
@@ -15,6 +16,12 @@ storage/task_logs/
 storage/task_cmd/
 storage/exports/
 storage/private/
+storage/tmp/
+storage/tmp_*
+storage/*.html
+
+# Local / test scripts (may load secrets)
+test_gemini_api.php
 
 # User uploads (regenerated on server)
 public/img/announcements/
@@ -30,8 +37,13 @@ public/uploads/
 .DS_Store
 Thumbs.db
 
-# Database dumps (may contain sensitive data)
+# Database dumps (may contain sensitive data / PII)
 database/latest-database-inside.sql
+database/*-dump*.sql
+database/*-inside*.sql
+!database/migration_*.sql
+!database/schema.sql
+!database/performance_indexes.sql
 
 # Stray logo asset (proper copy is in public/img/infragov-logo.png)
 599746247_1396112291886318_566174000779487152_n.png

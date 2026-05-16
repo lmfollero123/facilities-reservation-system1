@@ -14,9 +14,12 @@ require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
+require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
+$paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
+$approvalFirstThenPayment = !empty($paymentsCfg['enabled']) && !empty($paymentsCfg['require_payment_for_reservations']);
 
 // Auto-decline expired pending reservations (past their reservation time)
 $autoDeclined = autoDeclineExpiredReservations();
@@ -27,7 +30,10 @@ if ($autoDeclined > 0) {
     $message = $autoDeclined . ' pending reservation(s) automatically denied due to expired reservation time.';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
+    $message = 'Your session expired or the form is invalid. Please refresh and try again.';
+    $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_POST['action'])) {
     $reservationId = (int)$_POST['reservation_id'];
     $action = $_POST['action'];
     $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone'];
@@ -35,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
     if ($reservationId && in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log (including facility status)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email, u.mobile AS requester_mobile
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -167,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 $notifMessage .= ' Reason: ' . $reason;
                 
                 createNotification($reservation['requester_id'], 'booking', 'Reservation Modified', $notifMessage, 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php');
+                    base_path() . '/dashboard/my-reservations');
                 
                 // Send email notification
                 if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
@@ -177,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    $emailBody .= '<p><a href="' . base_url() . '/dashboard/my-reservations">View My Reservations</a></p>';
                     sendEmail($reservation['requester_email'], $reservation['requester_name'], $emailSubject, $emailBody);
                 }
                 
@@ -291,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 $notifMessage .= ' The new date requires re-approval. Reason: ' . $reason;
                 
                 createNotification($reservation['requester_id'], 'booking', 'Reservation Postponed', $notifMessage, 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php');
+                    base_path() . '/dashboard/my-reservations');
                 
                 // Send email notification
                 if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
@@ -355,21 +361,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                     }
                 }
                 
+                $finalAction = $action;
+                $finalNote = $note;
+
+                // Hybrid policy: manual approval transitions to payment-required state.
+                if ($action === 'approved' && $approvalFirstThenPayment && ($reservation['status'] ?? '') === 'pending') {
+                    $finalAction = 'pending_payment';
+                    $approvalPaymentNote = 'Approved by staff. Awaiting payment confirmation to finalize reservation.';
+                    $finalNote = !empty($finalNote) ? ($finalNote . ' | ' . $approvalPaymentNote) : $approvalPaymentNote;
+                }
+
                 // If approving a postponed reservation, clear postponed_at timestamp (priority flag remains for tracking)
-                if ($action === 'approved' && $reservation['status'] === 'postponed') {
+                if ($finalAction === 'approved' && $reservation['status'] === 'postponed') {
                     $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                 } else {
                     $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                 }
                 $stmt->execute([
-                    'status' => $action,
+                    'status' => $finalAction,
                     'id' => $reservationId,
                 ]);
                 $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)');
                 $hist->execute([
                     'id' => $reservationId,
-                    'status' => $action,
-                    'note' => $note,
+                    'status' => $finalAction,
+                    'note' => $finalNote,
                     'user' => $_SESSION['user_id'] ?? null,
                 ]);
                 
@@ -378,33 +394,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                 if ($reservation) {
                     $details .= ' (' . $reservation['reservation_date'] . ' ' . $reservation['time_slot'] . ')';
                 }
-                if (!empty($note)) {
-                    $details .= ' – Note: ' . $note;
+                if (!empty($finalNote)) {
+                    $details .= ' – Note: ' . $finalNote;
                 }
-                logAudit(ucfirst($action) . ' reservation', 'Reservations', $details);
+                logAudit(ucfirst($finalAction) . ' reservation', 'Reservations', $details);
                 
                 // Create notification for the requester
                 if ($reservation) {
-                    $notifTitle = $action === 'approved' ? 'Reservation Approved' : ($action === 'denied' ? 'Reservation Denied' : 'Reservation Cancelled');
+                    $notifTitle = $finalAction === 'approved'
+                        ? 'Reservation Approved'
+                        : ($finalAction === 'pending_payment'
+                            ? 'Reservation Approved - Payment Required'
+                            : ($finalAction === 'denied' ? 'Reservation Denied' : 'Reservation Cancelled'));
                     $notifMessage = 'Your reservation request for ' . $reservation['facility_name'];
                     $notifMessage .= ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ')';
-                    $notifMessage .= ' has been ' . $action . '.';
+                    if ($finalAction === 'pending_payment') {
+                        $notifMessage .= ' has been approved and is awaiting payment confirmation.';
+                    } else {
+                        $notifMessage .= ' has been ' . $finalAction . '.';
+                    }
                     
                     // Check if this was a postponed reservation with priority
-                    if ($action === 'approved' && $reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])) {
+                    if ($finalAction === 'approved' && $reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])) {
                         $notifMessage .= ' This reservation had priority due to previous postponement.';
                     }
                     
-                    if (!empty($note)) {
-                        $notifMessage .= ' Note: ' . $note;
+                    if (!empty($finalNote)) {
+                        $notifMessage .= ' Note: ' . $finalNote;
                     }
                     
-                    $notifLink = base_path() . '/resources/views/pages/dashboard/my_reservations.php';
+                    $notifLink = $finalAction === 'pending_payment'
+                        ? (base_path() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId)
+                        : (base_path() . '/dashboard/my-reservations');
                     createNotification($reservation['requester_id'], 'booking', $notifTitle, $notifMessage, $notifLink);
                     
                     // Send email notification
                     if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
-                        if ($action === 'approved') {
+                        if ($finalAction === 'approved') {
                             // Use the new professional template for approvals
                             $emailBody = getReservationApprovedEmailTemplate(
                                 $reservation['requester_name'],
@@ -414,7 +440,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                                 $note ?? ''
                             );
                             sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Approved', $emailBody);
-                        } elseif ($action === 'denied') {
+                            sendReservationStatusSms($reservation, 'approved');
+                        } elseif ($finalAction === 'pending_payment') {
+                            $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>'
+                                . '<p>Your reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> on '
+                                . '<strong>' . date('F j, Y', strtotime($reservation['reservation_date'])) . '</strong> ('
+                                . htmlspecialchars($reservation['time_slot']) . ') has been approved.</p>'
+                                . '<p><strong>Next step:</strong> Please complete your payment to finalize the reservation.</p>'
+                                . '<p><a href="' . htmlspecialchars(base_url() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8') . '">Pay Now</a></p>';
+                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Approved - Payment Required', $emailBody);
+                            sendReservationStatusSms($reservation, 'pending_payment');
+                        } elseif ($finalAction === 'denied') {
                             // Use professional template for denials
                             $emailBody = getReservationDeniedEmailTemplate(
                                 $reservation['requester_name'],
@@ -424,7 +460,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                                 $note ?? ''
                             );
                             sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Denied', $emailBody);
-                        } elseif ($action === 'cancelled') {
+                            sendReservationStatusSms($reservation, 'denied');
+                        } elseif ($finalAction === 'cancelled') {
                             // Use professional template for cancellations
                             $emailBody = getReservationCancelledEmailTemplate(
                                 $reservation['requester_name'],
@@ -434,11 +471,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_P
                                 $note ?? ''
                             );
                             sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Cancelled', $emailBody);
+                            sendReservationStatusSms($reservation, 'cancelled');
                         }
                     }
                 }
                 
-                $message = ucfirst($action) . ' reservation successfully.';
+                $message = $finalAction === 'pending_payment'
+                    ? 'Reservation approved. User must complete payment to finalize the booking.'
+                    : (ucfirst($finalAction) . ' reservation successfully.');
             }
         } catch (Throwable $e) {
             $message = $e->getMessage();
@@ -454,7 +494,7 @@ $pendingOffset = ($pendingPage - 1) * $pendingPerPage;
 $pendingSearch = trim($_GET['pending_search'] ?? '');
 
 // Build pending query with filters
-$pendingWhere = ['r.status IN ("pending", "postponed")'];
+$pendingWhere = ['r.status IN ("pending", "postponed", "pending_payment")'];
 $pendingParams = [];
 
 if (!empty($pendingSearch)) {
@@ -682,15 +722,22 @@ ob_start();
                             <td><?= htmlspecialchars($reservation['purpose']); ?></td>
                             <td>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
+                                    <span class="status-badge <?= $reservation['status']; ?>">
+                                        <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                                    </span>
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
-                                        <form method="POST" action="<?= base_path(); ?>/dashboard/reservations-manage" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservations-manage" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
                                             <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
                                             <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
                                             <button class="btn-primary confirm-action" data-message="Approve this reservation?<?= !empty($reservation['postponed_priority']) ? ' (This reservation has priority due to previous postponement.)' : ''; ?>" name="action" value="approved" type="submit">Approve</button>
                                             <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
                                         </form>
+                                    <?php elseif ($reservation['status'] === 'pending_payment'): ?>
+                                        <span style="font-size:0.85rem; color:#9a3412; background:#ffedd5; border:1px solid #fdba74; padding:0.3rem 0.55rem; border-radius:6px;">
+                                            User must complete payment
+                                        </span>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -723,6 +770,10 @@ ob_start();
             <li>
                 <span class="status-badge approved">Approved</span>
                 <span style="margin-left: 0.5rem;">Facility is reserved for the requester.</span>
+            </li>
+            <li>
+                <span class="status-badge pending_payment">Awaiting Payment</span>
+                <span style="margin-left: 0.5rem;">Already approved; waiting for user payment to finalize.</span>
             </li>
             <li>
                 <span class="status-badge denied">Denied</span>
@@ -829,6 +880,7 @@ ob_start();
             <button onclick="closeModifyModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
         <form method="POST" id="modifyForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
             <input type="hidden" id="modify_facility_id" value="">
@@ -893,6 +945,7 @@ ob_start();
             <button onclick="closePostponeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
         <form method="POST" id="postponeForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
             
@@ -942,6 +995,7 @@ ob_start();
             <button onclick="closeCancelModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
         <form method="POST" id="cancelForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
             <input type="hidden" name="action" value="cancelled">
             
@@ -1045,7 +1099,7 @@ async function checkModifyConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
-        const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+        const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body
@@ -1216,7 +1270,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
                 <button type="submit" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Search</button>
                 <?php if (!empty($modalSearch) || !empty($modalStatus)): ?>
-                    <a href="?" class="btn-outline" style="padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 6px;">Clear Filters</a>
+                    <a href="?open_modal=all_reservations&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 6px;">Clear Filters</a>
                 <?php endif; ?>
             </div>
             <!-- Preserve other GET parameters -->
@@ -1224,6 +1278,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
             <input type="hidden" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>">
             <input type="hidden" name="approved_page" value="<?= $approvedPage; ?>">
             <input type="hidden" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>">
+            <input type="hidden" name="open_modal" value="all_reservations">
         </form>
         
         <!-- Reservations List -->
@@ -1270,11 +1325,11 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
                 <?php if ($modalTotalPages > 1): ?>
                     <div class="pagination" style="margin-top: 1.5rem; justify-content: center;">
                         <?php if ($modalPage > 1): ?>
-                            <a href="?modal_page=<?= $modalPage - 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">&larr; Prev</a>
+                            <a href="?open_modal=all_reservations&modal_page=<?= $modalPage - 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">&larr; Prev</a>
                         <?php endif; ?>
                         <span class="current" style="padding: 0.5rem 1rem;">Page <?= $modalPage; ?> of <?= $modalTotalPages; ?> (<?= $modalTotal; ?> total)</span>
                         <?php if ($modalPage < $modalTotalPages): ?>
-                            <a href="?modal_page=<?= $modalPage + 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">Next &rarr;</a>
+                            <a href="?open_modal=all_reservations&modal_page=<?= $modalPage + 1; ?>&modal_search=<?= urlencode($modalSearch); ?>&modal_status=<?= urlencode($modalStatus); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="text-decoration: none; padding: 0.5rem 1rem;">Next &rarr;</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
@@ -1340,11 +1395,17 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
         document.body.appendChild(modal);
     }
     
-    // Never auto-open on page load; modal opens only when user clicks "All Reservations"
+    // Auto-open when user paginates/filters inside the modal (full page reload)
+    const params = new URLSearchParams(window.location.search);
+    const shouldOpen = (params.get('open_modal') === 'all_reservations') ||
+                       params.has('modal_search') || params.has('modal_status') || params.has('modal_page');
     
     function openAllReservationsModal() {
         if (modal) {
             if (modal.parentNode !== document.body) document.body.appendChild(modal);
+            const url = new URL(window.location.href);
+            url.searchParams.set('open_modal', 'all_reservations');
+            window.history.replaceState({}, '', url);
             modal.classList.add('show');
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -1359,6 +1420,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
             url.searchParams.delete('modal_search');
             url.searchParams.delete('modal_status');
             url.searchParams.delete('modal_page');
+            url.searchParams.delete('open_modal');
             window.history.replaceState({}, '', url);
             modal.classList.remove('show');
             modal.style.display = 'none';
@@ -1367,6 +1429,11 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     }
     
     window.closeAllReservationsModal = closeAllReservationsModal;
+
+    if (shouldOpen) {
+        // Defer until after modal is moved to body
+        setTimeout(openAllReservationsModal, 0);
+    }
     
     // Use document-level delegation so close handlers always work (avoids stacking/blocking issues)
     document.addEventListener('click', function(e) {

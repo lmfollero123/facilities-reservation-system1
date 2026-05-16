@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../../../config/data_export.php';
 
 // Require authentication
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -80,7 +80,7 @@ ob_start();
                     </p>
                 </div>
                 <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
-                    <a href="<?= $base . '/resources/views/pages/dashboard/profile.php'; ?>" class="btn-outline" style="text-decoration:none; padding:0.6rem 1rem;">Back to Profile</a>
+                    <a href="<?= $base . '/dashboard/profile'; ?>" class="btn-outline" style="text-decoration:none; padding:0.6rem 1rem;">Back to Profile</a>
                     <button type="button" class="btn-primary" onclick="window.print();" style="padding:0.6rem 1rem;">Print / Save as PDF</button>
                 </div>
             </div>

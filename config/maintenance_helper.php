@@ -70,7 +70,7 @@ function handleFacilityMaintenanceStatusChange(int $facilityId, string $facility
                         'booking',
                         'Reservation Cancelled',
                         "Your pending reservation for {$facilityName} on {$reservation['reservation_date']} ({$reservation['time_slot']}) has been cancelled because the facility is now under maintenance.",
-                        base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                        base_path() . '/dashboard/my-reservations'
                     );
                     
                     $result['pending_cancelled']++;
@@ -113,7 +113,7 @@ function handleFacilityMaintenanceStatusChange(int $facilityId, string $facility
                         'booking',
                         'Reservation Postponed',
                         "Your approved reservation for {$facilityName} on {$reservation['reservation_date']} ({$reservation['time_slot']}) has been postponed due to facility maintenance. You will receive priority when the facility becomes available again.",
-                        base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                        base_path() . '/dashboard/my-reservations'
                     );
                     
                     $result['approved_postponed']++;
@@ -188,7 +188,7 @@ function sendPostponementEmail(string $userEmail, string $userName, string $faci
                 
                 <p>We apologize for any inconvenience this may cause. If you have any questions or concerns, please contact us.</p>
                 
-                <a href='" . base_url() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
+                <a href='" . base_url() . "/dashboard/my-reservations' class='btn'>View My Reservations</a>
             </div>
             <div class='footer'>
                 <p>LGU Facilities Reservation System<br>
@@ -221,7 +221,7 @@ Priority Status: Active
 
 We apologize for any inconvenience this may cause. If you have any questions or concerns, please contact us.
 
-View your reservations: " . base_url() . "/resources/views/pages/dashboard/my_reservations.php
+View your reservations: " . base_url() . "/dashboard/my-reservations
 
 ---
 LGU Facilities Reservation System
@@ -281,7 +281,7 @@ function handleFacilityAvailableStatusChange(int $facilityId, string $facilityNa
                     'booking',
                     'Facility Available - Priority Reservation',
                     "Great news! {$facilityName} is now available again. Your previously postponed reservation on " . date('F j, Y', strtotime($reservation['reservation_date'])) . " has priority. Please reschedule your reservation as soon as possible.",
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                    base_path() . '/dashboard/my-reservations'
                 );
                 
                 $result['notified']++;
@@ -351,7 +351,7 @@ function sendFacilityAvailableEmail(string $userEmail, string $userName, string 
                     <li>We recommend rescheduling at least 3 days in advance of your preferred date.</li>
                 </ul>
                 
-                <a href='" . base_url() . "/resources/views/pages/dashboard/my_reservations.php' class='btn'>View My Reservations</a>
+                <a href='" . base_url() . "/dashboard/my-reservations' class='btn'>View My Reservations</a>
                 
                 <p>Thank you for your patience during the maintenance period.</p>
             </div>
@@ -385,7 +385,7 @@ Next Steps:
 - Due to your priority status, your reservation will be processed with preference.
 - We recommend rescheduling at least 3 days in advance of your preferred date.
 
-View your reservations: " . base_url() . "/resources/views/pages/dashboard/my_reservations.php
+View your reservations: " . base_url() . "/dashboard/my-reservations
 
 Thank you for your patience during the maintenance period.
 

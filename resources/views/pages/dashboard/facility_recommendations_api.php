@@ -15,7 +15,12 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    frs_reject_invalid_csrf_json();
+}
 require_once __DIR__ . '/../../../../config/geocoding.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
@@ -36,7 +41,9 @@ if (empty($purpose)) {
     exit;
 }
 
-$suggestedTimes = function_exists('getSuggestedTimesForPurpose') ? getSuggestedTimesForPurpose($purpose) : ['slots' => [], 'label' => ''];
+$suggestedTimes = function_exists('getSuggestedTimesForPurpose')
+    ? getSuggestedTimesForPurpose($purpose, $pdo)
+    : ['slots' => [], 'label' => '', 'source' => 'rules'];
 
 try {
     $userBookingStmt = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE user_id = :user_id');
@@ -54,8 +61,10 @@ try {
     if (empty($facilities)) {
         echo json_encode([
             'recommendations' => [],
-            'suggested_times' => $suggestedTimes,
+            'suggested_times' => $suggestedTimes['slots'] ?? [],
             'best_times_label' => $suggestedTimes['label'] ?? '',
+            'suggested_times_source' => $suggestedTimes['source'] ?? 'rules',
+            'recommendation_engine' => 'none',
         ]);
         exit;
     }
@@ -65,7 +74,12 @@ try {
     $baseResponse = [
         'suggested_times' => $suggestedTimes['slots'] ?? [],
         'best_times_label' => $suggestedTimes['label'] ?? '',
+        'suggested_times_source' => $suggestedTimes['source'] ?? 'rules',
     ];
+
+    $popMap = function_exists('getFacilityApprovedBookingCounts')
+        ? getFacilityApprovedBookingCounts($pdo)
+        : [];
 
     $facilitiesForMl = array_map(function ($f) {
         return [
@@ -79,7 +93,8 @@ try {
     if (function_exists('recommendFacilitiesML')) {
         try {
             $startTime = microtime(true);
-            $mlTimeLimit = 2.0; // Reduced from 3.0 to 2.0 seconds for faster fallback
+            // Must match callPythonModel timeout in recommendFacilitiesML (cold start + sklearn import)
+            $mlTimeLimit = 50.0;
 
             $recommendations = recommendFacilitiesML(
                 facilities: $facilitiesForMl,
@@ -95,8 +110,12 @@ try {
 
             $mlTime = microtime(true) - $startTime;
 
-            if (($mlTime <= $mlTimeLimit) && !isset($recommendations['error']) && !empty($recommendations['recommendations'])) {
-                $recs = $recommendations['recommendations'];
+            $mlRecs = $recommendations['recommendations'] ?? [];
+            $mlFailedHard = isset($recommendations['error']) && $mlRecs === [];
+
+            if (($mlTime <= $mlTimeLimit) && !$mlFailedHard && $mlRecs !== []) {
+                $recs = $mlRecs;
+                $mlModelLoaded = !empty($recommendations['ml_model_loaded']);
                 $facilityMap = [];
                 foreach ($facilities as $f) {
                     $facilityMap[$f['id']] = $f;
@@ -122,6 +141,10 @@ try {
                 }
                 unset($r);
 
+                if ($popMap !== [] && function_exists('applyFacilityBookingPopularityBoost')) {
+                    $recs = applyFacilityBookingPopularityBoost($recs, $popMap);
+                }
+
                 usort($recs, function ($a, $b) {
                     $sA = $a['ml_relevance_score'] ?? 0;
                     $sB = $b['ml_relevance_score'] ?? 0;
@@ -135,7 +158,8 @@ try {
 
                 echo json_encode(array_merge($baseResponse, [
                     'recommendations' => $recs,
-                    'ml_enabled' => true,
+                    'ml_enabled' => $mlModelLoaded,
+                    'recommendation_engine' => $mlModelLoaded ? 'sklearn' : 'python_heuristic',
                     'ml_time' => round($mlTime, 2),
                 ]));
                 exit;
@@ -226,6 +250,10 @@ try {
         ];
     }
 
+    if ($popMap !== [] && function_exists('applyFacilityBookingPopularityBoost')) {
+        $scoredFacilities = applyFacilityBookingPopularityBoost($scoredFacilities, $popMap);
+    }
+
     usort($scoredFacilities, function ($a, $b) {
         if ($b['ml_relevance_score'] !== $a['ml_relevance_score']) {
             return $b['ml_relevance_score'] <=> $a['ml_relevance_score'];
@@ -238,6 +266,7 @@ try {
     echo json_encode(array_merge($baseResponse, [
         'recommendations' => array_slice($scoredFacilities, 0, 5),
         'ml_enabled' => false,
+        'recommendation_engine' => 'php_rules',
     ]));
 
 } catch (Exception $e) {

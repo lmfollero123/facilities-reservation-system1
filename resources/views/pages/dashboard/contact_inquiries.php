@@ -9,7 +9,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Check authentication and admin/staff role
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['Admin', 'Staff'], true)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -96,7 +96,7 @@ ob_start();
     <div class="card-elevated">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h2 style="color: #1b1b1f;">Inquiry Details</h2>
-            <a href="<?= $base; ?>/resources/views/pages/dashboard/contact_inquiries.php" class="btn btn-outline">← Back to List</a>
+            <a href="<?= $base; ?>/dashboard/contact-inquiries" class="btn btn-outline">← Back to List</a>
         </div>
         
         <div style="background: #f5f7fd; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">

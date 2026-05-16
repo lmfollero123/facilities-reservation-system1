@@ -5072,6 +5072,11 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     color: #856404;
 }
 
+.status-badge.pending_payment {
+    background: #fb923c;
+    color: #7c2d12;
+}
+
 .status-badge.denied,
 .status-badge.declined,
 .status-denied {
@@ -6898,6 +6903,13 @@ select:focus {
     border: 1px solid var(--warning-border);
 }
 
+.status-badge.pending_payment,
+.status-badge.status-pending_payment {
+    background: #ffedd5;
+    color: #9a3412;
+    border: 1px solid #fdba74;
+}
+
 .status-badge.status-denied,
 .status-badge.denied {
     background: var(--error-bg);
@@ -6937,10 +6949,63 @@ select:focus {
 
 .notif-panel-header {
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+}
+
+.notif-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-shrink: 0;
+}
+
+.notif-mark-all-btn,
+.notif-mark-all-page-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--gov-blue);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.notif-mark-all-btn:hover,
+.notif-mark-all-page-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--gov-blue);
+}
+
+.notif-mark-all-btn:disabled,
+.notif-mark-all-page-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.notif-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.notif-page-header h2 {
+    margin: 0;
 }
 
 .notif-panel h3 {
     color: var(--text-primary);
+    margin: 0;
 }
 
 .notif-item {
@@ -9469,6 +9534,289 @@ html[data-theme="dark"] .mobile-controls {
 html[data-theme="dark"] #noScheduleMsg,
 html[data-theme="dark"] #noResultMsg {
     color: var(--text-secondary);
+}
+
+/* ============================================
+   MAINTENANCE INTEGRATION UI REFRESH (Scoped)
+   ============================================ */
+.maintenance-calendar-wrapper {
+    --mi-blue: #3762c8;
+    --mi-blue-dark: #2851b3;
+    --mi-border: rgba(55, 98, 200, 0.15);
+    --mi-bg-soft: #f8faff;
+}
+
+.maintenance-calendar-wrapper #calendarView,
+.maintenance-calendar-wrapper #scheduleView {
+    border: 1px solid var(--mi-border);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    padding: 0.95rem;
+}
+
+.maintenance-calendar-wrapper .calendar-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--mi-border);
+    background: linear-gradient(135deg, #eef2ff 0%, #f5f7ff 100%);
+}
+
+.maintenance-calendar-wrapper .calendar-header > .toggle-btn:first-child {
+    justify-self: start;
+    margin-top: 0;
+}
+
+.maintenance-calendar-wrapper .calendar-header > div:last-child {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.maintenance-calendar-wrapper #monthLabel,
+.maintenance-calendar-wrapper #mobileMonthLabel {
+    justify-self: center;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+}
+
+.maintenance-calendar-wrapper #monthLabel:hover,
+.maintenance-calendar-wrapper #mobileMonthLabel:hover {
+    background: rgba(55, 98, 200, 0.1);
+}
+
+.maintenance-calendar-wrapper .toggle-btn,
+.maintenance-calendar-wrapper .schedule-btn,
+.maintenance-calendar-wrapper .calendar-btn,
+.maintenance-calendar-wrapper .mobile-calendar-btn,
+.maintenance-calendar-wrapper .mobile-toggle-btn,
+.maintenance-calendar-wrapper .mobile-schedule-btn {
+    margin-top: 0;
+    border-radius: 10px;
+    border: 1.5px solid rgba(55, 98, 200, 0.24);
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--mi-blue);
+    min-width: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(55, 98, 200, 0.1);
+}
+
+.maintenance-calendar-wrapper .schedule-btn {
+    width: auto;
+    min-width: 36px;
+    padding: 0 10px;
+}
+
+.maintenance-calendar-wrapper .toggle-btn:hover,
+.maintenance-calendar-wrapper .schedule-btn:hover,
+.maintenance-calendar-wrapper .calendar-btn:hover,
+.maintenance-calendar-wrapper .mobile-calendar-btn:hover,
+.maintenance-calendar-wrapper .mobile-toggle-btn:hover,
+.maintenance-calendar-wrapper .mobile-schedule-btn:hover {
+    background: var(--mi-blue);
+    border-color: var(--mi-blue);
+    color: #fff;
+}
+
+.maintenance-calendar-wrapper .calendar-weekdays {
+    margin-bottom: 8px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--mi-blue) 0%, var(--mi-blue-dark) 100%);
+    box-shadow: 0 3px 10px rgba(55, 98, 200, 0.25);
+}
+
+.maintenance-calendar-wrapper .calendar-weekdays div {
+    padding: 8px 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.86);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.maintenance-calendar-wrapper .calendar-weekdays div:first-child,
+.maintenance-calendar-wrapper .calendar-weekdays div:last-child {
+    color: #ffb3b3;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.maintenance-calendar-wrapper .calendar-grid {
+    gap: 6px;
+}
+
+.maintenance-calendar-wrapper .calendar-day {
+    background: var(--mi-bg-soft);
+    border: 1.5px solid transparent;
+    border-radius: 12px;
+    min-height: 88px;
+    padding: 8px 6px 6px;
+    align-items: center;
+    text-align: center;
+    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+
+.maintenance-calendar-wrapper .calendar-day > div:first-child {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #334155;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.maintenance-calendar-wrapper .calendar-day.has-event {
+    background: #e8eeff;
+    border-color: rgba(55, 98, 200, 0.28);
+}
+
+.maintenance-calendar-wrapper .calendar-day:hover {
+    background: #e8eeff;
+    border-color: rgba(55, 98, 200, 0.32);
+    box-shadow: 0 0 0 2px rgba(55, 98, 200, 0.12);
+}
+
+.maintenance-calendar-wrapper .calendar-day .day-tasks {
+    width: 100%;
+    text-align: center;
+}
+
+.maintenance-calendar-wrapper .task-btn {
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 10.5px;
+    line-height: 1.25;
+    text-align: left;
+}
+
+.maintenance-calendar-wrapper .task-dropdown {
+    border-radius: 12px;
+    border: 1.5px solid var(--mi-border);
+    box-shadow: 0 12px 26px rgba(55, 98, 200, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.maintenance-calendar-wrapper .calendar-details-card {
+    margin-top: 12px;
+    border: 1.5px solid var(--mi-border);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(55, 98, 200, 0.08);
+}
+
+.maintenance-calendar-wrapper #scheduleView > div:first-child {
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--mi-border);
+    background: linear-gradient(135deg, #eef2ff 0%, #f5f7ff 100%);
+    margin-bottom: 12px;
+}
+
+.maintenance-calendar-wrapper #scheduleSearch,
+.maintenance-calendar-wrapper #mobileScheduleSearch {
+    border: 1.5px solid rgba(55, 98, 200, 0.18);
+    border-radius: 10px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.maintenance-calendar-wrapper .schedule-item {
+    border: 1px solid rgba(55, 98, 200, 0.12);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    padding: 12px;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.maintenance-calendar-wrapper .schedule-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(55, 98, 200, 0.25);
+    box-shadow: 0 8px 20px rgba(55, 98, 200, 0.12);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper #calendarView,
+html[data-theme="dark"] .maintenance-calendar-wrapper #scheduleView {
+    background: linear-gradient(180deg, rgba(26, 26, 30, 0.95) 0%, rgba(22, 24, 34, 0.95) 100%);
+    border-color: rgba(95, 140, 255, 0.2);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-header,
+html[data-theme="dark"] .maintenance-calendar-wrapper #scheduleView > div:first-child {
+    background: linear-gradient(135deg, rgba(55, 98, 200, 0.14) 0%, rgba(22, 26, 46, 0.85) 100%);
+    border-color: rgba(95, 140, 255, 0.18);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper #monthLabel,
+html[data-theme="dark"] .maintenance-calendar-wrapper #mobileMonthLabel {
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .toggle-btn,
+html[data-theme="dark"] .maintenance-calendar-wrapper .schedule-btn,
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-btn,
+html[data-theme="dark"] .maintenance-calendar-wrapper .mobile-calendar-btn,
+html[data-theme="dark"] .maintenance-calendar-wrapper .mobile-toggle-btn,
+html[data-theme="dark"] .maintenance-calendar-wrapper .mobile-schedule-btn {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(95, 140, 255, 0.28);
+    color: #8ab4f8;
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-weekdays {
+    background: linear-gradient(135deg, #253880 0%, #1a2b6e 100%);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-day {
+    background: #252a3d;
+    border-color: rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-day.has-event {
+    background: rgba(55, 98, 200, 0.16);
+    border-color: rgba(95, 140, 255, 0.3);
+}
+
+html[data-theme="dark"] .maintenance-calendar-wrapper .calendar-details-card,
+html[data-theme="dark"] .maintenance-calendar-wrapper .schedule-item {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 768px) {
+    .maintenance-calendar-wrapper #calendarView,
+    .maintenance-calendar-wrapper #scheduleView {
+        padding: 0.75rem;
+    }
+
+    .maintenance-calendar-wrapper .calendar-day {
+        min-height: 64px;
+        padding: 6px 4px;
+        border-radius: 10px;
+    }
+
+    .maintenance-calendar-wrapper .calendar-day > div:first-child {
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        font-size: 11px;
+    }
 }
 
 /* ============================================

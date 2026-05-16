@@ -72,7 +72,7 @@ try {
                 <p><strong>Message:</strong></p>
                 <p style='white-space: pre-wrap;'>" . nl2br(htmlspecialchars($message)) . "</p>
             </div>
-            <p><a href='" . base_path() . "/resources/views/pages/dashboard/contact_inquiries.php?id=" . $inquiryId . "' style='background: #285ccd; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>View in Dashboard</a></p>
+            <p><a href='" . base_path() . "/dashboard/contact-inquiries?id=" . $inquiryId . "' style='background: #285ccd; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>View in Dashboard</a></p>
         </body>
         </html>";
         

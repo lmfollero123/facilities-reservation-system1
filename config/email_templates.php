@@ -131,7 +131,7 @@ function getOTPEmailTemplate($userName, $otpCode, $expiryMinutes = 10) {
  *
  * Used after a new user registers or when resending the verification code.
  */
-function getEmailVerificationEmailTemplate($userName, $verificationCode, $expiryHours = 24) {
+function getEmailVerificationEmailTemplate($userName, $verificationCode, $expiryMinutes = 1) {
     $header = getEmailHeader('Verify Your Email Address');
     $footer = getEmailFooter();
 
@@ -151,7 +151,7 @@ function getEmailVerificationEmailTemplate($userName, $verificationCode, $expiry
         ', '#e3f2fd', '#2196f3') . '
 
         <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
-            <strong>⏱️ This verification code will expire in ' . (int)$expiryHours . ' hours.</strong>
+            <strong>⏱️ This verification code will expire in ' . (int)$expiryMinutes . ' minute' . ((int)$expiryMinutes === 1 ? '' : 's') . '.</strong>
         </p>
         <p style="margin: 10px 0 0; color: #6b7280; font-size: 14px;">
             If this registration was not made by you, you can safely ignore this email. Unverified accounts are automatically removed after the verification window expires.
@@ -270,7 +270,7 @@ function getAccountLockedEmailTemplate($userName, $reason = '') {
 function getReservationApprovedEmailTemplate($userName, $facilityName, $date, $timeSlot, $note = '') {
     $header = getEmailHeader('Reservation Approved');
     $footer = getEmailFooter();
-    $dashboardUrl = base_url() . '/dashboard/my-reservations';
+    $dashboardUrl = base_url() . '/dashboard/book-facility?module=mine';
     
     $noteHtml = '';
     if (!empty($note)) {
@@ -323,7 +323,7 @@ function getReservationApprovedEmailTemplate($userName, $facilityName, $date, $t
 function getReservationPostponedEmailTemplate($userName, $facilityName, $oldDate, $oldTimeSlot, $newDate, $newTimeSlot, $reason) {
     $header = getEmailHeader('Reservation Postponed');
     $footer = getEmailFooter();
-    $dashboardUrl = base_url() . '/dashboard/my-reservations';
+    $dashboardUrl = base_url() . '/dashboard/book-facility?module=mine';
     
     $content = '
         <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">📅 Reservation Postponed</h2>
@@ -556,7 +556,7 @@ function getReservationCancelledEmailTemplate($userName, $facilityName, $date, $
 function getReservationRescheduledEmailTemplate($userName, $facilityName, $oldDate, $oldTimeSlot, $newDate, $newTimeSlot, $reason, $requiresApproval = false) {
     $header = getEmailHeader('Reservation Rescheduled');
     $footer = getEmailFooter();
-    $dashboardUrl = base_url() . '/dashboard/my-reservations';
+    $dashboardUrl = base_url() . '/dashboard/book-facility?module=mine';
     
     $approvalNote = '';
     if ($requiresApproval) {

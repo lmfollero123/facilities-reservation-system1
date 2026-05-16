@@ -26,16 +26,16 @@ function autoDeclineExpiredReservations(): int {
     $autoDeclined = 0;
     
     try {
-        // Get all pending and postponed reservations that are past their date
+        // Get all pending-payment, pending, and postponed reservations that are past their date
         // Using database CURDATE() for reliable date comparison
         $currentHour = (int)date('H');
         $currentMinute = (int)date('i');
         
         // Get pending reservations with past dates (using CURDATE() for database timezone consistency)
         $pendingStmt = $pdo->prepare(
-            'SELECT id, reservation_date, time_slot, user_id 
+            'SELECT id, reservation_date, time_slot, user_id, status
              FROM reservations 
-             WHERE status IN ("pending", "postponed")
+             WHERE status IN ("pending_payment", "pending", "postponed")
              AND reservation_date < CURDATE()'
         );
         $pendingStmt->execute();
@@ -43,9 +43,9 @@ function autoDeclineExpiredReservations(): int {
         
         // Get pending reservations for today that have passed their time slot
         $todayPendingStmt = $pdo->prepare(
-            'SELECT id, reservation_date, time_slot, user_id 
+            'SELECT id, reservation_date, time_slot, user_id, status
              FROM reservations 
-             WHERE status IN ("pending", "postponed")
+             WHERE status IN ("pending_payment", "pending", "postponed")
              AND reservation_date = CURDATE()'
         );
         $todayPendingStmt->execute();
@@ -79,24 +79,34 @@ function autoDeclineExpiredReservations(): int {
         
         // Process each expired reservation
         foreach ($expiredReservations as $expired) {
-            // Update status to denied
+            // pending_payment = payment not completed in time => cancelled
+            // pending/postponed = approval did not happen in time => denied
+            $targetStatus = (($expired['status'] ?? '') === 'pending_payment') ? 'cancelled' : 'denied';
+            $targetNote = (($expired['status'] ?? '') === 'pending_payment')
+                ? 'Automatically cancelled: Pencil booking expired before payment confirmation.'
+                : 'Automatically denied: Reservation date/time has passed without approval.';
+
             $updateStmt = $pdo->prepare(
                 'UPDATE reservations 
-                 SET status = "denied", updated_at = CURRENT_TIMESTAMP 
-                 WHERE id = ? AND status IN ("pending", "postponed")'
+                 SET status = :target_status, updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = :id AND status IN ("pending_payment", "pending", "postponed")'
             );
-            $updateStmt->execute([$expired['id']]);
+            $updateStmt->execute([
+                'target_status' => $targetStatus,
+                'id' => $expired['id'],
+            ]);
             
             // Only proceed if update was successful (prevents duplicate processing)
             if ($updateStmt->rowCount() > 0) {
                 // Add to history
                 $histStmt = $pdo->prepare(
                     'INSERT INTO reservation_history (reservation_id, status, note, created_by) 
-                     VALUES (?, "denied", ?, NULL)'
+                     VALUES (:reservation_id, :status, :note, NULL)'
                 );
                 $histStmt->execute([
-                    $expired['id'],
-                    'Automatically denied: Reservation date/time has passed without approval.'
+                    'reservation_id' => $expired['id'],
+                    'status' => $targetStatus,
+                    'note' => $targetNote,
                 ]);
                 
                 // Get facility name for notification
@@ -115,20 +125,28 @@ function autoDeclineExpiredReservations(): int {
                     createNotification(
                         $expired['user_id'],
                         'booking',
-                        'Reservation Automatically Denied',
-                        'Your reservation request for ' . $facilityName . ' on ' . 
+                        $targetStatus === 'cancelled' ? 'Reservation Automatically Cancelled' : 'Reservation Automatically Denied',
+                        'Your reservation request for ' . $facilityName . ' on ' .
                         date('F j, Y', strtotime($expired['reservation_date'])) . 
-                        ' (' . $expired['time_slot'] . ') has been automatically denied because the reservation time has passed without approval.',
-                        base_url() . '/resources/views/pages/dashboard/my_reservations.php'
+                        ' (' . $expired['time_slot'] . ') ' . (
+                            $targetStatus === 'cancelled'
+                                ? 'was automatically cancelled because the payment window has expired.'
+                                : 'has been automatically denied because the reservation time has passed without approval.'
+                        ),
+                        base_url() . '/dashboard/my-reservations'
                     );
                 }
                 
                 // Log audit event
                 if (function_exists('logAudit')) {
                     logAudit(
-                        'Auto-denied expired reservation',
+                        $targetStatus === 'cancelled' ? 'Auto-cancelled expired payment hold' : 'Auto-denied expired reservation',
                         'Reservations',
-                        'RES-' . $expired['id'] . ' – Past reservation date/time without approval'
+                        'RES-' . $expired['id'] . ' – ' . (
+                            $targetStatus === 'cancelled'
+                                ? 'Payment window expired'
+                                : 'Past reservation date/time without approval'
+                        )
                     );
                 }
                 

@@ -5,17 +5,23 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/notifications.php';
 $pdo = db();
 $pageTitle = 'Notifications | LGU Facilities Reservation';
 $userId = $_SESSION['user_id'] ?? null;
+$unreadCount = getUnreadNotificationCount((int)$userId);
 
 // Handle mark as read
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_read'])) {
+    if (!frs_csrf_ok()) {
+        header('Location: ' . base_path() . '/dashboard/notifications?error=csrf');
+        exit;
+    }
     $notifId = (int)($_POST['notification_id'] ?? 0);
     if ($notifId > 0) {
         $stmt = $pdo->prepare(
@@ -89,7 +95,14 @@ ob_start();
 
 <div class="booking-wrapper">
     <section class="booking-card">
-        <h2>All Notifications</h2>
+        <div class="notif-page-header">
+            <h2>All Notifications</h2>
+            <?php if ($unreadCount > 0): ?>
+                <button type="button" class="btn-outline notif-mark-all-page-btn" id="notifPageMarkAllBtn" title="Mark all as read">
+                    Mark all as read
+                </button>
+            <?php endif; ?>
+        </div>
         <?php if (empty($notifications)): ?>
             <div style="text-align: center; padding: 3rem; color: #8b95b5;">
                 <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No notifications</p>
@@ -169,8 +182,17 @@ function markNotificationAsRead(button, notifId) {
     button.disabled = true;
     button.textContent = 'Marking...';
     
-    fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=mark_read&id=' + notifId, {
-        method: 'POST'
+    const markReadUrl = (typeof frsUrl === 'function' ? frsUrl : (p) => (window.APP_BASE_PATH || '') + p)('/dashboard/notifications-api?action=mark_read&id=' + notifId);
+    const markReadHeaders = typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' };
+    let markReadBody = typeof frsPostBody === 'function' ? frsPostBody().toString() : '';
+    if (!markReadBody && window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
+        markReadBody = window.CSRF_TOKEN_NAME + '=' + encodeURIComponent(window.CSRF_TOKEN);
+    }
+
+    fetch(markReadUrl, {
+        method: 'POST',
+        headers: markReadHeaders,
+        body: markReadBody
     })
     .then(response => response.json())
     .then(data => {
@@ -209,21 +231,75 @@ function markNotificationAsRead(button, notifId) {
     });
 }
 
+function applyAllReadStateOnPage() {
+    document.querySelectorAll('.notif-item.unread').forEach(function (notifItem) {
+        notifItem.classList.remove('unread');
+        notifItem.classList.add('read');
+        const statusBadge = notifItem.querySelector('.status-badge');
+        if (statusBadge) {
+            statusBadge.className = 'status-badge status-approved';
+            statusBadge.textContent = 'Read';
+        }
+        const markBtn = notifItem.querySelector('.mark-read-btn');
+        if (markBtn) {
+            markBtn.remove();
+        }
+    });
+    const pageMarkAllBtn = document.getElementById('notifPageMarkAllBtn');
+    if (pageMarkAllBtn) {
+        pageMarkAllBtn.style.display = 'none';
+    }
+}
+
+function markAllNotificationsOnPage() {
+    const btn = document.getElementById('notifPageMarkAllBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Marking...';
+    }
+    const request = (typeof frsMarkAllNotificationsRead === 'function')
+        ? frsMarkAllNotificationsRead()
+        : fetch((window.APP_BASE_PATH || '') + '/dashboard/notifications-api?action=mark_all_read', { method: 'POST' }).then(r => r.json());
+
+    request
+        .then(function (data) {
+            if (data && data.success) {
+                applyAllReadStateOnPage();
+                updateNotificationBadge();
+            } else {
+                alert('Failed to mark all notifications as read. Please try again.');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Mark all as read';
+                }
+            }
+        })
+        .catch(function (error) {
+            console.error('Error marking all notifications as read:', error);
+            alert('An error occurred. Please try again.');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Mark all as read';
+            }
+        });
+}
+
 // Function to update notification badge count
 function updateNotificationBadge() {
-    fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=count')
+    fetch((window.APP_BASE_PATH || '') + '/dashboard/notifications-api?action=count')
         .then(response => response.json())
         .then(data => {
             if (data.success !== undefined) {
                 const badge = document.querySelector('.notif-dot');
                 const unreadCount = data.count || 0;
+                const pageMarkAllBtn = document.getElementById('notifPageMarkAllBtn');
+                const headerMarkAllBtn = document.getElementById('notifMarkAllBtn');
                 
                 if (unreadCount > 0) {
                     if (badge) {
                         badge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
                         badge.style.display = '';
                     } else {
-                        // Create badge if it doesn't exist
                         const bell = document.querySelector('.notif-bell');
                         if (bell) {
                             const newBadge = document.createElement('span');
@@ -232,10 +308,21 @@ function updateNotificationBadge() {
                             bell.appendChild(newBadge);
                         }
                     }
+                    if (pageMarkAllBtn) {
+                        pageMarkAllBtn.style.display = '';
+                    }
+                    if (headerMarkAllBtn) {
+                        headerMarkAllBtn.style.display = '';
+                    }
                 } else {
-                    // Hide badge if no unread notifications
                     if (badge) {
                         badge.style.display = 'none';
+                    }
+                    if (pageMarkAllBtn) {
+                        pageMarkAllBtn.style.display = 'none';
+                    }
+                    if (headerMarkAllBtn) {
+                        headerMarkAllBtn.style.display = 'none';
                     }
                 }
             }
@@ -247,20 +334,14 @@ function updateNotificationBadge() {
 
 // Update badge count when page loads (in case it changed)
 document.addEventListener('DOMContentLoaded', function() {
-    // Force refresh the badge count to ensure it matches what's displayed
     setTimeout(function() {
         updateNotificationBadge();
     }, 100);
-    
-    // Also update badge when notifications are marked as read via page interactions
-    document.querySelectorAll('.mark-read-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            // Update badge after marking as read
-            setTimeout(function() {
-                updateNotificationBadge();
-            }, 500);
-        });
-    });
+
+    const pageMarkAllBtn = document.getElementById('notifPageMarkAllBtn');
+    if (pageMarkAllBtn) {
+        pageMarkAllBtn.addEventListener('click', markAllNotificationsOnPage);
+    }
 });
 </script>
 <?php

@@ -7,6 +7,12 @@
 if (!defined('GEMINI_API_KEY') && file_exists(__DIR__ . '/gemini_config.php')) {
     require_once __DIR__ . '/gemini_config.php';
 }
+if (!defined('GEMINI_API_KEY')) {
+    $envGeminiKey = function_exists('env_value') ? env_value('GEMINI_API_KEY', '') : (getenv('GEMINI_API_KEY') ?: '');
+    if (is_string($envGeminiKey) && trim($envGeminiKey) !== '') {
+        define('GEMINI_API_KEY', trim($envGeminiKey));
+    }
+}
 
 /**
  * Call Gemini API and return text response.

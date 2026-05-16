@@ -64,7 +64,7 @@ def extract_purpose_keywords(purpose: str):
     keywords = {
         'meeting': 1 if any(word in purpose_lower for word in ['meeting', 'conference', 'assembly']) else 0,
         'celebration': 1 if any(word in purpose_lower for word in ['celebration', 'party', 'fiesta', 'festival']) else 0,
-        'sports': 1 if any(word in purpose_lower for word in ['sports', 'game', 'tournament', 'basketball', 'volleyball']) else 0,
+        'sports': 1 if any(word in purpose_lower for word in ['sports', 'game', 'tournament', 'basketball', 'volleyball', 'zumba', 'fitness', 'dance', 'aerobic']) else 0,
         'education': 1 if any(word in purpose_lower for word in ['education', 'training', 'seminar', 'workshop', 'class']) else 0,
         'religious': 1 if any(word in purpose_lower for word in ['religious', 'mass', 'prayer', 'worship']) else 0,
         'community': 1 if any(word in purpose_lower for word in ['community', 'barangay', 'general assembly', 'town hall']) else 0,
@@ -111,7 +111,7 @@ class FacilityRecommendationModel:
             self.loaded = True
             return True
         except Exception as e:
-            print(f"Error loading model: {e}")
+            print(f"Error loading model: {e}", file=sys.stderr)
             return False
     
     def predict_relevance(self, features: dict, user_booking_count: int = 0):
@@ -203,7 +203,7 @@ class FacilityRecommendationModel:
             return float(score)
         
         except Exception as e:
-            print(f"Error predicting relevance: {e}")
+            print(f"Error predicting relevance: {e}", file=sys.stderr)
             return 0.0
     
     def recommend_facilities(self, facilities: list, user_id: int, purpose: str,
@@ -229,8 +229,10 @@ class FacilityRecommendationModel:
         """
         if not self.loaded:
             if not self.load_model():
-                # Fallback: return facilities without ML scores
-                return facilities[:limit]
+                return self._recommend_heuristic(
+                    facilities, user_id, purpose, expected_attendees, time_slot,
+                    reservation_date, is_commercial, user_booking_count, limit
+                )
         
         # Parse reservation date
         try:
@@ -293,6 +295,100 @@ class FacilityRecommendationModel:
         recommendations.sort(key=lambda x: x.get('ml_relevance_score', 0), reverse=True)
         
         return recommendations[:limit]
+
+    def _recommend_heuristic(
+        self,
+        facilities: list,
+        user_id: int,
+        purpose: str,
+        expected_attendees: int,
+        time_slot: str,
+        reservation_date: str,
+        is_commercial: bool,
+        user_booking_count: int,
+        limit: int,
+    ):
+        """
+        Used when trained .pkl files are missing or unloadable.
+        Mirrors rule-based signals so users still get ranked suggestions; set ml_model_loaded=false in API.
+        """
+        purpose_lower = (purpose or '').lower()
+        purpose_keywords = extract_purpose_keywords(purpose)
+        time_feat = extract_time_features(time_slot)
+        try:
+            res_date = pd.to_datetime(reservation_date)
+            holiday = is_holiday(res_date)
+        except Exception:
+            holiday = 0
+
+        ranked = []
+        for facility in facilities:
+            capacity = extract_capacity_number(facility.get('capacity', 100))
+            name = str(facility.get('name', ''))
+            amenities = str(facility.get('amenities', ''))
+            desc = str(facility.get('description', ''))
+            blob = f"{name} {amenities} {desc}".lower()
+
+            score = 1.0
+            reasons = []
+
+            if purpose_keywords.get('sports') or any(w in purpose_lower for w in ('zumba', 'fitness', 'dance', 'yoga')):
+                if any(x in blob for x in ('court', 'sport', 'gym', 'field', 'covered', 'multipurpose')):
+                    score += 2.8
+                    reasons.append('Good fit for sports / fitness activities')
+
+            if purpose_keywords.get('meeting'):
+                if any(x in blob for x in ('hall', 'conference', 'multipurpose', 'assembly')):
+                    score += 2.2
+                    reasons.append('Suitable for meetings or assemblies')
+
+            if purpose_keywords.get('celebration'):
+                if any(x in blob for x in ('hall', 'event', 'covered', 'court')):
+                    score += 2.0
+                    reasons.append('Works for celebrations or events')
+
+            if purpose_keywords.get('education'):
+                if any(x in blob for x in ('hall', 'classroom', 'training', 'multipurpose')):
+                    score += 1.8
+                    reasons.append('Suitable for training or classes')
+
+            if purpose_keywords.get('community'):
+                score += 0.8
+                reasons.append('Community-oriented venue')
+
+            ratio = expected_attendees / capacity if capacity > 0 else 0.5
+            if 0.15 <= ratio <= 1.0:
+                score += 1.5
+                reasons.append('Capacity lines up with expected attendees')
+            elif ratio > 1.0:
+                score -= 0.8
+                reasons.append('Listed capacity may be lower than your headcount')
+
+            if is_commercial:
+                score += 0.3
+
+            if holiday:
+                score += 0.15
+
+            if user_booking_count and user_booking_count > 3:
+                score += 0.2
+                reasons.append('You have booking history with the LGU')
+
+            if purpose_lower:
+                for token in set(purpose_lower.replace(',', ' ').split()):
+                    if len(token) < 4:
+                        continue
+                    if token in blob:
+                        score += 0.35
+
+            ranked.append({
+                **facility,
+                'ml_relevance_score': float(max(0.1, round(score, 2))),
+                'reason': '; '.join(reasons) if reasons else 'Heuristic ranking (install trained models for ML scores)',
+            })
+
+        ranked.sort(key=lambda x: x.get('ml_relevance_score', 0), reverse=True)
+        return ranked[:limit]
 
 
 # Global model instance

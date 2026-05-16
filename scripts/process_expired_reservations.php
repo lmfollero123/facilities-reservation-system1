@@ -34,5 +34,5 @@ echo "Done! Auto-declined {$count} expired reservation(s).\n";
 
 if (php_sapi_name() !== 'cli') {
     echo '</pre>';
-    echo '<p><a href="' . base_path() . '/resources/views/pages/dashboard/reservations_manage.php">Go to Reservations Management</a></p>';
+    echo '<p><a href="' . base_path() . '/dashboard/reservations-manage">Go to Reservations Management</a></p>';
 }

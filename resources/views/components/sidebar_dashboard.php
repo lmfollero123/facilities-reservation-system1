@@ -4,6 +4,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/database.php';
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    $pdo = db();
+}
 $base = base_path();
 $role = $_SESSION['role'] ?? 'Resident';
 $userName = $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Guest';
@@ -49,6 +52,22 @@ $iconPaths = [
 function isLinkActive($link, $current) {
     $linkPath = trim(parse_url($link['href'], PHP_URL_PATH), '/');
     $pageSlug = str_replace('_', '-', $link['page']);
+    $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    $page = $link['page'] ?? '';
+
+    if ($page === 'book_facility') {
+        if (!str_contains($requestUri, 'book-facility')) {
+            return false;
+        }
+        return !str_contains($requestUri, 'module=mine');
+    }
+    if ($page === 'my_reservations') {
+        if (str_contains($requestUri, 'my-reservations')) {
+            return true;
+        }
+        return str_contains($requestUri, 'book-facility') && str_contains($requestUri, 'module=mine');
+    }
+
     return ($current === $linkPath || $current === 'dashboard/' . $pageSlug) || str_contains($current, $link['page']);
 }
 
@@ -72,8 +91,8 @@ function renderCollapsibleGroup($title, $targetId, $links, $current, $iconPaths,
 // ========== Grouped Navigation ==========
 $bookingGroup = [
     ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'],
-    ['label' => 'My Reservations', 'href' => $base . '/dashboard/my-reservations', 'icon' => 'calendar', 'page' => 'my_reservations'],
-    ['label' => 'Calendar', 'href' => $base . '/dashboard/calendar', 'icon' => 'calendar-days', 'page' => 'calendar'],
+    ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'],
+    ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'],
 ];
 
 $aiToolsGroup = [
@@ -90,6 +109,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $reservationsFacilitiesGroup = [
         ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'],
         ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'],
+        ['label' => 'Blackout Dates', 'href' => $base . '/dashboard/blackout-dates', 'icon' => 'calendar-days', 'page' => 'blackout_dates'],
     ];
     $communicationsGroup = [
         ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'],
@@ -101,6 +121,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         ['label' => 'Utilities', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'],
     ];
     $reportsGroup = [
+        ['label' => 'Live Occupancy', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'],
         ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'],
     ];
 }
@@ -109,6 +130,7 @@ if ($role === 'Admin') {
     $administrationGroup = [
         ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
         ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'],
+        ['label' => 'SMS Test (IPROG)', 'href' => $base . '/dashboard/sms-test', 'icon' => 'telephone', 'page' => 'sms_test'],
         ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'],
     ];
 }
@@ -116,6 +138,10 @@ if ($role === 'Admin') {
 $accountLinks = [
     ['label' => 'Profile', 'href' => $base . '/dashboard/profile', 'icon' => 'user', 'page' => 'profile'],
 ];
+
+$sidebarAvatarInitial = function_exists('mb_substr')
+    ? mb_strtoupper(mb_substr((string) $userName, 0, 1, 'UTF-8'), 'UTF-8')
+    : strtoupper(substr((string) $userName, 0, 1));
 ?>
 
 <aside class="sidebar">
@@ -165,7 +191,9 @@ $accountLinks = [
         <div class="sidebar-user-info">
             <div class="sidebar-user-avatar">
                 <?php if ($profilePicture): ?>
-                    <img src="<?= $base . '/public/uploads/profile_pictures/' . basename(htmlspecialchars($profilePicture)); ?>" alt="<?= htmlspecialchars($userName); ?>" onerror="this.style.display='none'; this.parentElement.innerHTML='<?= strtoupper(substr($userName, 0, 1)); ?>';">
+                    <img src="<?= $base . '/public/uploads/profile_pictures/' . basename(htmlspecialchars($profilePicture)); ?>" alt="<?= htmlspecialchars($userName); ?>"
+                         data-initial="<?= htmlspecialchars($sidebarAvatarInitial, ENT_QUOTES, 'UTF-8'); ?>"
+                         onerror="this.style.display='none';var p=this.parentElement;if(!p)return;var fb=p.querySelector('.sidebar-avatar-fallback');if(fb)return;fb=document.createElement('span');fb.className='sidebar-avatar-fallback';fb.textContent=(this.dataset.initial||'?');p.appendChild(fb);">
                 <?php else: ?>
                     <?= strtoupper(substr($userName, 0, 1)); ?>
                 <?php endif; ?>

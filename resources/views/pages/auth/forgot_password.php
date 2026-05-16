@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log('Password reset token created - Token (first 20): ' . substr($token, 0, 20) . '... | Hash (first 20): ' . substr($tokenHash, 0, 20) . '...');
                     
                     // Send reset email - token is hex (URL-safe)
-                    $resetUrl = base_url() . '/resources/views/pages/auth/reset_password.php?token=' . $token;
+                    $resetUrl = base_url() . '/reset-password?token=' . $token;
                     error_log('Reset URL (first 100 chars): ' . substr($resetUrl, 0, 100) . '...');
                     
                     require_once __DIR__ . '/../../../../config/email_templates.php';
@@ -132,7 +132,7 @@ ob_start();
         </form>
         
         <div class="auth-footer">
-            <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php">← Back to Login</a>
+            <a href="<?= base_path(); ?>/login">← Back to Login</a>
         </div>
     </div>
 </div>

@@ -14,10 +14,12 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    frs_reject_invalid_csrf_json();
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $date = $_POST['date'] ?? '';
     $timeSlot = $_POST['time_slot'] ?? '';

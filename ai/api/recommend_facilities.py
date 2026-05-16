@@ -61,6 +61,25 @@ if __name__ == "__main__":
                     rec_dict[key] = str(value)
             result.append(rec_dict)
         
-        print(json.dumps({'recommendations': result}))
+        print(
+            json.dumps(
+                {
+                    'recommendations': result,
+                    'ml_model_loaded': bool(getattr(model, 'loaded', False)),
+                }
+            )
+        )
     except Exception as e:
-        print(json.dumps({'error': str(e), 'recommendations': facilities[:limit]}))
+        try:
+            _lim = max(1, min(50, int(limit)))
+        except (TypeError, ValueError):
+            _lim = 5
+        print(
+            json.dumps(
+                {
+                    'error': str(e),
+                    'recommendations': facilities[:_lim],
+                    'ml_model_loaded': False,
+                }
+            )
+        )

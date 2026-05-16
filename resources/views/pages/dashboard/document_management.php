@@ -22,7 +22,9 @@ $success = '';
 $error = '';
 
 // Handle archival actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
+    $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['archive_user'])) {
         $userId = (int)$_POST['user_id'];
         try {
@@ -368,7 +370,8 @@ ob_start();
                                     </span>
                                 </td>
                                 <td style="padding:0.75rem; text-align:center;">
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Archive all documents for <?= htmlspecialchars($user['name'], ENT_QUOTES); ?>? Documents will be moved to archive storage.');">
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Archive all documents for <?= htmlspecialchars($user['name'], ENT_QUOTES); ?>
+            <?= csrf_field(); ?>? Documents will be moved to archive storage.');">
                                         <input type="hidden" name="user_id" value="<?= $user['user_id']; ?>">
                                         <input type="hidden" name="archive_user" value="1">
                                         <button type="submit" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;">Archive Documents</button>

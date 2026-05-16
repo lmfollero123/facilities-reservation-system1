@@ -14,6 +14,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 
@@ -42,6 +43,9 @@ try {
             'notifications' => $notifications
         ]);
     } elseif ($action === 'mark_read') {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            frs_reject_invalid_csrf_json();
+        }
         $notifId = (int)($_GET['id'] ?? 0);
         
         if ($notifId > 0) {
@@ -61,6 +65,20 @@ try {
         } else {
             echo json_encode(['success' => false, 'error' => 'Invalid notification ID']);
         }
+    } elseif ($action === 'mark_all_read') {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+        frs_reject_invalid_csrf_json();
+        $marked = markAllNotificationsRead((int)$userId);
+        $count = getUnreadNotificationCount($userId);
+        echo json_encode([
+            'success' => true,
+            'marked' => $marked,
+            'count' => $count,
+        ]);
     } elseif ($action === 'count') {
         // Use the exact same query logic as the notifications page to ensure consistency
         $stmt = $pdo->prepare(

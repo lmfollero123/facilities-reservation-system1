@@ -6,16 +6,49 @@
  * Recommended DB name: facilities_reservation
  */
 
- const DB_HOST = 'localhost';
- const DB_NAME = 'cprf_facilities_reservation';
- const DB_USER = 'cprf_root';        // default XAMPP user
- const DB_PASS = '#Ej9+LqgMpteCp17';
+if (!function_exists('load_local_env_for_db')) {
+    function load_local_env_for_db(string $path): void
+    {
+        if (!is_file($path) || !is_readable($path)) {
+            return;
+        }
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (!is_array($lines)) {
+            return;
+        }
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#') {
+                continue;
+            }
+            $eqPos = strpos($line, '=');
+            if ($eqPos === false) {
+                continue;
+            }
+            $key = trim(substr($line, 0, $eqPos));
+            $val = trim(substr($line, $eqPos + 1));
+            if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) {
+                continue;
+            }
+            if ($val !== '' && (($val[0] === '"' && substr($val, -1) === '"') || ($val[0] === "'" && substr($val, -1) === "'"))) {
+                $val = substr($val, 1, -1);
+            }
+            if (getenv($key) !== false && getenv($key) !== '') {
+                continue;
+            }
+            putenv($key . '=' . $val);
+            $_ENV[$key] = $val;
+            $_SERVER[$key] = $val;
+        }
+    }
+}
 
+load_local_env_for_db(dirname(__DIR__) . '/.env');
 
-//  const DB_HOST = 'localhost';
-//  const DB_NAME = 'facilities_reservation';
-//  const DB_USER = 'root';       // default XAMPP user
-//  const DB_PASS = '';
+const DB_HOST = 'localhost';
+const DB_NAME = 'facilities_reservation';
+const DB_USER = 'root'; // default XAMPP user
+const DB_PASS = '';
 // /**
 //  * Returns a shared PDO instance.
 //  */
@@ -24,7 +57,12 @@ function db()
     static $pdo = null;
 
     if ($pdo === null) {
-        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+        $dbHost = trim((string)(getenv('DB_HOST') !== false ? getenv('DB_HOST') : DB_HOST));
+        $dbName = trim((string)(getenv('DB_NAME') !== false ? getenv('DB_NAME') : DB_NAME));
+        $dbUser = (string)(getenv('DB_USER') !== false ? getenv('DB_USER') : DB_USER);
+        $dbPass = (string)(getenv('DB_PASS') !== false ? getenv('DB_PASS') : DB_PASS);
+
+        $dsn = 'mysql:host=' . $dbHost . ';dbname=' . $dbName . ';charset=utf8mb4';
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -34,7 +72,7 @@ function db()
         ];
         
         try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
             
             // Set MySQL timezone to Philippines (UTC+8)
             $pdo->exec("SET time_zone = '+08:00'");
@@ -49,7 +87,7 @@ function db()
                 throw new RuntimeException(
                     'Database authentication error. ' .
                     'Please run this SQL command in MySQL: ' .
-                    "ALTER USER '" . DB_USER . "'@'localhost' IDENTIFIED WITH mysql_native_password BY '" . DB_PASS . "'; " .
+                    "ALTER USER '" . $dbUser . "'@'localhost' IDENTIFIED WITH mysql_native_password BY '" . $dbPass . "'; " .
                     "Then run: FLUSH PRIVILEGES; " .
                     'See docs/DATABASE_AUTH_FIX.md for detailed instructions.'
                 );

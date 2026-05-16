@@ -454,36 +454,185 @@ function recommendFacilities($purpose = null, $expectedAttendance = null, $requi
 }
 
 /**
+ * Tokens from purpose text for matching reservation purposes (same idea as matchPurpose).
+ *
+ * @return string[]
+ */
+function getPurposeSearchTokens(string $purpose): array {
+    $stopWords = ['for', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'of', 'with', 'by', 'is', 'are', 'was', 'were'];
+    $purposeLower = strtolower(trim($purpose));
+    if ($purposeLower === '') {
+        return [];
+    }
+    $words = array_filter(
+        explode(' ', preg_replace('/[^a-z0-9\s]/', ' ', $purposeLower)),
+        static function ($word) use ($stopWords) {
+            return strlen($word) > 2 && !in_array($word, $stopWords, true);
+        }
+    );
+    return array_values(array_unique($words));
+}
+
+/**
+ * Approved reservation counts per facility (recent window) for ranking boosts.
+ *
+ * @return array<int, int> facility_id => count
+ */
+function getFacilityApprovedBookingCounts(PDO $pdo, int $monthsBack = 24): array {
+    if ($monthsBack < 1) {
+        $monthsBack = 1;
+    }
+    if ($monthsBack > 120) {
+        $monthsBack = 120;
+    }
+    $stmt = $pdo->prepare(
+        'SELECT facility_id, COUNT(*) AS c
+         FROM reservations
+         WHERE status = \'approved\'
+           AND reservation_date >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
+         GROUP BY facility_id'
+    );
+    $stmt->execute(['months' => $monthsBack]);
+    $out = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $out[(int)$row['facility_id']] = (int)$row['c'];
+    }
+    return $out;
+}
+
+/**
+ * Increase relevance scores using real booking frequency (log-scaled).
+ *
+ * @param array<int, array<string, mixed>> $recommendations
+ * @param array<int, int> $facilityIdToCount
+ * @return array<int, array<string, mixed>>
+ */
+function applyFacilityBookingPopularityBoost(array $recommendations, array $facilityIdToCount, float $maxBoost = 2.5): array {
+    foreach ($recommendations as &$r) {
+        $fid = (int)($r['id'] ?? 0);
+        $c = $facilityIdToCount[$fid] ?? 0;
+        if ($c <= 0) {
+            continue;
+        }
+        $boost = round(min($maxBoost, log(1 + $c, 10) * 3.5), 2);
+        $base = (float)($r['ml_relevance_score'] ?? 0);
+        $r['ml_relevance_score'] = round($base + $boost, 2);
+        $suffix = $c === 1 ? '1 approved booking' : $c . ' approved bookings';
+        $suffix .= ' (last 24 mo)';
+        $reason = trim((string)($r['reason'] ?? ''));
+        $r['reason'] = $reason === '' ? $suffix : $reason . '; ' . $suffix;
+    }
+    unset($r);
+    return $recommendations;
+}
+
+/**
+ * Popular time_slot values from real reservations (optionally filtered by purpose keywords).
+ *
+ * @return array{slots: string[], label: string, source: string}|null Null if not enough data
+ */
+function getSuggestedTimesFromReservationsDb(PDO $pdo, string $purpose, int $monthsBack = 24, int $minCount = 1, bool $matchPurposeKeywords = true): ?array {
+    if ($monthsBack < 1) {
+        $monthsBack = 1;
+    }
+    if ($monthsBack > 120) {
+        $monthsBack = 120;
+    }
+    $tokens = $matchPurposeKeywords ? getPurposeSearchTokens($purpose) : [];
+    $params = ['months' => $monthsBack, 'minc' => max(1, $minCount)];
+    $purposeSql = '1=1';
+    if ($tokens !== []) {
+        $parts = [];
+        foreach ($tokens as $i => $tok) {
+            $key = 't' . $i;
+            $parts[] = 'LOWER(r.purpose) LIKE LOWER(:' . $key . ')';
+            $params[$key] = '%' . $tok . '%';
+        }
+        $purposeSql = '(' . implode(' OR ', $parts) . ')';
+    }
+
+    $sql = 'SELECT r.time_slot AS ts, COUNT(*) AS booking_count
+            FROM reservations r
+            WHERE r.status = \'approved\'
+              AND r.reservation_date >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
+              AND r.time_slot IS NOT NULL AND TRIM(r.time_slot) != \'\'
+              AND ' . $purposeSql . '
+            GROUP BY r.time_slot
+            HAVING booking_count >= :minc
+            ORDER BY booking_count DESC
+            LIMIT 8';
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    $slots = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $ts = trim((string)($row['ts'] ?? ''));
+        if ($ts === '' || !preg_match('/\d{1,2}:\d{2}/', $ts)) {
+            continue;
+        }
+        $slots[] = $ts;
+    }
+    if (count($slots) < 1) {
+        return null;
+    }
+
+    $scope = ($matchPurposeKeywords && $tokens !== [])
+        ? 'bookings whose purpose matches yours'
+        : 'approved bookings across all purposes';
+    $label = 'Popular times from your records (' . $scope . ', last ' . $monthsBack . ' mo): ' . implode('; ', array_slice($slots, 0, 3));
+    if (count($slots) > 3) {
+        $label .= '…';
+    }
+
+    return ['slots' => $slots, 'label' => $label, 'source' => 'database'];
+}
+
+/**
  * Get suggested time slots for a purpose (e.g. zumba → morning/evening).
- * Used by AI recommendations to show "Great times for X: ..." and optionally boost scoring.
+ * Prefers real reservation history when PDO is provided; falls back to rules.
  *
  * @param string $purpose Event purpose
- * @return array { 'slots': string[], 'label': string }
+ * @param PDO|null $pdo Database connection for data-driven slots
+ * @return array { slots: string[], label: string, source?: string }
  */
-function getSuggestedTimesForPurpose($purpose) {
+function getSuggestedTimesForPurpose($purpose, ?PDO $pdo = null) {
+    if ($pdo instanceof PDO) {
+        $fromDb = getSuggestedTimesFromReservationsDb($pdo, $purpose, 24, 1, true);
+        if ($fromDb === null && getPurposeSearchTokens($purpose) !== []) {
+            $fromDb = getSuggestedTimesFromReservationsDb($pdo, '', 24, 1, false);
+        }
+        if ($fromDb !== null) {
+            return $fromDb;
+        }
+    }
+
     $p = strtolower($purpose);
     $slots = [];
     $label = '';
     if (preg_match('/zumba|aerobic|fitness|exercise|workout|gym|dance|dancing|physical\s+activity/i', $p)) {
         $slots = ['06:00 - 08:00', '17:00 - 19:00'];
-        $label = 'Great for Zumba/fitness: 6–8 AM, 5–7 PM';
+        $label = 'Typical slots (no matching history yet): Zumba/fitness — 6–8 AM, 5–7 PM';
     } elseif (preg_match('/meeting|conference|assembly|seminar|workshop|training|forum/i', $p)) {
         $slots = ['09:00 - 12:00', '14:00 - 17:00'];
-        $label = 'Great for meetings: 9 AM–12 PM, 2–5 PM';
+        $label = 'Typical slots (no matching history yet): meetings — 9 AM–12 PM, 2–5 PM';
     } elseif (preg_match('/sport|game|tournament|basketball|volleyball|athletic/i', $p)) {
         $slots = ['08:00 - 12:00', '14:00 - 18:00'];
-        $label = 'Great for sports: 8 AM–12 PM, 2–6 PM';
+        $label = 'Typical slots (no matching history yet): sports — 8 AM–12 PM, 2–6 PM';
     } elseif (preg_match('/celebration|party|fiesta|wedding|anniversary|birthday/i', $p)) {
         $slots = ['10:00 - 14:00', '18:00 - 22:00'];
-        $label = 'Great for celebrations: 10 AM–2 PM, 6–10 PM';
+        $label = 'Typical slots (no matching history yet): celebrations — 10 AM–2 PM, 6–10 PM';
     } elseif (preg_match('/religious|mass|prayer|worship/i', $p)) {
         $slots = ['06:00 - 09:00', '17:00 - 20:00'];
-        $label = 'Great for religious events: 6–9 AM, 5–8 PM';
+        $label = 'Typical slots (no matching history yet): religious events — 6–9 AM, 5–8 PM';
     } else {
         $slots = ['08:00 - 12:00', '14:00 - 18:00'];
-        $label = 'Popular times: 8 AM–12 PM, 2–6 PM';
+        $label = 'Typical slots (no booking history match yet): 8 AM–12 PM, 2–6 PM';
     }
-    return ['slots' => $slots, 'label' => $label];
+    return ['slots' => $slots, 'label' => $label, 'source' => 'rules'];
 }
 
 /**

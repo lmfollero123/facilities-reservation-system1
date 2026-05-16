@@ -61,6 +61,31 @@ function getUnreadNotificationCount($userId = null) {
     }
 }
 
+/**
+ * Mark all notifications as read for a user (includes system-wide notices).
+ *
+ * @return int Number of notifications updated
+ */
+function markAllNotificationsRead(?int $userId): int
+{
+    if ($userId === null || $userId <= 0) {
+        return 0;
+    }
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            'UPDATE notifications
+             SET is_read = TRUE
+             WHERE (user_id = :user_id OR user_id IS NULL) AND is_read = FALSE'
+        );
+        $stmt->execute(['user_id' => $userId]);
+        return $stmt->rowCount();
+    } catch (Throwable $e) {
+        error_log('Failed to mark all notifications read: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 
 
 

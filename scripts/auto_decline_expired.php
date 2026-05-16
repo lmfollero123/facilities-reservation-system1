@@ -114,7 +114,7 @@ try {
                     CONCAT('Your reservation for ', ?, ' on ', ?), 
                     ?, NOW())"
         );
-        $link = base_path() . '/resources/views/pages/dashboard/my_reservations.php';
+        $link = base_path() . '/dashboard/my-reservations';
         $notifStmt->execute([
             $reservation['user_id'],
             $reservation['facility_name'],

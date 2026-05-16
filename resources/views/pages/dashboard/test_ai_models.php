@@ -239,7 +239,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     require_once __DIR__ . '/../../../../config/app.php';
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 

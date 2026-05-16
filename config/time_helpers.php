@@ -123,6 +123,64 @@ function formatTimeSlotForDisplay(string $timeSlot): string {
     return $timeSlot;
 }
 
+/**
+ * Application timezone (Philippines).
+ */
+function frs_app_timezone(): DateTimeZone
+{
+    $name = date_default_timezone_get();
+    if ($name === '' || $name === 'UTC') {
+        return new DateTimeZone('Asia/Manila');
+    }
+    return new DateTimeZone($name);
+}
+
+/**
+ * Minutes from midnight for HH:MM (24h).
+ */
+function frs_hhmm_to_minutes(string $hhmm): int
+{
+    if (!preg_match('/^(\d{1,2}):(\d{2})$/', trim($hhmm), $m)) {
+        return 0;
+    }
+    return ((int)$m[1]) * 60 + (int)$m[2];
+}
+
+/**
+ * Format minutes-from-midnight as HH:MM.
+ */
+function frs_minutes_to_hhmm(int $minutes): string
+{
+    $minutes = max(0, min(24 * 60 - 1, $minutes));
+    return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
+}
+
+/**
+ * Earliest bookable start today: current local time rounded up to the next 30-minute slot.
+ */
+function frs_earliest_bookable_start_minutes(?DateTimeInterface $now = null): int
+{
+    if ($now === null) {
+        $now = new DateTime('now', frs_app_timezone());
+    }
+    $total = (int)$now->format('H') * 60 + (int)$now->format('i');
+    return (int)(ceil($total / 30) * 30);
+}
+
+/**
+ * Whether a start time on the given date is already in the past (local TZ).
+ */
+function frs_is_start_time_past_for_date(string $dateYmd, string $startHi, ?DateTimeInterface $now = null): bool
+{
+    if ($now === null) {
+        $now = new DateTime('now', frs_app_timezone());
+    }
+    if ($dateYmd !== $now->format('Y-m-d')) {
+        return false;
+    }
+    return frs_hhmm_to_minutes($startHi) < frs_earliest_bookable_start_minutes($now);
+}
+
 
 
 

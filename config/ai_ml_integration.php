@@ -15,6 +15,14 @@ require_once __DIR__ . '/app.php';
  */
 function getPythonPath(): string {
     $aiPath = getAIPath();
+
+    $envPy = getenv('FRS_PYTHON');
+    if (!is_string($envPy) || $envPy === '') {
+        $envPy = getenv('PYTHON_EXECUTABLE');
+    }
+    if (is_string($envPy) && $envPy !== '' && (file_exists($envPy) || $envPy === 'python' || $envPy === 'python3')) {
+        return $envPy;
+    }
     
     // Check for virtual environment first (common locations)
     $venvPaths = [
@@ -44,9 +52,23 @@ function getPythonPath(): string {
     foreach ($possiblePaths as $path) {
         $output = [];
         $returnVar = 0;
-        @exec("$path --version 2>&1", $output, $returnVar);
+        @exec(escapeshellarg($path) . ' --version 2>&1', $output, $returnVar);
         if ($returnVar === 0) {
             return $path;
+        }
+    }
+
+    if (stripos(PHP_OS, 'WIN') === 0) {
+        $localApp = getenv('LOCALAPPDATA');
+        if (is_string($localApp) && $localApp !== '') {
+            $storePy = $localApp . '\\Programs\\Python\\Python311\\python.exe';
+            if (file_exists($storePy)) {
+                return $storePy;
+            }
+            $storePy312 = $localApp . '\\Programs\\Python\\Python312\\python.exe';
+            if (file_exists($storePy312)) {
+                return $storePy312;
+            }
         }
     }
     
@@ -72,7 +94,7 @@ function getAIPath(): string {
  * @param array|null $inputData JSON input data (if script reads from stdin)
  * @return array Decoded JSON response or error array
  */
-function callPythonModel(string $scriptPath, array $args = [], ?array $inputData = null): array {
+function callPythonModel(string $scriptPath, array $args = [], ?array $inputData = null, int $timeoutSeconds = 5): array {
     $pythonPath = getPythonPath();
     $aiPath = getAIPath();
     $fullScriptPath = $aiPath . '/' . $scriptPath;
@@ -103,7 +125,7 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
         2 => ['pipe', 'w'],  // stderr
     ];
     
-    $process = proc_open($command, $descriptorspec, $pipes);
+    $process = proc_open($command, $descriptorspec, $pipes, $aiPath);
     
     if (!is_resource($process)) {
         return ['error' => 'Failed to execute Python script'];
@@ -124,7 +146,7 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
     // Read output with timeout
     $output = '';
     $error = '';
-    $timeout = 5; // 5 seconds timeout
+    $timeout = max(3, min(120, $timeoutSeconds));
     $startTime = time();
     
     while (true) {
@@ -176,15 +198,21 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
     
     // Check for errors
     if ($returnValue !== 0) {
-        error_log("Python script error: $error");
-        return ['error' => "Python script failed with return code $returnValue", 'stderr' => $error];
+        error_log("Python script error (code $returnValue): $error Output head: " . substr($output, 0, 500));
+        $decoded = json_decode($output, true);
+        if (is_array($decoded) && !empty($decoded['recommendations'])) {
+            $decoded['python_stderr'] = $error;
+            $decoded['python_exit_code'] = $returnValue;
+            return $decoded;
+        }
+        return ['error' => "Python script failed with return code $returnValue", 'stderr' => $error, 'stdout' => substr($output, 0, 2000)];
     }
     
     // Parse JSON output
     $result = json_decode($output, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
         error_log("JSON decode error: " . json_last_error_msg() . " Output: $output");
-        return ['error' => 'Failed to parse Python script output', 'output' => $output];
+        return ['error' => 'Failed to parse Python script output', 'output' => substr($output, 0, 2000)];
     }
     
     return $result ?? ['error' => 'Empty response from Python script'];
@@ -389,17 +417,23 @@ function recommendFacilitiesML(
         'limit' => $limit,
     ];
     
-    $result = callPythonModel('api/recommend_facilities.py', [], $inputData);
+    // Facility recommendation loads sklearn; allow longer cold-start on first request
+    $result = callPythonModel('api/recommend_facilities.py', [], $inputData, 45);
     
-    // Return original facilities if error (fallback)
-    if (isset($result['error'])) {
+    $recs = is_array($result) ? ($result['recommendations'] ?? []) : [];
+    if (isset($result['error']) && $recs === []) {
         return [
             'recommendations' => array_slice($facilities, 0, $limit),
             'error' => $result['error'],
+            'ml_model_loaded' => false,
         ];
     }
     
-    return $result;
+    return is_array($result) ? $result : [
+        'recommendations' => array_slice($facilities, 0, $limit),
+        'error' => 'Invalid ML response',
+        'ml_model_loaded' => false,
+    ];
 }
 
 /**

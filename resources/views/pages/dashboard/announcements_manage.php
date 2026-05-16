@@ -23,7 +23,10 @@ $message = '';
 $messageType = '';
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
+    $message = 'Your session expired or the form is invalid. Please refresh and try again.';
+    $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     if ($action === 'create') {
@@ -148,6 +151,7 @@ ob_start();
     </div>
     
     <form method="POST" enctype="multipart/form-data" class="announcement-form">
+            <?= csrf_field(); ?>
         <input type="hidden" name="action" value="create">
         
         <div class="form-group">
@@ -255,6 +259,7 @@ ob_start();
                             </td>
                             <td>
                                 <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this announcement?');">
+            <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="announcement_id" value="<?= (int)$announcement['id']; ?>">
                                     <button type="submit" class="btn btn-sm btn-danger" title="Delete announcement">

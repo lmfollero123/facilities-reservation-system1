@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -37,7 +37,7 @@ $pageTitle = 'Profile | LGU Facilities Reservation';
 $userId = $_SESSION['user_id'] ?? null;
 
 if (!$userId) {
-    header('Location: /resources/views/pages/auth/login.php');
+    header('Location: /login');
     exit;
 }
 
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account'])
             
             // Destroy session and redirect to login
             session_destroy();
-            header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+            header('Location: ' . base_path() . '/login?deactivated=1');
             exit;
             
         } catch (Throwable $e) {
@@ -202,7 +202,7 @@ $user = $stmt->fetch(PDO::FETCH_ASSOC);
 // Prevent deactivated users from accessing profile (they shouldn't be logged in, but double-check)
 if ($user && strtolower($user['status']) === 'deactivated') {
     session_destroy();
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php?deactivated=1');
+    header('Location: ' . base_path() . '/login?deactivated=1');
     exit;
 }
 
@@ -954,7 +954,7 @@ ob_start();
                                                            target="_blank"
                                                            class="btn-primary" 
                                                            style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">📄 View PDF</a>
-                                                        <a href="<?= base_path() . '/resources/views/pages/dashboard/download_export.php?id=' . $export['id']; ?>" 
+                                                        <a href="<?= base_path() . '/dashboard/download-export?id=' . $export['id']; ?>" 
                                                            class="btn-outline" 
                                                            style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">📥 JSON</a>
                                                     <?php else: ?>
@@ -1231,7 +1231,7 @@ function confirmDeactivation(event) {
         showGeocodeStatus('Looking up coordinates…', false);
         const form = new URLSearchParams();
         form.append('address', addr);
-        fetch(base + '/resources/views/pages/dashboard/geocode_api.php', {
+        fetch(base + '/dashboard/geocode-api', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: form

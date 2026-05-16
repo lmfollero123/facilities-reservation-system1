@@ -10,7 +10,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -119,7 +119,7 @@ ob_start();
             <?php if ($user['latitude'] === null || $user['longitude'] === null): ?>
                 <div style="background:#fff3cd; color:#856404; padding:1rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid #ffc107;">
                     <strong>⚠️ Action Required:</strong> Your coordinates are not set. 
-                    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/profile.php" style="color:#856404; text-decoration:underline;">Go to Profile</a> to add your address or manually enter coordinates.
+                    <a href="<?= base_path(); ?>/dashboard/profile" style="color:#856404; text-decoration:underline;">Go to Profile</a> to add your address or manually enter coordinates.
                 </div>
             <?php else: ?>
                 <div style="background:#e3f8ef; color:#0d7a43; padding:1rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid #28a745;">

@@ -58,8 +58,14 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/auth/login_otp.php';
 } elseif ($path === 'verify-email') {
     require_once __DIR__ . '/resources/views/pages/auth/verify_email.php';
+} elseif ($path === 'logout') {
+    require_once __DIR__ . '/resources/views/pages/auth/logout.php';
+} elseif ($path === 'reset-password') {
+    require_once __DIR__ . '/resources/views/pages/auth/reset_password.php';
 } elseif ($path === 'privacy') {
     require_once __DIR__ . '/resources/views/pages/public/privacy.php';
+} elseif ($path === 'paymongo-webhook') {
+    require_once __DIR__ . '/resources/views/pages/public/api/paymongo_webhook.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
     // Dashboard routes - check if user is logged in
     if (!isset($_SESSION['user_id'])) {
@@ -83,6 +89,7 @@ if ($path === 'announcements') {
         'reservations-manage' => 'reservations_manage.php',
         'announcements-manage' => 'announcements_manage.php',
         'facility-management' => 'facility_management.php',
+        'time-tracking' => 'time_tracking.php',
         'maintenance-integration' => 'maintenance_integration.php',
         'infrastructure-projects' => 'infrastructure_projects_integration.php',
         'utilities-integration' => 'utilities_integration.php',
@@ -95,6 +102,26 @@ if ($path === 'announcements') {
         'calendar' => 'calendar.php',
         'notifications' => 'notifications.php',
         'reservation-detail' => 'reservation_detail.php',
+        'session-keepalive' => 'session_keepalive.php',
+        'pay-now' => 'pay_now.php',
+        'facility-recommendations' => 'facility_recommendations_api.php',
+        'booking-smart-hints' => 'booking_smart_hints_api.php',
+        'occupancy-monitor' => 'occupancy_monitor.php',
+        'occupancy-live' => 'occupancy_live_api.php',
+        'check-in' => 'check_in_gate.php',
+        'blackout-dates' => 'blackout_dates.php',
+        'ai-conflict-check' => 'ai_conflict_check.php',
+        'ai-recommendations-api' => 'ai_recommendations_api.php',
+        'notifications-api' => 'notifications_api.php',
+        'facility-details-api' => 'facility-details-api.php',
+        'geocode-api' => 'geocode_api.php',
+        'chatbot-api' => 'chatbot_api.php',
+        'ai-chatbot' => 'ai_chatbot.php',
+        'export-audit-trail' => 'export_audit_trail.php',
+        'download-document' => 'download_document.php',
+        'download-export' => 'download_export.php',
+        'contact-inquiries' => 'contact_inquiries.php',
+        'sms-test' => 'sms_test.php',
     ];
     
     // Extract dashboard path

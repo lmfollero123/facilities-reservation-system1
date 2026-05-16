@@ -15,6 +15,20 @@ $pdo = db();
 $userRole = $_SESSION['role'] ?? 'Resident';
 $pageTitle = 'Smart Scheduler | LGU Facilities Reservation';
 
+/** @var array<int, array{id:int,name:string}> */
+$schedulerFacilities = [];
+try {
+    $schedulerFacilities = $pdo->query(
+        "SELECT id, name FROM facilities WHERE status != 'deleted' ORDER BY name ASC"
+    )->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $schedulerFacilities = [];
+}
+
+$filterFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : 0;
+$slotPage = max(1, (int)($_GET['slot_page'] ?? 1));
+$slotsPerPage = 12;
+
 // Holiday / local event calendar (Philippines + Barangay Culiat) for current and next year
 $yearNow = (int)date('Y');
 $years = [$yearNow, $yearNow + 1];
@@ -60,15 +74,20 @@ $windowStart = date('Y-m-01', strtotime('-5 months'));
 $windowEnd = date('Y-m-t');
 
 // Aggregate reservations by facility, day of week, and time slot
-$slotStmt = $pdo->prepare(
+$facilityAggClause = '';
+if ($filterFacilityId > 0) {
+    $facilityAggClause = ' AND f.id = ' . $filterFacilityId;
+}
+$slotSql =
     'SELECT f.id AS facility_id, f.name AS facility, DAYNAME(r.reservation_date) AS day_name, r.time_slot, COUNT(*) AS booking_count
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      WHERE r.reservation_date BETWEEN :start AND :end
-       AND r.status = "approved"
-     GROUP BY f.id, facility_id, facility, day_name, r.time_slot
-     ORDER BY booking_count ASC, facility ASC'
-);
+       AND r.status = "approved"'
+    . $facilityAggClause .
+    ' GROUP BY f.id, facility_id, facility, day_name, r.time_slot
+     ORDER BY booking_count ASC, facility ASC';
+$slotStmt = $pdo->prepare($slotSql);
 $slotStmt->execute([
     'start' => $windowStart,
     'end' => $windowEnd,
@@ -101,8 +120,30 @@ foreach ($rawSlots as $row) {
     ];
 }
 
-// Limit to top 10 recommended slots
-$slots = array_slice($slots, 0, 10);
+$scoreRank = static function ($score): int {
+    return $score === 'High' ? 0 : ($score === 'Medium' ? 1 : 2);
+};
+usort(
+    $slots,
+    static function ($a, $b) use ($scoreRank): int {
+        $sa = $scoreRank($a['score']);
+        $sb = $scoreRank($b['score']);
+        if ($sa !== $sb) {
+            return $sa <=> $sb;
+        }
+        if ((int)$a['count'] !== (int)$b['count']) {
+            return (int)$a['count'] <=> (int)$b['count'];
+        }
+        return strcmp((string)$a['facility'], (string)$b['facility']);
+    }
+);
+
+$slotsTotal = count($slots);
+$slotOffset = ($slotPage - 1) * $slotsPerPage;
+$slotsPage = array_slice($slots, $slotOffset, $slotsPerPage);
+$slotsHasPrev = $slotPage > 1;
+$slotsHasNext = $slotOffset + $slotsPerPage < $slotsTotal;
+$slotsTotalPages = max(1, (int)ceil($slotsTotal / $slotsPerPage));
 
 // Compute simple insights: peak day and peak time slot across all facilities
 $peakDayStmt = $pdo->prepare(
@@ -172,24 +213,49 @@ ob_start();
                 <strong>How recommendations work:</strong> The system analyzes historical booking patterns over the last 6 months. 
                 <strong>High recommendation</strong> means very few past bookings (1 or less) for that day/time combination, indicating lower conflict risk. 
                 <strong>Medium</strong> has moderate usage (2-3 bookings), while <strong>Low</strong> has frequent bookings (4+) and higher competition. 
-                These recommendations help you find the best times to book with minimal conflicts.
+                These rankings are derived entirely from existing reservation history (no separate scoring API).
             </p>
+            <form method="get" action="" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
+                <label style="display:flex; flex-direction:column; gap:0.35rem; font-size:0.9rem; color:#3d4f6f;">
+                    <span style="font-weight:600;">Facility</span>
+                    <select name="facility_id" style="min-width:220px; padding:0.45rem 0.65rem; border-radius:8px; border:1px solid #d8dee9;">
+                        <option value="0"<?= $filterFacilityId === 0 ? ' selected' : ''; ?>>All facilities</option>
+                        <?php foreach ($schedulerFacilities as $sf): ?>
+                            <option value="<?= (int)$sf['id']; ?>"<?= $filterFacilityId === (int)$sf['id'] ? ' selected' : ''; ?>>
+                                <?= htmlspecialchars((string)$sf['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <button type="submit" class="btn-primary" style="padding:0.5rem 1rem; border-radius:8px;">Apply filter</button>
+                <?php if ($slotsTotal): ?>
+                    <span style="color:#8b95b5; font-size:0.88rem; margin-left:auto;">
+                        Showing <?= (int)min($slotsTotal, $slotOffset + 1); ?>–<?= (int)min($slotsTotal, $slotOffset + count($slotsPage)); ?> of <?= (int)$slotsTotal; ?> pattern<?= $slotsTotal === 1 ? '' : 's'; ?>
+                    </span>
+                <?php endif; ?>
+            </form>
             <?php if (empty($slots)): ?>
-                <p style="color:#8b95b5; padding:1rem 0;">Not enough historical data yet to generate recommendations. Once more approved reservations are recorded, suggested slots will appear here.</p>
+                <p style="color:#8b95b5; padding:1rem 0;">Not enough historical data yet to generate recommendations for this scope. Try “All facilities” or check back once more approved reservations are recorded.</p>
             <?php else: ?>
                 <table class="table">
                     <thead>
                     <tr>
                         <th>Facility</th>
                         <th>Day</th>
-                        <th>Time Window</th>
-                        <th>Recommendation</th>
-                        <th>Past Bookings</th>
+                        <th>Historical time window</th>
+                        <th>Suggested tier</th>
+                        <th>Pattern insight</th>
+                        <th>Past bookings</th>
                         <th>Action</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($slots as $slot): ?>
+                    <?php foreach ($slotsPage as $slot): ?>
+                        <?php
+                            $patternLabel = ($slot['score'] === 'High')
+                                ? 'Lower historical demand'
+                                : (($slot['score'] === 'Medium') ? 'Moderate demand' : 'Frequent bookings in this pattern');
+                            ?>
                         <tr>
                             <td><?= htmlspecialchars($slot['facility']); ?></td>
                             <td><?= htmlspecialchars($slot['day']); ?></td>
@@ -199,10 +265,13 @@ ob_start();
                                     <?= htmlspecialchars($slot['score']); ?>
                                 </span>
                             </td>
+                            <td style="max-width:220px; color:#55607a; font-size:0.88rem;">
+                                <?= htmlspecialchars($patternLabel); ?> · <?= htmlspecialchars((string)$slot['reason']); ?>
+                            </td>
                             <td><?= (int)$slot['count']; ?></td>
                             <td>
                                 <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
-                                   href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode($slot['facility_id']); ?>&time_slot=<?= urlencode($slot['time']); ?>">
+                                   href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode((string)$slot['facility_id']); ?>&time_slot=<?= urlencode((string)$slot['time']); ?>">
                                     Book this slot
                                 </a>
                             </td>
@@ -210,6 +279,32 @@ ob_start();
                     <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php if ($slotsTotalPages > 1): ?>
+                    <nav style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-top:1rem;" aria-label="Recommended slots pagination">
+                        <?php
+                        $pagerBase = function (int $p) use ($filterFacilityId): string {
+                            $q = ['slot_page' => (string)$p];
+                            if ($filterFacilityId > 0) {
+                                $q['facility_id'] = (string)$filterFacilityId;
+                            }
+                            return '?' . http_build_query($q);
+                        };
+                        ?>
+                        <?php if ($slotsHasPrev): ?>
+                            <a class="btn-outline" href="<?= htmlspecialchars($pagerBase($slotPage - 1)); ?>" style="text-decoration:none; padding:0.4rem 0.75rem;">← Previous</a>
+                        <?php else: ?>
+                            <span class="btn-outline" style="opacity:0.45; padding:0.4rem 0.75rem;">← Previous</span>
+                        <?php endif; ?>
+                        <span style="color:#6c757d; font-size:0.88rem;">
+                            Page <?= (int)$slotPage; ?> of <?= (int)$slotsTotalPages; ?>
+                        </span>
+                        <?php if ($slotsHasNext): ?>
+                            <a class="btn-outline" href="<?= htmlspecialchars($pagerBase($slotPage + 1)); ?>" style="text-decoration:none; padding:0.4rem 0.75rem;">Next →</a>
+                        <?php else: ?>
+                            <span class="btn-outline" style="opacity:0.45; padding:0.4rem 0.75rem;">Next →</span>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </section>

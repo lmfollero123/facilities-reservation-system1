@@ -50,6 +50,9 @@ if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
 
 $pageTitle = $pageTitle ?? 'LGU Dashboard';
 $userName = $_SESSION['name'] ?? 'User';
+$sessionTimeoutSeconds = defined('SESSION_TIMEOUT') ? (int)SESSION_TIMEOUT : 120;
+$lastActivityTs = isset($_SESSION['last_activity']) ? (int)$_SESSION['last_activity'] : time();
+$sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivityTs));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -190,11 +193,128 @@ $userName = $_SESSION['name'] ?? 'User';
     </div>
 </div>
 
+<div id="sessionTimeoutModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100002; align-items:center; justify-content:center;">
+    <div style="width:min(520px, 92vw); background:#ffffff; color:#1f2937; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,0.35); padding:1.4rem 1.25rem; text-align:center; border:2px solid #f97316;">
+        <div style="font-size:2rem; margin-bottom:0.35rem;">⏳</div>
+        <h3 style="margin:0; font-size:1.35rem; color:#9a3412;">Session expiring soon</h3>
+        <p style="margin:0.6rem 0 0.35rem; color:#4b5563; font-size:0.95rem;">
+            You will be logged out due to inactivity.
+        </p>
+        <div id="sessionTimeoutCountdown" style="font-size:2rem; font-weight:800; color:#b91c1c; letter-spacing:1px; margin:0.35rem 0 0.8rem;">01:00</div>
+        <div style="display:flex; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
+            <button id="keepSessionBtn" type="button" class="btn-primary" style="padding:0.55rem 0.95rem;">
+                Keep me logged in
+            </button>
+            <a href="<?= base_path(); ?>/logout" class="btn-outline" style="padding:0.55rem 0.95rem; text-decoration:none;">Log out now</a>
+        </div>
+    </div>
+</div>
+
 <script>
-window.APP_BASE_PATH = "<?= base_path(); ?>";
-window.CHATBOT_USER_ID = "<?= htmlspecialchars((string)($_SESSION['user_id'] ?? 'guest')); ?>";
+window.APP_BASE_PATH = <?= json_encode((string) base_path(), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.CHATBOT_USER_ID = <?= json_encode((string)($_SESSION['user_id'] ?? 'guest'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.SESSION_TIMEOUT_REMAINING = <?= (int)$sessionRemainingSeconds; ?>;
+window.SESSION_TIMEOUT_WARNING_SECONDS = 60;
+window.CSRF_TOKEN = "<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>";
+window.CSRF_TOKEN_NAME = <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 <script src="<?= base_path(); ?>/public/js/main.js"></script>
+<script>
+(function () {
+    const modal = document.getElementById('sessionTimeoutModal');
+    const countdownEl = document.getElementById('sessionTimeoutCountdown');
+    const keepBtn = document.getElementById('keepSessionBtn');
+    if (!modal || !countdownEl || !keepBtn) return;
+
+    let remaining = Number(window.SESSION_TIMEOUT_REMAINING || 0);
+    const sessionTimeout = Math.max(1, Number(window.SESSION_TIMEOUT_REMAINING || 120));
+    const warningAt = Number(window.SESSION_TIMEOUT_WARNING_SECONDS || 60);
+    const loginUrl = (window.APP_BASE_PATH || '') + '/login?timeout=1';
+    const keepAliveUrl = (window.APP_BASE_PATH || '') + '/dashboard/session-keepalive';
+    let keepAliveInFlight = false;
+    let lastActivityAt = Date.now();
+    let lastKeepAliveAt = 0;
+    const KEEPALIVE_THROTTLE_MS = 15000;
+
+    function render() {
+        if (remaining <= warningAt && remaining > 0) {
+            modal.style.display = 'flex';
+            const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const ss = String(remaining % 60).padStart(2, '0');
+            countdownEl.textContent = `${mm}:${ss}`;
+        } else {
+            modal.style.display = 'none';
+        }
+    }
+
+    function pingKeepAlive(silent) {
+        if (keepAliveInFlight) return;
+        keepAliveInFlight = true;
+        if (!silent) {
+            keepBtn.disabled = true;
+            keepBtn.textContent = 'Extending...';
+        }
+
+        const body = new URLSearchParams();
+        body.set('<?= CSRF_TOKEN_NAME; ?>', window.CSRF_TOKEN || '');
+
+        fetch(keepAliveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                remaining = Number(data.remaining || sessionTimeout);
+                lastKeepAliveAt = Date.now();
+                render();
+            } else {
+                if (!silent) window.location.href = loginUrl;
+            }
+        })
+        .catch(() => {
+            if (!silent) window.location.href = loginUrl;
+        })
+        .finally(() => {
+            keepAliveInFlight = false;
+            if (!silent) {
+                keepBtn.disabled = false;
+                keepBtn.textContent = 'Keep me logged in';
+            }
+        });
+    }
+
+    keepBtn.addEventListener('click', function () {
+        pingKeepAlive(false);
+    });
+
+    function markActivity() {
+        lastActivityAt = Date.now();
+        // Keep the server session alive while user is actively interacting.
+        if (!keepAliveInFlight && (Date.now() - lastKeepAliveAt) > KEEPALIVE_THROTTLE_MS) {
+            pingKeepAlive(true);
+        }
+    }
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(function (evt) {
+        window.addEventListener(evt, markActivity, { passive: true });
+    });
+
+    render();
+    setInterval(function () {
+        const inactiveSeconds = Math.floor((Date.now() - lastActivityAt) / 1000);
+        // Warn only when user is idle.
+        remaining = Math.max(0, sessionTimeout - inactiveSeconds);
+
+        if (remaining <= 0) {
+            window.location.href = loginUrl;
+            return;
+        }
+        render();
+    }, 1000);
+})();
+</script>
 <script>
 (function () {
     const modal = document.getElementById('confirmModal');
@@ -439,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const formData = new URLSearchParams();
         formData.append('message', message);
 
-        fetch('<?= base_path(); ?>/resources/views/pages/dashboard/ai_chatbot.php', {
+        fetch('<?= base_path(); ?>/dashboard/ai-chatbot', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'

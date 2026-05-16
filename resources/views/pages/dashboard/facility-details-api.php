@@ -22,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+frs_reject_invalid_csrf_json();
+
 $facilityId = isset($_POST['facility_id']) ? (int)$_POST['facility_id'] : 0;
 
 if ($facilityId <= 0) {

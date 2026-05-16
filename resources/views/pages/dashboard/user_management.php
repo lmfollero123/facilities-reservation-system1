@@ -21,7 +21,10 @@ $message = '';
 $messageType = 'success';
 
 // Handle user actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
+    $message = 'Your session expired or the form is invalid. Please refresh and try again.';
+    $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
     $userId = (int)$_POST['user_id'];
     $action = $_POST['action'];
     $currentUserId = $_SESSION['user_id'] ?? null;
@@ -91,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['ac
                                 'system',
                                 'Account Verified',
                                 'Your account has been verified. You can now use auto-approval features for facility bookings.',
-                                base_path() . '/resources/views/pages/dashboard/profile.php'
+                                base_path() . '/dashboard/profile'
                             );
                             
                             $body = getAccountVerifiedEmailTemplate($userInfo['name']);
@@ -415,6 +418,7 @@ ob_start();
                         <td>
                             <?php if ($_SESSION['role'] === 'Admin'): ?>
                                 <form method="POST" style="display:inline;" class="role-change-form">
+            <?= csrf_field(); ?>
                                     <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                     <input type="hidden" name="action" value="change_role">
                                     <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" style="border:1px solid #dfe3ef; border-radius:6px; padding:0.25rem 0.5rem;">
@@ -489,17 +493,20 @@ ob_start();
                             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                 <?php if ($user['status'] === 'pending'): ?>
                                     <form method="POST" style="display:inline;">
+            <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="approve">
                                         <button class="btn-primary confirm-action" data-message="Approve this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Approve</button>
                                     </form>
                                     <form method="POST" style="display:inline;">
+            <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="deny">
                                         <button class="btn-outline confirm-action" data-message="Remove this pending user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Deny</button>
                                     </form>
                                 <?php elseif ($user['status'] === 'active'): ?>
                                     <form method="POST" style="display:inline;">
+            <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="lock">
                                         <input type="text" name="lock_reason" placeholder="Reason (optional)" style="width:180px; padding:0.35rem 0.5rem; border:1px solid #d7deed; border-radius:8px; font-size:0.85rem; margin-right:0.35rem;">
@@ -507,6 +514,7 @@ ob_start();
                                     </form>
                                 <?php elseif ($user['status'] === 'locked'): ?>
                                     <form method="POST" style="display:inline;">
+            <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="unlock">
                                         <button class="btn-primary confirm-action" data-message="Unlock this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Unlock</button>
@@ -515,6 +523,7 @@ ob_start();
                                 <!-- Password Reset Button (available for all active/locked users) -->
                                 <?php if (in_array($user['status'], ['active', 'locked'])): ?>
                                     <form method="POST" style="display:inline;">
+            <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
                                         <input type="hidden" name="action" value="reset_password">
                                         <button class="btn-outline confirm-action" data-message="Reset password for this user? New credentials will be sent to their email." type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem; background:#ff9800; color:#fff; border-color:#ff9800;">Reset Password</button>

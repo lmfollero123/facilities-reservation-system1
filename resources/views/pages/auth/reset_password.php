@@ -182,7 +182,7 @@ ob_start();
                 Your password has been successfully reset. You can now log in with your new password.
             </div>
             <div class="auth-footer">
-                <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php" class="btn-primary" style="display: block; text-align: center;">Go to Login</a>
+                <a href="<?= base_path(); ?>/login" class="btn-primary" style="display: block; text-align: center;">Go to Login</a>
             </div>
         <?php elseif ($error && !$tokenValid): ?>
             <!-- Token validation error - show error page -->
@@ -216,7 +216,7 @@ ob_start();
                 <?php endif; ?>
             </div>
             <div class="auth-footer">
-                <a href="<?= base_path(); ?>/resources/views/pages/auth/forgot_password.php">Request New Reset Link</a>
+                <a href="<?= base_path(); ?>/forgot-password">Request New Reset Link</a>
             </div>
         <?php else: ?>
             <!-- Show form (either no error, or password validation error with valid token) -->
@@ -250,7 +250,7 @@ ob_start();
             </form>
             
             <div class="auth-footer">
-                <a href="<?= base_path(); ?>/resources/views/pages/auth/login.php">← Back to Login</a>
+                <a href="<?= base_path(); ?>/login">← Back to Login</a>
             </div>
         <?php endif; ?>
     </div>

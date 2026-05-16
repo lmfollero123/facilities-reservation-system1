@@ -8,6 +8,35 @@ use PHPMailer\PHPMailer\Exception;
 /**
  * Send email via SMTP (PHPMailer). Configure credentials in config/mail.php.
  */
+/**
+ * Send a plain-text email (used for carrier email-to-SMS gateways).
+ */
+function sendPlainTextEmail(string $toEmail, string $subject, string $textBody): bool
+{
+    $config = require __DIR__ . '/mail.php';
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = $config['host'] ?? '';
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $config['username'] ?? '';
+        $mail->Password   = $config['password'] ?? '';
+        $mail->SMTPSecure = $config['encryption'] ?? PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = $config['port'] ?? 587;
+
+        $mail->setFrom($config['from_email'] ?? 'no-reply@example.com', $config['from_name'] ?? 'LGU Facilities');
+        $mail->addAddress($toEmail);
+        $mail->isHTML(false);
+        $mail->Subject = $subject;
+        $mail->Body    = $textBody;
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log('Mail error (plain): ' . $mail->ErrorInfo);
+        return false;
+    }
+}
+
 function sendEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $textBody = ''): bool
 {
     $config = require __DIR__ . '/mail.php';

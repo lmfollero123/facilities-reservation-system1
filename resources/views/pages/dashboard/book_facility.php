@@ -22,11 +22,28 @@ require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 require_once __DIR__ . '/../../../../config/auto_approval.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
+require_once __DIR__ . '/../../../../config/paymongo_helper.php';
+require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/email_templates.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+require_once __DIR__ . '/../../../../config/time_helpers.php';
+require_once __DIR__ . '/../../../../config/sms_helper.php';
 
 $pdo = db();
-$pageTitle = 'Book a Facility | LGU Facilities Reservation';
+
+if (isset($_GET['tab']) && $_GET['tab'] === 'reservations') {
+    $rq = $_GET;
+    unset($rq['tab']);
+    $rq['module'] = 'mine';
+    header('Location: ' . base_path() . '/dashboard/book-facility?' . http_build_query($rq));
+    exit;
+}
+
+$reservationsHubMine = (($_SERVER['_RESERVATIONS_HUB_ROUTE'] ?? '') === 'mine') || (isset($_GET['module']) && $_GET['module'] === 'mine');
+$pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservation' : 'Book a Facility | LGU Facilities Reservation';
 $success = '';
 $error = '';
+$bcfOpenBookingModal = false;
 $conflictWarning = null;
 $recommendations = [];
 
@@ -43,6 +60,7 @@ $userVerificationStmt->execute(['user_id' => $userId]);
 $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
 $isVerified = (bool)($userVerificationData['is_verified'] ?? false);
 $userRole = $userVerificationData['role'] ?? 'Resident';
+$isAdminUser = ($userRole === 'Admin');
 
 // Staff and Admin are automatically verified (no ID upload required)
 $isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
@@ -60,43 +78,104 @@ try {
     $error = 'Unable to load facilities right now.';
 }
 
+// Backward-compatible schema checks so booking works even when some payment migrations are not yet applied.
+$reservationColumns = [];
+$reservationStatusValues = [];
+$historyStatusValues = [];
+try {
+    $schemaStmt = $pdo->query('SHOW COLUMNS FROM reservations');
+    foreach ($schemaStmt->fetchAll(PDO::FETCH_ASSOC) as $col) {
+        $field = (string)($col['Field'] ?? '');
+        $type = (string)($col['Type'] ?? '');
+        if ($field !== '') {
+            $reservationColumns[$field] = true;
+            if ($field === 'status' && stripos($type, 'enum(') === 0 && preg_match_all("/'([^']+)'/", $type, $m)) {
+                $reservationStatusValues = $m[1];
+            }
+        }
+    }
+
+    $histSchemaStmt = $pdo->query('SHOW COLUMNS FROM reservation_history');
+    foreach ($histSchemaStmt->fetchAll(PDO::FETCH_ASSOC) as $col) {
+        $field = (string)($col['Field'] ?? '');
+        $type = (string)($col['Type'] ?? '');
+        if ($field === 'status' && stripos($type, 'enum(') === 0 && preg_match_all("/'([^']+)'/", $type, $m)) {
+            $historyStatusValues = $m[1];
+            break;
+        }
+    }
+} catch (Throwable $e) {
+    // Keep defaults empty; logic below safely falls back.
+}
+
+$supportsPendingPayment = in_array('pending_payment', $reservationStatusValues, true);
+$historySupportsPendingPayment = in_array('pending_payment', $historyStatusValues, true);
+$hasPriorityLevelColumn = isset($reservationColumns['priority_level']);
+$hasExpiresAtColumn = isset($reservationColumns['expires_at']);
+$hasPaymentDueAtColumn = isset($reservationColumns['payment_due_at']);
+$activeBookingStatusesSql = $supportsPendingPayment
+    ? '"pending_payment","pending","approved"'
+    : '"pending","approved"';
+
 // Prepare base path for AJAX calls
 $basePath = base_path();
+
+$postedBookingAction = ($_SERVER['REQUEST_METHOD'] === 'POST') ? ($_POST['action'] ?? null) : null;
+$isReservationsMgmtPost = $postedBookingAction !== null && in_array((string)$postedBookingAction, ['edit_details', 'reschedule', 'cancel_reservation'], true);
+
+$message = '';
+$messageType = 'success';
+$viewerRole = (string)($_SESSION['role'] ?? 'Resident');
+$canViewOtherReservationDetails = in_array($viewerRole, ['Admin', 'Staff'], true);
+$GLOBALS['frsMineNotifyPath'] = base_path() . '/dashboard/book-facility?module=mine';
+$GLOBALS['frsMineNotifyAbsUrl'] = base_url() . '/dashboard/book-facility?module=mine';
+autoDeclineExpiredReservations();
+$frsCsrfOk = frs_csrf_ok();
+$frsCsrfError = 'Your session expired or the form is invalid. Please refresh and try again.';
+require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';
 
 // Check if pre-filled from Smart Scheduler (for showing notification)
 $prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
 $prefillTimeSlot = isset($_GET['time_slot']) ? trim($_GET['time_slot']) : null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtPost) {
+    $message = $frsCsrfError;
+    $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && !$isReservationsMgmtPost) {
+    $error = $frsCsrfError;
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !$isReservationsMgmtPost) {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $date = $_POST['reservation_date'] ?? '';
     $startTime = $_POST['start_time'] ?? '';
     $endTime = $_POST['end_time'] ?? '';
     $purpose = trim($_POST['purpose'] ?? '');
-    $docRef = trim($_POST['doc_ref'] ?? '');
-    $expectedAttendees = !empty($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : null;
-    $isCommercial = isset($_POST['is_commercial']) && $_POST['is_commercial'] === '1';
-    $priorityLevel = isset($_POST['priority_level']) ? (int)$_POST['priority_level'] : 3; // Default: Private Individual
-    // Validate priority level (1=LGU/Barangay, 2=Community/Org, 3=Private)
-    if ($priorityLevel < 1 || $priorityLevel > 3) {
-        $priorityLevel = 3;
+    $bookingNotes = trim($_POST['booking_notes'] ?? '');
+    if ($purpose !== '' && $bookingNotes !== '') {
+        $purpose .= "\n\n--- Additional notes ---\n" . $bookingNotes;
     }
+    $expectedAttendees = isset($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : 0;
+    $isCommercial = false;
+    $priorityLevel = 3;
     
     // Check if user is verified - if not, require ID upload
-    $userVerificationStmt = $pdo->prepare('SELECT is_verified FROM users WHERE id = :user_id');
+    $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
     $userVerificationStmt->execute(['user_id' => $userId]);
-    $isVerified = (bool)($userVerificationStmt->fetchColumn() ?? false);
+    $userVerifyRow = $userVerificationStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $isVerified = (bool)($userVerifyRow['is_verified'] ?? false);
+    $postUserRole = (string)($userVerifyRow['role'] ?? $userRole);
+    $isAdminUser = ($postUserRole === 'Admin');
+    $isVerifiedOrPrivileged = $isVerified || in_array($postUserRole, ['Staff', 'Admin'], true);
     
     $validIdFile = $_FILES['doc_valid_id'] ?? null;
     $hasValidIdUpload = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
     
     // If user is not verified and hasn't uploaded a valid ID, require ID upload
-    if (!$isVerified && !$hasValidIdDocument && !$hasValidIdUpload) {
+    if (!$isVerifiedOrPrivileged && !$hasValidIdDocument && !$hasValidIdUpload) {
         $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
     }
     
     // If user already has a valid ID document uploaded, don't allow another upload
-    if (!$isVerified && $hasValidIdDocument && $hasValidIdUpload) {
+    if (!$isVerifiedOrPrivileged && $hasValidIdDocument && $hasValidIdUpload) {
         $error = 'You have already submitted a valid ID document. Please wait for admin verification.';
     }
     
@@ -139,19 +218,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Invalid date format.';
         } elseif ($reservationDate < $today) {
             $error = 'Cannot book facilities for past dates. Please select today or a future date.';
-        } elseif ($reservationDate > (clone $today)->modify('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days')) {
+        } elseif (!$isAdminUser && $reservationDate > (clone $today)->modify('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days')) {
             $error = "Bookings are allowed only up to {$BOOKING_ADVANCE_MAX_DAYS} days in advance.";
         }
     }
+
+    if (!$error && $date && $startTime && function_exists('frs_is_start_time_past_for_date')) {
+        if (frs_is_start_time_past_for_date($date, $startTime)) {
+            $earliestHi = frs_minutes_to_hhmm(frs_earliest_bookable_start_minutes());
+            $error = 'For reservations today, the earliest start time is ' . $earliestHi . ' (Philippine time). Past time slots are not available.';
+        }
+    }
+
+    if (!$error && $expectedAttendees < 1) {
+        $error = 'Expected number of attendees is required (enter at least 1).';
+    }
+
+    // Enforce occupancy vs listing capacity when a numeric capacity is configured
+    if (!$error && $facilityId && $expectedAttendees >= 1) {
+        $capLookup = $pdo->prepare('SELECT capacity FROM facilities WHERE id = :id LIMIT 1');
+        $capLookup->execute(['id' => $facilityId]);
+        $capCell = $capLookup->fetchColumn();
+        if ($capCell !== false && preg_match('/(\d{1,7})/', (string)$capCell, $cm)) {
+            $maxListed = (int)$cm[1];
+            if ($expectedAttendees > $maxListed) {
+                $error = 'Expected attendees (' . $expectedAttendees . ') cannot exceed this facility\'s maximum occupancy (' . $maxListed . ').';
+            }
+        }
+    }
     
-    if (!$error) {
+    if (!$error && !$isAdminUser) {
         // Active bookings cap in rolling window
         $windowEnd = date('Y-m-d', strtotime('+' . ($BOOKING_LIMIT_WINDOW_DAYS - 1) . ' days'));
         $activeCountStmt = $pdo->prepare(
             'SELECT COUNT(*) FROM reservations
              WHERE user_id = :uid
                AND reservation_date BETWEEN :start AND :end
-               AND status IN ("pending","approved")'
+               AND status IN (' . $activeBookingStatusesSql . ')'
         );
         // Note: postponed and on_hold reservations don't count as active bookings
         $activeCountStmt->execute([
@@ -169,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'SELECT COUNT(*) FROM reservations
                  WHERE user_id = :uid
                    AND reservation_date = :date
-                   AND status IN ("pending","approved")'
+                   AND status IN (' . $activeBookingStatusesSql . ')'
             );
             // Note: postponed and on_hold reservations don't count toward daily limit
             $perDayStmt->execute([
@@ -184,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if (!$error) {
+    if (!$error && !$isAdminUser) {
         // Check facility status - prevent booking if under maintenance or offline
         $facilityStatusStmt = $pdo->prepare('SELECT status, name FROM facilities WHERE id = :id');
         $facilityStatusStmt->execute(['id' => $facilityId]);
@@ -197,12 +300,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($facilityStatus['status'] === 'offline') {
             $error = '⚠️ This facility is currently offline and unavailable for booking. Please select a different facility.';
         }
+
+        // Block bookings on synced blackout dates (e.g., CIMM maintenance windows).
+        if (!$error && !empty($date)) {
+            $blackoutStmt = $pdo->prepare(
+                'SELECT reason FROM facility_blackout_dates WHERE facility_id = :facility_id AND blackout_date = :date LIMIT 1'
+            );
+            $blackoutStmt->execute([
+                'facility_id' => $facilityId,
+                'date' => $date,
+            ]);
+            $blackout = $blackoutStmt->fetch(PDO::FETCH_ASSOC);
+            if ($blackout) {
+                $reason = trim((string)($blackout['reason'] ?? 'Facility maintenance'));
+                $error = '⚠️ This facility is unavailable on the selected date.'
+                    . ($reason !== '' ? (' Reason: ' . $reason . '.') : '');
+            }
+        }
     }
     
     // AI Purpose Analysis - Check if purpose is unclear or categorize it
     $purposeAnalysis = null;
     $purposeCategory = null;
-    if (!$error && !empty($purpose) && function_exists('detectUnclearPurpose')) {
+    if (!$error && !$isAdminUser && !empty($purpose) && function_exists('detectUnclearPurpose')) {
         try {
             $unclearResult = detectUnclearPurpose($purpose);
             if (!isset($unclearResult['error']) && $unclearResult['is_unclear'] && $unclearResult['probability'] > 0.7) {
@@ -226,7 +346,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if (!$error) {
+    if (!$error && !$isAdminUser) {
         // AI Conflict Detection - BEST PRACTICE: Only APPROVED blocks, PENDING shows warning
         $conflictCheck = detectBookingConflict($facilityId, $date, $timeSlot);
         
@@ -279,29 +399,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $userId,
                 $BOOKING_ADVANCE_MAX_DAYS
             );
-            
-            // Determine initial status based on auto-approval evaluation
-            // Note: If user is not verified, auto-approval will fail, so status will be 'pending'
-            $initialStatus = $autoApprovalResult['auto_approve'] ? 'approved' : 'pending';
-            $isAutoApproved = $autoApprovalResult['auto_approve'];
-            
-            // Set expires_at for pending reservations (48 hours from now)
-            $expiresAt = null;
-            if ($initialStatus === 'pending') {
-                $expiresAt = date('Y-m-d H:i:s', strtotime('+48 hours'));
+
+            $paymentsEnabled = false;
+            $requirePaymentForReservations = false;
+            $paymentsCfgPath = __DIR__ . '/../../../../config/payments.php';
+            if (file_exists($paymentsCfgPath)) {
+                $paymentsCfg = require $paymentsCfgPath;
+                $paymentsEnabled = !empty($paymentsCfg['enabled']);
+                $requirePaymentForReservations = !empty($paymentsCfg['require_payment_for_reservations']);
             }
+
+            $autoApprovedByRules = !empty($autoApprovalResult['auto_approve']);
+            $hybridPaymentMode = $paymentsEnabled && $requirePaymentForReservations;
+
+            if ($hybridPaymentMode) {
+                // Hybrid policy:
+                // - Auto-approvable reservations go straight to payment step.
+                // - Manual-approval reservations stay pending until staff approval.
+                $initialStatus = ($supportsPendingPayment && $autoApprovedByRules) ? 'pending_payment' : 'pending';
+                $isAutoApproved = false;
+            } else {
+                // Legacy mode (no payment gate): keep original auto-approval behavior.
+                $initialStatus = $autoApprovedByRules ? 'approved' : 'pending';
+                $isAutoApproved = $autoApprovedByRules;
+            }
+
+            $paymentWindowMinutes = 30;
+            if (isset($paymentsCfg) && is_array($paymentsCfg)) {
+                $candidateWindow = (int)($paymentsCfg['payment_window_minutes'] ?? 30);
+                if ($candidateWindow > 0) {
+                    $paymentWindowMinutes = $candidateWindow;
+                }
+            }
+            $paymentDueAt = date('Y-m-d H:i:s', strtotime('+' . $paymentWindowMinutes . ' minutes'));
+            // Payment holds use payment window; normal pending keeps 48-hour expiry.
+            $expiresAt = $initialStatus === 'pending_payment'
+                ? $paymentDueAt
+                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+48 hours')) : null);
             
-            // Insert reservation with determined status, priority, and expiration
-            $stmt = $pdo->prepare(
-                'INSERT INTO reservations (
-                    user_id, facility_id, reservation_date, time_slot, purpose, 
-                    status, expected_attendees, is_commercial, auto_approved, priority_level, expires_at
-                ) VALUES (
-                    :user, :facility, :date, :slot, :purpose, 
-                    :status, :attendees, :commercial, :auto_approved, :priority, :expires
-                )'
-            );
-            $stmt->execute([
+            // Insert reservation with dynamic columns based on current database schema.
+            $insertColumns = [
+                'user_id',
+                'facility_id',
+                'reservation_date',
+                'time_slot',
+                'purpose',
+                'status',
+                'expected_attendees',
+                'is_commercial',
+                'auto_approved',
+            ];
+            $insertParams = [
                 'user' => $userId,
                 'facility' => $facilityId,
                 'date' => $date,
@@ -311,9 +459,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'attendees' => $expectedAttendees,
                 'commercial' => $isCommercial ? 1 : 0,
                 'auto_approved' => $isAutoApproved ? 1 : 0,
-                'priority' => $priorityLevel,
-                'expires' => $expiresAt,
-            ]);
+            ];
+
+            if ($hasPriorityLevelColumn) {
+                $insertColumns[] = 'priority_level';
+                $insertParams['priority'] = $priorityLevel;
+            }
+            if ($hasExpiresAtColumn) {
+                $insertColumns[] = 'expires_at';
+                $insertParams['expires'] = $expiresAt;
+            }
+            if ($hasPaymentDueAtColumn) {
+                $insertColumns[] = 'payment_due_at';
+                $insertParams['payment_due_at'] = $paymentDueAt;
+            }
+
+            $insertPlaceholders = [
+                ':user',
+                ':facility',
+                ':date',
+                ':slot',
+                ':purpose',
+                ':status',
+                ':attendees',
+                ':commercial',
+                ':auto_approved',
+            ];
+            if ($hasPriorityLevelColumn) {
+                $insertPlaceholders[] = ':priority';
+            }
+            if ($hasExpiresAtColumn) {
+                $insertPlaceholders[] = ':expires';
+            }
+            if ($hasPaymentDueAtColumn) {
+                $insertPlaceholders[] = ':payment_due_at';
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO reservations (' . implode(', ', $insertColumns) . ')
+                 VALUES (' . implode(', ', $insertPlaceholders) . ')'
+            );
+            $stmt->execute($insertParams);
             $newReservationId = $pdo->lastInsertId();
             
             // Get facility name for audit log
@@ -327,9 +513,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'INSERT INTO reservation_history (reservation_id, status, note, created_by) 
                  VALUES (:res_id, :status, :note, NULL)'
             );
-            $historyNote = $isAutoApproved 
-                ? 'Automatically approved by system - all conditions met'
-                : 'Pending manual review by staff';
+            $historyStatus = ($initialStatus === 'pending_payment' && !$historySupportsPendingPayment) ? 'pending' : $initialStatus;
+            if ($initialStatus === 'pending_payment') {
+                $historyNote = 'Auto-approved by rules. Awaiting payment confirmation.';
+            } elseif ($initialStatus === 'approved') {
+                $historyNote = 'Automatically approved by system - all conditions met.';
+            } else {
+                $historyNote = 'Pending manual review by staff.';
+            }
             
             // Add purpose analysis note if purpose is unclear
             if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
@@ -338,7 +529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $historyStmt->execute([
                 'res_id' => $newReservationId,
-                'status' => $initialStatus,
+                'status' => $historyStatus,
                 'note' => $historyNote
             ]);
             
@@ -349,133 +540,239 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             logAudit('Created reservation request', 'Reservations', $auditDetails);
             
-            // Create notifications
-            if ($isAutoApproved) {
-                // Auto-approved: notify user only
+            if ($initialStatus === 'pending_payment') {
                 createNotification(
-                    $userId, 
-                    'booking', 
-                    'Reservation Approved', 
-                    'Your reservation request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $timeSlot . ') has been automatically approved.', 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                    $userId,
+                    'booking',
+                    'Reservation Hold Created',
+                    'Your reservation for ' . $facilityName . ' is on hold. Complete payment to secure the slot.',
+                    base_path() . '/dashboard/pay-now?reservation_id=' . (int)$newReservationId
+                );
+                $success = 'Reservation approved. Please complete payment to finalize and secure your slot.';
+            } elseif ($initialStatus === 'approved') {
+                createNotification(
+                    $userId,
+                    'booking',
+                    'Reservation Approved',
+                    'Your reservation for ' . $facilityName . ' has been approved.',
+                    base_path() . '/dashboard/book-facility?module=mine'
                 );
                 $success = 'Reservation automatically approved! Your booking has been confirmed.';
             } else {
-                // Pending: notify admin/staff and user
-                $staffStmt = $pdo->query("SELECT id FROM users WHERE role IN ('Admin', 'Staff') AND status = 'active'");
-                $staffUsers = $staffStmt->fetchAll(PDO::FETCH_COLUMN);
-                
-                $notifTitle = 'New Reservation Request';
-                $notifMessage = 'A new reservation request has been submitted for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $timeSlot . ').';
-                $notifLink = base_path() . '/resources/views/pages/dashboard/reservations_manage.php';
-                
-                foreach ($staffUsers as $staffId) {
-                    createNotification($staffId, 'booking', $notifTitle, $notifMessage, $notifLink);
-                }
-                
                 createNotification(
-                    $userId, 
-                    'booking', 
-                    'Reservation Submitted', 
-                    'Your reservation request for ' . $facilityName . ' has been submitted and is pending review.', 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+                    $userId,
+                    'booking',
+                    'Reservation Submitted',
+                    'Your reservation request for ' . $facilityName . ' has been submitted and is pending review.',
+                    base_path() . '/dashboard/book-facility?module=mine'
                 );
-                
-                $success = 'Reservation submitted successfully. You will receive an update once it is reviewed.';
-                
-                // Include reason if provided
-                if (!empty($autoApprovalResult['reason']) && $autoApprovalResult['reason'] !== 'All conditions met for auto-approval') {
-                    $success .= ' (Note: ' . htmlspecialchars($autoApprovalResult['reason']) . ')';
-                }
-                
-                // Include purpose analysis warning if purpose is unclear
-                if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
-                    $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
-                }
+                $success = 'Reservation submitted successfully and is pending review.';
+            }
+            $userMobileStmt = $pdo->prepare('SELECT mobile FROM users WHERE id = :id LIMIT 1');
+            $userMobileStmt->execute(['id' => $userId]);
+            $bookingSmsPayload = [
+                'facility_name' => $facilityName,
+                'reservation_date' => $date,
+                'time_slot' => $timeSlot,
+                'requester_mobile' => $userMobileStmt->fetchColumn() ?: null,
+            ];
+            $smsStatusKey = $initialStatus === 'pending_payment' ? 'pending_payment' : ($initialStatus === 'approved' ? 'approved' : 'pending');
+            sendReservationStatusSms($bookingSmsPayload, $smsStatusKey);
+            if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
+                $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
             }
         } catch (Throwable $e) {
             $error = 'Unable to submit reservation. Please try again later.';
             error_log('Reservation submission error: ' . $e->getMessage());
         }
         }
+    } elseif (!$error && $isAdminUser) {
+        // Admin exemption: bypass booking policy constraints and proceed directly.
+        try {
+            // Evaluate auto-approval conditions
+            $autoApprovalResult = evaluateAutoApproval(
+                $facilityId,
+                $date,
+                $timeSlot,
+                $expectedAttendees,
+                $isCommercial,
+                $userId,
+                $BOOKING_ADVANCE_MAX_DAYS
+            );
+
+            $paymentsEnabled = false;
+            $requirePaymentForReservations = false;
+            $paymentsCfgPath = __DIR__ . '/../../../../config/payments.php';
+            if (file_exists($paymentsCfgPath)) {
+                $paymentsCfg = require $paymentsCfgPath;
+                $paymentsEnabled = !empty($paymentsCfg['enabled']);
+                $requirePaymentForReservations = !empty($paymentsCfg['require_payment_for_reservations']);
+            }
+
+            $autoApprovedByRules = !empty($autoApprovalResult['auto_approve']);
+            $hybridPaymentMode = $paymentsEnabled && $requirePaymentForReservations;
+
+            if ($hybridPaymentMode) {
+                $initialStatus = ($supportsPendingPayment && $autoApprovedByRules) ? 'pending_payment' : 'pending';
+                $isAutoApproved = false;
+            } else {
+                $initialStatus = $autoApprovedByRules ? 'approved' : 'pending';
+                $isAutoApproved = $autoApprovedByRules;
+            }
+
+            $paymentWindowMinutes = 30;
+            if (isset($paymentsCfg) && is_array($paymentsCfg)) {
+                $candidateWindow = (int)($paymentsCfg['payment_window_minutes'] ?? 30);
+                if ($candidateWindow > 0) {
+                    $paymentWindowMinutes = $candidateWindow;
+                }
+            }
+            $paymentDueAt = date('Y-m-d H:i:s', strtotime('+' . $paymentWindowMinutes . ' minutes'));
+            $expiresAt = $initialStatus === 'pending_payment'
+                ? $paymentDueAt
+                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+48 hours')) : null);
+
+            $insertColumns = [
+                'user_id',
+                'facility_id',
+                'reservation_date',
+                'time_slot',
+                'purpose',
+                'status',
+                'expected_attendees',
+                'is_commercial',
+                'auto_approved',
+            ];
+            $insertParams = [
+                'user' => $userId,
+                'facility' => $facilityId,
+                'date' => $date,
+                'slot' => $timeSlot,
+                'purpose' => $purpose,
+                'status' => $initialStatus,
+                'attendees' => $expectedAttendees,
+                'commercial' => $isCommercial ? 1 : 0,
+                'auto_approved' => $isAutoApproved ? 1 : 0,
+            ];
+
+            if ($hasPriorityLevelColumn) {
+                $insertColumns[] = 'priority_level';
+                $insertParams['priority'] = $priorityLevel;
+            }
+            if ($hasExpiresAtColumn) {
+                $insertColumns[] = 'expires_at';
+                $insertParams['expires'] = $expiresAt;
+            }
+            if ($hasPaymentDueAtColumn) {
+                $insertColumns[] = 'payment_due_at';
+                $insertParams['payment_due_at'] = $paymentDueAt;
+            }
+
+            $insertPlaceholders = [
+                ':user',
+                ':facility',
+                ':date',
+                ':slot',
+                ':purpose',
+                ':status',
+                ':attendees',
+                ':commercial',
+                ':auto_approved',
+            ];
+            if ($hasPriorityLevelColumn) {
+                $insertPlaceholders[] = ':priority';
+            }
+            if ($hasExpiresAtColumn) {
+                $insertPlaceholders[] = ':expires';
+            }
+            if ($hasPaymentDueAtColumn) {
+                $insertPlaceholders[] = ':payment_due_at';
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO reservations (' . implode(', ', $insertColumns) . ')
+                 VALUES (' . implode(', ', $insertPlaceholders) . ')'
+            );
+            $stmt->execute($insertParams);
+            $newReservationId = $pdo->lastInsertId();
+
+            $facilityStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = :id');
+            $facilityStmt->execute(['id' => $facilityId]);
+            $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
+            $facilityName = $facility ? $facility['name'] : 'Unknown Facility';
+
+            $historyStmt = $pdo->prepare(
+                'INSERT INTO reservation_history (reservation_id, status, note, created_by) 
+                 VALUES (:res_id, :status, :note, NULL)'
+            );
+            $historyStatus = ($initialStatus === 'pending_payment' && !$historySupportsPendingPayment) ? 'pending' : $initialStatus;
+            if ($initialStatus === 'pending_payment') {
+                $historyNote = 'Admin override: approved and awaiting payment confirmation.';
+            } elseif ($initialStatus === 'approved') {
+                $historyNote = 'Admin override: reservation approved.';
+            } else {
+                $historyNote = 'Admin override: submitted without resident booking limits.';
+            }
+
+            $historyStmt->execute([
+                'res_id' => $newReservationId,
+                'status' => $historyStatus,
+                'note' => $historyNote
+            ]);
+
+            logAudit('Created reservation request (admin exempt)', 'Reservations', 'RES-' . $newReservationId . ' – ' . $facilityName . ' (' . $date . ' ' . $timeSlot . ')');
+
+            if ($initialStatus === 'pending_payment') {
+                createNotification(
+                    $userId,
+                    'booking',
+                    'Reservation Hold Created',
+                    'Your reservation for ' . $facilityName . ' is on hold. Complete payment to secure the slot.',
+                    base_path() . '/dashboard/pay-now?reservation_id=' . (int)$newReservationId
+                );
+                $success = 'Admin booking submitted. Payment is required to finalize this reservation.';
+            } elseif ($initialStatus === 'approved') {
+                createNotification(
+                    $userId,
+                    'booking',
+                    'Reservation Approved',
+                    'Your reservation for ' . $facilityName . ' has been approved.',
+                    base_path() . '/dashboard/book-facility?module=mine'
+                );
+                $success = 'Admin booking approved successfully.';
+            } else {
+                createNotification(
+                    $userId,
+                    'booking',
+                    'Reservation Submitted',
+                    'Your reservation request for ' . $facilityName . ' has been submitted and is pending review.',
+                    base_path() . '/dashboard/book-facility?module=mine'
+                );
+                $success = 'Admin booking submitted successfully (rule exemptions applied).';
+            }
+            $userMobileStmt = $pdo->prepare('SELECT mobile FROM users WHERE id = :id LIMIT 1');
+            $userMobileStmt->execute(['id' => $userId]);
+            $bookingSmsPayload = [
+                'facility_name' => $facilityName,
+                'reservation_date' => $date,
+                'time_slot' => $timeSlot,
+                'requester_mobile' => $userMobileStmt->fetchColumn() ?: null,
+            ];
+            $smsStatusKey = $initialStatus === 'pending_payment' ? 'pending_payment' : ($initialStatus === 'approved' ? 'approved' : 'pending');
+            sendReservationStatusSms($bookingSmsPayload, $smsStatusKey);
+        } catch (Throwable $e) {
+            $error = 'Unable to submit reservation. Please try again later.';
+            error_log('Reservation submission error (admin exempt): ' . $e->getMessage());
+        }
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($error)) {
+    $bcfOpenBookingModal = true;
 }
 
 // Get facility recommendations - will be loaded via AJAX when user types in purpose field
 $recommendations = [];
-
-$myReservations = [];
-if (!empty($_SESSION['user_id'])) {
-    $myStmt = $pdo->prepare(
-        'SELECT r.reservation_date, r.time_slot, r.status, f.name AS facility
-         FROM reservations r
-         JOIN facilities f ON r.facility_id = f.id
-         WHERE r.user_id = :user_id
-         ORDER BY r.created_at DESC
-         LIMIT 5'
-    );
-    $myStmt->execute(['user_id' => $_SESSION['user_id']]);
-    $myReservations = $myStmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-// Get availability snapshot for next 14 days
-$today = date('Y-m-d');
-$endDate = date('Y-m-d', strtotime('+13 days'));
-
-$availabilityStmt = $pdo->prepare(
-    'SELECT r.reservation_date, r.status, COUNT(*) as reservation_count
-     FROM reservations r
-     WHERE r.reservation_date >= :start_date AND r.reservation_date <= :end_date
-     GROUP BY r.reservation_date, r.status'
-);
-$availabilityStmt->execute([
-    'start_date' => $today,
-    'end_date' => $endDate,
-]);
-$availabilityData = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Group by date
-$availabilityByDate = [];
-foreach ($availabilityData as $row) {
-    $date = $row['reservation_date'];
-    if (!isset($availabilityByDate[$date])) {
-        $availabilityByDate[$date] = ['approved' => 0, 'pending' => 0, 'blocked' => 0];
-    }
-    if ($row['status'] === 'approved') {
-        $availabilityByDate[$date]['approved'] = (int)$row['reservation_count'];
-    } elseif ($row['status'] === 'pending') {
-        $availabilityByDate[$date]['pending'] = (int)$row['reservation_count'];
-    }
-}
-
-$resDetailStmt = $pdo->prepare(
-    'SELECT r.reservation_date, r.time_slot, r.status, r.purpose, f.name AS facility_name, f.status AS facility_status, u.name AS requester
-     FROM reservations r
-     JOIN facilities f ON r.facility_id = f.id
-     JOIN users u ON r.user_id = u.id
-     WHERE r.reservation_date >= :start_date AND r.reservation_date <= :end_date
-       AND r.status IN ("pending","approved","denied","cancelled")
-     ORDER BY r.reservation_date, r.time_slot'
-);
-$resDetailStmt->execute([
-    'start_date' => $today,
-    'end_date' => $endDate,
-]);
-$resDetailByDate = [];
-foreach ($resDetailStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $resDetailByDate[$row['reservation_date']][] = $row;
-}
-
-// Build maintenance status per date (check if any reservation on that date involves a facility in maintenance)
-$maintenanceByDate = [];
-foreach ($resDetailByDate as $date => $reservations) {
-    foreach ($reservations as $reservation) {
-        if ($reservation['facility_status'] === 'maintenance' || $reservation['facility_status'] === 'offline') {
-            $maintenanceByDate[$date] = true;
-            break;
-        }
-    }
-}
 
 $yearNow = (int)date('Y');
 $years = [$yearNow, $yearNow + 1];
@@ -507,16 +804,504 @@ for ($i = 0; $i < 30; $i++) {
     }
 }
 
+require_once __DIR__ . '/../../../../config/booking_calendar_status.php';
+
+// Booking calendar shares year/month GET params with the My Reservations tab; supports legacy cal_month / cal_fac.
+$bookCalYear = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+$bookCalMonth = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
+$legacyCalMonthStr = $_GET['cal_month'] ?? '';
+if (is_string($legacyCalMonthStr) && preg_match('/^(\d{4})-(\d{2})$/', $legacyCalMonthStr, $cm)) {
+    $bookCalYear = (int)$cm[1];
+    $bookCalMonth = (int)$cm[2];
+}
+if ($bookCalMonth < 1 || $bookCalMonth > 12) {
+    $bookCalMonth = (int)date('n');
+}
+if ($bookCalYear < 2000 || $bookCalYear > 2100) {
+    $bookCalYear = (int)date('Y');
+}
+$bookFacilityPick = (int)($_GET['book_fac'] ?? $_GET['cal_fac'] ?? ($prefillFacilityId ?? 0));
+
+$calendarToneMatrix = [];
+if ($bookFacilityPick > 0) {
+    $calendarToneMatrix = frs_facility_calendar_matrix($pdo, $bookFacilityPick, $bookCalYear, $bookCalMonth);
+}
+$bookCalFirstDay = sprintf('%04d-%02d-01', $bookCalYear, $bookCalMonth);
+$bookCalAnchor = new DateTimeImmutable($bookCalFirstDay);
+$bookCalNavPrev = $bookCalAnchor->modify('-1 month');
+$bookCalNavNext = $bookCalAnchor->modify('+1 month');
+$bookCalMonthLabel = $bookCalAnchor->format('F Y');
+$bookCalMonthTs = mktime(0, 0, 0, $bookCalMonth, 1, $bookCalYear);
+$bookFirstWeekday = (int)date('w', $bookCalMonthTs);
+$bookDaysInMonth = (int)date('t', $bookCalMonthTs);
+$todayISO = date('Y-m-d');
+$bcfNowDt = new DateTime('now', frs_app_timezone());
+
+$bookPaneQuery = ['year' => $bookCalYear, 'month' => $bookCalMonth];
+if ($bookFacilityPick > 0) {
+    $bookPaneQuery['book_fac'] = $bookFacilityPick;
+}
+$minePaneQuery = array_merge(['module' => 'mine'], $bookPaneQuery);
+if (isset($_GET['scope']) && $_GET['scope'] === 'all') {
+    $minePaneQuery['scope'] = 'all';
+}
+
+$GLOBALS['frsMineCalOnHubBookFacility'] = strpos($_SERVER['REQUEST_URI'] ?? '', '/book-facility') !== false;
+
+$frsScriptJsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+    $frsScriptJsonFlags |= JSON_INVALID_UTF8_SUBSTITUTE;
+}
+$frsJsonForInlineScript = static function ($data) use ($frsScriptJsonFlags): string {
+    $j = json_encode($data, $frsScriptJsonFlags);
+    return ($j !== false) ? $j : '{}';
+};
+
 ob_start();
+
+$bookCalQuery = static function (array $extra): string {
+    return '?' . http_build_query($extra);
+};
 ?>
+<style>
+.book-facility-compact .booking-card { padding: 0.95rem; }
+.book-facility-compact .booking-form { display: grid; gap: 0.75rem; }
+.book-facility-compact .booking-form label { margin-bottom: 0; }
+.book-facility-compact .booking-form textarea { min-height: 74px; }
+.book-facility-compact .booking-form small { margin-top: 0.15rem !important; }
+.book-facility-compact #conflict-warning { margin-top: 0.45rem !important; }
+/* Full-width rows: global .booking-wrapper uses 2 columns on desktop — these must span or we get an empty column */
+.book-facility-compact.booking-wrapper {
+    grid-template-columns: 1fr !important;
+}
+.book-facility-compact .booking-hub-tabs,
+.book-facility-compact #booking-pane-reservations,
+.book-facility-compact #booking-pane-book {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 100%;
+}
+@media (min-width: 980px) {
+    .book-facility-compact .booking-form { grid-template-columns: 1fr 1fr; column-gap: 0.85rem; }
+    .book-facility-compact .booking-form > label,
+    .book-facility-compact .booking-form > div,
+    .book-facility-compact .booking-form > section { grid-column: 1 / -1; }
+    .book-facility-compact .booking-form > label:nth-of-type(1),
+    .book-facility-compact .booking-form > label:nth-of-type(2),
+    .book-facility-compact .booking-form > label:nth-of-type(3),
+    .book-facility-compact .booking-form > label:nth-of-type(4),
+    .book-facility-compact .booking-form > label:nth-of-type(8),
+    .book-facility-compact .booking-form > label:nth-of-type(9) { grid-column: span 1; }
+}
+.booking-hub-tabs { border-bottom: 2px solid #e8ecf4; margin-bottom: 1.25rem; }
+.booking-hub-tab {
+    display: inline-block;
+    padding: 0.55rem 1rem;
+    border-radius: 8px 8px 0 0;
+    text-decoration: none;
+    color: #4c5b7c;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+.booking-hub-tab.is-active {
+    background: #fff;
+    border-color: #e8ecf4;
+    border-bottom-color: #fff;
+    color: #1e3a5f;
+    margin-bottom: -2px;
+}
+.booking-hub-grid {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: start;
+}
+@media (min-width: 1024px) {
+    .booking-hub-grid { grid-template-columns: minmax(280px, 1fr) minmax(300px, 380px); }
+}
+.bcf-cal-panel .bcf-cal-grid-head {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+    text-align: center;
+    margin: 0.75rem 0 0.25rem;
+}
+.bcf-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.35rem;
+}
+.bcf-cal-filler { min-height: 2.5rem; }
+.bcf-cal-day {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    min-height: 2.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.bcf-cal-day:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
+.bcf-cal-day:disabled { cursor: not-allowed; opacity: 0.45; }
+.bcf-cal-past { opacity: 0.45; cursor: default; }
+.bcf-tone-green { background: #dcfce7; border-color: #86efac; color: #14532d; }
+.bcf-tone-yellow { background: #fef9c3; border-color: #fde047; color: #713f12; }
+.bcf-tone-red { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+.bcf-tone-blackout { background: #e2e8f0; border-color: #94a3b8; color: #1e293b; }
+.bcf-tone-maintenance, .bcf-tone-offline { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.bcf-tone-muted { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; cursor: default; }
+.bcf-sq { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 3px; margin-right: 0.25rem; vertical-align: middle; }
+/* Viewport-fixed overlay — must stay under document.body because .dashboard-content uses transform animations,
+   which would otherwise make fixed positioning relative to the whole tall content area */
+.bcf-modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+    background: rgba(10, 24, 55, 0.55);
+    backdrop-filter: blur(6px);
+    z-index: 12060;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: bcfFade 0.2s ease;
+    overscroll-behavior: contain;
+}
+.bcf-modal-overlay.is-open { display: flex !important; }
+@keyframes bcfFade { from { opacity: 0; } to { opacity: 1; } }
+.bcf-modal-dialog {
+    background: #fff;
+    border-radius: 16px;
+    width: min(720px, 100%);
+    max-height: min(88vh, 900px);
+    max-height: min(88dvh, 900px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+    transform: scale(0.98);
+    animation: bcfPop 0.22s ease forwards;
+    margin: auto;
+    flex-shrink: 1;
+}
+@keyframes bcfPop { to { transform: scale(1); } }
+.bcf-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid #e8ecf4;
+    flex-shrink: 0;
+}
+.bcf-modal-body {
+    padding: 1rem 1.1rem 1.25rem;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 719px) {
+    .bcf-modal-overlay { align-items: flex-end; padding: 0; justify-content: center; }
+    .bcf-modal-dialog {
+        width: 100%;
+        max-height: 90vh;
+        max-height: 90dvh;
+        border-radius: 16px 16px 0 0;
+    }
+}
+.bcf-res-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.65rem; }
+.bcf-res-li {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem 0.75rem;
+    align-items: start;
+    padding: 0.75rem;
+    border: 1px solid #e8ecf4;
+    border-radius: 10px;
+    background: #f8fbff;
+}
+@media (max-width: 600px) {
+    .bcf-res-li { grid-template-columns: 1fr; }
+}
+.hub-raw-status { text-transform: none; font-weight: 600; }
+.bcf-cal-toolbar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+.bcf-cal-toolbar-form { width: 100%; margin: 0; }
+.bcf-cal-month-heading {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gov-blue-dark, #1e3a5f);
+    letter-spacing: 0.02em;
+}
+.bcf-cal-toolbar-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 0.65rem 0.85rem;
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+}
+.bcf-cal-fac-field { flex: 1 1 220px; min-width: min(280px, 100%); max-width: 340px; }
+.bcf-cal-fac-field-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gov-blue-dark, #1e3a5f);
+    margin-bottom: 0.3rem;
+    display: block;
+}
+.bcf-cal-fac-field .bcf-cal-shell {
+    position: relative;
+}
+.bcf-cal-fac-field .bcf-cal-shell .bi {
+    position: absolute;
+    left: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b95b5;
+    pointer-events: none;
+    font-size: 1rem;
+    z-index: 1;
+}
+.bcf-cal-fac-select {
+    width: 100%;
+    padding: 0.72rem 0.95rem 0.72rem 2.75rem;
+    border: 2px solid #e1e6f3;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--gov-blue-dark, #1e3a5f);
+    background: #fafbfd;
+    min-height: 46px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    appearance: auto;
+}
+.bcf-cal-fac-select:hover { background: #fff; border-color: #cdd6ea; }
+.bcf-cal-fac-select:focus {
+    outline: none;
+    border-color: var(--gov-blue, #0047ab);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
+}
+.bcf-cal-nav-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+.bcf-cal-nav-cluster .bcf-cal-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    min-width: 5.65rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-align: center;
+    white-space: nowrap;
+    border-radius: 10px;
+    border: 2px solid #dfe5f3;
+    box-sizing: border-box;
+    line-height: 1.25;
+}
+.bcf-cal-nav-cluster .bcf-cal-nav-btn:hover {
+    border-color: var(--gov-blue, #0047ab);
+    color: var(--gov-blue, #0047ab);
+    background: #f8faff;
+}
+.input-wrapper.bcf-scroll-select-slot { position: relative; z-index: 0; }
+.bcf-scroll-select-slot .bcf-time-select-native {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.bcf-scroll-select-trigger {
+    width: 100%;
+    padding: 0.9rem 2.75rem;
+    padding-right: 2.25rem;
+    border: 2px solid #e1e6f3;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--gov-blue-dark, #1e3a5f);
+    background: #fafbfd;
+    text-align: left;
+    cursor: pointer;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-sizing: border-box;
+}
+.bcf-scroll-select-trigger:hover {
+    background: var(--gov-white, #fff);
+}
+.bcf-scroll-select-trigger:focus {
+    outline: none;
+    border-color: var(--gov-blue, #0047ab);
+    box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
+    background: var(--gov-white, #fff);
+}
+.bcf-scroll-select-trigger[disabled] {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+.bcf-scroll-select-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bcf-scroll-select-chevron {
+    flex-shrink: 0;
+    color: #64748b;
+    font-size: 0.7rem;
+    line-height: 1;
+}
+ul.bcf-scroll-select-menu {
+    list-style: none;
+    margin: 0;
+    padding: 0.35rem;
+    border-radius: 10px;
+    border: 2px solid #e1e6f3;
+    background: #fff;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+    max-height: min(42vh, 260px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 13070;
+}
+.bcf-scroll-select-option {
+    padding: 0.52rem 0.72rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+.bcf-scroll-select-option:hover,
+.bcf-scroll-select-option[data-active="1"] {
+    background: #eef4ff;
+    color: var(--gov-blue-dark, #1e3a5f);
+}
+.bcf-scroll-select-option.bcf-opt-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.booking-form .input-wrapper.bcf-res-date-wrapper .bcf-res-date-readonly {
+    padding-left: 2.75rem;
+    width: 100%;
+}
+.bcf-res-date-readonly {
+    padding: 0.72rem 0.95rem;
+    border: 2px dashed #cdd6ea;
+    border-radius: 8px;
+    background: #f4f7fc;
+    font-weight: 600;
+    color: var(--gov-blue-dark, #1e3a5f);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    box-sizing: border-box;
+}
+.bcf-res-date-readonly-empty {
+    color: #94a3b8;
+    font-weight: 500;
+    font-style: italic;
+}
+.bcf-purpose-first-card {
+    border: 1px solid #e1e6f3;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+    background: #fafbff;
+}
+.bcf-purpose-first-card textarea {
+    width: 100%;
+    min-height: 72px;
+    margin-top: 0.35rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 8px;
+    border: 2px solid #dbe3f5;
+    font-size: 0.92rem;
+    box-sizing: border-box;
+}
+.bcf-purpose-first-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-top: 0.5rem;
+}
+.bcf-purpose-first-row label {
+    font-size: 0.82rem;
+    color: #475569;
+}
+.bcf-smart-hints-bar {
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    font-size: 0.84rem;
+    color: #4c1d95;
+    line-height: 1.45;
+    display: none;
+}
+.bcf-smart-hints-bar.is-visible { display: block; }
+.my-reservations-calendar-cell.bcf-ai-suggest-date:not(.empty) {
+    box-shadow: inset 0 0 0 2px #7c3aed;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.07), rgba(255, 255, 255, 0));
+}
+.my-reservations-calendar-cell.bcf-ai-suggest-date:not(.empty) .date-label {
+    font-weight: 800;
+    color: #5b21b6;
+}
+</style>
 <div class="page-header">
     <div class="breadcrumb">
-        <span>Reservations</span><span class="sep">/</span><span>Book a Facility</span>
+        <span>Reservations</span><span class="sep">/</span><span><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></span>
     </div>
-    <h1>Book a Facility</h1>
-    <small>Submit a reservation request for LGU-managed venues.</small>
+    <h1><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></h1>
+    <small><?= $reservationsHubMine ? 'View and manage your bookings on the calendar below.' : 'Submit a reservation request for LGU-managed venues.'; ?></small>
 </div>
 
+<?php if (!empty($message)): ?>
+    <div class="message <?= $messageType === 'error' ? 'error' : 'success'; ?>" style="background:<?= $messageType === 'error' ? '#fdecee;color:#b23030' : '#e8f5e9;color:#2e7d32'; ?>;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
+        <?= htmlspecialchars($message); ?>
+    </div>
+<?php endif; ?>
 <?php if ($success): ?>
     <div class="message success" style="background:#e3f8ef;color:#0d7a43;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($success); ?>
@@ -527,9 +1312,173 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
-    <section class="booking-card">
-        <h2>Reservation Details</h2>
+<div class="booking-wrapper book-facility-compact">
+    <nav class="booking-hub-tabs" aria-label="Booking sections">
+        <a class="booking-hub-tab <?= !$reservationsHubMine ? 'is-active' : ''; ?>" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($bookPaneQuery)); ?>">Book a Facility</a>
+        <a class="booking-hub-tab <?= $reservationsHubMine ? 'is-active' : ''; ?>" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($minePaneQuery)); ?>">My Reservations</a>
+    </nav>
+
+    <div id="booking-pane-reservations" style="display: <?= $reservationsHubMine ? 'block' : 'none'; ?>;">
+        <?php require __DIR__ . '/includes/reservations_hub_mine_tab.php'; ?>
+    </div>
+
+    <div id="booking-pane-book" style="display: <?= !$reservationsHubMine ? 'block' : 'none'; ?>;">
+        <div class="booking-hub-grid">
+            <div class="booking-card booking-calendar-myres-panel">
+                <h2 style="margin-top:0;">Book a facility</h2>
+                <p style="color:#6c757d; font-size:0.88rem;">Describe your event first to see AI-assisted picks: suggested venues (by distance and fit) and calendar days with availability for the top match. Then choose a facility and date as usual.</p>
+                <div class="bcf-purpose-first-card" id="bcf-purpose-first-card">
+                    <label for="bcf-purpose-preview" style="font-weight:600; font-size:0.9rem; color:#1e293b;">Purpose of reservation</label>
+                    <textarea id="bcf-purpose-preview" name="bcf_purpose_preview" maxlength="2000" placeholder="e.g., Youth basketball practice, barangay assembly, zumba class…"></textarea>
+                    <div class="bcf-purpose-first-row">
+                        <label>Expected attendees (optional for hints)
+                            <input type="number" id="bcf-purpose-attendees-preview" min="1" max="50000" placeholder="50" style="display:block; width:7rem; margin-top:0.25rem; padding:0.45rem 0.5rem; border-radius:8px; border:2px solid #dbe3f5;">
+                        </label>
+                    </div>
+                    <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#64748b;">This stays in sync with the booking form. Purple-ring days = open or partially booked days for the best-matching facility this month.</p>
+                    <div id="bcf-smart-hints-bar" class="bcf-smart-hints-bar" role="status" aria-live="polite"></div>
+                </div>
+                <?php
+                    $bookCalNavPrevParams = array_merge($bookPaneQuery, [
+                        'year' => (int)$bookCalNavPrev->format('Y'),
+                        'month' => (int)$bookCalNavPrev->format('n'),
+                    ]);
+                    $bookCalNavNextParams = array_merge($bookPaneQuery, [
+                        'year' => (int)$bookCalNavNext->format('Y'),
+                        'month' => (int)$bookCalNavNext->format('n'),
+                    ]);
+                    ?>
+                <div class="bcf-cal-toolbar-wrap">
+                    <div class="bcf-cal-month-heading"><?= htmlspecialchars($bookCalMonthLabel); ?></div>
+                    <form method="get" action="<?= htmlspecialchars(base_path() . '/dashboard/book-facility'); ?>" class="bcf-cal-toolbar-form booking-cal-toolbar">
+                        <input type="hidden" name="year" value="<?= (int)$bookCalYear; ?>">
+                        <input type="hidden" name="month" value="<?= (int)$bookCalMonth; ?>">
+                        <div class="bcf-cal-toolbar-grid">
+                            <div class="bcf-cal-fac-field">
+                                <label class="bcf-cal-fac-field-label" for="book-fac-cal-select">Facility</label>
+                                <div class="bcf-cal-shell">
+                                    <i class="bi bi-building" aria-hidden="true"></i>
+                                    <select id="book-fac-cal-select" name="book_fac" class="bcf-cal-fac-select" onchange="this.form.submit()" aria-label="Choose facility for calendar">
+                                        <option value="0">Choose a facility…</option>
+                                        <?php foreach ($facilities as $f): ?>
+                                            <option value="<?= (int)$f['id']; ?>" <?= $bookFacilityPick === (int)$f['id'] ? 'selected' : ''; ?>>
+                                                <?= htmlspecialchars((string)$f['name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="bcf-cal-nav-cluster">
+                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($bookCalNavPrevParams)); ?>">← Prev</a>
+                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($bookCalNavNextParams)); ?>">Next →</a>
+                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery(array_merge($bookPaneQuery, ['year' => (int)date('Y'), 'month' => (int)date('n')]))); ?>">Today</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="my-reservations-calendar" style="min-height:auto;">
+                    <div class="my-reservations-calendar-header" style="margin-bottom:0.65rem;">
+                        <div class="my-reservations-legend">
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#22c55e;"></span> Open</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#eab308;"></span> Partial bookings</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Fully booked</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Blocked</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="border:2px solid #7c3aed; background:transparent;"></span> AI-suggested day</div>
+                        </div>
+                    </div>
+                    <div class="my-reservations-calendar-grid">
+                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $w): ?>
+                            <div class="my-reservations-calendar-dayname"><?= $w; ?></div>
+                        <?php endforeach; ?>
+                        <?php for ($jx = 0; $jx < $bookFirstWeekday; $jx++): ?>
+                            <div class="my-reservations-calendar-cell empty"></div>
+                        <?php endfor; ?>
+                        <?php for ($bd = 1; $bd <= $bookDaysInMonth; $bd++):
+                            $iso = sprintf('%04d-%02d-%02d', $bookCalYear, $bookCalMonth, $bd);
+                            if (!$bookFacilityPick) {
+                                $tone = ($iso < $todayISO) ? 'past' : 'muted';
+                            } else {
+                                $tone = $calendarToneMatrix[$iso] ?? 'green';
+                            }
+                            $dayStatusClass = '';
+                            $chipLabel = '';
+                            if ($iso < $todayISO) {
+                                $chipLabel = '';
+                            } elseif (!$bookFacilityPick) {
+                                $chipLabel = '—';
+                            } else {
+                                if ($tone === 'green') {
+                                    $dayStatusClass = ' status-approved';
+                                    $chipLabel = 'Open';
+                                } elseif ($tone === 'yellow') {
+                                    $dayStatusClass = ' status-pending';
+                                    $chipLabel = 'Busy';
+                                } elseif ($tone === 'red') {
+                                    $dayStatusClass = ' status-denied';
+                                    $chipLabel = 'Full';
+                                } elseif ($tone === 'blackout' || $tone === 'maintenance' || $tone === 'offline') {
+                                    $dayStatusClass = ' status-denied';
+                                    $chipLabel = ($tone === 'blackout') ? 'Blackout' : 'N/A';
+                                } elseif ($tone === 'muted') {
+                                    $chipLabel = '—';
+                                } elseif ($tone === 'past') {
+                                    $chipLabel = '';
+                                } else {
+                                    $chipLabel = '';
+                                }
+                            }
+                            $bookPickable = ($iso >= $todayISO) && $bookFacilityPick > 0 && in_array($tone, ['green', 'yellow', 'red'], true);
+                            $cellCls = 'my-reservations-calendar-cell';
+                            if ($iso === $todayISO) {
+                                $cellCls .= ' today';
+                            }
+                            if (!$bookPickable) {
+                                $cellCls .= ' empty';
+                            }
+                            $cellCls .= $dayStatusClass;
+                            if ($bookPickable) {
+                                $cellCls .= ' bcf-book-cal-cell';
+                            }
+                            ?>
+                            <div class="<?= htmlspecialchars($cellCls, ENT_QUOTES, 'UTF-8'); ?>" data-cal-date="<?= htmlspecialchars($iso, ENT_QUOTES, 'UTF-8'); ?>"<?= $bookPickable ? ' role="button" tabindex="0" data-bcf-date="' . htmlspecialchars($iso, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
+                                <div class="date-label"><?= (int)$bd; ?></div>
+                                <?php if ($chipLabel !== ''): ?>
+                                    <div class="status-chip"><?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+                <button type="button" class="btn-primary" id="bcf-open-booking-explicit" style="margin-top:1rem;">Open booking form</button>
+                <small style="display:block;margin-top:0.5rem;color:#8b95b5;">Tap a coloured future day above, or use this button if you already know your date.</small>
+            </div>
+
+            <aside class="booking-card bcf-aside-col">
+                <div id="facility-details-container" style="display: none;">
+                    <h2 id="facility-details-title">Facility Details</h2>
+                    <div id="facility-details-content">
+                        <div style="text-align: center; padding: 2rem; color: #8b95b5;">
+                            <p>Select a facility from the calendar dropdown to view details.</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="facility-placeholder" style="display: block;">
+                    <h2>Facility Details</h2>
+                    <div style="text-align: center; padding: 2rem; color: #8b95b5;">
+                        <p>Select a facility from the calendar dropdown to view details.</p>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <div id="booking-flow-modal" class="bcf-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="bcf-modal-title" aria-hidden="true">
+            <div class="bcf-modal-dialog" role="document">
+                <div class="bcf-modal-head">
+                    <h2 id="bcf-modal-title" style="margin:0; font-size:1.05rem;">New reservation</h2>
+                    <button type="button" class="btn-outline" id="bcf-close-booking-modal" aria-label="Close">&times;</button>
+                </div>
+                <div class="bcf-modal-body">
+                    <section class="booking-card" style="box-shadow:none;border:none;padding:0;background:transparent;margin:0;">
         <?php if ($prefillFacilityId && $prefillTimeSlot): ?>
             <div style="background:#e3f8ef; border:2px solid #0d7a43; border-radius:8px; padding:1rem; margin-bottom:1rem;">
                 <div style="display:flex; align-items:center; gap:0.75rem;">
@@ -544,7 +1493,8 @@ ob_start();
                 </div>
             </div>
         <?php endif; ?>
-        <form class="booking-form" method="POST" enctype="multipart/form-data">
+        <form id="main-booking-form" class="booking-form" method="POST" enctype="multipart/form-data">
+            <?= csrf_field(); ?>
             <label>
                 Facility
                 <div class="input-wrapper">
@@ -566,18 +1516,23 @@ ob_start();
 
             <label>
                 Reservation Date
-                <div class="input-wrapper">
+                <input type="hidden" name="reservation_date" id="reservation-date" value="">
+                <div class="input-wrapper bcf-res-date-wrapper">
                     <i class="bi bi-calendar input-icon"></i>
-                    <input type="date" name="reservation_date" id="reservation-date" min="<?= date('Y-m-d'); ?>" required>
+                    <div id="bcf-reservation-date-display" class="bcf-res-date-readonly bcf-res-date-readonly-empty" role="status" aria-live="polite">Select a date on the calendar.</div>
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Only future dates are allowed.</small>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Chosen from the month grid on the booking page (not editable here).</small>
             </label>
 
             <label>
                 Start Time
-                <div class="input-wrapper">
+                <div class="input-wrapper bcf-scroll-select-slot">
                     <i class="bi bi-clock input-icon"></i>
-                    <select name="start_time" id="start-time" required>
+                    <button type="button" id="bcf-start-time-trigger" class="bcf-scroll-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="bcf-start-time-menu">
+                        <span class="bcf-scroll-select-text">Select start time…</span>
+                        <span class="bcf-scroll-select-chevron">▾</span>
+                    </button>
+                    <select name="start_time" id="start-time" class="bcf-time-select-native" required tabindex="-1" aria-hidden="true">
                         <option value="">Select start time...</option>
                         <?php
                         // Generate 30-minute increments from 8:00 AM to 9:00 PM
@@ -597,9 +1552,13 @@ ob_start();
 
             <label>
                 End Time
-                <div class="input-wrapper">
+                <div class="input-wrapper bcf-scroll-select-slot">
                     <i class="bi bi-clock input-icon"></i>
-                    <select name="end_time" id="end-time" required>
+                    <button type="button" id="bcf-end-time-trigger" class="bcf-scroll-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="bcf-end-time-menu">
+                        <span class="bcf-scroll-select-text">Select end time…</span>
+                        <span class="bcf-scroll-select-chevron">▾</span>
+                    </button>
+                    <select name="end_time" id="end-time" class="bcf-time-select-native" required tabindex="-1" aria-hidden="true">
                         <option value="">Select end time...</option>
                         <?php
                         // Generate 30-minute increments from 8:00 AM to 9:00 PM
@@ -617,6 +1576,17 @@ ob_start();
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
                     Must be after start time. Maximum duration: 4 hours (if facility has auto-approval enabled).
                 </small>
+            </label>
+
+            <label>
+                Quick slot (from gaps on this day)
+                <div class="input-wrapper">
+                    <i class="bi bi-clock input-icon"></i>
+                    <select id="bcf-slot-from-availability">
+                        <option value="">Load by choosing facility + date…</option>
+                    </select>
+                </div>
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Populated from the existing public availability response for the chosen date; pick a range, then fine-tune below if needed.</small>
             </label>
 
             <div id="conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
@@ -639,60 +1609,31 @@ ob_start();
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Describe your event - AI will suggest the best facilities for you.</small>
             </label>
 
-            <div style="margin: 1.5rem 0; padding: 1rem; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
-                <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
-                    <input type="checkbox" name="is_commercial" value="1" id="is-commercial" style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
-                    <span style="flex: 1; line-height: 1.6; margin-top: 0;">
-                        <span style="color: #1b1b1f; font-size: 0.9rem;">This reservation is for commercial purposes (e.g., business events, paid workshops, sales activities)</span>
-                        <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.5rem; line-height: 1.5;">
-                            Commercial reservations require manual approval by LGU staff.
-                        </small>
-                    </span>
-                </label>
-            </div>
-
             <label>
-                Expected Number of Attendees (Optional)
+                Expected Number of Attendees <span style="color:#dc3545;">*</span>
                 <div class="input-wrapper">
                     <i class="bi bi-people input-icon"></i>
-                    <input type="number" name="expected_attendees" id="expected-attendees" min="1" placeholder="e.g., 50">
+                    <input type="number" name="expected_attendees" id="expected-attendees" min="1" required inputmode="numeric" placeholder="e.g., 50">
                 </div>
                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                    Helps ensure facility capacity is appropriate. Some facilities have capacity limits for auto-approval.
+                    Required. Cannot exceed this facility&apos;s listed maximum occupancy when capacity is configured.
                 </small>
-            </label>
-
-            <label>
-                Event Priority Level
-                <div class="input-wrapper">
-                    <i class="bi bi-star input-icon"></i>
-                    <select name="priority_level" id="priority-level" required>
-                        <option value="3" selected>Private Individual Event</option>
-                        <option value="2">Community/Organization Event</option>
-                        <option value="1">LGU/Barangay Official Event</option>
-                    </select>
-                </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                    Priority helps admins make fair decisions when multiple requests compete for the same slot. LGU/Barangay events have highest priority.
-                </small>
+                <p id="bcf-capacity-msg" style="display:none; color:#b23030; margin:0.35rem 0 0; font-size:0.85rem;"></p>
             </label>
 
             <div id="ai-recommendations" style="display:none; background:#e3f8ef; border:1px solid #0d7a43; border-radius:8px; padding:1rem; margin-top:1rem;">
                 <h4 style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
                     <span>🤖</span> AI Recommendations
                 </h4>
-                <p id="recommendations-intro" style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.85rem;">Based on your purpose, here are recommended facilities:</p>
+                <p id="recommendations-intro" style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.85rem;">Enter your purpose, choose a date on the calendar, and start/end times. Suggestions use 50 attendees until you enter a number.</p>
                 <p id="recommendations-best-times" style="margin:0 0 0.75rem; color:#0d7a43; font-size:0.82rem; font-weight:600; display:none;"></p>
                 <div id="recommendations-loading" style="display:none; color:#0d7a43; font-size:0.85rem; font-style:italic;">Loading recommendations...</div>
                 <div id="recommendations-list" style="color:#0d7a43; font-size:0.85rem;"></div>
             </div>
 
             <label>
-                Supporting Document Reference
-                <div class="input-wrapper">
-                    <i class="bi bi-file-text input-icon"></i>
-                    <input type="text" name="doc_ref" placeholder="Document No. / Request Letter Ref.">
-                </div>
+                Notes for staff (optional, appended to purpose on save)
+                <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="1200" placeholder="Parking, setup time, accessibility, etc."></textarea>
             </label>
 
             <?php if (!$isVerified && !$hasValidIdDocument): ?>
@@ -718,7 +1659,7 @@ ob_start();
             </div>
             <?php endif; ?>
 
-            <button class="btn-primary" type="submit">Submit Booking Request</button>
+            <button class="btn-primary" type="submit" id="bcf-submit-booking">Submit Booking Request</button>
         </form>
 
         <?php if ($conflictWarning && $conflictWarning['has_conflict']): ?>
@@ -776,367 +1717,13 @@ ob_start();
                 All facilities are provided free of charge for public use.
             </p>
         </div>
-
-        <div class="schedule-board" style="display:none;" id="availabilitySnapshotContainer">
-            <header>
-                <h3>Availability Snapshot</h3>
-                <a class="btn-outline" href="<?= base_path(); ?>/resources/views/pages/dashboard/calendar.php">View Full Calendar</a>
-            </header>
-            <div class="schedule-grid" id="availabilitySnapshot" title="Click on dates for details">
-                <?php for ($i = 0; $i < 14; $i++): ?>
-                    <?php
-                    $currentDate = date('Y-m-d', strtotime("+$i days"));
-                    $dayNumber = date('d', strtotime($currentDate));
-                    $dayName = date('D', strtotime($currentDate));
-                    $dateData = $availabilityByDate[$currentDate] ?? ['approved' => 0, 'pending' => 0, 'blocked' => 0];
-                    $eventLabel = $eventMap[$currentDate] ?? null;
-                    
-                    // Determine status
-                    $status = 'available';
-                    $title = 'Available';
-                    $hasMaintenanceOnDate = isset($maintenanceByDate[$currentDate]) && $maintenanceByDate[$currentDate];
-                    
-                    if ($hasMaintenanceOnDate && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
-                        $status = 'unavailable';
-                        $title = 'Maintenance + ' . ($dateData['approved'] + $dateData['pending']) . ' booking(s)';
-                    } elseif ($hasMaintenanceOnDate) {
-                        $status = 'unavailable';
-                        $title = 'Maintenance';
-                    } elseif ($dateData['approved'] > 0 && $dateData['pending'] > 0) {
-                        $status = 'requested';
-                        $title = $dateData['approved'] . ' approved, ' . $dateData['pending'] . ' pending';
-                    } elseif ($dateData['approved'] > 0) {
-                        $status = 'requested';
-                        $title = $dateData['approved'] . ' booking(s)';
-                    } elseif ($dateData['pending'] > 0) {
-                        $status = 'requested';
-                        $title = $dateData['pending'] . ' pending request(s)';
-                    }
-                    
-                    // Highlight today
-                    $isToday = $currentDate === date('Y-m-d');
-                    ?>
-                    <div class="schedule-cell <?= $status; ?><?= $isToday ? ' today' : ''; ?>" 
-                         data-date="<?= $currentDate; ?>"
-                         data-event="<?= htmlspecialchars($eventLabel ?? '', ENT_QUOTES); ?>"
-                         title="<?= htmlspecialchars($title . ' - ' . date('M d, Y', strtotime($currentDate))); ?>">
-                        <span class="cell-dow"><?= $dayName; ?></span>
-                        <span class="cell-month"><?= date('M', strtotime($currentDate)); ?></span>
-                        <span class="cell-day"><?= $dayNumber; ?></span>
-                        <?php if ($dateData['approved'] > 0 || $dateData['pending'] > 0): ?>
-                            <span class="cell-count">
-                                <?= $dateData['approved'] + $dateData['pending']; ?>
-                            </span>
-                        <?php endif; ?>
-                        <?php if ($eventLabel): ?>
-                                    <?php
-                                        $e = strtolower($eventLabel);
-                                        $color = '#16a34a';
-                                        if (strpos($e, 'christmas') !== false) $color = '#b91c1c';
-                                        elseif (strpos($e, 'new year') !== false) $color = '#9333ea';
-                                        elseif (strpos($e, 'fiesta') !== false) $color = '#2563eb';
-                                        elseif (strpos($e, 'independence') !== false) $color = '#0f766e';
-                                        elseif (strpos($e, 'heroes') !== false) $color = '#2563eb';
-                                        elseif (strpos($e, 'bonifacio') !== false) $color = '#334155';
-                                        elseif (strpos($e, 'all saints') !== false || strpos($e, 'all souls') !== false) $color = '#92400e';
-                                    ?>
-                                    <span class="event-pill" data-color="<?= $color; ?>">
-                                <?= htmlspecialchars($eventLabel); ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                <?php endfor; ?>
-            </div>
-            <div class="legend">
-                <span><span class="dot" style="background:#f6f8fc"></span> Available</span>
-                <span><span class="dot" style="background:#fde9ec"></span> Blocked / Maintenance</span>
-                <span><span class="dot" style="background:#fff4e5"></span> Has Bookings</span>
-                <span><span class="dot" style="background:#dbeafe; border:1px solid #2563eb;"></span> Holiday / Barangay Event</span>
-            </div>
-            <small style="display:block; margin-top:0.75rem; color:#8b95b5; font-size:0.85rem;">
-                Showing next 14 days. Click on dates for details.
-            </small>
-        </div>
-
-        <!-- Button to show availability -->
-        <div style="margin-top: 1.5rem; text-align: center;">
-            <button type="button" class="btn-outline" id="showAvailableDatesBtn" style="padding: 0.75rem 1.5rem; font-size: 0.95rem;">
-                📅 Show Available Dates
-            </button>
-            <a class="btn-outline" href="<?= base_path(); ?>/resources/views/pages/dashboard/calendar.php" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; margin-left: 0.75rem;">
-                View Full Calendar
-            </a>
-        </div>
-
-        <!-- Availability Calendar Modal -->
-        <?php
-        $rangeStartLabel = date('M d, Y');
-        $rangeEndLabel = date('M d, Y', strtotime('+13 days'));
-        ?>
-        <div id="availabilityCalendarModal" class="modal-overlay" style="display:none;">
-            <div class="modal-container" style="max-width:900px;">
-                <div class="modal-header">
-                    <div>
-                        <h3 style="margin:0;">Availability Calendar</h3>
-                        <small style="color:#64748b;">Next 14 days · <?= $rangeStartLabel; ?> — <?= $rangeEndLabel; ?></small>
-                    </div>
-                    <button type="button" class="btn-outline" id="closeAvailabilityCalendar" aria-label="Close calendar">Close</button>
-                </div>
-                <div class="modal-body">
-                    <div class="schedule-grid full-grid">
-                        <?php for ($i = 0; $i < 14; $i++): ?>
-                            <?php
-                            $currentDate = date('Y-m-d', strtotime("+$i days"));
-                            $dayNumber = date('d', strtotime($currentDate));
-                            $dayName = date('D', strtotime($currentDate));
-                            $dateData = $availabilityByDate[$currentDate] ?? ['approved' => 0, 'pending' => 0, 'blocked' => 0];
-                            $eventLabel = $eventMap[$currentDate] ?? null;
-
-                            $status = 'available';
-                            $title = 'Available';
-                            $hasMaintenanceOnDate = isset($maintenanceByDate[$currentDate]) && $maintenanceByDate[$currentDate];
-
-                            if ($hasMaintenanceOnDate && ($dateData['approved'] > 0 || $dateData['pending'] > 0)) {
-                                $status = 'unavailable';
-                                $title = 'Maintenance + ' . ($dateData['approved'] + $dateData['pending']) . ' booking(s)';
-                            } elseif ($hasMaintenanceOnDate) {
-                                $status = 'unavailable';
-                                $title = 'Maintenance';
-                            } elseif ($dateData['approved'] > 0 && $dateData['pending'] > 0) {
-                                $status = 'requested';
-                                $title = $dateData['approved'] . ' approved, ' . $dateData['pending'] . ' pending';
-                            } elseif ($dateData['approved'] > 0) {
-                                $status = 'requested';
-                                $title = $dateData['approved'] . ' booking(s)';
-                            } elseif ($dateData['pending'] > 0) {
-                                $status = 'requested';
-                                $title = $dateData['pending'] . ' pending request(s)';
-                            }
-
-                            $isToday = $currentDate === date('Y-m-d');
-                            ?>
-                            <div class="schedule-cell <?= $status; ?><?= $isToday ? ' today' : ''; ?>" title="<?= htmlspecialchars($title . ' - ' . date('M d, Y', strtotime($currentDate))); ?>">
-                                <span class="cell-dow"><?= $dayName; ?></span>
-                                <span class="cell-month"><?= date('M', strtotime($currentDate)); ?></span>
-                                <span class="cell-day"><?= $dayNumber; ?></span>
-                                <?php if ($dateData['approved'] > 0 || $dateData['pending'] > 0): ?>
-                                    <span class="cell-count">
-                                        <?= $dateData['approved'] + $dateData['pending']; ?>
-                                    </span>
-                                <?php endif; ?>
-                                <?php if ($eventLabel): ?>
-                                    <span class="event-pill"><?= htmlspecialchars($eventLabel); ?></span>
-                                <?php endif; ?>
-                            </div>
-                        <?php endfor; ?>
-                    </div>
+                    </section>
                 </div>
             </div>
         </div>
 
-        <style>
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(10, 24, 55, 0.55);
-            backdrop-filter: blur(6px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.25rem;
-            z-index: 3000;
-        }
-        .modal-container {
-            background: #fff;
-            border-radius: 18px;
-            box-shadow: 0 18px 60px rgba(0,0,0,0.25);
-            width: min(1100px, 100%);
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid #e8ecf4;
-        }
-        .modal-body {
-            padding: 1.25rem;
-            overflow: auto;
-        }
-        .schedule-grid.full-grid {
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        }
-        </style>
-
-        <!-- Day Details Modal -->
-        <div id="dayDetailModal" class="modal-overlay" style="display:none;">
-            <div class="modal-container" style="max-width: 640px;">
-                <div class="modal-header">
-                    <div>
-                        <h3 id="dayDetailTitle" style="margin:0;">Date</h3>
-                        <small id="dayDetailSub" style="color:#64748b;"></small>
-                    </div>
-                    <button type="button" class="btn-outline" id="closeDayDetail" aria-label="Close details">Close</button>
-                </div>
-                <div class="modal-body" id="dayDetailBody"></div>
-            </div>
-        </div>
-
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const showBtn = document.getElementById('showAvailableDatesBtn');
-            const snapshotContainer = document.getElementById('availabilitySnapshotContainer');
-            const snapshotGrid = document.getElementById('availabilitySnapshot');
-            const closeBtn = document.getElementById('closeAvailabilityCalendar');
-            const modal = document.getElementById('availabilityCalendarModal');
-            const dayModal = document.getElementById('dayDetailModal');
-            const closeDayDetail = document.getElementById('closeDayDetail');
-            const dayDetailTitle = document.getElementById('dayDetailTitle');
-            const dayDetailSub = document.getElementById('dayDetailSub');
-            const dayDetailBody = document.getElementById('dayDetailBody');
-            const resDetail = <?= json_encode($resDetailByDate); ?>;
-            const eventMapJS = <?= json_encode($eventMap); ?>;
-
-            function openAvailabilityModal() {
-                modal.style.display = 'flex';
-                document.body.classList.add('modal-open');
-            }
-            function closeAvailabilityModal() {
-                modal.style.display = 'none';
-                document.body.classList.remove('modal-open');
-            }
-            function openDayModal(dateStr) {
-                const friendly = new Date(dateStr + 'T00:00:00');
-                dayModal.style.display = 'flex';
-                document.body.classList.add('modal-open');
-                dayDetailTitle.textContent = friendly.toDateString();
-                const eventLabel = eventMapJS[dateStr] || '';
-                dayDetailSub.textContent = eventLabel ? `Event/Holiday: ${eventLabel}` : '';
-                const items = resDetail[dateStr] || [];
-                if (!items.length) {
-                    dayDetailBody.innerHTML = '<p style="color:#8b95b5;">No pending or approved reservations for this date.</p>';
-                } else {
-                    dayDetailBody.innerHTML = '<ul style="list-style:none; padding-left:0; margin:0; display:flex; flex-direction:column; gap:0.75rem;">' +
-                        items.map(it => {
-                            const statusClass = `status-${it.status}`;
-                            return `<li style="padding:0.75rem; border:1px solid #e8ecf4; border-radius:10px; background:#f8fbff;">
-                                <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:flex-start;">
-                                    <div>
-                                        <strong>${it.facility_name || ''}</strong><br>
-                                        <span style="color:#5b6888;">${it.time_slot}</span>
-                                    </div>
-                                    <span class="status-badge ${statusClass}" style="text-transform:capitalize;">${it.status}</span>
-                                </div>
-                                <div style="margin-top:0.35rem; color:#475569; font-size:0.9rem;">${it.purpose || ''}</div>
-                                <div style="margin-top:0.25rem; color:#8b95b5; font-size:0.85rem;">Requester: ${it.requester || ''}</div>
-                            </li>`;
-                        }).join('') + '</ul>';
-                }
-            }
-            function closeDayModal() {
-                dayModal.style.display = 'none';
-                document.body.classList.remove('modal-open');
-            }
-
-            // Show/hide snapshot container when clicking the button
-            if (showBtn && snapshotContainer) {
-                showBtn.addEventListener('click', () => {
-                    if (snapshotContainer.style.display === 'none' || !snapshotContainer.style.display) {
-                        snapshotContainer.style.display = 'block';
-                        showBtn.textContent = '📅 Hide Available Dates';
-                    } else {
-                        snapshotContainer.style.display = 'none';
-                        showBtn.textContent = '📅 Show Available Dates';
-                    }
-                });
-            }
-            if (closeBtn) closeBtn.addEventListener('click', closeAvailabilityModal);
-            modal?.addEventListener('click', (e) => {
-                if (e.target === modal) closeAvailabilityModal();
-            });
-            closeDayDetail?.addEventListener('click', closeDayModal);
-            dayModal?.addEventListener('click', (e) => {
-                if (e.target === dayModal) closeDayModal();
-            });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (modal && modal.style.display === 'flex') closeAvailabilityModal();
-                    if (dayModal && dayModal.style.display === 'flex') closeDayModal();
-                }
-            });
-
-            function bindCells(scope) {
-                scope.querySelectorAll('.schedule-cell').forEach(cell => {
-                    const dateStr = cell.getAttribute('data-date');
-                    cell.addEventListener('click', (e) => {
-                        if (!dateStr) return;
-                        e.stopPropagation(); // Prevent grid click from firing
-                        openDayModal(dateStr);
-                    });
-                    // event color
-                    const pill = cell.querySelector('.event-pill');
-                    if (pill && pill.dataset.color) {
-                        pill.style.background = pill.dataset.color;
-                        pill.style.color = '#fff';
-                        pill.style.border = '1px solid rgba(0,0,0,0.05)';
-                    }
-                });
-            }
-            bindCells(document);
-            bindCells(modal);
-        });
-        </script>
-    </section>
-
-    <aside class="booking-card">
-        <div id="facility-details-container" style="display: none;">
-            <h2 id="facility-details-title">Facility Details</h2>
-            <div id="facility-details-content">
-                <div style="text-align: center; padding: 2rem; color: #8b95b5;">
-                    <p>Select a facility from the dropdown to view details</p>
-                </div>
-            </div>
-        </div>
-        
-        <div id="facility-placeholder" style="display: block;">
-            <h2>Facility Details</h2>
-            <div style="text-align: center; padding: 2rem; color: #8b95b5;">
-                <p>Select a facility from the dropdown to view details</p>
-            </div>
-        </div>
-
-        <div class="booking-card" style="margin-top:1.5rem;">
-            <h3>My Recent Reservations</h3>
-            <?php if (empty($myReservations)): ?>
-                <p>No reservations yet. Submitted bookings will appear here.</p>
-            <?php else: ?>
-                <table class="table">
-                    <thead>
-                    <tr>
-                        <th>Facility</th>
-                        <th>Schedule</th>
-                        <th>Status</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($myReservations as $reservation): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($reservation['facility']); ?></td>
-                            <td><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></td>
-                            <td><?= ucfirst($reservation['status']); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <a class="btn-outline" style="margin-top:0.75rem; text-align:center;" href="<?= base_path(); ?>/dashboard/my-reservations">View full history</a>
-            <?php endif; ?>
-        </div>
-    </aside>
-</div>
+    </div><!-- end booking-pane-book -->
+</div><!-- end booking-wrapper -->
 
 <!-- Maintenance Warning Modal -->
 <div id="maintenanceWarningModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 2000;">
@@ -1194,8 +1781,384 @@ document.addEventListener('DOMContentLoaded', function() {
     const altList = document.getElementById('alternatives-list');
     const riskLine = document.getElementById('conflict-risk');
 
-    const eventMap = <?= json_encode($eventMap); ?>;
-    const basePath = <?= json_encode($basePath); ?>;
+    const eventMap = <?= $frsJsonForInlineScript($eventMap); ?>;
+    const basePath = <?= $frsJsonForInlineScript((string)$basePath); ?>;
+    const BCF_OPEN_ON_LOAD = <?= !empty($bcfOpenBookingModal) ? 'true' : 'false'; ?>;
+    const bookCalFacilityId = <?= (int)$bookFacilityPick; ?>;
+    const BCF_CAL_YEAR = <?= (int)$bookCalYear; ?>;
+    const BCF_CAL_MONTH = <?= (int)$bookCalMonth; ?>;
+    const BCF_TODAY_ISO = <?= $frsJsonForInlineScript($todayISO); ?>;
+    const BCF_EARLIEST_START_MIN = <?= (int)frs_earliest_bookable_start_minutes($bcfNowDt); ?>;
+    window._bcfMaxFacilityCapacity = null;
+    window._bcfLastConflictHard = false;
+
+    function bcfHintEscape(t) {
+        if (t === null || t === undefined) return '';
+        const d = document.createElement('div');
+        d.textContent = String(t);
+        return d.innerHTML;
+    }
+
+    let bcfSmartHintsTimer = null;
+    function bcfClearCalendarAiHints() {
+        document.querySelectorAll('.bcf-ai-suggest-date').forEach(function (el) {
+            el.classList.remove('bcf-ai-suggest-date');
+        });
+        const bar = document.getElementById('bcf-smart-hints-bar');
+        if (bar) {
+            bar.classList.remove('is-visible');
+            bar.innerHTML = '';
+        }
+    }
+
+    function bcfApplyCalendarAiHints(payload) {
+        bcfClearCalendarAiHints();
+        const bar = document.getElementById('bcf-smart-hints-bar');
+        const dates = payload && payload.highlight_dates ? payload.highlight_dates : [];
+        const dateSet = new Set(dates);
+        document.querySelectorAll('[data-cal-date]').forEach(function (cell) {
+            const d = cell.getAttribute('data-cal-date');
+            if (d && dateSet.has(d)) {
+                cell.classList.add('bcf-ai-suggest-date');
+            }
+        });
+        if (!bar) return;
+        if (!payload || !payload.facilities || payload.facilities.length === 0) {
+            return;
+        }
+        const top = payload.facilities[0];
+        let html = '<strong>Top match:</strong> ' + bcfHintEscape(top.name);
+        if (top.distance) {
+            html += ' <span style="opacity:.88">(' + bcfHintEscape(top.distance) + ')</span>';
+        }
+        if (dates.length) {
+            html += '. Purple rings show days with open or partial availability for that venue.';
+        } else {
+            html += '. No open/partial days left this month for that venue — try another month or facility.';
+        }
+        if (payload.best_times_label) {
+            html += '<br><span style="font-size:0.82rem;opacity:.92">' + bcfHintEscape(payload.best_times_label) + '</span>';
+        }
+        if (payload.primary_facility_id) {
+            const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(BCF_CAL_YEAR)) + '&month=' + encodeURIComponent(String(BCF_CAL_MONTH)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
+            html += '<div style="margin-top:0.5rem;"><a class="btn-outline" style="display:inline-block;padding:0.35rem 0.75rem;font-size:0.82rem;text-decoration:none;border-radius:8px;border:1px solid #7c3aed;color:#5b21b6;font-weight:600;" href="' + u + '">Show this facility on the calendar</a></div>';
+        }
+        bar.innerHTML = html;
+        bar.classList.add('is-visible');
+    }
+
+    async function bcfFetchBookingSmartHints() {
+        const ta = document.getElementById('bcf-purpose-preview');
+        const purpose = ta ? (ta.value || '').trim() : '';
+        if (purpose.length < 3) {
+            bcfClearCalendarAiHints();
+            return;
+        }
+        const attEl = document.getElementById('bcf-purpose-attendees-preview');
+        let fd = new URLSearchParams();
+        fd.append('purpose', purpose);
+        fd.append('year', String(BCF_CAL_YEAR));
+        fd.append('month', String(BCF_CAL_MONTH));
+        const attV = attEl ? attEl.value.trim() : '';
+        if (attV !== '') fd.append('expected_attendees', attV);
+        try {
+            if (typeof frsPostBody === 'function') {
+                fd = frsPostBody(fd);
+            } else if (window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
+                fd.set(window.CSRF_TOKEN_NAME, window.CSRF_TOKEN);
+            }
+            const res = await fetch(basePath + '/dashboard/booking-smart-hints', {
+                method: 'POST',
+                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: fd.toString()
+            });
+            const raw = await res.text();
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                console.error('booking-smart-hints: invalid JSON', raw.slice(0, 400));
+                return;
+            }
+            if (data.error && (!data.facilities || data.facilities.length === 0)) {
+                bcfClearCalendarAiHints();
+                return;
+            }
+            bcfApplyCalendarAiHints(data);
+        } catch (e) {
+            console.error('booking-smart-hints', e);
+        }
+    }
+
+    function bcfDebouncedSmartHints() {
+        if (bcfSmartHintsTimer) clearTimeout(bcfSmartHintsTimer);
+        bcfSmartHintsTimer = setTimeout(bcfFetchBookingSmartHints, 550);
+    }
+
+    const bcfPurposePreview = document.getElementById('bcf-purpose-preview');
+    const bcfPurposeAttPrev = document.getElementById('bcf-purpose-attendees-preview');
+    if (bcfPurposePreview) {
+        try {
+            const saved = sessionStorage.getItem('bcf_booking_purpose');
+            if (saved && !bcfPurposePreview.value) {
+                bcfPurposePreview.value = saved;
+                const pi0 = document.getElementById('purpose-input');
+                if (pi0 && !pi0.value) pi0.value = saved;
+            }
+        } catch (e) { /* ignore */ }
+        bcfPurposePreview.addEventListener('input', function () {
+            try { sessionStorage.setItem('bcf_booking_purpose', this.value); } catch (e) { /* ignore */ }
+            const pi = document.getElementById('purpose-input');
+            if (pi) pi.value = this.value;
+            bcfDebouncedSmartHints();
+        });
+    }
+    if (bcfPurposeAttPrev) {
+        bcfPurposeAttPrev.addEventListener('input', bcfDebouncedSmartHints);
+        bcfPurposeAttPrev.addEventListener('change', function () { bcfFetchBookingSmartHints(); });
+    }
+
+    function refreshBookingGates() {
+        const btn = document.getElementById('bcf-submit-booking');
+        const capMsg = document.getElementById('bcf-capacity-msg');
+        if (!btn) return;
+        const maxC = window._bcfMaxFacilityCapacity;
+        const attendeeInputEl = document.getElementById('expected-attendees');
+        const attTrim = attendeeInputEl && attendeeInputEl.value ? attendeeInputEl.value.trim() : '';
+        let attendeeMissing = (attTrim === '');
+        let n = attTrim !== '' ? parseInt(attTrim, 10) : NaN;
+        if (!attendeeMissing && (isNaN(n) || n < 1)) attendeeMissing = true;
+        let capErr = false;
+        if (!attendeeMissing && maxC != null && !isNaN(n) && n > maxC) {
+            capErr = true;
+        }
+        if (capErr && capMsg) {
+            capMsg.style.display = 'block';
+            capMsg.textContent = 'Maximum occupancy for this facility is ' + maxC + '. Enter a number equal to or below that.';
+        } else if (attendeeMissing && capMsg) {
+            capMsg.style.display = 'block';
+            capMsg.textContent = 'Expected number of attendees is required.';
+        } else if (capMsg) {
+            capMsg.style.display = 'none';
+            capMsg.textContent = '';
+        }
+        btn.disabled = !!(window._bcfLastConflictHard || capErr || attendeeMissing);
+    }
+
+    function updateBcfReservationDateReadout() {
+        const disp = document.getElementById('bcf-reservation-date-display');
+        if (!disp || !dateInput) return;
+        const raw = (dateInput.value || '').trim();
+        disp.classList.toggle('bcf-res-date-readonly-empty', !raw);
+        if (!raw) {
+            disp.textContent = 'Select a date on the calendar.';
+            return;
+        }
+        const parsed = new Date(raw + 'T12:00:00');
+        if (!isNaN(parsed.getTime())) {
+            disp.textContent = parsed.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } else {
+            disp.textContent = raw;
+        }
+    }
+
+    let bcfActiveTimeMenu = null;
+
+    function bcfEnsureTimeMenus() {
+        if (document.getElementById('bcf-start-time-menu')) return;
+        ['bcf-start-time-menu', 'bcf-end-time-menu'].forEach(function (menuId) {
+            const ul = document.createElement('ul');
+            ul.id = menuId;
+            ul.className = 'bcf-scroll-select-menu';
+            ul.setAttribute('role', 'listbox');
+            ul.hidden = true;
+            ul.style.display = 'none';
+            ul.dataset.open = '';
+            document.body.appendChild(ul);
+        });
+    }
+
+    function bcfGetScrollSelectElements(nativeSel) {
+        const triggerId = nativeSel.id === 'start-time' ? 'bcf-start-time-trigger' : 'bcf-end-time-trigger';
+        const menuId = nativeSel.id === 'start-time' ? 'bcf-start-time-menu' : 'bcf-end-time-menu';
+        const trigger = document.getElementById(triggerId);
+        const menu = document.getElementById(menuId);
+        const txt = trigger ? trigger.querySelector('.bcf-scroll-select-text') : null;
+        return { trigger, menu, txt };
+    }
+
+    function bcfCloseTimeMenus() {
+        ['bcf-start-time-menu', 'bcf-end-time-menu'].forEach(function (mid) {
+            const menu = document.getElementById(mid);
+            const tid = mid === 'bcf-start-time-menu' ? 'bcf-start-time-trigger' : 'bcf-end-time-trigger';
+            const trigger = document.getElementById(tid);
+            if (menu) {
+                menu.hidden = true;
+                menu.style.display = 'none';
+                menu.dataset.open = '';
+            }
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        });
+        bcfActiveTimeMenu = null;
+    }
+
+    function bcfPlaceTimeMenu(trigger, menu) {
+        const r = trigger.getBoundingClientRect();
+        const pad = 4;
+        const maxH = Math.min(window.innerHeight * 0.42, 260);
+        const top = Math.min(r.bottom + pad, window.innerHeight - maxH - 12);
+        menu.style.position = 'fixed';
+        menu.style.left = Math.max(8, r.left) + 'px';
+        menu.style.top = Math.max(8, top) + 'px';
+        menu.style.width = Math.min(r.width, window.innerWidth - 16) + 'px';
+        menu.style.maxHeight = maxH + 'px';
+    }
+
+    function bcfRebuildTimeMenus() {
+        bcfEnsureTimeMenus();
+        [startTimeInput, endTimeInput].forEach(function (nativeSel) {
+            if (!nativeSel) return;
+            const { trigger, menu, txt } = bcfGetScrollSelectElements(nativeSel);
+            if (!trigger || !menu) return;
+            menu.innerHTML = '';
+            Array.from(nativeSel.options).forEach(function (opt, idx) {
+                if (idx === 0 && opt.value === '') return;
+                const li = document.createElement('li');
+                li.setAttribute('role', 'option');
+                li.dataset.value = opt.value;
+                li.textContent = (opt.text || '').trim() || opt.value;
+                li.className = opt.disabled ? 'bcf-scroll-select-option bcf-opt-disabled' : 'bcf-scroll-select-option';
+                if (opt.disabled) li.setAttribute('aria-disabled', 'true');
+                menu.appendChild(li);
+            });
+            const si = nativeSel.selectedIndex;
+            const selOpt = si >= 0 ? nativeSel.options[si] : null;
+            if (txt) {
+                if (selOpt && selOpt.value) {
+                    txt.textContent = (selOpt.text || '').trim();
+                } else if (nativeSel.id === 'start-time') {
+                    txt.textContent = 'Select start time…';
+                } else {
+                    txt.textContent = 'Select end time…';
+                }
+            }
+        });
+    }
+
+    let bcfTimeMenusWired = false;
+    function bcfAttachTimeMenusOnce() {
+        if (bcfTimeMenusWired || !startTimeInput || !endTimeInput) return;
+        const stTrig = document.getElementById('bcf-start-time-trigger');
+        const enTrig = document.getElementById('bcf-end-time-trigger');
+        if (!stTrig || !enTrig) return;
+        bcfEnsureTimeMenus();
+        bcfTimeMenusWired = true;
+
+        function openNativeMenu(nativeSel, trig) {
+            const { menu } = bcfGetScrollSelectElements(nativeSel);
+            if (!menu || !trig) return;
+            if (bcfActiveTimeMenu && bcfActiveTimeMenu.trigger === trig) {
+                bcfCloseTimeMenus();
+                return;
+            }
+            bcfCloseTimeMenus();
+            bcfRebuildTimeMenus();
+            if (menu.querySelectorAll('li').length === 0) {
+                return;
+            }
+            menu.hidden = false;
+            menu.style.display = 'block';
+            trig.setAttribute('aria-expanded', 'true');
+            bcfPlaceTimeMenu(trig, menu);
+            bcfActiveTimeMenu = { menu: menu, trigger: trig, native: nativeSel };
+        }
+
+        stTrig.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openNativeMenu(startTimeInput, stTrig);
+        });
+        enTrig.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openNativeMenu(endTimeInput, enTrig);
+        });
+
+        ['bcf-start-time-menu', 'bcf-end-time-menu'].forEach(function (menuId) {
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+            menu.addEventListener('click', function (ev) {
+                const li = ev.target.closest('li');
+                if (!li || li.classList.contains('bcf-opt-disabled')) return;
+                const val = li.dataset.value;
+                const sel = menuId === 'bcf-start-time-menu' ? startTimeInput : endTimeInput;
+                if (!sel || val === undefined) return;
+                sel.value = String(val);
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                bcfRebuildTimeMenus();
+                bcfCloseTimeMenus();
+            });
+        });
+
+        document.addEventListener('mousedown', function (down) {
+            if (!bcfActiveTimeMenu) return;
+            const t = down.target;
+            if (bcfActiveTimeMenu.menu.contains(t) || bcfActiveTimeMenu.trigger.contains(t)) return;
+            bcfCloseTimeMenus();
+        });
+        window.addEventListener('resize', function () { bcfCloseTimeMenus(); }, { passive: true });
+        window.addEventListener('scroll', function (ev) {
+            if (!bcfActiveTimeMenu) return;
+            const menu = bcfActiveTimeMenu.menu;
+            const t = ev.target;
+            if (t === menu || (t && typeof Node !== 'undefined' && t instanceof Node && menu.contains(t))) {
+                return;
+            }
+            bcfCloseTimeMenus();
+        }, true);
+    }
+
+    const bookingFlowModal = document.getElementById('booking-flow-modal');
+    /* Reparent so position:fixed is viewport-relative (.dashboard-content uses CSS animation with transform). */
+    if (bookingFlowModal && bookingFlowModal.parentNode !== document.body) {
+        document.body.appendChild(bookingFlowModal);
+    }
+    bcfAttachTimeMenusOnce();
+    bcfRebuildTimeMenus();
+
+    function openBookingFlowModal() {
+        if (!bookingFlowModal) return;
+        bookingFlowModal.classList.add('is-open');
+        bookingFlowModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('bcf-modal-active');
+        document.body.style.overflow = 'hidden';
+        updateBcfReservationDateReadout();
+        bcfCloseTimeMenus();
+        const pv = document.getElementById('bcf-purpose-preview');
+        const pi = document.getElementById('purpose-input');
+        if (pv && pi) {
+            if (pi.value && !pv.value) pv.value = pi.value;
+            else if (pv.value && !pi.value) pi.value = pv.value;
+        }
+        document.dispatchEvent(new CustomEvent('bcf-booking-modal-opened'));
+        bcfDebouncedSmartHints();
+        if (facilitySel && facilitySel.value) {
+            filterTimeSlotsByOperatingHours();
+        } else {
+            applySameDayPastTimeCutoff();
+            bcfRebuildTimeMenus();
+        }
+    }
+    function closeBookingFlowModal() {
+        if (!bookingFlowModal) return;
+        bcfCloseTimeMenus();
+        bookingFlowModal.classList.remove('is-open');
+        bookingFlowModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('bcf-modal-active');
+        if (!document.querySelector('.modal-confirm.open')) {
+            document.body.style.overflow = '';
+        }
+    }
     
     // Prefill from query params (facility_id, reservation_date, time_slot, purpose, expected_attendees) - MUST BE DECLARED EARLY
     const qp = new URLSearchParams(window.location.search);
@@ -1217,6 +2180,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide details, show placeholder
             if (facilityDetailsContainer) facilityDetailsContainer.style.display = 'none';
             if (facilityPlaceholder) facilityPlaceholder.style.display = 'block';
+            const aeClear = document.getElementById('expected-attendees');
+            if (aeClear) aeClear.removeAttribute('max');
+            refreshBookingGates();
             return;
         }
         
@@ -1229,10 +2195,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (facilityPlaceholder) facilityPlaceholder.style.display = 'none';
             
             // Fetch facility details via AJAX
-            const response = await fetch(basePath + '/resources/views/pages/dashboard/facility-details-api.php', {
+            const response = await fetch(basePath + '/dashboard/facility-details-api', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'facility_id=' + encodeURIComponent(facilityId)
+                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: (typeof frsPostBody === 'function' ? frsPostBody({ facility_id: facilityId }) : new URLSearchParams({ facility_id: facilityId })).toString()
             });
             
             if (!response.ok) {
@@ -1336,10 +2302,28 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update content
             facilityDetailsContent.innerHTML = html;
+            window._bcfMaxFacilityCapacity = null;
+            if (facility.capacity) {
+                const capMatch = String(facility.capacity).match(/(\d{1,7})/);
+                if (capMatch) {
+                    window._bcfMaxFacilityCapacity = parseInt(capMatch[1], 10);
+                }
+            }
+            const attendeeEl = document.getElementById('expected-attendees');
+            if (attendeeEl) {
+                attendeeEl.removeAttribute('max');
+                if (window._bcfMaxFacilityCapacity != null && !isNaN(window._bcfMaxFacilityCapacity)) {
+                    attendeeEl.setAttribute('max', String(window._bcfMaxFacilityCapacity));
+                }
+            }
+            refreshBookingGates();
             
         } catch (error) {
             console.error('Error loading facility details:', error);
             facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #b23030;"><p>Unable to load facility details. Please try again.</p></div>';
+            const aeErr = document.getElementById('expected-attendees');
+            if (aeErr) aeErr.removeAttribute('max');
+            refreshBookingGates();
         }
     }
     
@@ -1355,16 +2339,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const facilityId = this.value;
         loadFacilityDetails(facilityId);
     });
-    
-    // Load facility details if pre-filled
-    if (preFacility && facilitySel) {
-        setTimeout(() => {
-            loadFacilityDetails(preFacility);
-        }, 300);
-    }
 
     // Check facility status when selected
-    facilitySel.addEventListener('change', function() {
+    facilitySel?.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         if (!selectedOption || !selectedOption.value) {
             // Ensure body scroll is restored when no facility is selected
@@ -1420,6 +2397,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 riskLine.style.display = 'none';
                 riskLine.textContent = '';
             }
+            window._bcfLastConflictHard = false;
+            refreshBookingGates();
         }, 300);
     }
 
@@ -1504,6 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 riskLine.style.display = 'none';
             }
         }
+        refreshBookingGates();
     }
 
     let lastShown = null;
@@ -1563,14 +2543,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (riskLine) riskLine.style.display = 'none';
         
         try {
-            const url = basePath + '/resources/views/pages/dashboard/ai_conflict_check.php';
-            const body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+            const url = basePath + '/dashboard/ai-conflict-check';
+            const body = (typeof frsPostBody === 'function'
+                ? frsPostBody({ facility_id: fid, date: date, time_slot: timeSlot })
+                : new URLSearchParams({ facility_id: fid, date: date, time_slot: timeSlot })
+            ).toString();
             
             console.log('Checking conflict:', { fid, date, timeSlot, url });
             
             const resp = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body
             });
             
@@ -1604,6 +2587,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const eventLabel = eventMap[date] || null;
+            window._bcfLastConflictHard = false;
             const key = `${fid}|${date}|${timeSlot}`;
             
             // Add small delay to make loading state visible (professional feel)
@@ -1611,11 +2595,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Hard conflict (approved reservation) - block booking
             if (data.has_conflict) {
+                window._bcfLastConflictHard = true;
                 showMessage(data.message || 'This slot is already booked (approved reservation). Please select an alternative time.', data.alternatives || [], data.risk_score ?? null, eventLabel, 'hard');
                 lastShown = {fid, date, timeSlot};
             } 
             // Soft conflict (pending reservations) - show warning but allow booking
             else if (data.soft_conflicts && data.soft_conflicts.length > 0) {
+                window._bcfLastConflictHard = false;
                 const pendingCount = data.pending_count || data.soft_conflicts.length;
                 const msg = `Warning: ${pendingCount} pending reservation(s) exist for this slot. You can still book, but admin will approve only one based on priority.`;
                 showMessage(msg, [], data.risk_score ?? null, eventLabel, 'soft');
@@ -1623,12 +2609,14 @@ document.addEventListener('DOMContentLoaded', function() {
             } 
             // High risk or holiday
             else if ((data.risk_score ?? 0) >= 50 || eventLabel) {
+                window._bcfLastConflictHard = false;
                 const msg = eventLabel
                     ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
                     : 'Higher demand expected. Consider alternative slots.';
                 showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel, 'risk');
                 lastShown = {fid, date, timeSlot};
             } else {
+                window._bcfLastConflictHard = false;
                 // No conflicts - show success message
                 const successMsg = eventLabel 
                     ? `Slot is available! Note: ${eventLabel} may increase demand.`
@@ -1649,6 +2637,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 messageText.style.color = '#b23030';
                 messageText.textContent = 'Error checking availability. Please try again.';
             }
+            window._bcfLastConflictHard = false;
+            refreshBookingGates();
         }
     }
 
@@ -1689,8 +2679,52 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    function bcfIsReservationDateToday() {
+        const d = dateInput ? (dateInput.value || '').trim() : '';
+        return d !== '' && d === BCF_TODAY_ISO;
+    }
+
+    function bcfMinutesFromHi(hi) {
+        const p = (hi || '').split(':');
+        if (p.length < 2) return 0;
+        return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+    }
+
+    /** Disable start/end slots that are already past when booking for today (PH server clock). */
+    function applySameDayPastTimeCutoff() {
+        if (!startTimeInput || !endTimeInput) return;
+        if (!bcfIsReservationDateToday()) {
+            return;
+        }
+        const earliest = BCF_EARLIEST_START_MIN;
+
+        startTimeInput.querySelectorAll('option').forEach(function (opt) {
+            if (opt.value === '') return;
+            const mins = bcfMinutesFromHi(opt.value);
+            if (mins < earliest) {
+                opt.disabled = true;
+                opt.style.display = 'none';
+            }
+        });
+
+        if (startTimeInput.value && bcfMinutesFromHi(startTimeInput.value) < earliest) {
+            startTimeInput.value = '';
+            endTimeInput.value = '';
+        }
+
+        const startHelp = startTimeInput.parentElement && startTimeInput.parentElement.nextElementSibling;
+        if (startHelp && startHelp.tagName === 'SMALL') {
+            const eh = Math.floor(earliest / 60);
+            const em = earliest % 60;
+            const period = eh >= 12 ? 'PM' : 'AM';
+            const h12 = eh > 12 ? eh - 12 : (eh === 0 ? 12 : eh);
+            const earliestLabel = h12 + ':' + String(em).padStart(2, '0') + ' ' + period;
+            const base = startHelp.textContent.split(' · ')[0];
+            startHelp.textContent = base + ' · Today: earliest start ' + earliestLabel + ' or later';
+        }
+    }
+
     // Time validation: ensure end time is after start time and within limits
-    // Note: Times are now select dropdowns with only 30-minute increments, so no rounding needed
     function validateTimes() {
         if (!startTimeInput || !endTimeInput) return true;
         
@@ -1698,6 +2732,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const endTime = endTimeInput.value;
         
         if (!startTime || !endTime) return true;
+
+        if (bcfIsReservationDateToday() && bcfMinutesFromHi(startTime) < BCF_EARLIEST_START_MIN) {
+            const eh = Math.floor(BCF_EARLIEST_START_MIN / 60);
+            const em = BCF_EARLIEST_START_MIN % 60;
+            startTimeInput.setCustomValidity('For today, start time must be ' + String(eh).padStart(2, '0') + ':' + String(em).padStart(2, '0') + ' or later.');
+            return false;
+        }
+        startTimeInput.setCustomValidity('');
         
         const start = new Date('2000-01-01T' + startTime);
         const end = new Date('2000-01-01T' + endTime);
@@ -1732,6 +2774,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     startTimeInput?.addEventListener('change', validateTimes);
     endTimeInput?.addEventListener('change', validateTimes);
+    endTimeInput?.addEventListener('change', function () { bcfRebuildTimeMenus(); });
     
     // Update end time options based on start time selection
     startTimeInput?.addEventListener('change', function() {
@@ -1741,6 +2784,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Enable all end time options if no start time selected
             const endOptions = endTimeInput.querySelectorAll('option');
             endOptions.forEach(option => option.disabled = false);
+            bcfRebuildTimeMenus();
             return;
         }
         
@@ -1768,41 +2812,85 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         validateTimes();
+        bcfRebuildTimeMenus();
     });
     
-    // Facility Recommendations
+    // Facility Recommendations (dashboard route — not legacy ai_recommendations_api.php)
     const purposeInput = document.getElementById('purpose-input');
     const recommendationsDiv = document.getElementById('ai-recommendations');
     const recommendationsList = document.getElementById('recommendations-list');
     let recommendationTimeout = null;
-    
-    async function fetchRecommendations() {
-        const purpose = purposeInput?.value?.trim();
-        if (!purpose || purpose.length < 5) {
+
+    const expectedAttendeesInput = document.getElementById('expected-attendees');
+
+    /** Hint until purpose + calendar date + times exist; attendees optional (API defaults to 50). */
+    function syncAiRecommendationsGate() {
+        const purpose = purposeInput?.value?.trim() || '';
+        const loadingEl = document.getElementById('recommendations-loading');
+        const bestTimesEl = document.getElementById('recommendations-best-times');
+        const introEl = document.getElementById('recommendations-intro');
+
+        if (!purpose || purpose.length < 3) {
             if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+            if (loadingEl) loadingEl.style.display = 'none';
             return;
         }
+
+        const date = (dateInput?.value || '').trim();
+        const startTime = (startTimeInput?.value || '').trim();
+        const endTime = (endTimeInput?.value || '').trim();
+
+        const missing = [];
+        if (!date) {
+            missing.push('reservation date — tap a day on the month grid (or close the modal and pick a date first)');
+        }
+        if (!startTime || !endTime) {
+            missing.push('start and end times — use the time dropdowns above');
+        }
+
+        if (missing.length) {
+            if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+            if (introEl) {
+                introEl.textContent = 'Still needed for AI suggestions: ' + missing.join(' ') + ' Expected attendees can be filled later (defaults to 50 for ranking until you enter a number).';
+            }
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (bestTimesEl) bestTimesEl.style.display = 'none';
+            if (recommendationsList) recommendationsList.innerHTML = '';
+            return;
+        }
+
+        fetchRecommendationsCore();
+    }
+
+    function debouncedSyncAiRecommendations() {
+        if (recommendationTimeout) clearTimeout(recommendationTimeout);
+        recommendationTimeout = setTimeout(syncAiRecommendationsGate, 600);
+    }
+
+    document.addEventListener('bcf-booking-modal-opened', function () {
+        debouncedSyncAiRecommendations();
+    });
+    
+    async function fetchRecommendationsCore() {
+        const purpose = purposeInput?.value?.trim();
+        if (!purpose || purpose.length < 3) {
+            return;
+        }
+
+        const loadingEl = document.getElementById('recommendations-loading');
         
-        // OPTIMIZED: Skip if essential fields are missing (reduces unnecessary API calls)
         const date = dateInput?.value;
         const startTime = startTimeInput?.value;
         const endTime = endTimeInput?.value;
-        
-        if (!date || !startTime || !endTime) {
-            // Don't fetch recommendations without date/time context
-            return;
-        }
-        
+        if (!date || !startTime || !endTime) return;
+
         const timeSlot = startTime + ' - ' + endTime;
-        const expectedAttendees = document.querySelector('input[name="expected_attendees"]')?.value || 50;
-        const isCommercial = document.getElementById('is-commercial')?.checked || false;
-        
+        const expectedAttendeesRaw = (expectedAttendeesInput?.value || '').trim();
+        const expectedAttendees = expectedAttendeesRaw !== '' ? expectedAttendeesRaw : '50';
         // Show loading indicator
-        const loadingEl = document.getElementById('recommendations-loading');
-        const listEl = document.getElementById('recommendations-list');
         if (recommendationsDiv) recommendationsDiv.style.display = 'block';
         if (loadingEl) loadingEl.style.display = 'block';
-        if (listEl) listEl.innerHTML = '';
+        if (recommendationsList) recommendationsList.innerHTML = '';
         
         try {
             const formData = new URLSearchParams();
@@ -1810,40 +2898,86 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('reservation_date', date);
             formData.append('time_slot', timeSlot);
             formData.append('expected_attendees', expectedAttendees);
-            if (isCommercial) formData.append('is_commercial', '1');
             
-            const response = await fetch(basePath + '/resources/views/pages/dashboard/facility_recommendations_api.php', {
+            const response = await fetch(basePath + '/dashboard/facility-recommendations', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
+                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: (typeof frsPostBody === 'function' ? frsPostBody(formData) : formData).toString()
             });
             
             if (!response.ok) {
                 throw new Error('Failed to fetch recommendations');
             }
             
-            const data = await response.json();
+            const rawBody = await response.text();
+            let data;
+            try {
+                data = JSON.parse(rawBody);
+            } catch (parseErr) {
+                console.error('facility-recommendations: non-JSON response', rawBody.substring(0, 400));
+                throw parseErr;
+            }
+            if (data.error) {
+                console.warn('facility-recommendations:', data.error);
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+                const errIntro = document.getElementById('recommendations-intro');
+                if (errIntro) errIntro.textContent = String(data.error);
+                if (recommendationsList) recommendationsList.innerHTML = '';
+                return;
+            }
             
             // Store recommendations data for use in selectRecommendation
             currentRecommendationsData = data;
             
             // Hide loading indicator
             if (loadingEl) loadingEl.style.display = 'none';
+
+            const introEl = document.getElementById('recommendations-intro');
+            if (introEl) {
+                const engine = data.recommendation_engine || (data.ml_enabled ? 'sklearn' : 'php_rules');
+                if (engine === 'php_rules') {
+                    introEl.textContent = 'Suggested facilities for your event (match level, distance, and capacity):';
+                } else {
+                    introEl.textContent = 'AI-ranked facilities for your event (match level, distance, and capacity):';
+                }
+            }
             
             if (data.recommendations && data.recommendations.length > 0) {
                 if (recommendationsDiv) recommendationsDiv.style.display = 'block';
                 const bestTimesEl = document.getElementById('recommendations-best-times');
                 if (bestTimesEl) {
                     if (data.best_times_label) {
-                        bestTimesEl.textContent = '🕐 ' + data.best_times_label;
+                        const timesIcon = data.suggested_times_source === 'database' ? '📊 ' : '🕐 ';
+                        bestTimesEl.textContent = timesIcon + data.best_times_label;
                         bestTimesEl.style.display = 'block';
                     } else {
                         bestTimesEl.style.display = 'none';
                     }
                 }
                 if (recommendationsList) {
+                    const recScores = data.recommendations.map(function (r) {
+                        return r.ml_relevance_score != null ? Number(r.ml_relevance_score) : NaN;
+                    }).filter(function (n) { return !isNaN(n); });
+                    function bcfMatchTier(score) {
+                        const s = Number(score);
+                        if (isNaN(s) || recScores.length === 0) return 'MEDIUM';
+                        const max = Math.max.apply(null, recScores);
+                        const min = Math.min.apply(null, recScores);
+                        if (max === min) return 'HIGH';
+                        const ratio = (s - min) / (max - min);
+                        if (ratio >= 0.66) return 'HIGH';
+                        if (ratio >= 0.33) return 'MEDIUM';
+                        return 'LOW';
+                    }
+                    function bcfTierStyle(tier) {
+                        if (tier === 'HIGH') return 'background:#dcfce7;color:#14532d;border:1px solid #86efac;';
+                        if (tier === 'LOW') return 'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;';
+                        return 'background:#fef9c3;color:#713f12;border:1px solid #fde047;';
+                    }
                     recommendationsList.innerHTML = data.recommendations.map((rec, idx) => {
-                        const score = rec.ml_relevance_score != null ? Number(rec.ml_relevance_score).toFixed(1) : 'N/A';
+                        const tier = bcfMatchTier(rec.ml_relevance_score);
+                        const tierStyle = bcfTierStyle(tier);
                         let reason = rec.reason || 'Recommended based on your event purpose';
                         if (rec.distance && reason.indexOf(rec.distance) === -1) {
                             reason += ' · ' + rec.distance + ' from you';
@@ -1874,10 +3008,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             } else {
                                 operatingHoursDisplay = `🕐 ${hours}`;
                             }
-                        } else {
-                            operatingHoursDisplay = '🕐 8:00 AM - 9:00 PM (default)';
                         }
                         
+                        const hoursRow = operatingHoursDisplay
+                            ? `<div style="font-size:0.75rem; color:#0d7a43; font-weight:500; margin-top:0.25rem;">${operatingHoursDisplay}</div>`
+                            : '';
                         return `
                             <div class="recommendation-item" 
                                  data-facility-id="${rec.id}" 
@@ -1888,40 +3023,56 @@ document.addEventListener('DOMContentLoaded', function() {
                                  onclick="selectRecommendation(${rec.id}, '${rec.name.replace(/'/g, "\\'")}')">
                                 <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.25rem;">
                                     <strong style="color:#0d7a43; font-size:0.95rem;">${idx + 1}. ${rec.name}</strong>
-                                    <span style="color:#0d7a43; font-weight:bold; font-size:0.9rem;">Score: ${score}</span>
+                                    <span style="font-weight:700;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:999px;${tierStyle}">${tier} match</span>
                                 </div>
                                 <div style="font-size:0.8rem; color:#666; margin-top:0.25rem; margin-bottom:0.25rem;">${reason}</div>
-                                <div style="font-size:0.75rem; color:#0d7a43; font-weight:500; margin-top:0.25rem;">${operatingHoursDisplay}</div>
+                                ${hoursRow}
                                 <div style="font-size:0.7rem; color:#8b95b5; margin-top:0.25rem; font-style:italic;">Click to select this facility</div>
                             </div>
                         `;
                     }).join('');
                 }
             } else {
-                if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+                const emptyIntro = document.getElementById('recommendations-intro');
+                if (emptyIntro) emptyIntro.textContent = 'No facility suggestions returned (none available or filters excluded all). Try a different purpose or check that facilities are marked available.';
+                const bestTimesElEmpty = document.getElementById('recommendations-best-times');
+                if (bestTimesElEmpty) bestTimesElEmpty.style.display = 'none';
             }
         } catch (error) {
             console.error('Recommendation error:', error);
             if (loadingEl) loadingEl.style.display = 'none';
-            if (recommendationsDiv) recommendationsDiv.style.display = 'none';
+            if (recommendationsDiv) recommendationsDiv.style.display = 'block';
+            const failIntro = document.getElementById('recommendations-intro');
+            if (failIntro) {
+                failIntro.textContent = 'Could not load suggestions. Confirm you are logged in and open DevTools → Network for POST ' + basePath + '/dashboard/facility-recommendations (expect 200 JSON).';
+            }
+            if (recommendationsList) recommendationsList.innerHTML = '';
         }
     }
-    
-    // OPTIMIZED: Debounced recommendation fetching - reduced delay for faster response
-    function debouncedFetchRecommendations() {
-        if (recommendationTimeout) {
-            clearTimeout(recommendationTimeout);
-        }
-        // Reduced to 600ms for faster response while still debouncing rapid typing
-        recommendationTimeout = setTimeout(fetchRecommendations, 600);
-    }
-    
-    purposeInput?.addEventListener('input', debouncedFetchRecommendations);
-    purposeInput?.addEventListener('blur', fetchRecommendations);
-    dateInput?.addEventListener('change', fetchRecommendations);
-    startTimeInput?.addEventListener('change', fetchRecommendations);
-    endTimeInput?.addEventListener('change', fetchRecommendations);
-    
+
+    purposeInput?.addEventListener('input', function () {
+        const pv = document.getElementById('bcf-purpose-preview');
+        if (pv) pv.value = this.value;
+        try { sessionStorage.setItem('bcf_booking_purpose', this.value); } catch (e) { /* ignore */ }
+        bcfDebouncedSmartHints();
+        debouncedSyncAiRecommendations();
+    });
+    purposeInput?.addEventListener('blur', syncAiRecommendationsGate);
+    dateInput?.addEventListener('change', syncAiRecommendationsGate);
+    dateInput?.addEventListener('input', debouncedSyncAiRecommendations);
+    startTimeInput?.addEventListener('change', syncAiRecommendationsGate);
+    endTimeInput?.addEventListener('change', syncAiRecommendationsGate);
+    startTimeInput?.addEventListener('input', debouncedSyncAiRecommendations);
+    endTimeInput?.addEventListener('input', debouncedSyncAiRecommendations);
+    expectedAttendeesInput?.addEventListener('input', function () {
+        refreshBookingGates();
+        debouncedSyncAiRecommendations();
+    });
+    expectedAttendeesInput?.addEventListener('change', function () {
+        refreshBookingGates();
+        syncAiRecommendationsGate();
+    });
     // Function to select a recommendation and auto-fill facility and suggested time
     // Make it globally accessible for inline onclick handlers
     window.selectRecommendation = function(facilityId, facilityName) {
@@ -2025,8 +3176,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Reset to default if no facility selected
             const startOptions = startTimeInput.querySelectorAll('option');
             const endOptions = endTimeInput.querySelectorAll('option');
-            startOptions.forEach(opt => opt.style.display = '');
-            endOptions.forEach(opt => opt.style.display = '');
+            startOptions.forEach(function (opt) {
+                if (opt.value === '') return;
+                opt.style.display = '';
+                opt.disabled = false;
+            });
+            endOptions.forEach(function (opt) {
+                if (opt.value === '') return;
+                opt.style.display = '';
+                opt.disabled = false;
+            });
+            applySameDayPastTimeCutoff();
+            bcfRebuildTimeMenus();
             return;
         }
         
@@ -2093,6 +3254,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 endTimeInput.value = '';
             }
         }
+        applySameDayPastTimeCutoff();
+        bcfRebuildTimeMenus();
     }
     
     // Filter time slots when facility is selected
@@ -2101,7 +3264,7 @@ document.addEventListener('DOMContentLoaded', function() {
         checkConflict();
     });
 
-    // Prefill values and trigger change events
+    // Prefill modal facility from Smart Scheduler (?facility_id=) or calendar toolbar (?book_fac=)
     if (preFacility && facilitySel) {
         const prefilledOption = facilitySel.querySelector(`option[value="${preFacility}"]`);
         if (prefilledOption) {
@@ -2120,6 +3283,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 100);
             }
         }
+    } else if (bookCalFacilityId > 0 && facilitySel) {
+        const calOpt = facilitySel.querySelector('option[value="' + String(bookCalFacilityId) + '"]');
+        if (calOpt) {
+            facilitySel.value = String(bookCalFacilityId);
+            filterTimeSlotsByOperatingHours();
+            facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
     
     // Also filter on initial page load if facility is already selected
@@ -2129,7 +3299,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (preDate && dateInput) {
         dateInput.value = preDate;
         dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+        updateBcfReservationDateReadout();
     }
+    updateBcfReservationDateReadout();
     if (preSlot && startTimeInput && endTimeInput) {
         // Parse time slot format "HH:MM - HH:MM" or legacy format
         const timeMatch = preSlot.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
@@ -2144,12 +3316,160 @@ document.addEventListener('DOMContentLoaded', function() {
     if (prePurpose && prefillPurposeEl) prefillPurposeEl.value = prePurpose;
     if (preAttendees && prefillAttendeesEl) prefillAttendeesEl.value = preAttendees;
 
+    setTimeout(function () {
+        if (typeof syncAiRecommendationsGate === 'function') syncAiRecommendationsGate();
+    }, 300);
+
     // If all fields are pre-filled, trigger conflict check after a short delay
     if (preFacility && preDate && startTimeInput?.value && endTimeInput?.value) {
         setTimeout(() => {
             checkConflict();
         }, 200);
     }
+
+    const bcfQuickSlotSel = document.getElementById('bcf-slot-from-availability');
+    let bcfAvailTimer = null;
+    function normalizedDash(s) {
+        return String(s).replace(/\u2013|\u2014/g, '-');
+    }
+    async function refillBcfAvailabilitySlots() {
+        if (!bcfQuickSlotSel || !facilitySel || !dateInput) return;
+        const fid = facilitySel.value;
+        const dt = dateInput.value;
+        bcfQuickSlotSel.innerHTML = '<option value="">Loading gaps…</option>';
+        if (!fid || !dt) {
+            bcfQuickSlotSel.innerHTML = '<option value="">Choose facility + date first</option>';
+            return;
+        }
+        const opt = facilitySel.options[facilitySel.selectedIndex];
+        const fname = opt ? opt.text.trim() : '';
+        try {
+            const url = basePath + '/api/public/availability?date=' + encodeURIComponent(dt);
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                throw new Error('availability');
+            }
+            const data = await resp.json();
+            const fac = (data.facilities || []).find(f => String(f.facility_name).trim() === fname);
+            bcfQuickSlotSel.innerHTML = '<option value="">Pick an open gap…</option>';
+            if (!fac || !fac.timeline) {
+                return;
+            }
+            fac.timeline.forEach(seg => {
+                if (seg.type !== 'available' || !seg.range) return;
+                const r = normalizedDash(seg.range);
+                const pm = r.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                if (!pm) return;
+                const optEl = document.createElement('option');
+                optEl.value = pm[1] + '|' + pm[2];
+                optEl.textContent = r;
+                bcfQuickSlotSel.appendChild(optEl);
+            });
+        } catch (e2) {
+            bcfQuickSlotSel.innerHTML = '<option value="">Could not load gaps</option>';
+        }
+    }
+    function debouncedRefillAvail() {
+        clearTimeout(bcfAvailTimer);
+        bcfAvailTimer = setTimeout(refillBcfAvailabilitySlots, 450);
+    }
+    bcfQuickSlotSel?.addEventListener('change', function () {
+        if (!startTimeInput || !endTimeInput || !this.value) return;
+        const parts = this.value.split('|');
+        if (parts.length === 2) {
+            startTimeInput.value = parts[0];
+            endTimeInput.value = parts[1];
+            startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+            endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+            debouncedCheckConflict();
+        }
+    });
+    facilitySel?.addEventListener('change', debouncedRefillAvail);
+    dateInput?.addEventListener('change', function () {
+        filterTimeSlotsByOperatingHours();
+        debouncedRefillAvail();
+    });
+
+    document.getElementById('bcf-open-booking-explicit')?.addEventListener('click', function () {
+        if (!dateInput || !dateInput.value) {
+            alert('Please select a date on the calendar first.');
+            return;
+        }
+        openBookingFlowModal();
+        debouncedRefillAvail();
+    });
+    document.getElementById('bcf-close-booking-modal')?.addEventListener('click', closeBookingFlowModal);
+    bookingFlowModal?.addEventListener('click', function (e) {
+        if (e.target === bookingFlowModal) {
+            closeBookingFlowModal();
+        }
+    });
+    document.addEventListener('keydown', function (ke) {
+        if (ke.key !== 'Escape' || !bookingFlowModal || !bookingFlowModal.classList.contains('is-open')) return;
+        if (bcfActiveTimeMenu) {
+            bcfCloseTimeMenus();
+            ke.preventDefault();
+            return;
+        }
+        closeBookingFlowModal();
+    });
+
+    document.getElementById('main-booking-form')?.addEventListener('submit', function (ev) {
+        const d = dateInput ? (dateInput.value || '').trim() : '';
+        if (!d) {
+            ev.preventDefault();
+            alert('Please choose a reservation date by selecting a day on the calendar.');
+            return;
+        }
+        const attEl = document.getElementById('expected-attendees');
+        const attRaw = attEl ? (attEl.value || '').trim() : '';
+        const n = parseInt(attRaw, 10);
+        if (!attRaw || isNaN(n) || n < 1) {
+            ev.preventDefault();
+            alert('Please enter the expected number of attendees (at least 1).');
+            if (attEl) attEl.reportValidity();
+            return;
+        }
+        const maxC = window._bcfMaxFacilityCapacity;
+        if (maxC != null && !isNaN(maxC) && n > maxC) {
+            ev.preventDefault();
+            alert('Expected attendees (' + n + ') cannot exceed this facility\'s maximum occupancy (' + maxC + ').');
+        }
+    });
+
+    document.querySelectorAll('.bcf-book-cal-cell').forEach(function (cell) {
+        function activateBookingCalDate() {
+            const ds = cell.getAttribute('data-bcf-date');
+            if (!ds || !dateInput || !facilitySel) return;
+            dateInput.value = ds;
+            // Required so AI recommendations & other listeners see the new date (value alone does not fire handlers).
+            dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+            dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+            if (bookCalFacilityId) {
+                facilitySel.value = String(bookCalFacilityId);
+                facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            openBookingFlowModal();
+            debouncedRefillAvail();
+            setTimeout(debouncedCheckConflict, 200);
+        }
+        cell.addEventListener('click', activateBookingCalDate);
+        cell.addEventListener('keydown', function (ke) {
+            if (ke.key === 'Enter' || ke.key === ' ') {
+                ke.preventDefault();
+                activateBookingCalDate();
+            }
+        });
+    });
+
+    if (BCF_OPEN_ON_LOAD) {
+        setTimeout(function () {
+            openBookingFlowModal();
+            debouncedRefillAvail();
+        }, 200);
+    }
+
+    refreshBookingGates();
     
     // Safety: Ensure body scroll is restored on page load
     document.body.style.overflow = '';

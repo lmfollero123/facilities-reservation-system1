@@ -108,7 +108,7 @@ ob_start();
                     if ($filterDateFrom) $exportParams['date_from'] = $filterDateFrom;
                     if ($filterDateTo) $exportParams['date_to'] = $filterDateTo;
                     $exportParams['page'] = $page;
-                    $csvUrl = base_path() . '/resources/views/pages/dashboard/export_audit_trail.php?' . http_build_query($exportParams);
+                    $csvUrl = base_path() . '/dashboard/export-audit-trail?' . http_build_query($exportParams);
                     $pdfUrl = base_path() . '/dashboard/audit-trail-pdf?' . http_build_query($exportParams);
                     ?>
                     <a href="<?= htmlspecialchars($csvUrl); ?>" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">

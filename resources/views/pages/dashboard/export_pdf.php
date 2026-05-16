@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../../../config/data_export.php';
 
 // Authentication check
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 

@@ -13,6 +13,7 @@ if (session_status() === PHP_SESSION_NONE) {
 $pageTitle = 'Verify Email | LGU Facilities Reservation';
 $error = '';
 $info = '';
+$verificationRemainingSeconds = 0;
 
 // Determine which account is being verified (for display only)
 $email = '';
@@ -126,6 +127,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Load countdown expiry display (if available)
+try {
+    $pdoCountdown = db();
+    $countdownUser = null;
+    $pendingUserId = $_SESSION['pending_email_verify_user_id'] ?? null;
+    if ($pendingUserId) {
+        $stmtCountdown = $pdoCountdown->prepare("SELECT email_verification_expires_at FROM users WHERE id = ? LIMIT 1");
+        $stmtCountdown->execute([$pendingUserId]);
+        $countdownUser = $stmtCountdown->fetch(PDO::FETCH_ASSOC);
+    } elseif (!empty($email)) {
+        $stmtCountdown = $pdoCountdown->prepare("SELECT email_verification_expires_at FROM users WHERE email = ? LIMIT 1");
+        $stmtCountdown->execute([$email]);
+        $countdownUser = $stmtCountdown->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!empty($countdownUser['email_verification_expires_at'])) {
+        $verificationRemainingSeconds = max(0, strtotime($countdownUser['email_verification_expires_at']) - time());
+    }
+} catch (Throwable $e) {
+    $verificationRemainingSeconds = 0;
+}
+
 $base = base_path();
 ob_start();
 ?>
@@ -154,6 +176,9 @@ ob_start();
         <div style="margin-bottom: 1rem; font-size: 0.9rem; color: #4c5b7c;">
             We sent a 6-digit verification code to:
             <strong><?= htmlspecialchars($email); ?></strong>
+            <?php if ($verificationRemainingSeconds > 0): ?>
+                <div id="emailVerifyCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">Code expires in 01:00</div>
+            <?php endif; ?>
         </div>
 
         <form method="POST" class="auth-form">
@@ -259,6 +284,28 @@ document.addEventListener('DOMContentLoaded', function () {
             (inputs[lastIndex] || inputs[0]).focus();
         });
     });
+
+    const countdownEl = document.getElementById('emailVerifyCountdown');
+    if (countdownEl) {
+        let remaining = <?= (int)$verificationRemainingSeconds; ?>;
+        const renderCountdown = () => {
+            const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const ss = String(remaining % 60).padStart(2, '0');
+            countdownEl.textContent = remaining > 0
+                ? `Code expires in ${mm}:${ss}`
+                : 'Code expired. Please register again to request a new code.';
+            countdownEl.style.color = remaining > 0 ? '#b45309' : '#b23030';
+        };
+        renderCountdown();
+        const timer = setInterval(() => {
+            if (remaining <= 0) {
+                clearInterval(timer);
+                return;
+            }
+            remaining--;
+            renderCountdown();
+        }, 1000);
+    }
 });
 </script>
 

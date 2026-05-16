@@ -192,10 +192,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
 
                             if ($messageType !== 'error' && $messageType !== 'warning') {
-                                // Generate email verification code (6-digit) valid for 24 hours
+                                // Generate email verification code (6-digit) valid for 1 minute
                                 $verificationCode = (string)random_int(100000, 999999);
                                 $verificationHash = password_hash($verificationCode, PASSWORD_DEFAULT);
-                                $expiry = date('Y-m-d H:i:s', time() + 86400); // 24 hours
+                                $expiry = date('Y-m-d H:i:s', time() + 60); // 1 minute
 
                                 $updateStmt = $pdo->prepare(
                                     "UPDATE users 
@@ -206,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                 // Send verification email
                                 try {
-                                    $body = getEmailVerificationEmailTemplate($fullName, $verificationCode, 24);
+                                    $body = getEmailVerificationEmailTemplate($fullName, $verificationCode, 1);
                                     sendEmail($email, $fullName, 'Verify Your Email Address', $body);
                                 } catch (Exception $e) {
                                     // Log but don't expose internal error

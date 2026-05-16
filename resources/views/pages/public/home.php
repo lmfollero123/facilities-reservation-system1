@@ -2,6 +2,7 @@
 $useTailwind = true; // Enable Tailwind CSS for home page
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/announcement_categories.php';
 $pageTitle = 'Home | Barangay Culiat Public Facilities Reservation System';
 
 $pdo = db();
@@ -26,38 +27,6 @@ $announcementsStmt = $pdo->prepare(
 );
 $announcementsStmt->execute();
 $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Function to categorize announcements for display
-function getAnnouncementCategory($title, $message, $type) {
-    $titleLower = strtolower($title);
-    $messageLower = strtolower($message);
-    $combined = $titleLower . ' ' . $messageLower;
-    
-    $patterns = [
-        'urgent' => ['/emergency|urgent|alert|critical|closure|interruption/i'],
-        'advisory' => ['/advisory|notice|attention|reminder|please note|schedule|maintenance/i'],
-        'event' => ['/event|activity|program|ceremony|celebration|activity|drive/i'],
-        'general' => ['/announcement|update|information|news/i'],
-    ];
-    
-    foreach ($patterns as $category => $categoryPatterns) {
-        foreach ($categoryPatterns as $pattern) {
-            if (preg_match($pattern, $combined)) {
-                return [
-                    'type' => $category,
-                    'color' => $category === 'urgent' ? '#dc2626' : ($category === 'event' ? '#059669' : '#2563eb'),
-                    'bgColor' => $category === 'urgent' ? '#fee2e2' : ($category === 'event' ? '#ecfdf5' : '#eff6ff'),
-                ];
-            }
-        }
-    }
-    
-    return [
-        'type' => 'general',
-        'color' => '#6b7280',
-        'bgColor' => '#f3f4f6',
-    ];
-}
 
 // Default fallback image
 $defaultImage = $base . '/public/img/cityhall.jpeg';

@@ -13,6 +13,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'S
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/maintenance_helper.php';
+require_once __DIR__ . '/../../../../config/security.php';
 $pdo = db();
 $pageTitle = 'Facility Management | LGU Facilities Reservation';
 
@@ -20,10 +21,15 @@ $message = '';
 $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+        $message = 'Invalid security token. Please refresh and try again.';
+        $messageType = 'error';
+    } else {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    $rate = trim($_POST['base_rate'] ?? '');
+    $rateInput = trim((string)($_POST['base_rate'] ?? ''));
+    $rate = null;
     $location = trim($_POST['location'] ?? '');
     $capacity = trim($_POST['capacity'] ?? '');
     $amenities = trim($_POST['amenities'] ?? '');
@@ -36,6 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $capacityThreshold = !empty($_POST['capacity_threshold']) ? (int)$_POST['capacity_threshold'] : null;
     $maxDurationHours = !empty($_POST['max_duration_hours']) ? (float)$_POST['max_duration_hours'] : null;
     $operatingHours = trim($_POST['operating_hours'] ?? '');
+    $extensionFeePerHour = !empty($_POST['extension_fee_per_hour']) ? (float)$_POST['extension_fee_per_hour'] : null;
+    $extensionAutoApproveMaxHours = !empty($_POST['extension_auto_approve_max_hours']) ? (float)$_POST['extension_auto_approve_max_hours'] : null;
+    $allowSameDayExtension = isset($_POST['allow_same_day_extension']) && $_POST['allow_same_day_extension'] === '1';
 
     // Handle image upload (optional) with enhanced security
     $imagePath = null;
@@ -75,7 +84,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$name) {
         $message = 'Facility name is required.';
         $messageType = 'error';
+    } elseif ($rateInput !== '') {
+        // Accept formatted input like "2,500" but store as whole-number pesos only.
+        $normalizedRate = str_replace([',', ' ', '₱'], '', $rateInput);
+        if (!preg_match('/^\d+$/', $normalizedRate)) {
+            $message = 'Invalid rate format. Use whole numbers only (e.g., 2500 or 2,500). Do not use decimals or extra text.';
+            $messageType = 'error';
+        } else {
+            $rate = (string)((int)$normalizedRate);
+        }
     } else {
+        $rate = null;
+    }
+
+    if ($messageType !== 'error') {
         try {
             if ($facilityId) {
                 // Get old facility data for audit log
@@ -102,8 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ? WHERE id = ?');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $facilityId]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ?, extension_fee_per_hour = ?, extension_auto_approve_max_hours = ?, allow_same_day_extension = ? WHERE id = ?');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $facilityId]);
                 
                 // Log audit event
                 $details = $name;
@@ -155,8 +177,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null]);
+                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours, extension_fee_per_hour, extension_auto_approve_max_hours, allow_same_day_extension) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0]);
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
@@ -168,6 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Unable to save facility. Please try again.';
             $messageType = 'error';
         }
+    }
     }
 }
 
@@ -249,8 +272,8 @@ ob_start();
                         <header>
                             <div>
                                 <h3><?= htmlspecialchars($facility['name']); ?></h3>
-                                <?php if ($facility['base_rate']): ?>
-                                    <small><?= htmlspecialchars($facility['base_rate']); ?></small>
+                                <?php if ($facility['base_rate'] !== null && $facility['base_rate'] !== ''): ?>
+                                    <small>₱<?= number_format((int)$facility['base_rate']); ?></small>
                                 <?php endif; ?>
                             </div>
                             <span class="status-badge <?= $facility['status']; ?>">
@@ -304,6 +327,7 @@ ob_start();
             </div>
             <div class="facility-modal-body">
                 <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm">
+                    <?= csrf_field(); ?>
                     <input type="hidden" name="facility_id" id="facility_id">
                     <label>
                         Facility Name
@@ -315,9 +339,12 @@ ob_start();
                     <label>
                         Standard Rate
                         <div class="input-wrapper">
-                            <span class="input-icon">💰</span>
-                            <input type="text" name="base_rate" id="form-rate" placeholder="₱2,500 / 4 hrs">
+                            <span class="input-icon">₱</span>
+                            <input type="text" name="base_rate" id="form-rate" placeholder="e.g., 2,500" inputmode="numeric" autocomplete="off">
                         </div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                            Whole pesos only. Comma is added automatically (e.g., 2,500). Decimals are not allowed.
+                        </small>
                     </label>
                     <label>
                         Description
@@ -437,9 +464,52 @@ ob_start();
                         </div>
                     </div>
 
+                    <!-- Extension Settings as Collapsible Section -->
+                    <div class="collapsible-card" style="margin-top: 1.5rem;">
+                        <button type="button" class="collapsible-header" id="extension-header" onclick="toggleExtensionSection(event);" style="cursor: pointer;">
+                            <span>Extension Settings</span>
+                            <span class="chevron" id="extension-chevron">▼</span>
+                        </button>
+                        <div class="collapsible-body is-collapsed" id="extension-settings">
+                            <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
+                                Configure how users can extend their reservations, including fees and auto-approval rules.
+                            </p>
+
+                            <label>
+                                Extension Fee per Hour (₱)
+                                <div class="input-wrapper">
+                                    <span class="input-icon">₱</span>
+                                    <input type="number" step="0.01" name="extension_fee_per_hour" id="form-extension-fee" min="0" placeholder="e.g., 10.00">
+                                </div>
+                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                                    Fee charged per hour for extending reservations. Default: ₱10.00 per hour.
+                                </small>
+                            </label>
+
+                            <label>
+                                Auto-Approve Max Hours (Optional)
+                                <div class="input-wrapper">
+                                    <span class="input-icon">⏰</span>
+                                    <input type="number" step="0.5" name="extension_auto_approve_max_hours" id="form-extension-auto-approve" min="0. placeholder="e.g., 1.0">
+                                </div>
+                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                                    Maximum extension hours for auto-approval. If extension is within this limit and payment is made, it will be auto-approved. Leave blank to disable auto-approval for extensions.
+                                </small>
+                            </label>
+
+                            <label style="display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:1rem; cursor:pointer;">
+                                <input type="checkbox" name="allow_same_day_extension" value="1" id="form-allow-same-day" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
+                                <span style="flex:1; line-height:1.5;">Allow same-day extensions</span>
+                            </label>
+                            <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:-0.5rem; margin-bottom:1rem;">
+                                When enabled, users can extend their reservation on the same day if no conflicts exist and within operating hours.
+                            </small>
+                        </div>
+                    </div>
+
                     <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                         <button class="btn-primary" type="submit">Save Facility</button>
-                        <button class="btn-outline" type="button" onclick="resetFacilityForm()">Cancel</button>
+                        <button class="btn-outline" type="button" onclick="cancelFacilityForm()">Cancel</button>
                     </div>
                 </form>
             </div>
@@ -473,6 +543,16 @@ function openFacilityModal(resetForm = true) {
                 autoApprovalChevron.style.transform = 'rotate(0deg)';
             }
         }
+        // Also initialize extension section chevron
+        const extensionSection = document.getElementById('extension-settings');
+        const extensionChevron = document.getElementById('extension-chevron');
+        if (extensionSection && extensionChevron) {
+            if (extensionSection.classList.contains('is-collapsed')) {
+                extensionChevron.style.transform = 'rotate(-90deg)';
+            } else {
+                extensionChevron.style.transform = 'rotate(0deg)';
+            }
+        }
     }
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -486,8 +566,14 @@ function openFacilityModal(resetForm = true) {
 
 function closeFacilityModal() {
     const modal = document.getElementById('facilityModal');
+    if (!modal) return;
     modal.classList.remove('open');
     document.body.style.overflow = '';
+}
+
+function cancelFacilityForm() {
+    closeFacilityModal();
+    resetFacilityForm();
 }
 
 function toggleAutoApprovalSection(event) {
@@ -498,7 +584,25 @@ function toggleAutoApprovalSection(event) {
     const section = document.getElementById('auto-approval-settings');
     const chevron = document.getElementById('auto-approval-chevron');
     const isCollapsed = section.classList.contains('is-collapsed');
-    
+
+    if (isCollapsed) {
+        section.classList.remove('is-collapsed');
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        section.classList.add('is-collapsed');
+        chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+
+function toggleExtensionSection(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const section = document.getElementById('extension-settings');
+    const chevron = document.getElementById('extension-chevron');
+    const isCollapsed = section.classList.contains('is-collapsed');
+
     if (isCollapsed) {
         section.classList.remove('is-collapsed');
         chevron.style.transform = 'rotate(0deg)';
@@ -517,7 +621,7 @@ function editFacility(payload) {
     // Populate all form fields
     document.getElementById('facility_id').value = facility.id || '';
     document.getElementById('form-name').value = facility.name || '';
-    document.getElementById('form-rate').value = facility.base_rate || '';
+    document.getElementById('form-rate').value = formatRateInput(facility.base_rate || '');
     document.getElementById('form-description').value = facility.description || '';
     document.getElementById('form-location').value = facility.location || '';
     document.getElementById('form-latitude').value = facility.latitude || '';
@@ -531,7 +635,10 @@ function editFacility(payload) {
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
-    
+    document.getElementById('form-extension-fee').value = facility.extension_fee_per_hour || '';
+    document.getElementById('form-extension-auto-approve').value = facility.extension_auto_approve_max_hours || '';
+    document.getElementById('form-allow-same-day').checked = (facility.allow_same_day_extension == 1 || facility.allow_same_day_extension === true);
+
     // Open modal WITHOUT resetting the form (pass false)
     openFacilityModal(false);
 }
@@ -554,6 +661,9 @@ function resetFacilityForm() {
     document.getElementById('form-auto-approve').checked = false;
     document.getElementById('form-capacity-threshold').value = '';
     document.getElementById('form-max-duration').value = '';
+    document.getElementById('form-extension-fee').value = '';
+    document.getElementById('form-extension-auto-approve').value = '';
+    document.getElementById('form-allow-same-day').checked = false;
     document.getElementById('form-image').value = '';
     
     // Reset auto-approval section to collapsed state
@@ -562,6 +672,13 @@ function resetFacilityForm() {
     if (autoApprovalSection && autoApprovalChevron) {
         autoApprovalSection.classList.add('is-collapsed');
         autoApprovalChevron.style.transform = 'rotate(-90deg)';
+    }
+
+    const extensionSection = document.getElementById('extension-settings');
+    const extensionChevron = document.getElementById('extension-chevron');
+    if (extensionSection && extensionChevron) {
+        extensionSection.classList.add('is-collapsed');
+        extensionChevron.style.transform = 'rotate(-90deg)';
     }
 }
 
@@ -645,6 +762,34 @@ function resetFacilityForm() {
     setTimeout(initCollapsibles, 300);
 })();
 
+// Price input UX: integer-only pesos + auto comma formatting.
+(function() {
+    const form = document.getElementById('facilityForm');
+    const rateEl = document.getElementById('form-rate');
+    if (!form || !rateEl) return;
+
+    window.formatRateInput = function(value) {
+        const digits = String(value || '').replace(/\D/g, '');
+        if (!digits) return '';
+        return Number(digits).toLocaleString('en-US');
+    };
+
+    rateEl.addEventListener('input', function() {
+        rateEl.value = window.formatRateInput(rateEl.value);
+    });
+
+    form.addEventListener('submit', function(e) {
+        const digits = String(rateEl.value || '').replace(/\D/g, '');
+        if (rateEl.value.trim() !== '' && digits === '') {
+            e.preventDefault();
+            alert('Invalid rate format. Use whole numbers only (e.g., 2500 or 2,500).');
+            rateEl.focus();
+            return;
+        }
+        rateEl.value = digits;
+    });
+})();
+
 // Geocoding for facility address
 (function() {
     const base = (typeof window !== 'undefined' && window.APP_BASE_PATH) ? window.APP_BASE_PATH : '';
@@ -671,7 +816,7 @@ function resetFacilityForm() {
         showGeocodeStatus('Looking up coordinates…', false);
         const form = new URLSearchParams();
         form.append('address', addr);
-        fetch(base + '/resources/views/pages/dashboard/geocode_api.php', {
+        fetch(base + '/dashboard/geocode-api', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: form

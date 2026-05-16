@@ -10,6 +10,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
@@ -17,6 +18,8 @@ require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
+$paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
+$approvalFirstThenPayment = !empty($paymentsCfg['enabled']) && !empty($paymentsCfg['require_payment_for_reservations']);
 
 $reservationId = (int)($_GET['id'] ?? 0);
 if (!$reservationId) {
@@ -76,7 +79,7 @@ try {
             'booking',
             'Reservation Automatically Denied',
             'Your reservation request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($expired['reservation_date'])) . ' (' . $expired['time_slot'] . ') has been automatically denied because the reservation time has passed without approval.',
-            base_path() . '/resources/views/pages/dashboard/my_reservations.php'
+            base_path() . '/dashboard/my-reservations'
         );
         
         logAudit('Auto-denied expired reservation', 'Reservations', 'RES-' . $expired['id'] . ' – Past reservation time without approval');
@@ -89,7 +92,10 @@ $message = '';
 $messageType = 'success';
 
 // Handle violation recording
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'record_violation') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
+    $message = 'Your session expired or the form is invalid. Please refresh and try again.';
+    $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'record_violation') {
     require_once __DIR__ . '/../../../../config/violations.php';
     
     $violationUserId = (int)($_POST['violation_user_id'] ?? 0);
@@ -118,17 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $message = 'Missing required information to record violation.';
         $messageType = 'error';
     }
-}
-
-// Handle status change and modifications
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] !== 'record_violation') {
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] !== 'record_violation') {
     $action = $_POST['action'];
-    $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone'];
+    $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone', 'extend'];
 
     if (in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log (including facility status)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email, u.mobile AS requester_mobile
                                       FROM reservations r 
                                       JOIN facilities f ON r.facility_id = f.id 
                                       JOIN users u ON r.user_id = u.id 
@@ -256,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $notifMessage .= ' Reason: ' . $reason;
                 
                 createNotification($reservationInfo['requester_id'], 'booking', 'Reservation Modified', $notifMessage, 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php');
+                    base_path() . '/dashboard/my-reservations');
                 
                 // Send email notification
                 if (!empty($reservationInfo['requester_email']) && !empty($reservationInfo['requester_name'])) {
@@ -266,12 +269,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $emailBody .= '<p><strong>Original Date/Time:</strong> ' . date('F j, Y', strtotime($oldDate)) . ' (' . htmlspecialchars($oldTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>New Date/Time:</strong> ' . date('F j, Y', strtotime($newDate)) . ' (' . htmlspecialchars($newTimeSlot) . ')</p>';
                     $emailBody .= '<p><strong>Reason:</strong> ' . htmlspecialchars($reason) . '</p>';
-                    $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                    $emailBody .= '<p><a href="' . base_url() . '/dashboard/my-reservations">View My Reservations</a></p>';
                     sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], $emailSubject, $emailBody);
                 }
                 
                 $message = 'Reservation modified successfully.';
-                header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $reservationId);
+                header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
                 exit;
                 
             } elseif ($action === 'postpone') {
@@ -378,7 +381,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $notifMessage .= ' The new date requires re-approval. Reason: ' . $reason;
                 
                 createNotification($reservationInfo['requester_id'], 'booking', 'Reservation Postponed', $notifMessage, 
-                    base_path() . '/resources/views/pages/dashboard/my_reservations.php');
+                    base_path() . '/dashboard/my-reservations');
                 
                 // Send email notification
                 if (!empty($reservationInfo['requester_email']) && !empty($reservationInfo['requester_name'])) {
@@ -395,9 +398,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 }
                 
                 $message = 'Reservation postponed successfully. It now has postponed status with priority and requires re-approval.';
-                header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $reservationId);
+                header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
                 exit;
-                
+
+            } elseif ($action === 'extend') {
+                require_once __DIR__ . '/../../../../config/extension_helpers.php';
+
+                $extensionHours = (float)($_POST['extension_hours'] ?? 0);
+                if ($extensionHours <= 0) {
+                    throw new Exception('Extension hours must be greater than 0.');
+                }
+
+                // Validate extension
+                $check = canExtendReservation($pdo, $reservationId, $extensionHours);
+                if (!$check['can_extend']) {
+                    throw new Exception($check['reason']);
+                }
+
+                // Check if auto-approval is possible
+                $autoApprove = $check['can_auto_approve'] ?? false;
+
+                // Process extension
+                $result = processExtension($pdo, $reservationId, $extensionHours, $autoApprove);
+
+                if ($result['success']) {
+                    // Create notification for the requester
+                    $notifMessage = 'Your reservation for ' . $reservationInfo['facility_name'];
+                    $notifMessage .= ' on ' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . ' has been extended.';
+                    $notifMessage .= ' New time slot: ' . $result['new_time_slot'] . '. Fee: ₱' . number_format($result['fee'], 2);
+                    if ($result['status'] === 'pending') {
+                        $notifMessage .= '. Extension is pending approval.';
+                    } else {
+                        $notifMessage .= '. Extension has been auto-approved.';
+                    }
+
+                    createNotification($reservationInfo['requester_id'], 'booking', 'Reservation Extended', $notifMessage,
+                        base_path() . '/dashboard/my-reservations');
+
+                    // Send email notification
+                    if (!empty($reservationInfo['requester_email']) && !empty($reservationInfo['requester_name'])) {
+                        $emailSubject = 'Reservation Extended - ' . $reservationInfo['facility_name'];
+                        $emailBody = '<p>Hi ' . htmlspecialchars($reservationInfo['requester_name']) . ',</p>';
+                        $emailBody .= '<p>Your reservation for <strong>' . htmlspecialchars($reservationInfo['facility_name']) . '</strong>';
+                        $emailBody .= ' on <strong>' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . '</strong> has been extended.</p>';
+                        $emailBody .= '<p><strong>New Time Slot:</strong> ' . htmlspecialchars($result['new_time_slot']) . '</p>';
+                        $emailBody .= '<p><strong>Extension Fee:</strong> ₱' . number_format($result['fee'], 2) . '</p>';
+                        if ($result['status'] === 'pending') {
+                            $emailBody .= '<p>Your extension is pending approval. You will be notified once it is reviewed.</p>';
+                        } else {
+                            $emailBody .= '<p>Your extension has been auto-approved.</p>';
+                        }
+                        $emailBody .= '<p><a href="' . base_url() . '/dashboard/my-reservations">View My Reservations</a></p>';
+                        sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], $emailSubject, $emailBody);
+                    }
+
+                    $message = 'Reservation extended successfully. New time slot: ' . $result['new_time_slot'] . '. Fee: ₱' . number_format($result['fee'], 2) . '.';
+                    header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
+                    exit;
+                } else {
+                    throw new Exception($result['message']);
+                }
+
             } else {
                 // Standard approve/deny/cancel actions
                 if ($action === 'cancelled' && $reservationInfo['status'] === 'approved') {
@@ -444,16 +505,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     }
                 }
                 
+                $finalAction = $action;
+                $finalNote = $note;
+                if ($action === 'approved' && $approvalFirstThenPayment && ($reservationInfo['status'] ?? '') === 'pending') {
+                    $finalAction = 'pending_payment';
+                    $approvalPaymentNote = 'Approved by staff. Awaiting payment confirmation to finalize reservation.';
+                    $finalNote = !empty($finalNote) ? ($finalNote . ' | ' . $approvalPaymentNote) : $approvalPaymentNote;
+                }
+
                 $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                 $stmt->execute([
-                    'status' => $action,
+                    'status' => $finalAction,
                     'id' => $reservationId,
                 ]);
                 $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)');
                 $hist->execute([
                     'id' => $reservationId,
-                    'status' => $action,
-                    'note' => $note,
+                    'status' => $finalAction,
+                    'note' => $finalNote,
                     'user' => $_SESSION['user_id'] ?? null,
                 ]);
                 
@@ -462,41 +531,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 if ($reservationInfo) {
                     $details .= ' (' . $reservationInfo['reservation_date'] . ' ' . $reservationInfo['time_slot'] . ')';
                 }
-                if (!empty($note)) {
-                    $details .= ' – Note: ' . $note;
+                if (!empty($finalNote)) {
+                    $details .= ' – Note: ' . $finalNote;
                 }
-                logAudit(ucfirst($action) . ' reservation', 'Reservations', $details);
+                logAudit(ucfirst($finalAction) . ' reservation', 'Reservations', $details);
                 
                 // Create notification for the requester
                 if ($reservationInfo) {
-                    $notifTitle = $action === 'approved' ? 'Reservation Approved' : ($action === 'denied' ? 'Reservation Denied' : 'Reservation Cancelled');
+                    $notifTitle = $finalAction === 'approved'
+                        ? 'Reservation Approved'
+                        : ($finalAction === 'pending_payment'
+                            ? 'Reservation Approved - Payment Required'
+                            : ($finalAction === 'denied' ? 'Reservation Denied' : 'Reservation Cancelled'));
                     $notifMessage = 'Your reservation request for ' . $reservationInfo['facility_name'];
                     $notifMessage .= ' on ' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . ' (' . $reservationInfo['time_slot'] . ')';
-                    $notifMessage .= ' has been ' . $action . '.';
-                    if (!empty($note)) {
-                        $notifMessage .= ' Note: ' . $note;
+                    if ($finalAction === 'pending_payment') {
+                        $notifMessage .= ' has been approved and is awaiting payment confirmation.';
+                    } else {
+                        $notifMessage .= ' has been ' . $finalAction . '.';
+                    }
+                    if (!empty($finalNote)) {
+                        $notifMessage .= ' Note: ' . $finalNote;
                     }
                     
-                    $notifLink = base_path() . '/resources/views/pages/dashboard/my_reservations.php';
+                    $notifLink = $finalAction === 'pending_payment'
+                        ? (base_path() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId)
+                        : (base_path() . '/dashboard/my-reservations');
                     createNotification($reservationInfo['requester_id'], 'booking', $notifTitle, $notifMessage, $notifLink);
                     
                     // Send email notification
                     if (!empty($reservationInfo['requester_email']) && !empty($reservationInfo['requester_name'])) {
-                        $emailSubject = 'Reservation ' . ucfirst($action) . ' - ' . $reservationInfo['facility_name'];
+                        $emailSubject = $finalAction === 'pending_payment'
+                            ? 'Reservation Approved - Payment Required'
+                            : ('Reservation ' . ucfirst($finalAction) . ' - ' . $reservationInfo['facility_name']);
                         $emailBody = '<p>Hi ' . htmlspecialchars($reservationInfo['requester_name']) . ',</p>';
                         $emailBody .= '<p>Your reservation request for <strong>' . htmlspecialchars($reservationInfo['facility_name']) . '</strong>';
                         $emailBody .= ' on <strong>' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . '</strong> (' . htmlspecialchars($reservationInfo['time_slot']) . ')';
-                        $emailBody .= ' has been <strong>' . $action . '</strong>.</p>';
-                        if (!empty($note)) {
-                            $emailBody .= '<p><strong>Note:</strong> ' . htmlspecialchars($note) . '</p>';
+                        if ($finalAction === 'pending_payment') {
+                            $emailBody .= ' has been <strong>approved</strong> and is now awaiting payment.</p>';
+                            $emailBody .= '<p><a href="' . htmlspecialchars(base_url() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8') . '">Pay Now</a></p>';
+                        } else {
+                            $emailBody .= ' has been <strong>' . $finalAction . '</strong>.</p>';
                         }
-                        $emailBody .= '<p><a href="' . base_url() . '/resources/views/pages/dashboard/my_reservations.php">View My Reservations</a></p>';
+                        if (!empty($finalNote)) {
+                            $emailBody .= '<p><strong>Note:</strong> ' . htmlspecialchars($finalNote) . '</p>';
+                        }
+                        $emailBody .= '<p><a href="' . base_url() . '/dashboard/my-reservations">View My Reservations</a></p>';
                         sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], $emailSubject, $emailBody);
+                        sendReservationStatusSms($reservationInfo, $finalAction);
                     }
                 }
-                
-                $message = ucfirst($action) . ' reservation successfully.';
-                header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $reservationId);
+
+                $message = $finalAction === 'pending_payment'
+                    ? 'Reservation approved. User must complete payment to finalize the booking.'
+                    : (ucfirst($finalAction) . ' reservation successfully.');
+                header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
                 exit;
             }
         } catch (Throwable $e) {
@@ -510,7 +599,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $stmt = $pdo->prepare(
     'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
-            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status
+            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate
      FROM reservations r
      JOIN users u ON r.user_id = u.id
      JOIN facilities f ON r.facility_id = f.id
@@ -537,9 +626,31 @@ $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
 ob_start();
 ?>
+<style>
+.reservation-detail-compact .booking-wrapper {
+    gap: 0.85rem;
+}
+.reservation-detail-compact .booking-card {
+    padding: 0.9rem;
+}
+.reservation-detail-compact h2 {
+    margin-bottom: 0.65rem;
+    font-size: 1.02rem;
+}
+.reservation-detail-meta-grid {
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:0.65rem 0.9rem;
+}
+@media (max-width: 900px) {
+    .reservation-detail-meta-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
 <div class="page-header">
     <div class="breadcrumb">
-        <span>Reservations</span><span class="sep">/</span><span><a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" style="color:inherit;text-decoration:none;">Approvals</a></span><span class="sep">/</span><span>Details</span>
+        <span>Reservations</span><span class="sep">/</span><span><a href="<?= base_path(); ?>/dashboard/reservations-manage" style="color:inherit;text-decoration:none;">Approvals</a></span><span class="sep">/</span><span>Details</span>
     </div>
     <h1>Reservation Details</h1>
     <small>Comprehensive view of reservation #<?= $reservationId; ?></small>
@@ -551,17 +662,19 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
+<div class="booking-wrapper reservation-detail-compact">
     <section class="booking-card">
         <h2>Reservation Information</h2>
-        <div style="display:grid;gap:1rem;">
+        <div class="reservation-detail-meta-grid">
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Reservation ID</strong>
                 <p style="margin:0;font-size:1.1rem;font-weight:600;">#<?= $reservationId; ?></p>
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Status</strong>
-                <span class="status-badge <?= $reservation['status']; ?>"><?= ucfirst($reservation['status']); ?></span>
+                <span class="status-badge <?= $reservation['status']; ?>">
+                    <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                </span>
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Reservation Date</strong>
@@ -590,7 +703,7 @@ ob_start();
 
     <section class="booking-card">
         <h2>Requester Information</h2>
-        <div style="display:grid;gap:1rem;">
+        <div class="reservation-detail-meta-grid">
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Name</strong>
                 <p style="margin:0;font-size:1rem;"><?= htmlspecialchars($reservation['requester_name']); ?></p>
@@ -637,7 +750,7 @@ ob_start();
         </div>
         <?php endif; ?>
         
-        <div style="margin-top:1.5rem;">
+        <div style="margin-top:0.8rem;">
             <button class="btn-outline" onclick="openViolationModal(<?= $reservation['user_id']; ?>, '<?= htmlspecialchars($reservation['requester_name']); ?>', <?= $reservationId; ?>, '<?= htmlspecialchars($reservation['facility_name']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.5rem 1rem; color: #dc3545; border-color: #dc3545;">
                 Record Violation
             </button>
@@ -646,7 +759,7 @@ ob_start();
 
     <section class="booking-card">
         <h2>Facility Information</h2>
-        <div style="display:grid;gap:1rem;">
+        <div class="reservation-detail-meta-grid">
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Facility Name</strong>
                 <p style="margin:0;font-size:1rem;font-weight:600;"><?= htmlspecialchars($reservation['facility_name']); ?></p>
@@ -659,7 +772,14 @@ ob_start();
             <?php endif; ?>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Usage Fee</strong>
-                <p style="margin:0;font-size:1rem;color:#5b6888;">Free of Charge</p>
+                <?php
+                $rawFacilityRate = (string)($reservation['facility_base_rate'] ?? '');
+                $facilityRateDigits = preg_replace('/[^\d]/', '', $rawFacilityRate);
+                $facilityRateAmount = $facilityRateDigits !== '' ? (int)$facilityRateDigits : 0;
+                ?>
+                <p style="margin:0;font-size:1rem;color:#5b6888;">
+                    <?= $facilityRateAmount > 0 ? ('PHP ' . number_format((float)$facilityRateAmount, 2)) : 'Free of Charge'; ?>
+                </p>
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Facility Status</strong>
@@ -669,21 +789,22 @@ ob_start();
     </section>
 </div>
 
-<div class="booking-card" style="margin-top:1.5rem; background:#fff4e5; border:1px solid #ffc107;">
+<div class="booking-card" style="margin-top:0.85rem; background:#fff4e5; border:1px solid #ffc107;">
     <h2 style="margin:0 0 0.75rem; color:#856404; font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
         <span>⚠️</span> Emergency Override Policy
     </h2>
     <p style="margin:0; color:#856404; font-size:0.95rem; line-height:1.6;">
         In case of emergencies (e.g., evacuation centers, disaster response, urgent LGU/Barangay needs), 
         the LGU reserves the right to override or cancel existing reservations. Affected residents will be notified immediately. 
-        All facilities are provided free of charge for public use.
+        Reservation handling may include payment where configured by facility policy.
     </p>
 </div>
 
 <?php if ($reservation['status'] === 'pending'): ?>
     <div class="booking-card" style="margin-top:1.5rem;">
         <h2>Actions</h2>
-        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" style="display:flex;gap:1rem;align-items:flex-start;">
+        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" style="display:flex;gap:1rem;align-items:flex-start;">
             <div style="flex:1;">
                 <label style="display:block;margin-bottom:0.5rem;color:#5b6888;font-size:0.9rem;">Add Remarks (Optional)</label>
                 <textarea name="note" placeholder="Enter any notes or remarks for this action..." style="width:100%;padding:0.75rem;border:1px solid #dfe3ef;border-radius:8px;font-family:inherit;font-size:0.95rem;resize:vertical;min-height:80px;"></textarea>
@@ -693,6 +814,14 @@ ob_start();
                 <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
             </div>
         </form>
+    </div>
+<?php elseif ($reservation['status'] === 'pending_payment'): ?>
+    <div class="booking-card" style="margin-top:0.85rem; border:1px solid #fdba74; background:#fff7ed;">
+        <h2 style="margin:0 0 0.65rem; color:#9a3412;">Awaiting Payment</h2>
+        <p style="margin:0; color:#7c2d12;">
+            This reservation has been approved and is waiting for user payment confirmation.
+            The resident can complete payment from their reservations page.
+        </p>
     </div>
 <?php elseif ($reservation['status'] === 'approved'): 
     // Check if reservation date has passed
@@ -716,14 +845,15 @@ ob_start();
     }
     
     if (!$isPast): ?>
-    <div class="booking-card" style="margin-top:1.5rem;">
+    <div class="booking-card" style="margin-top:0.85rem;">
         <h2>Manage Approved Reservation</h2>
         <p style="color: #8b95b5; margin-bottom: 1rem; font-size: 0.9rem;">
-            In case of emergencies or schedule conflicts, you can modify, postpone, or cancel this approved reservation.
+            In case of emergencies or schedule conflicts, you can modify, postpone, extend, or cancel this approved reservation.
         </p>
         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
             <button class="btn-outline" onclick="openModifyModalDetail(this)" data-id="<?= (int)$reservationId; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars($reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars($reservation['facility_name'], ENT_QUOTES, 'UTF-8'); ?>" data-purpose="<?= htmlspecialchars($reservation['purpose'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>" style="padding:0.5rem 1rem;">Modify</button>
             <button class="btn-outline" onclick="openPostponeModalDetail(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>')" style="padding:0.5rem 1rem;">Postpone</button>
+            <button class="btn-outline" onclick="openExtendModal(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility_name']); ?>', <?= (int)$reservation['facility_id']; ?>)" style="padding:0.5rem 1rem;">Extend</button>
             <button class="btn-outline" onclick="openCancelModalDetail(<?= $reservationId; ?>, '<?= htmlspecialchars($reservation['facility_name']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.5rem 1rem; color: #dc3545;">Cancel</button>
         </div>
     </div>
@@ -737,7 +867,7 @@ ob_start();
     <?php endif; ?>
 <?php endif; ?>
 
-<div class="booking-card" style="margin-top:1.5rem;">
+<div class="booking-card" style="margin-top:0.85rem;">
     <h2>Status History Timeline</h2>
     <?php if (empty($history)): ?>
         <p style="color:#8b95b5;">No status history recorded yet.</p>
@@ -766,7 +896,8 @@ ob_start();
             <h3>Modify Approved Reservation</h3>
             <button onclick="closeModifyModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="modifyForm">
+        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="modifyForm">
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
             <input type="hidden" id="modify_facility_id" value="<?= (int)($reservation['facility_id'] ?? 0); ?>">
@@ -830,7 +961,8 @@ ob_start();
             <h3>Postpone Approved Reservation</h3>
             <button onclick="closePostponeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="postponeForm">
+        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="postponeForm">
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
             
@@ -879,27 +1011,80 @@ ob_start();
             <h3>Cancel Approved Reservation</h3>
             <button onclick="closeCancelModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="cancelForm">
+        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="cancelForm">
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
             <input type="hidden" name="action" value="cancelled">
-            
+
             <div style="margin-bottom: 1rem; padding: 1rem; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
                 <strong>⚠️ Warning:</strong> This will cancel the approved reservation. The user will be notified.
             </div>
-            
+
             <div style="margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
                 <strong>Reservation Details:</strong><br>
                 <span id="cancel_reservation_details"></span>
             </div>
-            
+
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Reason for Cancellation <span style="color: #dc3545;">*</span>
             </label>
             <textarea name="reason" id="cancel_reason" required placeholder="Enter the reason for cancelling this reservation (e.g., emergency, facility unavailable, etc.)" style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; min-height: 100px; font-family: inherit; resize: vertical;"></textarea>
-            
+
             <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                 <button type="button" class="btn-outline" onclick="closeCancelModal()" style="flex: 1;">Cancel</button>
                 <button type="submit" class="btn-primary confirm-action" data-message="Cancel this approved reservation?" style="flex: 1; background: #dc3545;">Cancel Reservation</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Extension Modal -->
+<div id="extendModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>Extend Reservation</h3>
+            <button onclick="closeExtendModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
+        </div>
+        <form method="POST" action="<?= base_path(); ?>
+            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="extendForm">
+            <input type="hidden" name="reservation_id" id="extend_reservation_id">
+            <input type="hidden" name="action" value="extend">
+            <input type="hidden" name="facility_id" id="extend_facility_id">
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                <strong>⚠️ Note:</strong> Extending will require payment and may require re-approval depending on the extension duration.
+            </div>
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
+                <strong>Current Schedule:</strong><br>
+                <span id="extend_current_schedule"></span>
+            </div>
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
+                <strong>Extension Fee:</strong> <span id="extension_fee_display">₱10.00</span> per hour
+            </div>
+
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                Extension Duration (hours) <span style="color: #dc3545;">*</span>
+            </label>
+            <select name="extension_hours" id="extension_hours" required style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+                <option value="0.5">0.5 hours (30 minutes)</option>
+                <option value="1">1 hour</option>
+                <option value="1.5">1.5 hours</option>
+                <option value="2">2 hours</option>
+                <option value="2.5">2.5 hours</option>
+                <option value="3">3 hours</option>
+                <option value="4">4 hours</option>
+            </select>
+            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Maximum 4 hours extension per request</small>
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #d4edda; border-radius: 6px; border-left: 4px solid #28a745;">
+                <strong>Total Fee:</strong> <span id="total_extension_fee">₱10.00</span>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn-outline" onclick="closeExtendModal()" style="flex: 1;">Cancel</button>
+                <button type="submit" class="btn-primary confirm-action" data-message="Extend this reservation? Payment will be required." style="flex: 1;">Extend & Pay</button>
             </div>
         </form>
     </div>
@@ -983,7 +1168,7 @@ async function checkModifyConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
-        const resp = await fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+        const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body
@@ -1064,6 +1249,28 @@ function openCancelModalDetail(reservationId, facilityName, currentDate, current
 function closeCancelModal() {
     document.getElementById('cancelModal').style.display = 'none';
 }
+
+function openExtendModal(reservationId, currentDate, currentTime, facilityName, facilityId) {
+    document.getElementById('extend_reservation_id').value = reservationId;
+    document.getElementById('extend_facility_id').value = facilityId;
+    document.getElementById('extend_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
+    document.getElementById('extension_hours').value = '1';
+    updateExtensionFee();
+    document.getElementById('extendModal').style.display = 'flex';
+}
+
+function closeExtendModal() {
+    document.getElementById('extendModal').style.display = 'none';
+}
+
+function updateExtensionFee() {
+    const hours = parseFloat(document.getElementById('extension_hours').value) || 0;
+    const feePerHour = 10.00; // Default fee, can be updated from facility data
+    const totalFee = hours * feePerHour;
+    document.getElementById('total_extension_fee').textContent = '₱' + totalFee.toFixed(2);
+}
+
+document.getElementById('extension_hours').addEventListener('change', updateExtensionFee);
 
 // Time validation for modify and postpone modals
 function validateTimeInputs(startInputId, endInputId) {
@@ -1149,6 +1356,7 @@ document.getElementById('violationModal').addEventListener('click', function(e) 
             <button type="button" class="btn-outline" onclick="closeViolationModal()">✕</button>
         </div>
         <form method="POST" class="modal-body">
+            <?= csrf_field(); ?>
             <input type="hidden" name="action" value="record_violation">
             <input type="hidden" name="violation_user_id" id="violation-user-id">
             <input type="hidden" name="reservation_id" id="violation-reservation-id">
@@ -1197,7 +1405,7 @@ document.getElementById('violationModal').addEventListener('click', function(e) 
 </div>
 
 <div style="margin-top:1.5rem;">
-    <a href="<?= base_path(); ?>/resources/views/pages/dashboard/reservations_manage.php" class="btn-outline" style="display:inline-block;text-decoration:none;">← Back to Approvals</a>
+    <a href="<?= base_path(); ?>/dashboard/reservations-manage" class="btn-outline" style="display:inline-block;text-decoration:none;">← Back to Approvals</a>
 </div>
 <?php
 $content = ob_get_clean();

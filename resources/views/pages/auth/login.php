@@ -77,10 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $emailVerified = isset($user['email_verified']) ? (bool)$user['email_verified'] : true;
                                 if (!$emailVerified) {
                                     try {
-                                        // Generate a fresh email verification code (6-digit) valid for 24 hours
+                                        // Generate a fresh email verification code (6-digit) valid for 1 minute
                                         $verificationCode = (string)random_int(100000, 999999);
                                         $verificationHash = password_hash($verificationCode, PASSWORD_DEFAULT);
-                                        $expiry = date('Y-m-d H:i:s', time() + 86400); // 24 hours
+                                        $expiry = date('Y-m-d H:i:s', time() + 60); // 1 minute
 
                                         $updateStmt = $pdo->prepare(
                                             "UPDATE users 
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                         require_once __DIR__ . '/../../../../config/email_templates.php';
                                         require_once __DIR__ . '/../../../../config/mail_helper.php';
-                                        $body = getEmailVerificationEmailTemplate($user['name'], $verificationCode, 24);
+                                        $body = getEmailVerificationEmailTemplate($user['name'], $verificationCode, 1);
                                         sendEmail($user['email'], $user['name'], 'Verify Your Email Address', $body);
                                     } catch (Exception $e) {
                                         logSecurityEvent('email_verification_email_error', 'Failed to send email verification on login: ' . $e->getMessage(), 'error');
@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // OTP is enabled -> proceed to OTP
                                     $otp = random_int(100000, 999999);
                                     $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
-                                    $otpExpiry = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+                                    $otpExpiry = date('Y-m-d H:i:s', time() + 60); // 1 minute
 
                                     // Store OTP details
                                     $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, otp_code_hash = ?, otp_expires_at = ?, otp_attempts = 0, otp_last_sent_at = NOW(), last_login_ip = ? WHERE id = ?");
@@ -131,8 +131,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // Send OTP email only if email OTP is enabled
                                     if ($enableOtp) {
                                         require_once __DIR__ . '/../../../../config/email_templates.php';
-                                        $otpBody = getOTPEmailTemplate($user['name'], $otp, 10);
+                                        $otpBody = getOTPEmailTemplate($user['name'], $otp, 1);
                                         sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
+                                        if (!empty($user['mobile'])) {
+                                            require_once __DIR__ . '/../../../../config/sms_helper.php';
+                                            sendLoginOtpSms((string)$user['mobile'], (string)$otp, 1);
+                                        }
                                     }
 
                                     // Save pending OTP session

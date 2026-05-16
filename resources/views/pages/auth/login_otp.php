@@ -21,7 +21,7 @@ $userName = $_SESSION['pending_otp_name'] ?? '';
 
 try {
     $pdo = db();
-    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status, totp_secret, COALESCE(totp_enabled, 0) AS totp_enabled FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status, totp_secret, COALESCE(totp_enabled, 0) AS totp_enabled, COALESCE(enable_otp, 1) AS enable_otp FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -114,7 +114,7 @@ try {
         }
     }
 
-    // Resend OTP
+    // Send/resend Email OTP (fallback)
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
         $lastSent = $user['otp_last_sent_at'] ? strtotime($user['otp_last_sent_at']) : 0;
         if (time() - $lastSent < 60) {
@@ -122,18 +122,27 @@ try {
         } else {
             $otp = random_int(100000, 999999);
             $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
-            $otpExpiry = date('Y-m-d H:i:s', time() + 600);
+            $otpExpiry = date('Y-m-d H:i:s', time() + 60);
 
             $pdo->prepare("UPDATE users SET otp_code_hash = ?, otp_expires_at = ?, otp_attempts = 0, otp_last_sent_at = NOW() WHERE id = ?")
                 ->execute([$otpHash, $otpExpiry, $userId]);
 
-            $otpBody = "<p>Hi " . htmlspecialchars($user['name']) . ",</p><p>Your one-time passcode is <strong>$otp</strong>.</p><p>This code expires in 10 minutes.</p>";
-            sendEmail($user['email'], $user['name'], 'Your login OTP', $otpBody);
-            $success = 'A new OTP has been sent to your email.';
+            require_once __DIR__ . '/../../../../config/email_templates.php';
+            $otpBody = getOTPEmailTemplate($user['name'], $otp, 1);
+            sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
+            $success = 'A 6-digit code has been sent to your email.';
         }
     }
 } catch (Exception $e) {
     $error = 'Unable to process OTP right now.';
+}
+
+$hasTotp = (bool)($user['totp_enabled'] ?? 0) && !empty($user['totp_secret']);
+$emailOtpValid = !empty($user['otp_code_hash']) && !empty($user['otp_expires_at']) && strtotime($user['otp_expires_at']) >= time();
+$emailOtpEnabled = (bool)($user['enable_otp'] ?? 1);
+$otpRemainingSeconds = 0;
+if (!empty($user['otp_expires_at'])) {
+    $otpRemainingSeconds = max(0, strtotime($user['otp_expires_at']) - time());
 }
 
 ob_start();
@@ -143,7 +152,14 @@ ob_start();
         <div class="auth-header">
             <div class="auth-icon">🔐</div>
             <h1>Enter One-Time Passcode</h1>
-            <p>We sent a 6-digit code to <?= htmlspecialchars($userEmail); ?>. You can also use the code from your authenticator app if you have it enabled.</p>
+            <?php if ($emailOtpValid): ?>
+                <p>We sent a 6-digit code to <?= htmlspecialchars($userEmail); ?>. You can also use the code from your authenticator app if you have it enabled.</p>
+                <p id="otpCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">Code expires in 01:00</p>
+            <?php elseif ($hasTotp): ?>
+                <p>Enter the 6-digit code from your authenticator app. If you can’t access it, you can request a 6-digit code via email as a fallback.</p>
+            <?php else: ?>
+                <p>Enter the 6-digit code from your email to continue.</p>
+            <?php endif; ?>
         </div>
 
         <?php if ($error): ?>
@@ -172,7 +188,11 @@ ob_start();
 
         <form method="POST" style="margin-top:0.75rem; text-align:center;">
             <?= csrf_field(); ?>
-            <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Resend Code</button>
+            <?php if ($hasTotp && !$emailOtpEnabled): ?>
+                <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Send code to email instead</button>
+            <?php else: ?>
+                <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Resend Code</button>
+            <?php endif; ?>
         </form>
 
         <div class="auth-footer">
@@ -183,6 +203,37 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
+
+if ($emailOtpValid):
+?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const countdownEl = document.getElementById('otpCountdown');
+    if (!countdownEl) return;
+    let remaining = <?= (int)$otpRemainingSeconds; ?>;
+
+    function renderCountdown() {
+        const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const ss = String(remaining % 60).padStart(2, '0');
+        countdownEl.textContent = remaining > 0
+            ? `Code expires in ${mm}:${ss}`
+            : 'Code expired. Please request a new code.';
+        countdownEl.style.color = remaining > 0 ? '#b45309' : '#b23030';
+    }
+
+    renderCountdown();
+    const timer = setInterval(function () {
+        if (remaining <= 0) {
+            clearInterval(timer);
+            return;
+        }
+        remaining--;
+        renderCountdown();
+    }, 1000);
+});
+</script>
+<?php
+endif;
 
 
 

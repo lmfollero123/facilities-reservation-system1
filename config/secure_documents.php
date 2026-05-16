@@ -68,7 +68,7 @@ function getUserArchiveStoragePath(int $userId): string
  */
 function getSecureDocumentUrl(int $documentId, string $accessType = 'view'): string
 {
-    return base_path() . '/resources/views/pages/dashboard/download_document.php?id=' . 
+    return base_path() . '/dashboard/download-document?id=' . 
            urlencode($documentId) . '&type=' . urlencode($accessType);
 }
 

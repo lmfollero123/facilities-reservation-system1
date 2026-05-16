@@ -153,7 +153,7 @@ ob_start();
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-save"></i> Save Changes
             </button>
-            <a href="<?= $base; ?>/resources/views/pages/public/contact.php" target="_blank" class="btn btn-outline-secondary">
+            <a href="<?= $base; ?>/contact" target="_blank" class="btn btn-outline-secondary">
                 <i class="bi bi-eye"></i> Preview Contact Page
             </a>
         </div>

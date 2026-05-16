@@ -16,7 +16,7 @@ define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
 define('RATE_LIMIT_REGISTER_ATTEMPTS', 5); // Threshold before IP is blocked
 define('RATE_LIMIT_REGISTER_WINDOW', 3600); // 1 hour in seconds
 define('RATE_LIMIT_REGISTER_BLOCK_WINDOW', 21600); // 6 hours in seconds
-define('SESSION_TIMEOUT', 1800); // 30 minutes
+define('SESSION_TIMEOUT', 300); // 5 minutes
 define('PASSWORD_MIN_LENGTH', 8);
 define('PASSWORD_REQUIRE_UPPERCASE', true);
 define('PASSWORD_REQUIRE_LOWERCASE', true);
@@ -277,29 +277,33 @@ function secureSession(): void
         ini_set('session.cookie_httponly', '1');
         ini_set('session.cookie_secure', isHTTPS() ? '1' : '0');
         ini_set('session.use_strict_mode', '1');
-        ini_set('session.cookie_samesite', 'Strict');
+        // Use Lax so session cookie is preserved on top-level returns from payment providers (e.g., PayMongo).
+        ini_set('session.cookie_samesite', 'Lax');
         ini_set('session.gc_maxlifetime', SESSION_TIMEOUT);
         
         session_start();
-        
-        // Regenerate session ID periodically to prevent fixation
-        if (!isset($_SESSION['created'])) {
-            $_SESSION['created'] = time();
-        } else if (time() - $_SESSION['created'] > 300) { // 5 minutes
-            session_regenerate_id(true);
-            $_SESSION['created'] = time();
-        }
-        
-        // Check session timeout
-        if (isset($_SESSION['last_activity']) && 
-            (time() - $_SESSION['last_activity']) > SESSION_TIMEOUT) {
-            session_unset();
-            session_destroy();
+    }
+
+    // Regenerate session ID periodically to prevent fixation
+    if (!isset($_SESSION['created'])) {
+        $_SESSION['created'] = time();
+    } else if (time() - $_SESSION['created'] > 300) { // 5 minutes
+        session_regenerate_id(true);
+        $_SESSION['created'] = time();
+    }
+
+    // Check session timeout (applies even if session was already started elsewhere)
+    if (isset($_SESSION['last_activity']) &&
+        (time() - $_SESSION['last_activity']) > SESSION_TIMEOUT) {
+        session_unset();
+        session_destroy();
+        if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        
-        $_SESSION['last_activity'] = time();
+        return;
     }
+
+    $_SESSION['last_activity'] = time();
 }
 
 /**
@@ -422,5 +426,82 @@ function logSecurityEvent(string $event, string $details = '', string $severity 
 function e(string $string): string
 {
     return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Read CSRF token from POST body or X-CSRF-Token header (AJAX).
+ */
+function frs_request_csrf_token(): string
+{
+    $fromPost = $_POST[CSRF_TOKEN_NAME] ?? '';
+    if (is_string($fromPost) && $fromPost !== '') {
+        return $fromPost;
+    }
+    $fromHeader = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    return is_string($fromHeader) ? $fromHeader : '';
+}
+
+/**
+ * Verify CSRF on POST requests. Returns false and sets flash when invalid.
+ *
+ * @param array{message?: string, messageType?: string}|null $flashVars
+ */
+function frs_verify_post_csrf(?array &$flashVars = null): bool
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        return true;
+    }
+    if (verifyCSRFToken(frs_request_csrf_token())) {
+        return true;
+    }
+    if ($flashVars !== null) {
+        $flashVars['message'] = 'Your session expired or the form is invalid. Please refresh and try again.';
+        $flashVars['messageType'] = 'error';
+    }
+    return false;
+}
+
+/**
+ * Append CSRF field to application/x-www-form-urlencoded body.
+ */
+function frs_post_body_with_csrf(string $body = ''): string
+{
+    $params = [];
+    if ($body !== '') {
+        parse_str($body, $params);
+    }
+    $params[CSRF_TOKEN_NAME] = csrf_token();
+    return http_build_query($params);
+}
+
+/**
+ * Exit with 403 when POST CSRF token is invalid (for JSON APIs).
+ */
+function frs_reject_invalid_csrf_json(): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        return;
+    }
+    if (verifyCSRFToken(frs_request_csrf_token())) {
+        return;
+    }
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'error' => 'Invalid or missing security token. Refresh the page and try again.',
+    ]);
+    exit;
+}
+
+/**
+ * True when request is not POST or CSRF token is valid.
+ */
+function frs_csrf_ok(): bool
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        return true;
+    }
+    return verifyCSRFToken(frs_request_csrf_token());
 }
 

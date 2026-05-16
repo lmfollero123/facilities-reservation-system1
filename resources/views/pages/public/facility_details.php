@@ -9,7 +9,7 @@ $pdo = db();
 // Get facility ID from query string
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) {
-    header('Location: ' . $base . '/resources/views/pages/public/facilities.php');
+    header('Location: ' . $base . '/facilities');
     exit;
 }
 
@@ -19,7 +19,7 @@ $stmt->execute([$id]);
 $facility = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$facility) {
-    header('Location: ' . $base . '/resources/views/pages/public/facilities.php');
+    header('Location: ' . $base . '/facilities');
     exit;
 }
 
@@ -177,7 +177,7 @@ include __DIR__ . '/../../layouts/guest_layout.php';
 <script>
 // Make calendar dates clickable: send user to login with redirect to booking calendar
 document.addEventListener('DOMContentLoaded', function() {
-    const loginUrl = '<?= $base; ?>/resources/views/pages/auth/login.php?next=<?= urlencode($base . '/resources/views/pages/dashboard/calendar.php'); ?>';
+    const loginUrl = '<?= $base; ?>/login?next=<?= urlencode($base . '/dashboard/calendar'); ?>';
     document.querySelectorAll('.calendar .day').forEach(day => {
         day.style.cursor = 'pointer';
         day.addEventListener('click', () => {

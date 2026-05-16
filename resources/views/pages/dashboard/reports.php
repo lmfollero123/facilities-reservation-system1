@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/resources/views/pages/auth/login.php');
+    header('Location: ' . base_path() . '/login');
     exit;
 }
 
@@ -17,6 +17,9 @@ if (!in_array($userRole, ['Admin', 'Staff'])) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
+require_once __DIR__ . '/../../../../config/time_helpers.php';
+require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 $pdo = db();
 $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 
@@ -525,6 +528,89 @@ if ($reportYear === null || $reportMonth === null) {
     }
 }
 
+/**
+ * Very lightweight linear-trend forecast (next N periods).
+ *
+ * @param array<int,int|float> $series
+ * @return array<int,int>
+ */
+function buildSimpleForecast(array $series, int $periods = 3): array
+{
+    $n = count($series);
+    if ($n === 0) {
+        return array_fill(0, max(0, $periods), 0);
+    }
+    if ($n === 1) {
+        return array_fill(0, max(0, $periods), max(0, (int)round((float)$series[0])));
+    }
+
+    $sumX = 0.0;
+    $sumY = 0.0;
+    $sumXY = 0.0;
+    $sumX2 = 0.0;
+    for ($i = 0; $i < $n; $i++) {
+        $x = (float)($i + 1);
+        $y = (float)$series[$i];
+        $sumX += $x;
+        $sumY += $y;
+        $sumXY += $x * $y;
+        $sumX2 += $x * $x;
+    }
+
+    $den = (($n * $sumX2) - ($sumX * $sumX));
+    $slope = $den != 0.0 ? ((($n * $sumXY) - ($sumX * $sumY)) / $den) : 0.0;
+    $intercept = ($sumY - ($slope * $sumX)) / $n;
+
+    $forecast = [];
+    for ($i = 1; $i <= $periods; $i++) {
+        $x = (float)($n + $i);
+        $y = $intercept + ($slope * $x);
+        $forecast[] = max(0, (int)round($y));
+    }
+    return $forecast;
+}
+
+$forecastValues = buildSimpleForecast($monthlyData, 3);
+$forecastLabels = [];
+if ($reportYear !== null && $reportMonth !== null) {
+    $baseTs = mktime(0, 0, 0, $reportMonth, 1, $reportYear);
+} else {
+    $baseTs = strtotime(date('Y-m-01'));
+}
+for ($i = 1; $i <= 3; $i++) {
+    $forecastLabels[] = date('M Y', strtotime('+' . $i . ' month', $baseTs));
+}
+
+// Operational occupancy (bookings + check-in/out + staff overrides).
+$occupancyNow = [
+    'as_of' => date('Y-m-d H:i:s'),
+    'total_facilities' => 0,
+    'occupied_facilities' => 0,
+    'available_now' => 0,
+    'occupancy_rate' => 0,
+    'checked_in' => 0,
+    'no_show_risk' => 0,
+    'disclaimer' => '',
+    'items' => [],
+];
+try {
+    $occSnapshot = frs_build_operational_occupancy_snapshot($pdo);
+    $occSum = $occSnapshot['summary'];
+    $occupancyNow = [
+        'as_of' => $occSnapshot['as_of'],
+        'total_facilities' => (int)$occSum['total_facilities'],
+        'occupied_facilities' => (int)$occSum['occupied'],
+        'available_now' => (int)$occSum['available'],
+        'occupancy_rate' => $occSnapshot['occupancy_rate'],
+        'checked_in' => (int)$occSum['checked_in'],
+        'no_show_risk' => (int)$occSum['no_show_risk'],
+        'disclaimer' => $occSnapshot['disclaimer'],
+        'items' => $occSnapshot['facilities'],
+    ];
+} catch (Throwable $e) {
+    // Keep page resilient; fall back to empty occupancy card.
+}
+
 // Status distribution (for selected period)
 $statusSql = 'SELECT status, COUNT(*) as count FROM reservations';
 if ($dateFilterClause) {
@@ -586,6 +672,133 @@ if (isset($_GET['print'])) {
     exit;
 }
 
+/**
+ * Build deterministic fallback insights so reports still work without AI API.
+ */
+function buildRuleBasedReportInsights(array $stats): array {
+    $summary = 'Reservation demand is steady for the selected period.';
+    if (($stats['approval_rate'] ?? 0) >= 70) {
+        $summary = 'Reservation performance is healthy with a strong approval rate.';
+    } elseif (($stats['approval_rate'] ?? 0) < 40) {
+        $summary = 'Reservation performance needs attention due to a low approval rate.';
+    }
+
+    $highlights = [];
+    $highlights[] = 'Total reservations: ' . number_format((int)($stats['total_reservations'] ?? 0));
+    $highlights[] = 'Approved: ' . number_format((int)($stats['approved_count'] ?? 0)) . ' (' . round((float)($stats['approval_rate'] ?? 0), 1) . '%)';
+    $highlights[] = 'Pending: ' . number_format((int)($stats['pending_count'] ?? 0));
+
+    $riskFlags = [];
+    if (($stats['pending_count'] ?? 0) > ($stats['approved_count'] ?? 0)) {
+        $riskFlags[] = 'Pending reservations exceed approved reservations.';
+    }
+    if (($stats['denied_count'] ?? 0) > 0 && ($stats['denied_count'] / max(1, $stats['total_reservations'])) > 0.25) {
+        $riskFlags[] = 'High denial share detected (>25%).';
+    }
+    if (($stats['cancelled_count'] ?? 0) > 0 && ($stats['cancelled_count'] / max(1, $stats['total_reservations'])) > 0.20) {
+        $riskFlags[] = 'Cancellation share is elevated (>20%).';
+    }
+
+    $recommendations = [];
+    $recommendations[] = 'Review top denied reasons and publish clearer booking guidance.';
+    if (!empty($riskFlags)) {
+        $recommendations[] = 'Prioritize queue cleanup and follow-up for pending requests.';
+    }
+    $recommendations[] = 'Monitor top utilized facilities and prepare overflow alternatives.';
+
+    return [
+        'source' => 'Rule-based',
+        'summary' => $summary,
+        'highlights' => $highlights,
+        'risk_flags' => $riskFlags,
+        'recommendations' => $recommendations,
+    ];
+}
+
+/**
+ * Attempt Gemini-generated narrative insights from computed report stats.
+ */
+function buildGeminiReportInsights(array $stats): ?array {
+    if (!function_exists('geminiChatbotResponse')) {
+        return null;
+    }
+
+    $systemPrompt = "You are a municipal analytics assistant. Return concise actionable insights for booking analytics.\n" .
+        "Output STRICT JSON only with keys: summary (string), highlights (array of 3-5 strings), risk_flags (array of strings), recommendations (array of 3-5 strings).\n" .
+        "No markdown, no code fences.";
+
+    $userMessage = "Generate insights for this report stats JSON:\n" . json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $resp = geminiChatbotResponse($systemPrompt, $userMessage, []);
+    if (!$resp || empty($resp['reply'])) {
+        return null;
+    }
+
+    $reply = trim((string)$resp['reply']);
+    $parsed = json_decode($reply, true);
+    if (!is_array($parsed)) {
+        if (preg_match('/\{[\s\S]*\}/', $reply, $m)) {
+            $parsed = json_decode($m[0], true);
+        }
+    }
+    if (!is_array($parsed)) {
+        return null;
+    }
+
+    return [
+        'source' => 'AI (Gemini)',
+        'summary' => (string)($parsed['summary'] ?? ''),
+        'highlights' => array_values(array_filter((array)($parsed['highlights'] ?? []), 'is_string')),
+        'risk_flags' => array_values(array_filter((array)($parsed['risk_flags'] ?? []), 'is_string')),
+        'recommendations' => array_values(array_filter((array)($parsed['recommendations'] ?? []), 'is_string')),
+    ];
+}
+
+$reportStatsForAI = [
+    'period_label' => $filterLabel,
+    'total_reservations' => $totalReservations,
+    'approved_count' => $approvedCount,
+    'pending_count' => $pendingCount,
+    'denied_count' => $deniedCount,
+    'cancelled_count' => $cancelledCount,
+    'approval_rate' => $approvalRate,
+    'utilization' => $utilization,
+    'avg_reservations_per_user' => $avgReservationsPerUser,
+    'top_facilities' => array_slice(array_map(function ($f) {
+        return [
+            'name' => $f['name'] ?? '',
+            'approved_count' => (int)($f['approved_count'] ?? 0),
+        ];
+    }, $facilityData), 0, 5),
+    'monthly_trend' => [
+        'labels' => $monthlyLabels,
+        'values' => $monthlyData,
+    ],
+];
+
+if (isset($_GET['ai_summary'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $insights = buildGeminiReportInsights($reportStatsForAI);
+    if (!$insights) {
+        $insights = buildRuleBasedReportInsights($reportStatsForAI);
+    }
+    echo json_encode([
+        'success' => true,
+        'filter_label' => $filterLabel,
+        'generated_at' => date('Y-m-d H:i:s'),
+        'insights' => $insights,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+if (isset($_GET['live_occupancy'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => true,
+        'occupancy' => $occupancyNow,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 ob_start();
 ?>
 <div class="page-header">
@@ -628,6 +841,9 @@ ob_start();
         <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
             📄 Print Summary
         </button>
+        <button type="button" onclick="openAiSummaryModal()" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap;">
+            ✨ Generate AI Summary
+        </button>
         <script>
         // Auto-submit when "All Time" is selected in month or year
         document.getElementById('month-filter')?.addEventListener('change', function() {
@@ -656,6 +872,24 @@ ob_start();
     </div>
 </div>
 
+<div id="aiSummaryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100050; align-items:center; justify-content:center; padding:1rem;">
+    <div style="width:min(920px,95vw); max-height:92vh; overflow:auto; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
+        <div style="padding:1rem 1.1rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+            <div>
+                <h3 style="margin:0; color:#111827;">AI Summary</h3>
+                <small id="aiSummaryMeta" style="color:#6b7280;">Generate insights based on current filters.</small>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn-outline" type="button" onclick="printAiSummary()">🖨️ Print</button>
+                <button class="btn-outline" type="button" onclick="closeAiSummaryModal()">✕ Close</button>
+            </div>
+        </div>
+        <div id="aiSummaryContent" style="padding:1rem 1.1rem;">
+            <p style="margin:0; color:#6b7280;">Click "Generate AI Summary" to load insights.</p>
+        </div>
+    </div>
+</div>
+
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
         <h2>Reservation Trends<?= ($reportYear !== null && $reportMonth !== null) ? ' (Around ' . date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)) . ')' : ' (Last 6 Months)'; ?></h2>
@@ -676,6 +910,58 @@ ob_start();
     <canvas id="facilityChart" style="max-height: 320px;"></canvas>
 </div>
 <?php endif; ?>
+
+<div class="reports-grid" style="margin-bottom: 1.5rem;">
+    <section class="booking-card">
+        <h2>Predictive Analytics Forecast</h2>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">
+            Projected reservation demand for the next 3 months (trend-based).
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
+            <?php foreach ($forecastLabels as $idx => $label): ?>
+                <div style="padding:0.85rem; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb;">
+                    <div style="font-size:0.82rem; color:#6b7280;"><?= htmlspecialchars($label); ?></div>
+                    <div style="font-size:1.45rem; font-weight:800; color:#1d4ed8; margin-top:0.2rem;">
+                        <?= (int)($forecastValues[$idx] ?? 0); ?>
+                    </div>
+                    <div style="font-size:0.78rem; color:#64748b;">forecasted reservations</div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <section class="booking-card">
+        <h2>Operational Occupancy</h2>
+        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">
+            <?= htmlspecialchars($occupancyNow['disclaimer'] ?: 'Estimated status from bookings, check-in/out, and staff updates.'); ?>
+            <a href="<?= base_path(); ?>/dashboard/occupancy-monitor" style="margin-left:0.35rem;">Open live board</a>
+        </p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:0.7rem; margin-bottom:0.85rem;">
+            <div style="padding:0.75rem; background:#f8fafc; border-radius:8px;">
+                <div style="font-size:0.75rem; color:#6b7280;">Total Facilities</div>
+                <div id="occ-total" style="font-size:1.25rem; font-weight:800; color:#0f172a;"><?= (int)$occupancyNow['total_facilities']; ?></div>
+            </div>
+            <div style="padding:0.75rem; background:#ecfdf5; border-radius:8px;">
+                <div style="font-size:0.75rem; color:#047857;">Occupied / busy</div>
+                <div id="occ-occupied" style="font-size:1.25rem; font-weight:800; color:#047857;"><?= (int)$occupancyNow['occupied_facilities']; ?></div>
+            </div>
+            <div style="padding:0.75rem; background:#dcfce7; border-radius:8px;">
+                <div style="font-size:0.75rem; color:#14532d;">On-site</div>
+                <div id="occ-checkedin" style="font-size:1.25rem; font-weight:800; color:#14532d;"><?= (int)($occupancyNow['checked_in'] ?? 0); ?></div>
+            </div>
+            <div style="padding:0.75rem; background:#fef3c7; border-radius:8px;">
+                <div style="font-size:0.75rem; color:#92400e;">No-show risk</div>
+                <div id="occ-noshow" style="font-size:1.25rem; font-weight:800; color:#92400e;"><?= (int)($occupancyNow['no_show_risk'] ?? 0); ?></div>
+            </div>
+            <div style="padding:0.75rem; background:#eff6ff; border-radius:8px;">
+                <div style="font-size:0.75rem; color:#1d4ed8;">Occupancy Rate</div>
+                <div id="occ-rate" style="font-size:1.25rem; font-weight:800; color:#1d4ed8;"><?= htmlspecialchars((string)$occupancyNow['occupancy_rate']); ?>%</div>
+            </div>
+        </div>
+        <small id="occ-asof" style="color:#6b7280;">
+            As of <?= htmlspecialchars((string)$occupancyNow['as_of']); ?>
+        </small>
+    </section>
+</div>
 
 <section>
     <div class="report-card">
@@ -808,11 +1094,161 @@ ob_start();
 </section>
 
 <script>
+function closeAiSummaryModal() {
+    const modal = document.getElementById('aiSummaryModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderAiSummaryContent(payload) {
+    const contentEl = document.getElementById('aiSummaryContent');
+    const metaEl = document.getElementById('aiSummaryMeta');
+    if (!contentEl || !payload) return;
+
+    const insights = payload.insights || {};
+    const esc = (v) => {
+        const div = document.createElement('div');
+        div.textContent = String(v ?? '');
+        return div.innerHTML;
+    };
+    const list = (arr) => Array.isArray(arr) && arr.length
+        ? `<ul style="margin:0; padding-left:1.1rem;">${arr.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`
+        : '<p style="margin:0; color:#6b7280;">No data.</p>';
+
+    if (metaEl) {
+        metaEl.textContent = `Source: ${insights.source || 'N/A'} | Filter: ${payload.filter_label || ''} | Generated: ${payload.generated_at || ''}`;
+    }
+
+    contentEl.innerHTML = `
+        <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Executive Summary</div>
+            <p style="margin:0; color:#374151;">${esc(insights.summary || 'No summary available.')}</p>
+        </div>
+        <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Highlights</div>
+            ${list(insights.highlights || [])}
+        </div>
+        <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Risk Flags</div>
+            ${list(insights.risk_flags || [])}
+        </div>
+        <div style="margin-bottom:0.2rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Recommended Actions</div>
+            ${list(insights.recommendations || [])}
+        </div>
+    `;
+}
+
+function openAiSummaryModal() {
+    const modal = document.getElementById('aiSummaryModal');
+    const contentEl = document.getElementById('aiSummaryContent');
+    if (!modal || !contentEl) return;
+    modal.style.display = 'flex';
+    contentEl.innerHTML = '<p style="margin:0; color:#6b7280;">Generating AI summary...</p>';
+
+    const facility = document.getElementById('facility-filter')?.value || 'all';
+    const month = document.getElementById('month-filter')?.value || 'all';
+    const year = document.getElementById('year-filter')?.value || 'all';
+    const url = `?ai_summary=1&facility=${encodeURIComponent(facility)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success) {
+                throw new Error('Unable to generate AI summary.');
+            }
+            renderAiSummaryContent(data);
+        })
+        .catch(err => {
+            contentEl.innerHTML = `<p style="margin:0; color:#b91c1c;">${err.message || 'Failed to generate AI summary.'}</p>`;
+        });
+}
+
+function printAiSummary() {
+    const contentEl = document.getElementById('aiSummaryContent');
+    const metaEl = document.getElementById('aiSummaryMeta');
+    if (!contentEl) return;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>AI Summary Report</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; color: #111827; }
+                h1 { margin: 0 0 8px; color: #4f46e5; }
+                .meta { color: #6b7280; font-size: 12px; margin-bottom: 14px; }
+                .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+                ul { margin-top: 0; }
+            </style>
+        </head>
+        <body>
+            <h1>AI Summary</h1>
+            <div class="meta">${metaEl ? metaEl.textContent : ''}</div>
+            <div class="card">${contentEl.innerHTML}</div>
+        </body>
+        </html>
+    `;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.onload = function () { win.print(); };
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Draw values directly on chart elements so users don't need hover/tooltips.
+    const alwaysValueLabelsPlugin = {
+        id: 'alwaysValueLabels',
+        afterDatasetsDraw(chart, args, pluginOptions) {
+            const opts = pluginOptions || {};
+            const color = opts.color || '#111827';
+            const fontSize = opts.fontSize || 12;
+            const weight = opts.fontWeight || '700';
+            const formatter = typeof opts.formatter === 'function'
+                ? opts.formatter
+                : (v) => String(v);
+
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.font = `${weight} ${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            chart.data.datasets.forEach((dataset, datasetIndex) => {
+                const meta = chart.getDatasetMeta(datasetIndex);
+                if (meta.hidden) return;
+                meta.data.forEach((element, dataIndex) => {
+                    const raw = dataset.data[dataIndex];
+                    if (raw === null || raw === undefined || Number(raw) === 0) return;
+                    const label = formatter(raw, dataIndex, dataset, chart);
+                    const pos = element.tooltipPosition();
+                    ctx.fillText(label, pos.x, pos.y);
+                });
+            });
+            ctx.restore();
+        }
+    };
+
+    const modal = document.getElementById('aiSummaryModal');
+    if (modal) {
+        // Move modal to <body> so fixed positioning is viewport-based
+        // (avoids transformed ancestors affecting placement).
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeAiSummaryModal();
+        });
+    }
     const monthlyCtx = document.getElementById('monthlyChart');
     if (monthlyCtx && window.Chart) {
         new Chart(monthlyCtx, {
             type: 'line',
+            plugins: [alwaysValueLabelsPlugin],
             data: {
                 labels: <?= json_encode($monthlyLabels); ?>,
                 datasets: [{
@@ -833,7 +1269,10 @@ document.addEventListener('DOMContentLoaded', function() {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    alwaysValueLabels: { color: '#1f2937', fontSize: 11 }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -852,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (statusCtx && window.Chart) {
         new Chart(statusCtx, {
             type: 'doughnut',
+            plugins: [alwaysValueLabelsPlugin],
             data: {
                 labels: <?= json_encode($statusLabels); ?>,
                 datasets: [{
@@ -868,7 +1308,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     legend: {
                         position: 'bottom',
                         labels: { padding: 15, font: { size: 12 } }
-                    }
+                    },
+                    alwaysValueLabels: { color: '#ffffff', fontSize: 12 }
                 },
                 cutout: '60%'
             }
@@ -879,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (facilityCtx && window.Chart) {
         new Chart(facilityCtx, {
             type: 'bar',
+            plugins: [alwaysValueLabelsPlugin],
             data: {
                 labels: <?= json_encode($facilityLabels); ?>,
                 datasets: [{
@@ -893,7 +1335,10 @@ document.addEventListener('DOMContentLoaded', function() {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    alwaysValueLabels: { color: '#111827', fontSize: 11 }
+                },
                 scales: {
                     y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
                     x: { grid: { display: false } }
@@ -901,6 +1346,34 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Realtime occupancy polling (every 30s).
+    function refreshRealtimeOccupancy() {
+        const url = '?live_occupancy=1&facility='
+            + encodeURIComponent(document.getElementById('facility-filter')?.value || 'all')
+            + '&month=' + encodeURIComponent(document.getElementById('month-filter')?.value || 'all')
+            + '&year=' + encodeURIComponent(document.getElementById('year-filter')?.value || 'all');
+        fetch(url, { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(data => {
+                if (!data || !data.success || !data.occupancy) return;
+                const occ = data.occupancy;
+                const totalEl = document.getElementById('occ-total');
+                const occupiedEl = document.getElementById('occ-occupied');
+                const rateEl = document.getElementById('occ-rate');
+                const asofEl = document.getElementById('occ-asof');
+                if (totalEl) totalEl.textContent = String(occ.total_facilities ?? 0);
+                if (occupiedEl) occupiedEl.textContent = String(occ.occupied_facilities ?? 0);
+                if (rateEl) rateEl.textContent = String(occ.occupancy_rate ?? 0) + '%';
+                const checkedEl = document.getElementById('occ-checkedin');
+                const noshowEl = document.getElementById('occ-noshow');
+                if (checkedEl) checkedEl.textContent = String(occ.checked_in ?? 0);
+                if (noshowEl) noshowEl.textContent = String(occ.no_show_risk ?? 0);
+                if (asofEl) asofEl.textContent = 'As of ' + String(occ.as_of ?? '');
+            })
+            .catch(() => {});
+    }
+    setInterval(refreshRealtimeOccupancy, 30000);
 });
 </script>
 

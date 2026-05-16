@@ -14,8 +14,13 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    frs_reject_invalid_csrf_json();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['purpose'])) {
     $purpose = $_POST['purpose'] ?? $_GET['purpose'] ?? '';

@@ -9,6 +9,34 @@
     }
 })();
 
+function frsUrl(path) {
+    return (window.APP_BASE_PATH || '') + path;
+}
+
+function frsPostBody(params) {
+    const body = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
+    if (window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
+        body.set(window.CSRF_TOKEN_NAME, window.CSRF_TOKEN);
+    }
+    return body;
+}
+
+function frsPostHeaders() {
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (window.CSRF_TOKEN) {
+        headers['X-CSRF-Token'] = window.CSRF_TOKEN;
+    }
+    return headers;
+}
+
+
+function frsMarkAllNotificationsRead() {
+    return fetch(frsUrl('/dashboard/notifications-api?action=mark_all_read'), {
+        method: 'POST',
+        headers: frsPostHeaders(),
+        body: frsPostBody().toString()
+    }).then(response => response.json());
+}
 document.addEventListener("DOMContentLoaded", () => {
     const navToggle = document.querySelector(".nav-toggle");
     const mobileMenu = document.querySelector(".guest-nav-mobile");
@@ -202,7 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             notifPanelContent.innerHTML = '<div class="notif-loading">Loading notifications...</div>';
 
-            fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=list&limit=10')
+            fetch((window.APP_BASE_PATH || '') + '/dashboard/notifications-api?action=list&limit=10')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.notifications) {
@@ -257,8 +285,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         function markAsRead(notifId) {
-            fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=mark_read&id=' + notifId, {
-                method: 'POST'
+            fetch(frsUrl('/dashboard/notifications-api?action=mark_read&id=' + notifId), {
+                method: 'POST',
+                headers: frsPostHeaders(),
+                body: frsPostBody().toString()
             })
                 .then(response => response.json())
                 .then(data => {
@@ -271,19 +301,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         function updateNotificationBadge() {
-            fetch((window.APP_BASE_PATH || '') + '/resources/views/pages/dashboard/notifications_api.php?action=count')
+            fetch((window.APP_BASE_PATH || '') + '/dashboard/notifications-api?action=count')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success !== undefined) {
                         const badge = document.querySelector('.notif-dot');
                         const unreadCount = data.count || 0;
+                        const markAllBtn = document.getElementById('notifMarkAllBtn');
 
                         if (unreadCount > 0) {
                             if (badge) {
                                 badge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
                                 badge.style.display = '';
                             } else {
-                                // Create badge if it doesn't exist
                                 const bell = document.querySelector('.notif-bell');
                                 if (bell) {
                                     const newBadge = document.createElement('span');
@@ -292,10 +322,15 @@ document.addEventListener("DOMContentLoaded", () => {
                                     bell.appendChild(newBadge);
                                 }
                             }
+                            if (markAllBtn) {
+                                markAllBtn.style.display = '';
+                            }
                         } else {
-                            // Hide badge if no unread notifications
                             if (badge) {
                                 badge.style.display = 'none';
+                            }
+                            if (markAllBtn) {
+                                markAllBtn.style.display = 'none';
                             }
                         }
                     }
@@ -303,6 +338,47 @@ document.addEventListener("DOMContentLoaded", () => {
                 .catch(error => {
                     console.error('Error updating badge:', error);
                 });
+        }
+
+        function markAllNotificationsInPanel() {
+            const markAllBtn = document.getElementById('notifMarkAllBtn');
+            if (markAllBtn) {
+                markAllBtn.disabled = true;
+                markAllBtn.textContent = 'Marking...';
+            }
+            frsMarkAllNotificationsRead()
+                .then(data => {
+                    if (data && data.success) {
+                        notifPanelContent.querySelectorAll('.notif-item.unread').forEach(item => {
+                            item.classList.remove('unread');
+                            item.classList.add('read');
+                        });
+                        updateNotificationBadge();
+                    } else {
+                        alert('Failed to mark all notifications as read. Please try again.');
+                        if (markAllBtn) {
+                            markAllBtn.disabled = false;
+                            markAllBtn.textContent = 'Mark all read';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error marking all as read:', error);
+                    alert('An error occurred. Please try again.');
+                    if (markAllBtn) {
+                        markAllBtn.disabled = false;
+                        markAllBtn.textContent = 'Mark all read';
+                    }
+                });
+        }
+
+        const notifMarkAllBtn = document.getElementById('notifMarkAllBtn');
+        if (notifMarkAllBtn) {
+            notifMarkAllBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                markAllNotificationsInPanel();
+            });
         }
 
         function formatTimeAgo(dateString) {
@@ -483,12 +559,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Check conflict via API
             const basePath = window.APP_BASE_PATH || '';
-            fetch(basePath + '/resources/views/pages/dashboard/ai_conflict_check.php', {
+            fetch(frsUrl('/dashboard/ai-conflict-check'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `facility_id=${facilityId}&date=${date}&time_slot=${encodeURIComponent(slot)}`
+                headers: frsPostHeaders(),
+                body: frsPostBody({
+                    facility_id: facilityId,
+                    date: date,
+                    time_slot: slot
+                }).toString()
             })
                 .then(response => response.json())
                 .then(data => {
@@ -533,75 +611,76 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // AI Facility Recommendations - Real-time as user types
-    const purposeInput = document.getElementById('purpose-input');
-    const aiRecommendations = document.getElementById('ai-recommendations');
-    const recommendationsList = document.getElementById('recommendations-list');
-    let recommendationTimeout = null;
+    // AI Facility Recommendations - legacy keyword API (ai_recommendations_api.php).
+    // Book a Facility (#main-booking-form) uses /dashboard/facility-recommendations in page script — do not double-bind.
+    const bookFacilityForm = document.getElementById('main-booking-form');
+    if (!bookFacilityForm) {
+        const purposeInput = document.getElementById('purpose-input');
+        const aiRecommendations = document.getElementById('ai-recommendations');
+        const recommendationsList = document.getElementById('recommendations-list');
+        let recommendationTimeout = null;
 
-    function loadRecommendations() {
-        const purpose = purposeInput?.value.trim();
+        function loadRecommendations() {
+            const purpose = purposeInput?.value.trim();
 
-        if (!purpose || purpose.length < 3) {
-            if (aiRecommendations) aiRecommendations.style.display = 'none';
-            return;
-        }
+            if (!purpose || purpose.length < 3) {
+                if (aiRecommendations) aiRecommendations.style.display = 'none';
+                return;
+            }
 
-        // Debounce: wait 500ms after user stops typing
-        clearTimeout(recommendationTimeout);
-        recommendationTimeout = setTimeout(() => {
-            const basePath = window.APP_BASE_PATH || '';
-            fetch(basePath + '/resources/views/pages/dashboard/ai_recommendations_api.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `purpose=${encodeURIComponent(purpose)}`
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (!aiRecommendations || !recommendationsList) return;
+            clearTimeout(recommendationTimeout);
+            recommendationTimeout = setTimeout(() => {
+                const basePath = window.APP_BASE_PATH || '';
+                fetch(frsUrl('/dashboard/ai-recommendations-api'), {
+                    method: 'POST',
+                    headers: frsPostHeaders(),
+                    body: frsPostBody({ purpose: purpose }).toString()
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!aiRecommendations || !recommendationsList) return;
 
-                    if (data.success && data.recommendations && data.recommendations.length > 0) {
-                        aiRecommendations.style.display = 'block';
+                        if (data.success && data.recommendations && data.recommendations.length > 0) {
+                            aiRecommendations.style.display = 'block';
 
-                        function escapeHtml(text) {
-                            if (!text) return '';
-                            const div = document.createElement('div');
-                            div.textContent = text;
-                            return div.innerHTML;
-                        }
+                            function escapeHtml(text) {
+                                if (!text) return '';
+                                const div = document.createElement('div');
+                                div.textContent = text;
+                                return div.innerHTML;
+                            }
 
-                        const html = '<ul style="margin:0; padding-left:1.25rem; list-style:none;">' +
-                            data.recommendations.map(rec => {
-                                const reasons = rec.reasons && rec.reasons.length > 0
-                                    ? '<br><small style="opacity:0.7;">' + escapeHtml(Array.isArray(rec.reasons) ? rec.reasons.slice(0, 2).join(', ') : rec.reasons) + '</small>'
-                                    : '';
-                                const distanceInfo = rec.distance ? ` <span style="color:#2563eb; font-weight:600;">• ${escapeHtml(rec.distance)} away</span>` : '';
-                                return `<li style="margin-bottom:0.5rem; cursor:pointer; padding:0.5rem; border-radius:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(13,122,67,0.1)'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('facility-select').value='${rec.facility_id}'; document.getElementById('facility-select').dispatchEvent(new Event('change'));">
+                            const html = '<ul style="margin:0; padding-left:1.25rem; list-style:none;">' +
+                                data.recommendations.map(rec => {
+                                    const reasons = rec.reasons && rec.reasons.length > 0
+                                        ? '<br><small style="opacity:0.7;">' + escapeHtml(Array.isArray(rec.reasons) ? rec.reasons.slice(0, 2).join(', ') : rec.reasons) + '</small>'
+                                        : '';
+                                    const distanceInfo = rec.distance ? ` <span style="color:#2563eb; font-weight:600;">• ${escapeHtml(rec.distance)} away</span>` : '';
+                                    return `<li style="margin-bottom:0.5rem; cursor:pointer; padding:0.5rem; border-radius:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(13,122,67,0.1)'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('facility-select').value='${rec.facility_id}'; document.getElementById('facility-select').dispatchEvent(new Event('change'));">
                                 <strong>${escapeHtml(rec.name)}</strong> 
                                 <span style="opacity:0.8;">(${rec.match_score}% match)</span>${distanceInfo}
                                 ${reasons}
                             </li>`;
-                            }).join('') +
-                            '</ul>';
+                                }).join('') +
+                                '</ul>';
 
-                        recommendationsList.innerHTML = html;
-                    } else {
-                        aiRecommendations.style.display = 'none';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading recommendations:', error);
-                });
-        }, 500);
-    }
+                            recommendationsList.innerHTML = html;
+                        } else {
+                            aiRecommendations.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading recommendations:', error);
+                    });
+            }, 500);
+        }
 
-    if (purposeInput) {
-        purposeInput.addEventListener('input', loadRecommendations);
-        purposeInput.addEventListener('paste', () => {
-            setTimeout(loadRecommendations, 100);
-        });
+        if (purposeInput) {
+            purposeInput.addEventListener('input', loadRecommendations);
+            purposeInput.addEventListener('paste', () => {
+                setTimeout(loadRecommendations, 100);
+            });
+        }
     }
 });
 
