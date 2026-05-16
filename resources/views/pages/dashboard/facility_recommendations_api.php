@@ -5,17 +5,15 @@
  * Considers: purpose, distance from user, capacity, suggested times for purpose.
  */
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../../config/app.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     http_response_code(401);
+    header('Content-Type: application/json');
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
 
-require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {

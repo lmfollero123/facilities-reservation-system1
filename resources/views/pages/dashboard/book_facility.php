@@ -1783,6 +1783,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const eventMap = <?= $frsJsonForInlineScript($eventMap); ?>;
     const basePath = <?= $frsJsonForInlineScript((string)$basePath); ?>;
+
+    /** POST with session cookie + CSRF (works even if main.js is cached/old). */
+    function bcfFetchPost(url, params) {
+        const body = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
+        if (window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
+            body.set(window.CSRF_TOKEN_NAME, window.CSRF_TOKEN);
+        }
+        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        if (window.CSRF_TOKEN) {
+            headers['X-CSRF-Token'] = window.CSRF_TOKEN;
+        }
+        return fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: body.toString(),
+            credentials: 'same-origin'
+        });
+    }
+
     const BCF_OPEN_ON_LOAD = <?= !empty($bcfOpenBookingModal) ? 'true' : 'false'; ?>;
     const bookCalFacilityId = <?= (int)$bookFacilityPick; ?>;
     const BCF_CAL_YEAR = <?= (int)$bookCalYear; ?>;
@@ -1862,16 +1881,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const attV = attEl ? attEl.value.trim() : '';
         if (attV !== '') fd.append('expected_attendees', attV);
         try {
-            if (typeof frsPostBody === 'function') {
-                fd = frsPostBody(fd);
-            } else if (window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
-                fd.set(window.CSRF_TOKEN_NAME, window.CSRF_TOKEN);
-            }
-            const res = await fetch(basePath + '/dashboard/booking-smart-hints', {
-                method: 'POST',
-                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: fd.toString()
-            });
+            const res = await bcfFetchPost(basePath + '/dashboard/booking-smart-hints', fd);
             const raw = await res.text();
             let data;
             try {
@@ -2195,11 +2205,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (facilityPlaceholder) facilityPlaceholder.style.display = 'none';
             
             // Fetch facility details via AJAX
-            const response = await fetch(basePath + '/dashboard/facility-details-api', {
-                method: 'POST',
-                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: (typeof frsPostBody === 'function' ? frsPostBody({ facility_id: facilityId }) : new URLSearchParams({ facility_id: facilityId })).toString()
-            });
+            const response = await bcfFetchPost(basePath + '/dashboard/facility-details-api', { facility_id: facilityId });
             
             if (!response.ok) {
                 throw new Error('Failed to load facility details');
@@ -2544,18 +2550,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             const url = basePath + '/dashboard/ai-conflict-check';
-            const body = (typeof frsPostBody === 'function'
-                ? frsPostBody({ facility_id: fid, date: date, time_slot: timeSlot })
-                : new URLSearchParams({ facility_id: fid, date: date, time_slot: timeSlot })
-            ).toString();
-            
             console.log('Checking conflict:', { fid, date, timeSlot, url });
-            
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body
-            });
+            const resp = await bcfFetchPost(url, { facility_id: fid, date: date, time_slot: timeSlot });
             
             if (!resp.ok) {
                 console.error('Conflict check failed:', resp.status, resp.statusText);
@@ -2899,11 +2895,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('time_slot', timeSlot);
             formData.append('expected_attendees', expectedAttendees);
             
-            const response = await fetch(basePath + '/dashboard/facility-recommendations', {
-                method: 'POST',
-                headers: typeof frsPostHeaders === 'function' ? frsPostHeaders() : { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: (typeof frsPostBody === 'function' ? frsPostBody(formData) : formData).toString()
-            });
+            const response = await bcfFetchPost(basePath + '/dashboard/facility-recommendations', formData);
             
             if (!response.ok) {
                 throw new Error('Failed to fetch recommendations');

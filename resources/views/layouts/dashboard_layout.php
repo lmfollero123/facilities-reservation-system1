@@ -218,7 +218,11 @@ window.SESSION_TIMEOUT_WARNING_SECONDS = 60;
 window.CSRF_TOKEN = "<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>";
 window.CSRF_TOKEN_NAME = <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
-<script src="<?= base_path(); ?>/public/js/main.js"></script>
+<?php
+$mainJsPath = dirname(__DIR__, 3) . '/public/js/main.js';
+$mainJsVer = is_file($mainJsPath) ? (string)filemtime($mainJsPath) : '1';
+?>
+<script src="<?= base_path(); ?>/public/js/main.js?v=<?= htmlspecialchars($mainJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function () {
     const modal = document.getElementById('sessionTimeoutModal');

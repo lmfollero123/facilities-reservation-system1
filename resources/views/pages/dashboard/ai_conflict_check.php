@@ -3,18 +3,15 @@
  * AI Conflict Detection API Endpoint
  * Returns JSON response with conflict information
  */
+require_once __DIR__ . '/../../../../config/app.php';
+
 header('Content-Type: application/json');
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 if (!($_SESSION['user_authenticated'] ?? false)) {
+    http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
-
-require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 
