@@ -642,6 +642,14 @@ ob_start();
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap:0.65rem 0.9rem;
 }
+.reservation-detail-email-wrap {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+.reservation-detail-email-wrap a {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
 @media (max-width: 900px) {
     .reservation-detail-meta-grid {
         grid-template-columns: 1fr;
@@ -708,7 +716,7 @@ ob_start();
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Name</strong>
                 <p style="margin:0;font-size:1rem;"><?= htmlspecialchars($reservation['requester_name']); ?></p>
             </div>
-            <div>
+            <div class="reservation-detail-email-wrap">
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Email</strong>
                 <p style="margin:0;font-size:1rem;"><a href="mailto:<?= htmlspecialchars($reservation['requester_email']); ?>" style="color:#2563eb;text-decoration:none;"><?= htmlspecialchars($reservation['requester_email']); ?></a></p>
             </div>
@@ -803,8 +811,8 @@ ob_start();
 <?php if ($reservation['status'] === 'pending'): ?>
     <div class="booking-card" style="margin-top:1.5rem;">
         <h2>Actions</h2>
-        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" style="display:flex;gap:1rem;align-items:flex-start;">
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" style="display:flex;gap:1rem;align-items:flex-start;">
+            <?= csrf_field(); ?>
             <div style="flex:1;">
                 <label style="display:block;margin-bottom:0.5rem;color:#5b6888;font-size:0.9rem;">Add Remarks (Optional)</label>
                 <textarea name="note" placeholder="Enter any notes or remarks for this action..." style="width:100%;padding:0.75rem;border:1px solid #dfe3ef;border-radius:8px;font-family:inherit;font-size:0.95rem;resize:vertical;min-height:80px;"></textarea>
@@ -896,8 +904,8 @@ ob_start();
             <h3>Modify Approved Reservation</h3>
             <button onclick="closeModifyModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="modifyForm">
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" id="modifyForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
             <input type="hidden" id="modify_facility_id" value="<?= (int)($reservation['facility_id'] ?? 0); ?>">
@@ -961,8 +969,8 @@ ob_start();
             <h3>Postpone Approved Reservation</h3>
             <button onclick="closePostponeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="postponeForm">
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" id="postponeForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
             
@@ -1011,8 +1019,8 @@ ob_start();
             <h3>Cancel Approved Reservation</h3>
             <button onclick="closeCancelModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="cancelForm">
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" id="cancelForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
             <input type="hidden" name="action" value="cancelled">
 
@@ -1045,8 +1053,8 @@ ob_start();
             <h3>Extend Reservation</h3>
             <button onclick="closeExtendModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservation-detail?id=<?= $reservationId; ?>" id="extendForm">
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" id="extendForm">
+            <?= csrf_field(); ?>
             <input type="hidden" name="reservation_id" id="extend_reservation_id">
             <input type="hidden" name="action" value="extend">
             <input type="hidden" name="facility_id" id="extend_facility_id">
@@ -1209,9 +1217,12 @@ async function checkModifyConflict() {
     }
 }
 
-document.getElementById('modify_new_date').addEventListener('change', debounceModifyConflict);
-document.getElementById('modify_start_time').addEventListener('change', debounceModifyConflict);
-document.getElementById('modify_end_time').addEventListener('change', debounceModifyConflict);
+['modify_new_date', 'modify_start_time', 'modify_end_time'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('change', debounceModifyConflict);
+    }
+});
 
 function closeModifyModal() {
     document.getElementById('modifyModal').style.display = 'none';
@@ -1270,7 +1281,10 @@ function updateExtensionFee() {
     document.getElementById('total_extension_fee').textContent = '₱' + totalFee.toFixed(2);
 }
 
-document.getElementById('extension_hours').addEventListener('change', updateExtensionFee);
+const extensionHoursEl = document.getElementById('extension_hours');
+if (extensionHoursEl) {
+    extensionHoursEl.addEventListener('change', updateExtensionFee);
+}
 
 // Time validation for modify and postpone modals
 function validateTimeInputs(startInputId, endInputId) {
@@ -1320,14 +1334,23 @@ validateTimeInputs('modify_start_time', 'modify_end_time');
 validateTimeInputs('postpone_start_time', 'postpone_end_time');
 
 // Close modals when clicking outside
-document.getElementById('modifyModal').addEventListener('click', function(e) {
-    if (e.target === this) closeModifyModal();
-});
-document.getElementById('postponeModal').addEventListener('click', function(e) {
-    if (e.target === this) closePostponeModal();
-});
-document.getElementById('cancelModal').addEventListener('click', function(e) {
-    if (e.target === this) closeCancelModal();
+['modifyModal', 'postponeModal', 'cancelModal'].forEach(function (modalId) {
+    const modalEl = document.getElementById(modalId);
+    if (!modalEl) {
+        return;
+    }
+    modalEl.addEventListener('click', function (e) {
+        if (e.target !== modalEl) {
+            return;
+        }
+        if (modalId === 'modifyModal') {
+            closeModifyModal();
+        } else if (modalId === 'postponeModal') {
+            closePostponeModal();
+        } else if (modalId === 'cancelModal') {
+            closeCancelModal();
+        }
+    });
 });
 
 // Violation Modal

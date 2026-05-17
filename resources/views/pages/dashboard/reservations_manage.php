@@ -727,8 +727,8 @@ ob_start();
                                     </span>
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                     <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
-                                        <form method="POST" action="<?= base_path(); ?>
-            <?= csrf_field(); ?>/dashboard/reservations-manage" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
+                                            <?= csrf_field(); ?>
                                             <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
                                             <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
                                             <button class="btn-primary confirm-action" data-message="Approve this reservation?<?= !empty($reservation['postponed_priority']) ? ' (This reservation has priority due to previous postponement.)' : ''; ?>" name="action" value="approved" type="submit">Approve</button>
