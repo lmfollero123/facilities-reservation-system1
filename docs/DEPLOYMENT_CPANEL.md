@@ -20,6 +20,7 @@ This guide walks you through deploying updates to your IndevFinite cPanel hostin
 
 Before pulling from GitHub:
 
+- [ ] **`vendor/` is not in Git** — after each pull, run `composer install --no-dev` on the server (see [Post-pull: Composer](#post-pull-composer))
 - [ ] **Backup your database** (cPanel → phpMyAdmin → Export)
 - [ ] **Backup these files** (download via File Manager or SFTP):
   - `config/database.php`
@@ -44,6 +45,20 @@ These files/folders are in `.gitignore` and **will not be updated** when you pul
 | `public/img/facilities/` | Facility images | Same as above. |
 | `logs/` | Application logs | Auto-created. Ensure writable. |
 | `storage/` | Exports, task logs, etc. | Auto-created. Ensure writable. |
+| `vendor/` | Composer packages (PHPMailer, 2FA, etc.) | **Not in Git.** Run `composer install --no-dev` after pull (see below). |
+
+### Post-pull: Composer
+
+`vendor/` is required at runtime but is **not committed**. After `git pull`, install dependencies on the server:
+
+```bash
+cd ~/public_html   # your app root (where composer.json lives)
+composer install --no-dev --no-interaction
+```
+
+If Composer is not installed on cPanel, use **Terminal** with the path shown in cPanel → **Select PHP Version** / **Composer**, or install dependencies locally and upload `vendor/` once via FTP (not ideal for updates).
+
+**Important:** The first deploy that *removes* `vendor/` from the repository may delete the folder on pull. Run `composer install --no-dev` immediately after that pull so mail and OTP keep working.
 
 ---
 

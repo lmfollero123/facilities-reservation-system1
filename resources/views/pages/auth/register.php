@@ -285,13 +285,15 @@ ob_start();
             </div>
         <?php endif; ?>
         
-        <form method="POST" class="auth-form auth-form-horizontal" enctype="multipart/form-data">
+        <form method="POST" class="auth-form auth-form-horizontal" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap: 0.9rem; margin: 0;">
             <?= csrf_field(); ?>
             <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
-                <div style="margin: 0.5rem 0 0.25rem;">
+                <div style="margin: 0.25rem 0 0;">
                     <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
                 </div>
             <?php endif; ?>
+
+            <div class="auth-form-scroll" style="max-height: min(62vh, 560px); overflow:auto; padding-right: 0.35rem; margin-right:-0.35rem;">
             <div class="auth-form-row">
                 <label>
                     First Name *
@@ -417,8 +419,9 @@ ob_start();
                     </span>
                 </label>
             </div>
+            </div>
             
-            <button class="btn-primary" type="submit" id="submitBtn">Register</button>
+            <button class="btn-primary" type="submit" id="submitBtn" style="position: sticky; bottom: 0; margin-top: 0.35rem;">Register</button>
         </form>
         
         <div class="auth-footer">

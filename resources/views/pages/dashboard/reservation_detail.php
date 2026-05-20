@@ -1366,9 +1366,6 @@ function closeViolationModal() {
     document.getElementById('violationModal').style.display = 'none';
 }
 
-document.getElementById('violationModal').addEventListener('click', function(e) {
-    if (e.target === this) closeViolationModal();
-});
 </script>
 
 <!-- Violation Recording Modal -->
@@ -1426,6 +1423,12 @@ document.getElementById('violationModal').addEventListener('click', function(e) 
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('violationModal')?.addEventListener('click', function (e) {
+    if (e.target === this) closeViolationModal();
+});
+</script>
 
 <div style="margin-top:1.5rem;">
     <a href="<?= base_path(); ?>/dashboard/reservations-manage" class="btn-outline" style="display:inline-block;text-decoration:none;">← Back to Approvals</a>

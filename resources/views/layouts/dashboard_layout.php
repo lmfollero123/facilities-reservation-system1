@@ -565,12 +565,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
         fetch('<?= base_path(); ?>/dashboard/ai-chatbot', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
             },
             body: formData
         })
-        .then(response => response.json())
+        .then(function (response) {
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                return response.text().then(function (body) {
+                    throw new Error('non_json_response:' + response.status + ':' + body.slice(0, 120));
+                });
+            }
+            return response.json().then(function (data) {
+                if (!response.ok) {
+                    data = data || {};
+                    data.reply = data.reply || ('Request failed (' + response.status + '). Please refresh and try again.');
+                }
+                return data;
+            });
+        })
         .then(data => {
             removeTypingIndicator(typingId);
             const responseText = data.reply || 'I apologize, but I couldn\'t process your request. Please try again.';
@@ -589,8 +605,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (params.toString()) {
                     const isBookFacilityPage = window.location.pathname.indexOf('book-facility') !== -1 || window.location.href.indexOf('book_facility') !== -1;
                     if (isBookFacilityPage) {
-                        fillBookingForm(d);
+                        (function tryChatbotPrefill(attempts) {
+                            if (typeof window.bcfApplyChatbotPrefill === 'function') {
+                                window.bcfApplyChatbotPrefill(d);
+                            } else if (attempts > 0) {
+                                setTimeout(function () { tryChatbotPrefill(attempts - 1); }, 200);
+                            } else {
+                                fillBookingForm(d);
+                            }
+                        })(15);
                     } else {
+                        params.set('open_booking', '1');
                         window.location.href = basePath + '/dashboard/book-facility?' + params.toString();
                     }
                 }
@@ -605,7 +630,13 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(error => {
             console.error('Chatbot API error:', error);
             removeTypingIndicator(typingId);
-            addMessage('I apologize, but I\'m having trouble connecting right now. Please try again later.', 'bot');
+            let errMsg = 'I apologize, but I\'m having trouble connecting right now. Please try again later.';
+            if (String(error && error.message || '').indexOf('non_json_response:401') === 0) {
+                errMsg = 'Your session has expired. Please refresh the page and log in again.';
+            } else if (String(error && error.message || '').indexOf('non_json_response:') === 0) {
+                errMsg = 'The assistant returned an unexpected response. Please refresh the page and try again.';
+            }
+            addMessage(errMsg, 'bot');
         })
         .finally(() => {
             // Re-enable send button

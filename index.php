@@ -64,11 +64,51 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/auth/reset_password.php';
 } elseif ($path === 'privacy') {
     require_once __DIR__ . '/resources/views/pages/public/privacy.php';
+} elseif ($path === 'terms') {
+    require_once __DIR__ . '/resources/views/pages/public/terms.php';
+} elseif ($path === 'legal') {
+    require_once __DIR__ . '/resources/views/pages/public/legal.php';
 } elseif ($path === 'paymongo-webhook') {
     require_once __DIR__ . '/resources/views/pages/public/api/paymongo_webhook.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
+    // Extract dashboard sub-path early (used for auth + routing)
+    $dashboardPath = str_replace('dashboard/', '', $path);
+    $dashboardPath = str_replace('dashboard', '', $dashboardPath);
+    $dashboardPath = trim($dashboardPath, '/');
+    if (strpos($dashboardPath, '?') !== false) {
+        $parts = explode('?', $dashboardPath);
+        $dashboardPath = $parts[0];
+    }
+
+    // JSON POST endpoints should not redirect to login HTML (breaks fetch().json())
+    $dashboardJsonPostRoutes = [
+        'ai-chatbot',
+        'chatbot-api',
+        'facility-details-api',
+        'facility-recommendations',
+        'booking-smart-hints',
+        'ai-conflict-check',
+        'ai-recommendations-api',
+        'notifications-api',
+        'geocode-api',
+        'occupancy-live',
+        'session-keepalive',
+    ];
+
     // Dashboard routes - check if user is logged in
     if (!isset($_SESSION['user_id'])) {
+        $isJsonApiPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+            && in_array($dashboardPath, $dashboardJsonPostRoutes, true);
+        if ($isJsonApiPost) {
+            header('Content-Type: application/json; charset=UTF-8');
+            http_response_code(401);
+            echo json_encode([
+                'reply' => 'Your session has expired. Please refresh the page and log in again.',
+                'error' => 'session_expired',
+            ]);
+            exit;
+        }
+
         // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $isLocal = (strpos($host, 'localhost') !== false || 
@@ -125,11 +165,9 @@ if ($path === 'announcements') {
     ];
     
     // Extract dashboard path
-    $dashboardPath = str_replace('dashboard/', '', $path);
-    $dashboardPath = str_replace('dashboard', '', $dashboardPath);
-    $dashboardPath = trim($dashboardPath, '/');
+    // (already computed above for auth checks)
     
-    // Handle query strings (e.g., reservation-detail?id=123)
+    // Handle query strings (e.g., reservation-detail?id=123) — path only, query stays in $_GET
     if (strpos($dashboardPath, '?') !== false) {
         $parts = explode('?', $dashboardPath);
         $dashboardPath = $parts[0];

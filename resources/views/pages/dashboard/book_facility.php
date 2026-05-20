@@ -138,6 +138,16 @@ require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';
 $prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
 $prefillTimeSlot = isset($_GET['time_slot']) ? trim($_GET['time_slot']) : null;
 
+// Open booking modal on load when AI chatbot or scheduler passes prefill query params
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    foreach (['facility_id', 'reservation_date', 'time_slot', 'start_time', 'end_time', 'purpose', 'expected_attendees', 'open_booking'] as $bcfOpenKey) {
+        if (!empty($_GET[$bcfOpenKey])) {
+            $bcfOpenBookingModal = true;
+            break;
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtPost) {
     $message = $frsCsrfError;
     $messageType = 'error';
@@ -2169,12 +2179,76 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = '';
         }
     }
+
+    function bcfApplyTimeSlotToInputs(slotStr) {
+        if (!slotStr || !startTimeInput || !endTimeInput) return;
+        const timeMatch = String(slotStr).match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+        if (!timeMatch) return;
+        startTimeInput.value = timeMatch[1] + ':' + timeMatch[2];
+        endTimeInput.value = timeMatch[3] + ':' + timeMatch[4];
+        startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function bcfApplyChatbotPrefill(d) {
+        if (!d || typeof d !== 'object') return;
+        if (d.facility_id && facilitySel) {
+            const opt = facilitySel.querySelector('option[value="' + String(d.facility_id) + '"]');
+            if (opt) {
+                facilitySel.value = String(d.facility_id);
+                facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+        if (d.reservation_date && dateInput) {
+            dateInput.value = d.reservation_date;
+            dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+            updateBcfReservationDateReadout();
+        }
+        if (d.start_time && startTimeInput) {
+            startTimeInput.value = d.start_time;
+            startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (d.end_time && endTimeInput) {
+            endTimeInput.value = d.end_time;
+            endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if ((!d.start_time || !d.end_time) && d.time_slot) {
+            bcfApplyTimeSlotToInputs(d.time_slot);
+        } else if (d.start_time && d.end_time) {
+            bcfApplyTimeSlotToInputs(d.start_time + ' - ' + d.end_time);
+        }
+        const purposeInput = document.getElementById('purpose-input');
+        const purposePreview = document.getElementById('bcf-purpose-preview');
+        if (d.purpose) {
+            if (purposeInput) purposeInput.value = d.purpose;
+            if (purposePreview) purposePreview.value = d.purpose;
+        }
+        const attendeesInput = document.getElementById('expected-attendees');
+        if (d.expected_attendees && attendeesInput) {
+            attendeesInput.value = String(d.expected_attendees);
+        }
+        if (facilitySel && facilitySel.value) {
+            filterTimeSlotsByOperatingHours();
+        } else {
+            applySameDayPastTimeCutoff();
+        }
+        bcfRebuildTimeMenus();
+        openBookingFlowModal();
+        setTimeout(function () {
+            if (typeof checkConflict === 'function') checkConflict();
+        }, 250);
+    }
+
+    window.openBookingFlowModal = openBookingFlowModal;
+    window.bcfApplyChatbotPrefill = bcfApplyChatbotPrefill;
     
     // Prefill from query params (facility_id, reservation_date, time_slot, purpose, expected_attendees) - MUST BE DECLARED EARLY
     const qp = new URLSearchParams(window.location.search);
     const preFacility = qp.get('facility_id');
     const preDate = qp.get('reservation_date');
     const preSlot = qp.get('time_slot'); // Legacy support for pre-filled slots
+    const preStartTime = qp.get('start_time');
+    const preEndTime = qp.get('end_time');
     const prePurpose = qp.get('purpose');
     const preAttendees = qp.get('expected_attendees');
     
@@ -3294,14 +3368,18 @@ document.addEventListener('DOMContentLoaded', function() {
         updateBcfReservationDateReadout();
     }
     updateBcfReservationDateReadout();
-    if (preSlot && startTimeInput && endTimeInput) {
-        // Parse time slot format "HH:MM - HH:MM" or legacy format
-        const timeMatch = preSlot.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
-        if (timeMatch) {
-            startTimeInput.value = timeMatch[1] + ':' + timeMatch[2];
-            endTimeInput.value = timeMatch[3] + ':' + timeMatch[4];
+    if (preSlot) {
+        bcfApplyTimeSlotToInputs(preSlot);
+    } else if (preStartTime || preEndTime) {
+        if (preStartTime && startTimeInput) {
+            startTimeInput.value = preStartTime;
             startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
+        if (preEndTime && endTimeInput) {
+            endTimeInput.value = preEndTime;
+            endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        bcfRebuildTimeMenus();
     }
     const prefillPurposeEl = document.getElementById('purpose-input');
     const prefillAttendeesEl = document.getElementById('expected-attendees');

@@ -21,9 +21,11 @@ require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=UTF-8');
+    @set_time_limit(45);
 
-    $pdo = db();
+    try {
+        $pdo = db();
     $userId   = $_SESSION['user_id'] ?? null;
     $userName = $_SESSION['name'] ?? 'User';
     $message  = trim($_POST['message'] ?? '');
@@ -299,6 +301,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     echo json_encode(['reply' => $reply]);
     exit;
+    } catch (Throwable $e) {
+        error_log('Chatbot POST error: ' . $e->getMessage());
+        echo json_encode([
+            'reply' => 'Something went wrong while processing your message. Please try again in a moment.',
+            'error' => 'server_error',
+        ]);
+        exit;
+    }
 }
 
 /*

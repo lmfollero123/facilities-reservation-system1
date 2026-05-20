@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/sms_helper.php';
+require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
@@ -428,8 +429,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                         : (base_path() . '/dashboard/my-reservations');
                     createNotification($reservation['requester_id'], 'booking', $notifTitle, $notifMessage, $notifLink);
                     
-                    // Send email notification
-                    if (!empty($reservation['requester_email']) && !empty($reservation['requester_name'])) {
+                    // Send email notification (if user opted in)
+                    $requesterId = (int)($reservation['requester_id'] ?? 0);
+                    $reservation['user_id'] = $requesterId;
+                    if ($requesterId > 0
+                        && frs_user_wants_notification($requesterId, 'booking', 'email')
+                        && !empty($reservation['requester_email'])
+                        && !empty($reservation['requester_name'])) {
                         if ($finalAction === 'approved') {
                             // Use the new professional template for approvals
                             $emailBody = getReservationApprovedEmailTemplate(

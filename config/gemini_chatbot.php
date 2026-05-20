@@ -27,10 +27,14 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
         return null;
     }
 
-    $models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
+    $models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
     $raw = false;
     $httpCode = 0;
     $apiKey = GEMINI_API_KEY;
+    $perRequestTimeout = 12;
+    $connectTimeout = 5;
+    $maxModelAttempts = 2;
+    $attemptedModels = 0;
 
     $contents = [];
     foreach ($conversationHistory as $msg) {
@@ -43,6 +47,10 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
     $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
 
     foreach ($models as $model) {
+        if ($attemptedModels >= $maxModelAttempts) {
+            break;
+        }
+        $attemptedModels++;
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
         $payload = [
             'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
@@ -63,7 +71,8 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
                 'x-goog-api-key: ' . $apiKey
             ],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT => $perRequestTimeout
         ]);
 
         $raw = curl_exec($ch);

@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/notification_preferences.php';
 
 /**
  * Create a notification for a user or all users
@@ -16,6 +17,13 @@ require_once __DIR__ . '/database.php';
  * @return int|false Notification ID on success, false on failure
  */
 function createNotification($userId, $type, $title, $message, $link = null) {
+    frs_ensure_notification_preferences_schema();
+    if ($userId !== null && (int)$userId > 0 && in_array($type, ['booking', 'reminder'], true)) {
+        $category = ($type === 'reminder') ? 'reminder' : 'booking';
+        if (!frs_user_wants_notification((int)$userId, $category, 'in_app')) {
+            return false;
+        }
+    }
     try {
         $pdo = db();
         $stmt = $pdo->prepare(

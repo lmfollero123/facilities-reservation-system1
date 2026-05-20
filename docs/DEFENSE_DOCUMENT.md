@@ -841,19 +841,40 @@ The **Barangay Culiat Public Facilities Reservation System** successfully addres
 - **Performance-Optimized AI**: Timeout protection and fallback mechanisms ensure system responsiveness even when ML models are slow
 - **Smart Client-Side Debouncing**: Reduces API calls by ~70% while maintaining real-time user experience
 
+## Facility Fees & Payments (Defense Narrative)
+
+Barangay Culiat public facilities are **free to reserve** for verified residents under normal community use. The system still supports **optional paid flows** when policy requires it:
+
+| Scenario | Behavior |
+|----------|----------|
+| Standard booking | No payment; status flows `pending` → `approved` (or auto-approved) |
+| Facility with usage fee + `PAYMENTS_ENABLED` | May enter `pending_payment`; resident completes PayMongo checkout |
+| Time extensions | Extension fees per facility configuration (`extension_helpers`) |
+
+This avoids contradicting “free facilities” messaging in the UI and chatbot while keeping PayMongo available for extensions or fee-based venues.
+
 ## Future Enhancements
 
-1. **Mobile Application**: Native iOS/Android apps
-2. **Payment Integration**: Online payment processing
-3. **Advanced Analytics**: Predictive analytics for demand forecasting
-4. **AI Chatbot**: Natural language interaction for bookings
-5. **Integration**: Maintenance Management, Infrastructure Management, Utilities Billing systems
+1. **Mobile Application**: Native iOS/Android apps or installable PWA
+2. **Event permit attachments**: Barangay resolution / letter uploads with large bookings
+3. **Advanced Analytics**: Demand forecasting in production reports UI
+4. **Live LGU integrations**: CIMM maintenance API (scaffolded), utilities/infrastructure feeds
+5. **Filipino/Tagalog localization** for public pages
+
+**Recently delivered:** AI chatbot (Gemini + booking prefill), notification preferences, 24h booking reminders (cron), automated PHPUnit CI.
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: January 2025  
+**Document Version**: 1.2  
+**Last Updated**: May 2026  
 **Prepared For**: Capstone Defense Presentation
+
+### Recent Updates (v1.2)
+- Notification preferences (Profile): in-app, email, SMS for booking status and reminders
+- Cron script `scripts/send_booking_reminders.php` for 24-hour approved-booking reminders
+- Public routes `/terms` and `/legal`; Contact Inquiries in admin sidebar
+- PHPUnit tests and GitHub Actions CI workflow
+- Facility fees narrative: free booking vs optional PayMongo/extension fees
 
 ### Recent Updates (v1.1)
 - Added Modify vs. Postpone documentation (Reservation Approval)

@@ -113,6 +113,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     ];
     $communicationsGroup = [
         ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'],
+        ['label' => 'Contact Inquiries', 'href' => $base . '/dashboard/contact-inquiries', 'icon' => 'telephone', 'page' => 'contact_inquiries'],
         ['label' => 'Contact Information', 'href' => $base . '/dashboard/contact-info', 'icon' => 'telephone', 'page' => 'contact_info_manage'],
     ];
     $integrationsGroup = [

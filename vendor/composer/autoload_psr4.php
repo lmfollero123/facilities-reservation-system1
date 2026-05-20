@@ -7,5 +7,7 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'RobThree\\Auth\\' => array($vendorDir . '/robthree/twofactorauth/lib'),
+    'PhpParser\\' => array($vendorDir . '/nikic/php-parser/lib/PhpParser'),
     'PHPMailer\\PHPMailer\\' => array($vendorDir . '/phpmailer/phpmailer/src'),
+    'DeepCopy\\' => array($vendorDir . '/myclabs/deep-copy/src/DeepCopy'),
 );

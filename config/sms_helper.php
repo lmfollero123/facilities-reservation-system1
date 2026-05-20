@@ -518,6 +518,17 @@ function sendSmsNotification(?string $recipient, string $message): bool
  */
 function sendReservationStatusSms(array $reservation, string $status): bool
 {
+    $userId = (int)($reservation['user_id'] ?? $reservation['requester_id'] ?? 0);
+    $statusKeyEarly = strtolower(trim($status));
+    if ($userId > 0) {
+        require_once __DIR__ . '/notification_preferences.php';
+        frs_ensure_notification_preferences_schema();
+        $smsCategory = ($statusKeyEarly === 'reminder') ? 'reminder' : 'booking';
+        if (!frs_user_wants_notification($userId, $smsCategory, 'sms')) {
+            return false;
+        }
+    }
+
     $facility = (string)($reservation['facility_name'] ?? 'facility');
     $date = !empty($reservation['reservation_date'])
         ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
@@ -533,6 +544,7 @@ function sendReservationStatusSms(array $reservation, string $status): bool
         'submitted' => 'LGU Culiat: We received your reservation for %s on %s (%s). Status: PENDING review.',
         'postponed' => 'LGU Culiat: Your reservation for %s has been POSTPONED. Check the app for the new schedule.',
         'modified' => 'LGU Culiat: Your reservation for %s on %s (%s) was UPDATED. Please review in the app.',
+        'reminder' => 'LGU Culiat: Reminder — %s tomorrow %s (%s). See My Reservations in the app.',
     ];
 
     $statusKey = strtolower(trim($status));

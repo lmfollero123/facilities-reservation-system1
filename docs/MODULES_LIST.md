@@ -75,7 +75,7 @@ Submodules:
 4.7 Historical Risk Scoring - [Implemented - OPTIMIZED Jan 2025]
    - Optimized single aggregate query for historical + pending counts
 4.8 Predictive Availability Forecasting - [Partially Implemented]
-4.9 AI Chatbot Assistant - [Planned]
+4.9 AI Chatbot Assistant - [Implemented] (Gemini + ML intents, booking prefill via floating widget)
 4.10 Context-Aware Facility Recommendations - [Implemented]
 4.11 Performance Database Indexes - [Implemented Jan 2025]
    - Indexes for conflict detection, historical queries, user booking counts, facility lookups
@@ -112,7 +112,7 @@ Submodules:
 6.7 Maintenance and Postponement Notifications
 6.8 Password Reset Email Notifications
 6.9 Contact Inquiry Email Alerts
-6.10 Notification Preferences Management
+6.10 Notification Preferences Management - [Implemented] (Profile page: in-app, email, SMS per booking/reminder)
 6.11 Public Announcements System - [Implemented]
    - Public announcements archive page with search, filters, and pagination
    - Category-based filtering (Emergency, Events, Health, Deadlines, Advisory, General)

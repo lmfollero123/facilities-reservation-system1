@@ -312,7 +312,7 @@ function secureSession(): void
 function isHTTPS(): bool
 {
     return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-           $_SERVER['SERVER_PORT'] == 443 ||
+           (int)($_SERVER['SERVER_PORT'] ?? 0) === 443 ||
            (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
 }
 

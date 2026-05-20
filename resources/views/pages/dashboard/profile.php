@@ -12,6 +12,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/data_export.php';
+require_once __DIR__ . '/../../../../config/notification_preferences.php';
 
 // Load Composer autoload for TOTP library
 // Try multiple possible paths
@@ -168,6 +169,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId && in_array($_SESSION['role
     }
 }
 
+// Save notification preferences
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notification_preferences'])) {
+    if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+        $error = 'Invalid form submission. Please refresh and try again.';
+    } else {
+        frs_ensure_notification_preferences_schema();
+        $prefs = [
+            'booking_in_app' => !empty($_POST['booking_in_app']),
+            'booking_email' => !empty($_POST['booking_email']),
+            'booking_sms' => !empty($_POST['booking_sms']),
+            'reminder_in_app' => !empty($_POST['reminder_in_app']),
+            'reminder_email' => !empty($_POST['reminder_email']),
+            'reminder_sms' => !empty($_POST['reminder_sms']),
+        ];
+        if (frs_save_notification_preferences((int)$userId, $prefs)) {
+            $success = 'Notification preferences saved.';
+        } else {
+            $error = 'Could not save notification preferences.';
+        }
+    }
+}
+
 // Handle data export request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_data'])) {
     $exportType = $_POST['export_type'] ?? 'full';
@@ -215,6 +238,9 @@ if ($user) {
     $validIdDoc = $docStmt->fetch(PDO::FETCH_ASSOC);
     $hasValidId = (bool)$validIdDoc;
 }
+
+frs_ensure_notification_preferences_schema();
+$notifyPrefs = frs_get_notification_preferences((int)$userId);
 
 if (!$user) {
     $error = 'Unable to load your profile information.';
@@ -623,6 +649,32 @@ ob_start();
 
                 <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0; display:flex; justify-content:flex-end;">
                     <button class="btn-primary" type="submit" style="padding:0.85rem 2rem; font-size:1rem; font-weight:600;">Save Changes</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="booking-card" id="notification-preferences">
+            <h2>Notification Preferences</h2>
+            <p style="color:#5b6888; margin:0 0 1rem; font-size:0.95rem;">Choose how you receive booking updates and 24-hour reminders. In-app notifications always respect these settings.</p>
+            <form method="POST" class="booking-form">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="save_notification_preferences" value="1">
+                <div style="display:grid; gap:1.25rem;">
+                    <div>
+                        <h3 style="margin:0 0 0.5rem; font-size:1rem;">Booking status (approve, deny, cancel, reschedule)</h3>
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;"><input type="checkbox" name="booking_in_app" value="1" <?= !empty($notifyPrefs['booking_in_app']) ? 'checked' : ''; ?>> In-app</label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;"><input type="checkbox" name="booking_email" value="1" <?= !empty($notifyPrefs['booking_email']) ? 'checked' : ''; ?>> Email</label>
+                        <label style="display:flex; align-items:center; gap:0.5rem;"><input type="checkbox" name="booking_sms" value="1" <?= !empty($notifyPrefs['booking_sms']) ? 'checked' : ''; ?>> SMS (requires mobile number above)</label>
+                    </div>
+                    <div>
+                        <h3 style="margin:0 0 0.5rem; font-size:1rem;">Reminders (24 hours before your event)</h3>
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;"><input type="checkbox" name="reminder_in_app" value="1" <?= !empty($notifyPrefs['reminder_in_app']) ? 'checked' : ''; ?>> In-app</label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;"><input type="checkbox" name="reminder_email" value="1" <?= !empty($notifyPrefs['reminder_email']) ? 'checked' : ''; ?>> Email</label>
+                        <label style="display:flex; align-items:center; gap:0.5rem;"><input type="checkbox" name="reminder_sms" value="1" <?= !empty($notifyPrefs['reminder_sms']) ? 'checked' : ''; ?>> SMS</label>
+                    </div>
+                </div>
+                <div style="margin-top:1.25rem;">
+                    <button type="submit" class="btn-primary">Save notification preferences</button>
                 </div>
             </form>
         </section>
