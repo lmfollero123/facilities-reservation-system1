@@ -163,6 +163,7 @@ if ($path === 'announcements') {
         'ai-chatbot' => 'ai_chatbot.php',
         'export-audit-trail' => 'export_audit_trail.php',
         'download-document' => 'download_document.php',
+        'download-reservation-document' => 'download_reservation_document.php',
         'download-export' => 'download_export.php',
         'contact-inquiries' => 'contact_inquiries.php',
         'sms-test' => 'sms_test.php',

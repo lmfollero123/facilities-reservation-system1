@@ -39,7 +39,7 @@ Close high-value gaps for capstone defense: reproducibility (README, CI), LGU-re
 
 | # | Item | Deliverable | Status |
 |---|------|-------------|--------|
-| C1 | Event permit attachments | Booking modal upload + `reservation_documents` table | Done |
+| C1 | Event permit attachments | Upload on book + view/download on reservation detail & My Reservations | Done |
 | C2 | Staff walk-in booking | Staff/Admin resident picker on Book a Facility | Done |
 | C5 | Calendar iCal export | `/dashboard/calendar-export` + button on Calendar | Done |
 | C6 | Integration pages | Routes + sidebar (preview labels) | Done |

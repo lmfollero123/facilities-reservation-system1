@@ -89,3 +89,144 @@ function frs_store_reservation_document(int $reservationId, array $file, int $up
         return ['ok' => false, 'error' => 'Database error saving document.'];
     }
 }
+
+function frs_reservation_document_type_label(string $type): string
+{
+    $labels = [
+        'event_permit' => 'Event / activity permit',
+        'barangay_resolution' => 'Barangay resolution',
+        'letter_request' => 'Letter of request',
+        'other' => 'Other',
+    ];
+    return $labels[$type] ?? ucwords(str_replace('_', ' ', $type));
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function frs_list_reservation_documents(int $reservationId): array
+{
+    if ($reservationId <= 0) {
+        return [];
+    }
+    frs_ensure_reservation_documents_schema();
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            'SELECT rd.id, rd.reservation_id, rd.document_type, rd.file_name, rd.file_size, rd.created_at,
+                    u.name AS uploaded_by_name
+             FROM reservation_documents rd
+             LEFT JOIN users u ON rd.uploaded_by = u.id
+             WHERE rd.reservation_id = :rid
+             ORDER BY rd.created_at ASC'
+        );
+        $stmt->execute(['rid' => $reservationId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        error_log('frs_list_reservation_documents: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * @param list<int> $reservationIds
+ * @return array<int, list<array<string, mixed>>>
+ */
+function frs_list_reservation_documents_for_ids(array $reservationIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $reservationIds), static fn ($id) => $id > 0)));
+    if ($ids === []) {
+        return [];
+    }
+    frs_ensure_reservation_documents_schema();
+    $out = [];
+    foreach ($ids as $id) {
+        $out[$id] = [];
+    }
+    try {
+        $pdo = db();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT rd.id, rd.reservation_id, rd.document_type, rd.file_name, rd.file_size, rd.created_at,
+                    u.name AS uploaded_by_name
+             FROM reservation_documents rd
+             LEFT JOIN users u ON rd.uploaded_by = u.id
+             WHERE rd.reservation_id IN ($placeholders)
+             ORDER BY rd.reservation_id, rd.created_at ASC"
+        );
+        $stmt->execute($ids);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $rid = (int)($row['reservation_id'] ?? 0);
+            if ($rid > 0) {
+                $out[$rid][] = $row;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('frs_list_reservation_documents_for_ids: ' . $e->getMessage());
+    }
+    return $out;
+}
+
+function frs_reservation_document_download_url(int $documentId, string $accessType = 'view'): string
+{
+    return base_path() . '/dashboard/download-reservation-document?id=' .
+        urlencode((string)$documentId) . '&type=' . urlencode($accessType);
+}
+
+/**
+ * @return array{allowed: bool, reason: string}
+ */
+function frs_can_access_reservation_document(int $documentId, int $userId, string $role): array
+{
+    if ($documentId <= 0 || $userId <= 0) {
+        return ['allowed' => false, 'reason' => 'Invalid request.'];
+    }
+    if (in_array($role, ['Admin', 'Staff'], true)) {
+        return ['allowed' => true, 'reason' => 'Staff access'];
+    }
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            'SELECT r.user_id FROM reservation_documents rd
+             JOIN reservations r ON r.id = rd.reservation_id
+             WHERE rd.id = :id LIMIT 1'
+        );
+        $stmt->execute(['id' => $documentId]);
+        $ownerId = (int)$stmt->fetchColumn();
+        if ($ownerId <= 0) {
+            return ['allowed' => false, 'reason' => 'Document not found.'];
+        }
+        if ($ownerId === $userId) {
+            return ['allowed' => true, 'reason' => 'Reservation owner'];
+        }
+        return ['allowed' => false, 'reason' => 'You do not have permission to view this document.'];
+    } catch (Throwable $e) {
+        error_log('frs_can_access_reservation_document: ' . $e->getMessage());
+        return ['allowed' => false, 'reason' => 'Unable to verify access.'];
+    }
+}
+
+function frs_get_reservation_document_file_path(int $documentId): ?string
+{
+    if ($documentId <= 0) {
+        return null;
+    }
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare('SELECT file_path FROM reservation_documents WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $documentId]);
+        $path = $stmt->fetchColumn();
+        if (!is_string($path) || $path === '' || !is_file($path)) {
+            return null;
+        }
+        $root = realpath(app_root_path());
+        $real = realpath($path);
+        if ($root === false || $real === false || strpos($real, $root) !== 0) {
+            return null;
+        }
+        return $real;
+    } catch (Throwable $e) {
+        error_log('frs_get_reservation_document_file_path: ' . $e->getMessage());
+        return null;
+    }
+}

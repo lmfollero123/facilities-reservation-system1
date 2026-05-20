@@ -238,7 +238,7 @@ Ensure these still work for Sprint B:
 
 | Feature | How to test |
 |---------|-------------|
-| Event permit upload | Book a facility → optional **Supporting document** → submit; row in `reservation_documents` |
+| Event permit upload | Book with **Supporting document** → Staff **Reservation Details** shows View/Download; resident sees file under **View Details** on My Reservations |
 | Walk-in booking | Log in as **Staff** → Book a Facility → pick a **Resident** → submit; reservation `user_id` = resident |
 | iCal export | **Calendar** → **Export to calendar (.ics)** → open file in Google/Outlook |
 | Integration previews | Sidebar **Urban Planning**, **Energy**, **Road Transport** (mock data pages) |

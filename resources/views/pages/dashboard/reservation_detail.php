@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/violations.php';
+require_once __DIR__ . '/../../../../config/reservation_documents.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -624,6 +625,8 @@ $historyStmt = $pdo->prepare(
 $historyStmt->execute(['id' => $reservationId]);
 $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
+$reservationDocuments = frs_list_reservation_documents($reservationId);
+
 ob_start();
 ?>
 <style>
@@ -794,6 +797,48 @@ ob_start();
                 <span class="status-badge <?= $reservation['facility_status']; ?>"><?= ucfirst($reservation['facility_status']); ?></span>
             </div>
         </div>
+    </section>
+
+    <section class="booking-card">
+        <h2>Supporting Documents</h2>
+        <?php if (empty($reservationDocuments)): ?>
+            <p style="margin:0; color:#8b95b5; font-size:0.95rem;">No event permit or supporting files were uploaded with this request.</p>
+        <?php else: ?>
+            <ul style="margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:0.75rem;">
+                <?php foreach ($reservationDocuments as $rdoc):
+                    $docId = (int)($rdoc['id'] ?? 0);
+                    $viewUrl = frs_reservation_document_download_url($docId, 'view');
+                    $dlUrl = frs_reservation_document_download_url($docId, 'download');
+                    $sizeKb = round(((int)($rdoc['file_size'] ?? 0)) / 1024, 1);
+                ?>
+                <li style="padding:0.75rem 1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem; flex-wrap:wrap;">
+                        <div>
+                            <strong style="display:block; color:#1e293b; font-size:0.95rem;">
+                                <?= htmlspecialchars(frs_reservation_document_type_label((string)($rdoc['document_type'] ?? 'other'))); ?>
+                            </strong>
+                            <span style="font-size:0.88rem; color:#64748b;">
+                                <?= htmlspecialchars((string)($rdoc['file_name'] ?? 'document')); ?>
+                                <?php if ($sizeKb > 0): ?> · <?= $sizeKb; ?> KB<?php endif; ?>
+                            </span>
+                            <?php if (!empty($rdoc['uploaded_by_name'])): ?>
+                                <span style="display:block; font-size:0.82rem; color:#94a3b8; margin-top:0.2rem;">
+                                    Uploaded by <?= htmlspecialchars((string)$rdoc['uploaded_by_name']); ?>
+                                    <?php if (!empty($rdoc['created_at'])): ?>
+                                        · <?= htmlspecialchars((string)$rdoc['created_at']); ?>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                            <a href="<?= htmlspecialchars($viewUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="btn-outline" style="padding:0.4rem 0.75rem; font-size:0.88rem; text-decoration:none;">View</a>
+                            <a href="<?= htmlspecialchars($dlUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding:0.4rem 0.75rem; font-size:0.88rem; text-decoration:none;">Download</a>
+                        </div>
+                    </div>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
     </section>
 </div>
 

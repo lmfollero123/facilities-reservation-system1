@@ -207,6 +207,11 @@ foreach ($calendarReservations as $reservation) {
     $mineTabByDate[$d][] = $reservation;
 }
 
+require_once __DIR__ . '/../../../../../config/reservation_documents.php';
+$mineReservationDocsById = frs_list_reservation_documents_for_ids(
+    array_map(static fn ($r) => (int)($r['id'] ?? 0), $calendarReservations)
+);
+
 // Selected date (opens the day modal)
 $selectedDate = $_GET['selected_date'] ?? '';
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$selectedDate)) {
@@ -421,6 +426,26 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                                 <div style="margin-top:0.6rem; color: var(--text-secondary,#6b7280);">
                                     <div><strong style="color: var(--text-primary,#0f172a);">Purpose:</strong> <?= htmlspecialchars($reservation['purpose'] ?? ''); ?></div>
                                     <div style="margin-top:0.25rem;"><strong style="color: var(--text-primary,#0f172a);">Expected attendees:</strong> <?= htmlspecialchars((string)($reservation['expected_attendees'] ?? 'N/A')); ?></div>
+                                    <?php
+                                    $mineDocs = $mineReservationDocsById[(int)($reservation['id'] ?? 0)] ?? [];
+                                    if ($isOwnReservation && !empty($mineDocs)):
+                                    ?>
+                                    <div style="margin-top:0.65rem;">
+                                        <strong style="color: var(--text-primary,#0f172a);">Supporting documents:</strong>
+                                        <ul style="margin:0.35rem 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:0.35rem;">
+                                            <?php foreach ($mineDocs as $mdoc):
+                                                $mdocId = (int)($mdoc['id'] ?? 0);
+                                            ?>
+                                            <li>
+                                                <a href="<?= htmlspecialchars(frs_reservation_document_download_url($mdocId, 'view'), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" style="color: var(--gov-blue,#2563eb); font-weight:600; text-decoration:none;">
+                                                    <?= htmlspecialchars(frs_reservation_document_type_label((string)($mdoc['document_type'] ?? 'other'))); ?>
+                                                </a>
+                                                <span style="color:#94a3b8; font-size:0.82rem;"> — <?= htmlspecialchars((string)($mdoc['file_name'] ?? '')); ?></span>
+                                            </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
                             </details>
                         <?php endif; ?>
