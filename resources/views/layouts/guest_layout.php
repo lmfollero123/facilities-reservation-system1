@@ -38,6 +38,21 @@ if ($isHomePage || $isPublicPage) {
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle); ?></title>
+    <?php
+    $captchaEnabled = false;
+    $turnstileSiteKey = '';
+    try {
+        require_once __DIR__ . '/../../../config/captcha.php';
+        $captchaEnabled = frs_captcha_enabled();
+        $turnstileSiteKey = frs_turnstile_site_key();
+    } catch (Throwable $e) {
+        $captchaEnabled = false;
+        $turnstileSiteKey = '';
+    }
+    ?>
+    <?php if ($captchaEnabled && $turnstileSiteKey !== ''): ?>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <?php endif; ?>
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
     <!-- Google fonts -->

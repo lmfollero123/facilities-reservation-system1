@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/captcha.php';
 
 header('Content-Type: application/json');
 
@@ -16,6 +17,27 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Invalid security token. Please refresh the page.']);
+    exit;
+}
+
+$clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+// Captcha first (cheap reject) before rate limit / DB work
+$captcha = frs_verify_turnstile($_POST['cf-turnstile-response'] ?? null, (string)$clientIp);
+if (!$captcha['ok']) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => $captcha['error']]);
+    exit;
+}
+if (!checkRateLimit('contact_form_ip', (string)$clientIp, 3, 300)) {
+    http_response_code(429);
+    echo json_encode(['success' => false, 'message' => 'Too many inquiries from your network. Please try again in a few minutes.']);
+    exit;
+}
+
+// Honeypot field (must stay empty). Do not reveal this check to bots.
+$hpWebsite = trim((string)($_POST['website'] ?? ''));
+if ($hpWebsite !== '') {
+    echo json_encode(['success' => true, 'message' => 'Thank you for your inquiry!']);
     exit;
 }
 
@@ -34,6 +56,9 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 }
 if (empty($message) || strlen($message) < 10) {
     $errors[] = 'Please enter a message (at least 10 characters).';
+}
+if (!empty($email) && !checkRateLimit('contact_form_email', strtolower($email), 2, 600)) {
+    $errors[] = 'Too many inquiries for this email. Please try again later.';
 }
 
 if (!empty($errors)) {

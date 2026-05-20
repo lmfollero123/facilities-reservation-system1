@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/captcha.php';
 
 // Ensure base_url() function exists (fallback if not loaded from app.php)
 if (!function_exists('base_url')) {
@@ -24,12 +25,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Invalid security token. Please refresh the page.';
         $messageType = 'error';
     } else {
+        $clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        $captcha = frs_verify_turnstile($_POST['cf-turnstile-response'] ?? null, (string)$clientIp);
+        if (!$captcha['ok']) {
+            $message = $captcha['error'];
+            $messageType = 'error';
+        } else
+        if (!checkRateLimit('forgot_password_ip', (string)$clientIp, 3, 600)) {
+            $message = 'Too many password reset requests. Please try again in 10 minutes.';
+            $messageType = 'error';
+        } else {
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
         
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = 'Please enter a valid email address.';
             $messageType = 'error';
         } else {
+            if (!checkRateLimit('forgot_password_email', strtolower($email), 2, 600)) {
+                $message = 'Too many reset attempts for this email. Please try again later.';
+                $messageType = 'error';
+            } else {
             try {
                 $pdo = db();
                 
@@ -99,6 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'An error occurred. Please try again later.';
                 $messageType = 'error';
             }
+            }
+        }
         }
     }
 }
@@ -121,6 +138,11 @@ ob_start();
         
         <form method="POST" class="auth-form">
             <?= csrf_field(); ?>
+            <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
+                <div style="margin: 0.75rem 0 0.25rem;">
+                    <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                </div>
+            <?php endif; ?>
             <label>
                 Email Address
                 <div class="input-wrapper">
