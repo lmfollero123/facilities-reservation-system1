@@ -120,6 +120,9 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'],
         ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'],
         ['label' => 'Utilities', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'],
+        ['label' => 'Urban Planning (preview)', 'href' => $base . '/dashboard/urban-planning', 'icon' => 'chart-bar', 'page' => 'urban_planning_integration'],
+        ['label' => 'Energy Efficiency (preview)', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'bolt', 'page' => 'energy_efficiency_integration'],
+        ['label' => 'Road & Transport (preview)', 'href' => $base . '/dashboard/road-transport', 'icon' => 'chart-bar', 'page' => 'road_transpo_integration'],
     ];
     $reportsGroup = [
         ['label' => 'Live Occupancy', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'],

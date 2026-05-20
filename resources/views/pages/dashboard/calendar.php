@@ -192,6 +192,11 @@ ob_start();
     </div>
     <h1>Calendar & Scheduling</h1>
     <small>Visual overview of reservations, maintenance blocks, and availability.</small>
+    <p style="margin:0.75rem 0 0;">
+        <a class="btn-outline" href="<?= htmlspecialchars(base_path() . '/dashboard/calendar-export?from=' . urlencode($startDate) . '&to=' . urlencode($endDate) . (in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true) ? '&scope=all' : ''), ENT_QUOTES, 'UTF-8'); ?>" style="display:inline-block;text-decoration:none;padding:0.45rem 0.9rem;font-size:0.88rem;">
+            Export to calendar (.ics)
+        </a>
+    </p>
     <div class="calendar-tabs">
         <a href="?view=month&year=<?= $year; ?>&month=<?= $month; ?>" class="<?= $view === 'month' ? 'active' : ''; ?>" data-calendar-view="month">Month</a>
         <a href="?view=week&year=<?= $year; ?>&month=<?= $month; ?>&day=<?= $day; ?>" class="<?= $view === 'week' ? 'active' : ''; ?>" data-calendar-view="week">Week</a>

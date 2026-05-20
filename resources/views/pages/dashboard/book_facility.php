@@ -55,6 +55,20 @@ $BOOKING_PER_DAY = 1; // max bookings per user per day (pending+approved)
 // Check if user is verified and if they have uploaded a valid ID
 // Note: Staff and Admin are automatically considered verified
 $userId = $_SESSION['user_id'] ?? null;
+$sessionActorId = (int)$userId;
+$viewerRole = (string)($_SESSION['role'] ?? 'Resident');
+$canBookOnBehalf = in_array($viewerRole, ['Admin', 'Staff'], true);
+$walkInResidents = [];
+$selectedBookForUserId = (int)($_POST['book_for_user_id'] ?? $_GET['book_for'] ?? 0);
+if ($canBookOnBehalf && $pdo) {
+    try {
+        $wr = $pdo->query("SELECT id, name, email FROM users WHERE role = 'Resident' AND status = 'active' ORDER BY name");
+        $walkInResidents = $wr ? $wr->fetchAll(PDO::FETCH_ASSOC) : [];
+    } catch (Throwable $e) {
+        $walkInResidents = [];
+    }
+}
+$bookingSubjectId = ($canBookOnBehalf && $selectedBookForUserId > 0) ? $selectedBookForUserId : $sessionActorId;
 $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
 $userVerificationStmt->execute(['user_id' => $userId]);
 $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
@@ -67,8 +81,14 @@ $isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'],
 
 // Check if user has already uploaded a valid ID document
 $hasValidIdDocStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
-$hasValidIdDocStmt->execute(['user_id' => $userId]);
+$hasValidIdDocStmt->execute(['user_id' => $bookingSubjectId]);
 $hasValidIdDocument = (bool)$hasValidIdDocStmt->fetch();
+if ($canBookOnBehalf && $bookingSubjectId !== $sessionActorId) {
+    $subVer = $pdo->prepare('SELECT is_verified FROM users WHERE id = :id LIMIT 1');
+    $subVer->execute(['id' => $bookingSubjectId]);
+    $isVerified = (bool)$subVer->fetchColumn();
+    $isVerifiedOrPrivileged = true;
+}
 
 try {
     $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status, operating_hours FROM facilities ORDER BY name');
@@ -125,7 +145,6 @@ $isReservationsMgmtPost = $postedBookingAction !== null && in_array((string)$pos
 
 $message = '';
 $messageType = 'success';
-$viewerRole = (string)($_SESSION['role'] ?? 'Resident');
 $canViewOtherReservationDetails = in_array($viewerRole, ['Admin', 'Staff'], true);
 $GLOBALS['frsMineNotifyPath'] = base_path() . '/dashboard/book-facility?module=mine';
 $GLOBALS['frsMineNotifyAbsUrl'] = base_url() . '/dashboard/book-facility?module=mine';
@@ -133,6 +152,7 @@ autoDeclineExpiredReservations();
 $frsCsrfOk = frs_csrf_ok();
 $frsCsrfError = 'Your session expired or the form is invalid. Please refresh and try again.';
 require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';
+require_once __DIR__ . '/../../../../config/reservation_documents.php';
 
 // Check if pre-filled from Smart Scheduler (for showing notification)
 $prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
@@ -166,6 +186,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     $expectedAttendees = isset($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : 0;
     $isCommercial = false;
     $priorityLevel = 3;
+
+    $bookingUserId = $sessionActorId;
+    if ($canBookOnBehalf && !empty($_POST['book_for_user_id'])) {
+        $bfid = (int)$_POST['book_for_user_id'];
+        $resChk = $pdo->prepare("SELECT id, name FROM users WHERE id = :id AND role = 'Resident' AND status = 'active' LIMIT 1");
+        $resChk->execute(['id' => $bfid]);
+        $resRow = $resChk->fetch(PDO::FETCH_ASSOC);
+        if (!$resRow) {
+            $error = 'Please select a valid active resident for walk-in booking.';
+        } else {
+            $bookingUserId = $bfid;
+            $purpose .= "\n\n--- Walk-in booking ---\nAssisted by: " . trim((string)($_SESSION['name'] ?? 'Staff'));
+        }
+    }
+    if (empty($error)) {
+        $userId = $bookingUserId;
+        $selectedBookForUserId = $bookingUserId;
+    }
+
+    $eventPermitType = in_array($_POST['event_document_type'] ?? '', ['event_permit', 'barangay_resolution', 'letter_request', 'other'], true)
+        ? (string)$_POST['event_document_type'] : 'event_permit';
+    $eventPermitFile = $_FILES['event_supporting_doc'] ?? null;
     
     // Check if user is verified - if not, require ID upload
     $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
@@ -179,8 +221,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     $validIdFile = $_FILES['doc_valid_id'] ?? null;
     $hasValidIdUpload = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
     
+    $staffAssistedBooking = $canBookOnBehalf && $bookingUserId !== $sessionActorId;
+    if ($staffAssistedBooking) {
+        $isVerifiedOrPrivileged = true;
+    }
+
     // If user is not verified and hasn't uploaded a valid ID, require ID upload
-    if (!$isVerifiedOrPrivileged && !$hasValidIdDocument && !$hasValidIdUpload) {
+    if (!$staffAssistedBooking && !$isVerifiedOrPrivileged && !$hasValidIdDocument && !$hasValidIdUpload) {
         $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
     }
     
@@ -548,7 +595,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             if ($isAutoApproved) {
                 $auditDetails .= ' [Auto-approved]';
             }
-            logAudit('Created reservation request', 'Reservations', $auditDetails);
+            $staffLabel = trim((string)($_SESSION['name'] ?? 'Staff'));
+            logAudit('Created reservation request', 'Reservations', $auditDetails, $staffAssistedBooking ? $sessionActorId : null);
+            if ($staffAssistedBooking) {
+                logAudit('Walk-in booking created', 'Reservations', 'RES-' . $newReservationId . ' for user #' . $bookingUserId . ' by ' . $staffLabel, $sessionActorId);
+            }
+            if (!empty($eventPermitFile['tmp_name']) && ($eventPermitFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                $docResult = frs_store_reservation_document((int)$newReservationId, $eventPermitFile, $sessionActorId, $eventPermitType);
+                if (!$docResult['ok']) {
+                    $success .= ' Note: supporting document was not saved — ' . ($docResult['error'] ?? 'upload error');
+                }
+            }
             
             if ($initialStatus === 'pending_payment') {
                 createNotification(
@@ -731,6 +788,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             ]);
 
             logAudit('Created reservation request (admin exempt)', 'Reservations', 'RES-' . $newReservationId . ' – ' . $facilityName . ' (' . $date . ' ' . $timeSlot . ')');
+            if (!empty($eventPermitFile['tmp_name']) && ($eventPermitFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                $docResult = frs_store_reservation_document((int)$newReservationId, $eventPermitFile, $sessionActorId, $eventPermitType);
+                if (!$docResult['ok']) {
+                    $success .= ' Note: supporting document was not saved — ' . ($docResult['error'] ?? 'upload error');
+                }
+            }
 
             if ($initialStatus === 'pending_payment') {
                 createNotification(
@@ -1505,6 +1568,23 @@ ul.bcf-scroll-select-menu {
         <?php endif; ?>
         <form id="main-booking-form" class="booking-form" method="POST" enctype="multipart/form-data">
             <?= csrf_field(); ?>
+            <?php if ($canBookOnBehalf && !empty($walkInResidents)): ?>
+            <div style="padding:1rem; background:#eff6ff; border:1px solid #93c5fd; border-radius:8px; margin-bottom:1rem;">
+                <h4 style="margin:0 0 0.5rem; color:#1e40af; font-size:1rem;">Walk-in / assisted booking</h4>
+                <p style="margin:0 0 0.75rem; color:#1e3a8a; font-size:0.88rem;">Create a reservation on behalf of a resident (barangay counter service).</p>
+                <label>
+                    Resident
+                    <select name="book_for_user_id" id="book-for-user-id" style="width:100%; padding:0.55rem; border-radius:8px; border:2px solid #dbe3f5;">
+                        <option value="">— Book for myself (staff/admin) —</option>
+                        <?php foreach ($walkInResidents as $wr): ?>
+                            <option value="<?= (int)$wr['id']; ?>" <?= $selectedBookForUserId === (int)$wr['id'] ? 'selected' : ''; ?>>
+                                <?= htmlspecialchars($wr['name']); ?> (<?= htmlspecialchars($wr['email']); ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </div>
+            <?php endif; ?>
             <label>
                 Facility
                 <div class="input-wrapper">
@@ -1646,7 +1726,25 @@ ul.bcf-scroll-select-menu {
                 <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="1200" placeholder="Parking, setup time, accessibility, etc."></textarea>
             </label>
 
-            <?php if (!$isVerified && !$hasValidIdDocument): ?>
+            <div style="padding:1rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; margin-top:0.5rem;">
+                <h4 style="margin:0 0 0.5rem; font-size:0.95rem;">Supporting document (optional)</h4>
+                <p style="margin:0 0 0.75rem; font-size:0.85rem; color:#64748b;">Event permit, barangay resolution, or letter of request — recommended for large events.</p>
+                <label style="display:block; margin-bottom:0.5rem;">
+                    Document type
+                    <select name="event_document_type" style="width:100%; padding:0.5rem; border-radius:8px; margin-top:0.25rem;">
+                        <option value="event_permit">Event / activity permit</option>
+                        <option value="barangay_resolution">Barangay resolution</option>
+                        <option value="letter_request">Letter of request</option>
+                        <option value="other">Other</option>
+                    </select>
+                </label>
+                <label>
+                    Upload file (PDF or image, max 8MB)
+                    <input type="file" name="event_supporting_doc" accept=".pdf,image/*" style="margin-top:0.35rem; width:100%;">
+                </label>
+            </div>
+
+            <?php if (!$isVerified && !$hasValidIdDocument && !($canBookOnBehalf && $selectedBookForUserId > 0)): ?>
             <div style="padding:1rem; background:#fff4e5; border:2px solid #ffc107; border-radius:8px; margin-top:1rem;">
                 <h4 style="margin:0 0 0.5rem; color:#856404; font-size:1rem;">⚠️ Valid ID Required</h4>
                 <p style="margin:0 0 1rem; color:#856404; font-size:0.9rem; line-height:1.5;">

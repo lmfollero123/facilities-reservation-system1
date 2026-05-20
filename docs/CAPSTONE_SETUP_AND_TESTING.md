@@ -1,4 +1,4 @@
-# Sprint A & B — Setup and Testing Guide
+# Capstone setup and testing (Sprints A–C)
 
 Step-by-step instructions for **local XAMPP** and **live cPanel** (IndevFinite or similar).
 
@@ -24,7 +24,12 @@ composer install
 
 ---
 
-## 1. Database migration (required once)
+## 1. Database migrations (required once)
+
+Run **both** (if not already applied):
+
+1. `database/migration_add_notification_preferences.sql` (Sprint B)
+2. `database/migration_add_reservation_documents.sql` (Sprint C)
 
 Sprint B adds:
 
@@ -229,11 +234,22 @@ Ensure these still work for Sprint B:
 
 ---
 
-## 8. Full checklist
+## 8. Sprint C — quick tests
+
+| Feature | How to test |
+|---------|-------------|
+| Event permit upload | Book a facility → optional **Supporting document** → submit; row in `reservation_documents` |
+| Walk-in booking | Log in as **Staff** → Book a Facility → pick a **Resident** → submit; reservation `user_id` = resident |
+| iCal export | **Calendar** → **Export to calendar (.ics)** → open file in Google/Outlook |
+| Integration previews | Sidebar **Urban Planning**, **Energy**, **Road Transport** (mock data pages) |
+
+---
+
+## 9. Full checklist
 
 ### After deploy
 
-- [ ] SQL migration applied (or columns exist)
+- [ ] Both SQL migrations applied (notification prefs + reservation documents)
 - [ ] `/terms` and `/legal` load in browser
 - [ ] Footer links open those pages
 - [ ] Admin sees **Contact Inquiries** in sidebar
@@ -249,10 +265,12 @@ Ensure these still work for Sprint B:
 3. Approve a booking → in-app notification (+ email/SMS if enabled).
 4. Explain cron: “24 hours before the event, residents get a reminder.”
 5. Run `php scripts/send_booking_reminders.php --dry-run` in terminal (optional).
+6. Staff walk-in: book for a resident from **Book a Facility**.
+7. Calendar **.ics** export for approved bookings.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Problem | Fix |
 |---------|-----|

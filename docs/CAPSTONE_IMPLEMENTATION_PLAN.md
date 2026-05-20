@@ -35,16 +35,21 @@ Close high-value gaps for capstone defense: reproducibility (README, CI), LGU-re
 
 ---
 
-## Sprint C — Future work (not in this pass)
+## Sprint C — LGU features (implemented)
+
+| # | Item | Deliverable | Status |
+|---|------|-------------|--------|
+| C1 | Event permit attachments | Booking modal upload + `reservation_documents` table | Done |
+| C2 | Staff walk-in booking | Staff/Admin resident picker on Book a Facility | Done |
+| C5 | Calendar iCal export | `/dashboard/calendar-export` + button on Calendar | Done |
+| C6 | Integration pages | Routes + sidebar (preview labels) | Done |
+
+## Sprint C — Deferred
 
 | # | Item | Notes |
 |---|------|-------|
-| C1 | Event permit attachments | Upload with reservation form |
-| C2 | Staff walk-in booking | Clerk creates reservation for resident |
-| C3 | Live CIMM API | Replace mock maintenance data |
-| C4 | Filipino/Tagalog UI | Partial i18n |
-| C5 | Calendar iCal export | `calendar.php` |
-| C6 | Wire or remove orphan integration pages | urban_planning, energy, road_transpo |
+| C3 | Live CIMM API | Requires external API from CIMM host |
+| C4 | Filipino/Tagalog UI | Partial i18n — large scope |
 
 ---
 

@@ -2,7 +2,7 @@
 /**
  * Send 24-hour reminders for approved reservations happening tomorrow.
  *
- * Usage: php scripts/send_booking_reminders.php [--dry-run] [--verbose]
+ * Usage: php scripts/send_booking_reminders.php [--dry-run] [--verbose] [--date=YYYY-MM-DD]
  */
 
 require_once __DIR__ . '/../config/app.php';
@@ -12,9 +12,12 @@ require_once __DIR__ . '/../config/notification_preferences.php';
 require_once __DIR__ . '/../config/mail_helper.php';
 require_once __DIR__ . '/../config/sms_helper.php';
 
-$options = getopt('', ['dry-run', 'verbose']);
+$options = getopt('', ['dry-run', 'verbose', 'date:']);
 $dryRun = isset($options['dry-run']);
 $verbose = isset($options['verbose']);
+$targetDate = isset($options['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$options['date'])
+    ? (string)$options['date']
+    : date('Y-m-d', strtotime('+1 day'));
 
 frs_ensure_notification_preferences_schema();
 
@@ -23,9 +26,10 @@ $basePath = function_exists('base_path') ? base_path() : '';
 
 echo "=== Booking Reminders (24h) ===\n";
 echo 'Started: ' . date('Y-m-d H:i:s') . "\n";
-echo 'Dry run: ' . ($dryRun ? 'yes' : 'no') . "\n\n";
+echo 'Dry run: ' . ($dryRun ? 'yes' : 'no') . "\n";
+echo 'Target date: ' . $targetDate . "\n\n";
 
-$tomorrow = date('Y-m-d', strtotime('+1 day'));
+$tomorrow = $targetDate;
 
 $hasReminderCol = false;
 try {
@@ -42,7 +46,7 @@ $sql = "
     FROM reservations r
     JOIN facilities f ON r.facility_id = f.id
     JOIN users u ON r.user_id = u.id
-    WHERE r.status = 'approved'
+    WHERE r.status IN ('approved', 'pending_payment')
       AND r.reservation_date = :tomorrow
 ";
 if ($hasReminderCol) {
@@ -53,7 +57,31 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute(['tomorrow' => $tomorrow]);
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-echo 'Tomorrow (' . $tomorrow . '): ' . count($rows) . " approved reservation(s) to remind.\n\n";
+echo 'Target date (' . $tomorrow . '): ' . count($rows) . " confirmed reservation(s) to remind (approved or pending_payment).\n";
+
+if ($verbose && count($rows) === 0) {
+    $diag = $pdo->prepare(
+        "SELECT r.id, r.reservation_date, r.status, r.reminder_sent_at, f.name AS facility_name
+         FROM reservations r
+         JOIN facilities f ON r.facility_id = f.id
+         WHERE r.reservation_date >= CURDATE()
+           AND r.reservation_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+         ORDER BY r.reservation_date ASC, r.id ASC
+         LIMIT 20"
+    );
+    $diag->execute();
+    $upcoming = $diag->fetchAll(PDO::FETCH_ASSOC);
+    echo "\nNo matches for target date. Upcoming reservations (next 7 days, any status):\n";
+    if (!$upcoming) {
+        echo "  (none)\n";
+    } else {
+        foreach ($upcoming as $u) {
+            $rs = $u['reminder_sent_at'] ?? 'null';
+            echo "  #{$u['id']} {$u['reservation_date']} [{$u['status']}] {$u['facility_name']} reminder_sent_at={$rs}\n";
+        }
+    }
+}
+echo "\n";
 
 $sent = 0;
 $skipped = 0;
