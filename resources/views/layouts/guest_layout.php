@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../config/app.php';
+require_once __DIR__ . '/../../../config/ui_helpers.php';
 $pageTitle = $pageTitle ?? 'LGU Facilities Reservation';
 $bodyClass = $bodyClass ?? '';
 // VISUAL CHANGE ONLY - Add landing-page class for home page and public pages
@@ -304,6 +305,11 @@ if ($isHomePage || $isPublicPage) {
 <!-- Bootstrap and plugins JS is loaded below -->
 <!-- Custom JS -->
 <script src="<?= htmlspecialchars($base); ?>/public/js/main.js"></script>
+<?php
+$frsTipsJsPath = dirname(__DIR__, 3) . '/public/js/frs-field-tips.js';
+$frsTipsJsVer = is_file($frsTipsJsPath) ? (string)filemtime($frsTipsJsPath) : '1';
+?>
+<script src="<?= htmlspecialchars($base); ?>/public/js/frs-field-tips.js?v=<?= htmlspecialchars($frsTipsJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>
 

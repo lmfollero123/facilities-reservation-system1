@@ -670,8 +670,7 @@ ob_start();
     </div>
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
         <div style="flex: 1;">
-            <h1>Reservation Approvals</h1>
-            <small>Review pending requests and manage reservation statuses.</small>
+            <?= frs_page_title('Reservation Approvals', 'Approve, deny, or cancel requests. Use filters and “All Reservations” for the full list.'); ?>
         </div>
         <button type="button" onclick="openAllReservationsModal()" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap;">
             All Reservations

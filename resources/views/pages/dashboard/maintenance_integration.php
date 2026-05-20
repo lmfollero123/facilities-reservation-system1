@@ -251,15 +251,14 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Maintenance Integration</span>
     </div>
-    <h1>Maintenance Integration</h1>
-    <small>View and manage maintenance schedules from Community Infrastructure Maintenance Management system.</small>
+    <?= frs_page_title('Maintenance Integration', 'Syncs maintenance windows from CIMM. Scheduled work can set facilities to maintenance and add blackout dates.'); ?>
 </div>
 
 <!-- Integration Status Card -->
 <div class="booking-card" style="margin-bottom: 1.5rem;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
         <div>
-            <h2 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Integration Status</h2>
+            <?= frs_heading_with_tip('Integration Status', 'Pulls maintenance schedules from CIMM when connected. Sync updates facility status and blackout dates.', 'h2'); ?>
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                 <span class="status-badge <?= $integrationStatus['connected'] ? 'active' : 'offline'; ?>" style="font-size: 0.9rem;">
                     <?= $integrationStatus['connected'] ? '✓ Connected' : '✗ Disconnected'; ?>
@@ -299,10 +298,6 @@ ob_start();
         </button>
     </div>
     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-        <small style="color: #8b95b5;">
-            <strong>Note:</strong> This integration connects to the Community Infrastructure Maintenance Management system. 
-            Maintenance schedules automatically update facility status and block booking dates.
-        </small>
         <?php if (empty($apiError) && !empty($maintenanceSchedules)): ?>
             <div style="margin-top:0.65rem; color:#4b5563; font-size:0.85rem; display:flex; gap:0.8rem; flex-wrap:wrap;">
                 <span>🔁 Updated to maintenance: <strong><?= (int)($syncSummary['updated_to_maintenance'] ?? 0); ?></strong></span>

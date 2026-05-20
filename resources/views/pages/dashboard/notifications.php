@@ -89,8 +89,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Inbox</span><span class="sep">/</span><span>Notifications</span>
     </div>
-    <h1>Notifications</h1>
-    <small>Centralized alerts for approvals, reminders, and system advisories.</small>
+    <?= frs_page_title('Notifications', 'Booking updates, reminders, and system messages. Adjust email preferences in Profile.'); ?>
 </div>
 
 <div class="booking-wrapper">

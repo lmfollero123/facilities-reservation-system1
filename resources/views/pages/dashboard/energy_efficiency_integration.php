@@ -123,8 +123,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Energy Efficiency</span>
     </div>
-    <h1>Energy Efficiency Management Integration</h1>
-    <small>Share facility usage data and receive energy efficiency recommendations for optimization.</small>
+    <?= frs_page_title('Energy Efficiency Management Integration', 'Preview module: shares usage patterns for efficiency recommendations when the external API is connected.'); ?>
 </div>
 
 <!-- Integration Status Card -->

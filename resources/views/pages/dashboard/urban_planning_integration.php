@@ -115,8 +115,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Urban Planning</span>
     </div>
-    <h1>Urban Planning & Development Integration</h1>
-    <small>Share facility usage data and receive planning recommendations for infrastructure development.</small>
+    <?= frs_page_title('Urban Planning & Development Integration', 'Preview module: usage analytics and planning recommendations when connected to the urban planning API.'); ?>
 </div>
 
 <!-- Integration Status Card -->

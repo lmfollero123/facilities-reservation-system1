@@ -94,8 +94,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Infrastructure Projects</span>
     </div>
-    <h1>Infrastructure Projects Integration</h1>
-    <small>View and manage infrastructure projects that affect facility availability and capacity.</small>
+    <?= frs_page_title('Infrastructure Projects Integration', 'Preview module: projects that may reduce capacity or block dates when synced from the external system.'); ?>
 </div>
 
 <!-- Integration Status Card -->

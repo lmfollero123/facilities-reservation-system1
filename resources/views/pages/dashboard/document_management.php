@@ -77,8 +77,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Administration</span><span class="sep">/</span><span>Document Management</span>
     </div>
-    <h1>Document Management</h1>
-    <small>Manage document archival, storage, and retention policies.</small>
+    <?= frs_page_title('Document Management', 'Archive reservation attachments and apply retention rules by document type.'); ?>
 </div>
 
 <?php if ($error): ?>

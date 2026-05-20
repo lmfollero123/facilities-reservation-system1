@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
+require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
 
 $pdo = db();
 
@@ -412,7 +413,7 @@ if (in_array($userRole, ['Admin', 'Staff'])) {
     $expiringSoon = 0;
 }
 
-// Helper function to build URL with filters
+// Helper function to build URL with filters (lists/stats + per-chart filters preserved)
 function buildFilterUrl($basePath, $page, $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, $additionalParams = []) {
     $params = [];
     if ($statusFilter) $params['status'] = $statusFilter;
@@ -420,7 +421,17 @@ function buildFilterUrl($basePath, $page, $statusFilter, $facilityFilter, $start
     if ($startDateFilter) $params['start_date'] = $startDateFilter;
     if ($endDateFilter) $params['end_date'] = $endDateFilter;
     $params = array_merge($params, $additionalParams);
-    
+    foreach ($_GET as $key => $value) {
+        if (!is_string($value) && !is_numeric($value)) {
+            continue;
+        }
+        foreach (['trend_', 'status_', 'topfac_'] as $prefix) {
+            if (str_starts_with((string)$key, $prefix)) {
+                $params[$key] = $value;
+            }
+        }
+    }
+
     $queryString = !empty($params) ? '?' . http_build_query($params) : '';
     return $basePath . $page . $queryString;
 }
@@ -467,33 +478,30 @@ $recentStmt->bindValue(':offset', $recentOffset, PDO::PARAM_INT);
 $recentStmt->execute();
 $recentReservations = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Chart data: Monthly reservations (last 6 months)
+// Per-chart filters (independent from list/stat filters above)
+$trendChartFilter = frs_parse_dashboard_chart_filter('trend');
+$statusChartFilter = frs_parse_dashboard_chart_filter('status');
+$topfacChartFilter = frs_parse_dashboard_chart_filter('topfac');
+
+// Chart data: Monthly reservations
 $monthlyLabels = [];
 $monthlyData = [];
-for ($i = 5; $i >= 0; $i--) {
+$trendMonths = max(1, (int)$trendChartFilter['months']);
+for ($i = $trendMonths - 1; $i >= 0; $i--) {
     $monthStart = date('Y-m-01', strtotime("-$i months"));
     $monthEnd = date('Y-m-t', strtotime("-$i months"));
     $monthLabel = date('M Y', strtotime("-$i months"));
-    
+
     $monthlyLabels[] = $monthLabel;
-    
-    $cond = [];
-    $params = [];
-    if (in_array($userRole, ['Admin', 'Staff'])) {
-        $cond[] = 'reservation_date >= :start AND reservation_date <= :end';
-        $params['start'] = $monthStart;
-        $params['end'] = $monthEnd;
-        if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_m'; $params['f_status_m'] = $statusFilter; }
-        if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_m'; $params['f_facility_m'] = $facilityFilter; }
-    } else {
+
+    $cond = ['reservation_date >= :start AND reservation_date <= :end'];
+    $params = ['start' => $monthStart, 'end' => $monthEnd];
+    if (!in_array($userRole, ['Admin', 'Staff'], true)) {
         $cond[] = 'user_id = :user_id';
         $params['user_id'] = $userId;
-        $cond[] = 'reservation_date >= :start AND reservation_date <= :end';
-        $params['start'] = $monthStart;
-        $params['end'] = $monthEnd;
-        if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_m'; $params['f_status_m'] = $statusFilter; }
-        if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_m'; $params['f_facility_m'] = $facilityFilter; }
     }
+    frs_dashboard_apply_chart_sql_filters($trendChartFilter, $cond, $params, 'trend_st', 'trend_fc', 'trend_sd', 'trend_ed');
+
     $sql = 'SELECT COUNT(*) FROM reservations WHERE ' . implode(' AND ', $cond);
     $monthStmt = $pdo->prepare($sql);
     $monthStmt->execute($params);
@@ -502,29 +510,19 @@ for ($i = 5; $i >= 0; $i--) {
 
 // Chart data: Status breakdown
 $statusData = [];
-if (in_array($userRole, ['Admin', 'Staff'])) {
-    $cond = [];
-    $params = [];
-    if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_s'; $params['f_status_s'] = $statusFilter; }
-    if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_s'; $params['f_facility_s'] = $facilityFilter; }
-    if ($startDateFilter) { $cond[] = 'reservation_date >= :f_start_s'; $params['f_start_s'] = $startDateFilter; }
-    if ($endDateFilter)   { $cond[] = 'reservation_date <= :f_end_s';   $params['f_end_s'] = $endDateFilter; }
-    $sql = 'SELECT status, COUNT(*) as count FROM reservations' . (empty($cond) ? '' : ' WHERE ' . implode(' AND ', $cond)) . ' GROUP BY status';
-    $statusStmt = $pdo->prepare($sql);
-    $statusStmt->execute($params);
-    $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
-} else {
-    $cond = ['user_id = :user_id'];
-    $params = ['user_id' => $userId];
-    if ($statusFilter) { $cond[] = 'LOWER(status) = :f_status_s'; $params['f_status_s'] = $statusFilter; }
-    if ($facilityFilter > 0) { $cond[] = 'facility_id = :f_facility_s'; $params['f_facility_s'] = $facilityFilter; }
-    if ($startDateFilter) { $cond[] = 'reservation_date >= :f_start_s'; $params['f_start_s'] = $startDateFilter; }
-    if ($endDateFilter)   { $cond[] = 'reservation_date <= :f_end_s';   $params['f_end_s'] = $endDateFilter; }
-    $sql = 'SELECT status, COUNT(*) as count FROM reservations WHERE ' . implode(' AND ', $cond) . ' GROUP BY status';
-    $statusStmt = $pdo->prepare($sql);
-    $statusStmt->execute($params);
-    $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
+$cond = [];
+$params = [];
+if (!in_array($userRole, ['Admin', 'Staff'], true)) {
+    $cond[] = 'user_id = :user_id';
+    $params['user_id'] = $userId;
 }
+frs_dashboard_apply_chart_sql_filters($statusChartFilter, $cond, $params, 'status_st', 'status_fc', 'status_sd', 'status_ed');
+$sql = 'SELECT status, COUNT(*) as count FROM reservations'
+    . (empty($cond) ? '' : ' WHERE ' . implode(' AND ', $cond))
+    . ' GROUP BY status';
+$statusStmt = $pdo->prepare($sql);
+$statusStmt->execute($params);
+$statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
 $statusLabels = [];
@@ -541,37 +539,62 @@ foreach ($statusData as $row) {
 $statusLabels = ['Approved', 'Pending', 'Denied', 'Cancelled'];
 $statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['denied'], $statusMap['cancelled']];
 
-// Chart data: Facility utilization (Admin/Staff only or user's top facilities)
-if (in_array($userRole, ['Admin', 'Staff'])) {
-    $cond = ['r.status = "approved"'];
+// Chart data: Top facilities
+$topLimit = max(1, (int)($topfacChartFilter['limit'] ?? 5));
+if (in_array($userRole, ['Admin', 'Staff'], true)) {
+    $joinCond = ['r.status = "approved"'];
     $params = [];
-    if ($statusFilter) { $cond[] = 'LOWER(r.status) = :f_status_f'; $params['f_status_f'] = $statusFilter; }
-    if ($facilityFilter > 0) { $cond[] = 'r.facility_id = :f_facility_f'; $params['f_facility_f'] = $facilityFilter; }
-    if ($startDateFilter) { $cond[] = 'r.reservation_date >= :f_start_f'; $params['f_start_f'] = $startDateFilter; }
-    if ($endDateFilter)   { $cond[] = 'r.reservation_date <= :f_end_f';   $params['f_end_f'] = $endDateFilter; }
+    if ($topfacChartFilter['status'] !== '') {
+        $joinCond[] = 'LOWER(r.status) = :topfac_st';
+        $params['topfac_st'] = $topfacChartFilter['status'];
+    }
+    if ($topfacChartFilter['facility'] > 0) {
+        $joinCond[] = 'r.facility_id = :topfac_fc';
+        $params['topfac_fc'] = $topfacChartFilter['facility'];
+    }
+    if ($topfacChartFilter['start'] !== '') {
+        $joinCond[] = 'r.reservation_date >= :topfac_sd';
+        $params['topfac_sd'] = $topfacChartFilter['start'];
+    }
+    if ($topfacChartFilter['end'] !== '') {
+        $joinCond[] = 'r.reservation_date <= :topfac_ed';
+        $params['topfac_ed'] = $topfacChartFilter['end'];
+    }
     $sql = 'SELECT f.name, COUNT(r.id) as booking_count
             FROM facilities f
-            LEFT JOIN reservations r ON f.id = r.facility_id' . (empty($cond) ? '' : ' AND ' . implode(' AND ', $cond)) . '
+            LEFT JOIN reservations r ON f.id = r.facility_id AND ' . implode(' AND ', $joinCond) . '
             GROUP BY f.id, f.name
             ORDER BY booking_count DESC
-            LIMIT 5';
+            LIMIT ' . (int)$topLimit;
     $facilityStmt = $pdo->prepare($sql);
     $facilityStmt->execute($params);
     $facilityData = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
     $cond = ['r.user_id = :user_id'];
     $params = ['user_id' => $userId];
-    if ($statusFilter) { $cond[] = 'LOWER(r.status) = :f_status_f'; $params['f_status_f'] = $statusFilter; }
-    if ($facilityFilter > 0) { $cond[] = 'r.facility_id = :f_facility_f'; $params['f_facility_f'] = $facilityFilter; }
-    if ($startDateFilter) { $cond[] = 'r.reservation_date >= :f_start_f'; $params['f_start_f'] = $startDateFilter; }
-    if ($endDateFilter)   { $cond[] = 'r.reservation_date <= :f_end_f';   $params['f_end_f'] = $endDateFilter; }
+    if ($topfacChartFilter['status'] !== '') {
+        $cond[] = 'LOWER(r.status) = :topfac_st';
+        $params['topfac_st'] = $topfacChartFilter['status'];
+    }
+    if ($topfacChartFilter['facility'] > 0) {
+        $cond[] = 'r.facility_id = :topfac_fc';
+        $params['topfac_fc'] = $topfacChartFilter['facility'];
+    }
+    if ($topfacChartFilter['start'] !== '') {
+        $cond[] = 'r.reservation_date >= :topfac_sd';
+        $params['topfac_sd'] = $topfacChartFilter['start'];
+    }
+    if ($topfacChartFilter['end'] !== '') {
+        $cond[] = 'r.reservation_date <= :topfac_ed';
+        $params['topfac_ed'] = $topfacChartFilter['end'];
+    }
     $sql = 'SELECT f.name, COUNT(r.id) as booking_count
             FROM facilities f
             JOIN reservations r ON f.id = r.facility_id
             WHERE ' . implode(' AND ', $cond) . '
             GROUP BY f.id, f.name
             ORDER BY booking_count DESC
-            LIMIT 5';
+            LIMIT ' . (int)$topLimit;
     $facilityStmt = $pdo->prepare($sql);
     $facilityStmt->execute($params);
     $facilityData = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -641,6 +664,11 @@ ob_start();
 <?php endif; ?>
 
 <form method="GET" class="booking-card" style="margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items: end;">
+    <?= frs_chart_hidden_preserve(); ?>
+    <div style="grid-column: 1 / -1; margin-bottom: 0.25rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+        <strong style="color:#334155; font-size:0.9rem;">Filter statistics, upcoming list &amp; pending requests</strong>
+        <?= frs_field_tip('Applies to stat cards and lists only. Each chart below has its own filter.'); ?>
+    </div>
     <div>
         <label for="status" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">Status</label>
         <select id="status" name="status" class="booking-form-control">
@@ -892,31 +920,32 @@ ob_start();
 
 <div class="reports-grid" style="margin-top: 1rem;">
     <section class="booking-card">
-        <h2>Reservation Trends</h2>
-        <p style="color: #8b95b5; font-size: 0.9rem; margin-bottom: 1rem;">
-            <?= in_array($userRole, ['Admin', 'Staff']) ? 'Total reservations over the last 6 months' : 'Your reservations over the last 6 months'; ?>
-        </p>
+        <?= frs_heading_with_tip('Reservation Trends', 'Monthly reservation counts. Use the filter to change status, facility, date range, or 6 vs 12 months.'); ?>
+        <?= frs_dashboard_chart_filter_form('dash-trend', 'trend', $facilityOptions, $trendChartFilter, true, false, ['status', 'topfac']); ?>
         <canvas id="monthlyChart" style="max-height: 300px;"></canvas>
     </section>
-    
+
     <section class="booking-card">
-        <h2>Status Breakdown</h2>
-        <p style="color: #8b95b5; font-size: 0.9rem; margin-bottom: 1rem;">
-            Distribution of reservation statuses
-        </p>
+        <?= frs_heading_with_tip('Status Breakdown', 'Distribution of approved, pending, denied, and cancelled reservations for the filter below.'); ?>
+        <?= frs_dashboard_chart_filter_form('dash-status', 'status', $facilityOptions, $statusChartFilter, false, false, ['trend', 'topfac']); ?>
         <canvas id="statusChart" style="max-height: 300px;"></canvas>
     </section>
 </div>
 
-<?php if (!empty($facilityLabels)): ?>
 <div class="booking-card" style="margin-top: 1rem;">
-    <h2><?= in_array($userRole, ['Admin', 'Staff']) ? 'Top Facilities by Bookings' : 'Your Most Booked Facilities'; ?></h2>
-    <p style="color: #8b95b5; font-size: 0.9rem; margin-bottom: 1rem;">
-        Facilities with the highest number of <?= in_array($userRole, ['Admin', 'Staff']) ? 'approved reservations' : 'your reservations'; ?>
-    </p>
+    <?= frs_heading_with_tip(
+        in_array($userRole, ['Admin', 'Staff']) ? 'Top Facilities by Bookings' : 'Your Most Booked Facilities',
+        in_array($userRole, ['Admin', 'Staff'])
+            ? 'Facilities with the most approved bookings in the selected period (top N from filter).'
+            : 'Your most frequently booked facilities in the selected period.'
+    ); ?>
+    <?= frs_dashboard_chart_filter_form('dash-topfac', 'topfac', $facilityOptions, $topfacChartFilter, false, true, ['trend', 'status']); ?>
+    <?php if (!empty($facilityLabels)): ?>
     <canvas id="facilityChart" style="max-height: 300px;"></canvas>
+    <?php else: ?>
+    <p style="color: #8b95b5; padding: 1rem 0;">No data for the selected filters.</p>
+    <?php endif; ?>
 </div>
-<?php endif; ?>
 
 <div class="booking-card" style="margin-top: 1rem;">
     <h2>Quick Actions</h2>

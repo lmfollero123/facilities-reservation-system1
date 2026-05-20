@@ -209,11 +209,10 @@ ob_start();
         </nav>
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Facility blackout dates</h1>
-                <p class="mt-2 text-sm text-slate-600 max-w-2xl leading-relaxed">
-                    Block days when a facility cannot be booked&mdash;LGU events, programs, holidays, or maintenance.
-                    Residents see these as unavailable on the booking calendar.
-                </p>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight frs-heading-with-tip">
+                    Facility blackout dates
+                    <?= frs_field_tip('Block days when a facility cannot be booked (events, holidays, maintenance). Residents see these as unavailable on the booking calendar.'); ?>
+                </h1>
             </div>
             <?php if ($hasTable): ?>
                 <div class="frs-bo-year-total flex-shrink-0 rounded-xl bg-slate-100 px-4 py-2.5 text-sm">
@@ -345,7 +344,7 @@ ob_start();
                         <?php else: ?>
                         <div class="<?= $cellClasses; ?>">
                         <?php endif; ?>
-                            <span class="text-sm font-bold <?= $isToday ? 'text-blue-700' : 'text-slate-800'; ?>"><?= $day; ?></span>
+                            <span class="text-sm font-bold bo-day-num"><?= $day; ?></span>
                             <?php if ($hasBlackout): ?>
                                 <span class="frs-bo-cal-chip"><?= htmlspecialchars($chipText); ?></span>
                             <?php endif; ?>
@@ -589,32 +588,42 @@ ob_start();
     text-align: center;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #64748b;
+    color: var(--bo-dow-fg, #64748b);
     padding: 0.25rem 0;
 }
 .frs-bo-calendar-grid .frs-bo-cal-cell {
     min-height: 4.5rem;
     border-radius: 0.5rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--bo-cell-border, #e2e8f0);
     padding: 0.35rem 0.5rem;
     display: flex;
     flex-direction: column;
     text-align: left;
     text-decoration: none;
     color: inherit;
-    background: #fff;
+    background: var(--bo-cell-bg, #fff);
 }
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-blocked {
-    background: #fef2f2;
-    border-color: #fecaca;
+    background: var(--bo-cell-blocked-bg, #fef2f2);
+    border-color: var(--bo-cell-blocked-border, #fecaca);
     cursor: pointer;
 }
-.frs-bo-calendar-grid .frs-bo-cal-cell.is-blocked:hover { background: #fee2e2; }
-.frs-bo-calendar-grid .frs-bo-cal-cell.is-today { box-shadow: 0 0 0 2px #3b82f6; }
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-blocked:hover {
+    background: var(--bo-cell-blocked-hover, #fee2e2);
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-today {
+    box-shadow: 0 0 0 2px var(--bo-today-ring, #3b82f6);
+}
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-empty {
     border-color: transparent;
     background: transparent;
     min-height: 4.5rem;
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell .bo-day-num {
+    color: var(--bo-day-num-fg, #1e293b);
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-today .bo-day-num {
+    color: var(--bo-today-num-fg, #1d4ed8);
 }
 .frs-bo-cal-chip {
     margin-top: auto;
@@ -623,8 +632,8 @@ ob_start();
     border-radius: 999px;
     font-size: 0.7rem;
     font-weight: 600;
-    background: rgba(254, 202, 202, 0.85);
-    color: #7f1d1d;
+    background: var(--bo-chip-bg, rgba(254, 202, 202, 0.85));
+    color: var(--bo-chip-fg, #7f1d1d);
     line-height: 1.2;
 }
 @media (min-width: 640px) {

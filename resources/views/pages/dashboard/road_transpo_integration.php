@@ -97,8 +97,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Road & Transportation</span>
     </div>
-    <h1>Road & Transportation Infrastructure Monitoring</h1>
-    <small>Monitor road closures and traffic alerts that may affect facility accessibility.</small>
+    <?= frs_page_title('Road & Transportation Infrastructure Monitoring', 'Preview module: road closures and alerts that may affect how residents reach a facility.'); ?>
 </div>
 
 <!-- Integration Status Card -->

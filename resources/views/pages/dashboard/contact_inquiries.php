@@ -75,8 +75,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Contact Inquiries</span>
     </div>
-    <h1 style="color: #1b1b1f;">Contact Inquiries</h1>
-    <small style="color: #6b7897;">View and manage inquiries, concerns, and technical issues from the public contact form.</small>
+    <?= frs_page_title('Contact Inquiries', 'Messages submitted from the public Contact page. Mark as read or replied when handled.'); ?>
 </div>
 
 <?php if (isset($success)): ?>

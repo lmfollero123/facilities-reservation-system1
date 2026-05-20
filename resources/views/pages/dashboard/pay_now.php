@@ -209,8 +209,7 @@ ob_start();
 ?>
 <div class="page-header">
     <div class="breadcrumb"><span>Reservations</span><span class="sep">/</span><span>Payment</span></div>
-    <h1>Complete Payment</h1>
-    <small>Finalize your pencil booking to secure this slot.</small>
+    <?= frs_page_title('Complete Payment', 'Pencil bookings hold a slot briefly until payment is completed or the hold expires.'); ?>
 </div>
 
 <?php if ($error): ?>

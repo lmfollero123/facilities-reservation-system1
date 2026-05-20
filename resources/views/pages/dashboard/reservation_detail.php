@@ -663,8 +663,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Reservations</span><span class="sep">/</span><span><a href="<?= base_path(); ?>/dashboard/reservations-manage" style="color:inherit;text-decoration:none;">Approvals</a></span><span class="sep">/</span><span>Details</span>
     </div>
-    <h1>Reservation Details</h1>
-    <small>Comprehensive view of reservation #<?= $reservationId; ?></small>
+    <h1>Reservation #<?= (int)$reservationId; ?></h1>
 </div>
 
 <?php if ($message): ?>

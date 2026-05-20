@@ -48,10 +48,7 @@ ob_start();
 <div class="dashboard-content dashboard-fade-in book-facility-compact">
     <div class="page-header" style="margin-bottom:1rem;">
         <div class="breadcrumb"><span>Operations</span><span class="sep">/</span><span>Live Occupancy</span></div>
-        <h1>Live Occupancy Board</h1>
-        <p style="color:#6b7280;max-width:720px;margin:0;">
-            Manage facility status overrides and monitor today’s bookings and check-ins.
-        </p>
+        <?= frs_page_title('Live Occupancy Board', 'Staff can override facility status (occupied/available). Counts reflect today’s bookings and check-in/out.'); ?>
     </div>
 
     <?php if ($flash): ?>

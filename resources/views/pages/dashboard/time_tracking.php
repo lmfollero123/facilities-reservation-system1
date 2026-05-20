@@ -202,8 +202,7 @@ ob_start();
 ?>
 <div class="dashboard-content dashboard-fade-in">
     <div class="page-header">
-        <h1>Time In / Time Out</h1>
-        <p>Upload a photo proof when you arrive and when you leave.</p>
+        <?= frs_page_title('Time In / Time Out', 'Photo proof is required at arrival and departure for today’s approved reservation. Available only during your booked time window.'); ?>
     </div>
 
     <?php if (!$hasAttendanceTable): ?>

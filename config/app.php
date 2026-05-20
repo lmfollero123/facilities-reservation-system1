@@ -6,6 +6,9 @@
 // Load security configuration
 require_once __DIR__ . '/security.php';
 
+// UI helpers (field tips, headings) — used by dashboard/public views before layouts load
+require_once __DIR__ . '/ui_helpers.php';
+
 // Set security headers
 setSecurityHeaders();
 

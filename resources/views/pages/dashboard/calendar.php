@@ -190,8 +190,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Scheduling</span><span class="sep">/</span><span>Calendar</span>
     </div>
-    <h1>Calendar & Scheduling</h1>
-    <small>Visual overview of reservations, maintenance blocks, and availability.</small>
+    <?= frs_page_title('Calendar & Scheduling', 'Green = approved, amber = pending, red = maintenance/blocked. Export adds events to Google Calendar or Outlook (.ics).'); ?>
     <p style="margin:0.75rem 0 0;">
         <a class="btn-outline" href="<?= htmlspecialchars(base_path() . '/dashboard/calendar-export?from=' . urlencode($startDate) . '&to=' . urlencode($endDate) . (in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true) ? '&scope=all' : ''), ENT_QUOTES, 'UTF-8'); ?>" style="display:inline-block;text-decoration:none;padding:0.45rem 0.9rem;font-size:0.88rem;">
             Export to calendar (.ics)

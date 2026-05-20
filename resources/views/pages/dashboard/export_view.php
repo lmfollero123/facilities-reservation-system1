@@ -59,8 +59,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Account</span><span class="sep">/</span><span>My Data Export</span>
     </div>
-    <h1>My Data Export</h1>
-    <small>Printable view of your account information and reservation history.</small>
+    <?= frs_page_title('My Data Export', 'Print or save as PDF from your browser (Ctrl+P). Includes profile and reservation history.'); ?>
 </div>
 
 <?php if ($error): ?>

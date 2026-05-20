@@ -101,8 +101,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>Utilities Integration</span>
     </div>
-    <h1>Utilities Billing & Management Integration</h1>
-    <small>Monitor utility outages and track facility utility costs and consumption.</small>
+    <?= frs_page_title('Utilities Billing & Management Integration', 'Preview module: utility outages and cost tracking per facility when the billing API is connected.'); ?>
 </div>
 
 <!-- Integration Status Card -->

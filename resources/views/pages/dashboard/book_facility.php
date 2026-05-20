@@ -28,6 +28,7 @@ require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/sms_helper.php';
+require_once __DIR__ . '/../../../../config/ui_helpers.php';
 
 $pdo = db();
 
@@ -977,10 +978,10 @@ $bookCalQuery = static function (array $extra): string {
     border: 1px solid transparent;
 }
 .booking-hub-tab.is-active {
-    background: #fff;
-    border-color: #e8ecf4;
-    border-bottom-color: #fff;
-    color: #1e3a5f;
+    background: var(--bg-secondary, #fff);
+    border-color: var(--border-color, #e8ecf4);
+    border-bottom-color: var(--bg-secondary, #fff);
+    color: var(--text-primary, #1e3a5f);
     margin-bottom: -2px;
 }
 .booking-hub-grid {
@@ -1055,7 +1056,7 @@ $bookCalQuery = static function (array $extra): string {
 .bcf-modal-overlay.is-open { display: flex !important; }
 @keyframes bcfFade { from { opacity: 0; } to { opacity: 1; } }
 .bcf-modal-dialog {
-    background: #fff;
+    background: var(--bg-secondary, #fff);
     border-radius: 16px;
     width: min(720px, 100%);
     max-height: min(88vh, 900px);
@@ -1082,6 +1083,18 @@ $bookCalQuery = static function (array $extra): string {
     padding: 1rem 1.1rem 1.25rem;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+}
+.bcf-walkin-box {
+    padding: 1rem;
+    background: var(--info-bg, #eff6ff);
+    border: 1px solid var(--info-border, #93c5fd);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+.bcf-walkin-title {
+    margin: 0 0 0.75rem;
+    color: var(--info-text, #1e40af);
+    font-size: 1rem;
 }
 @media (max-width: 719px) {
     .bcf-modal-overlay { align-items: flex-end; padding: 0; justify-content: center; }
@@ -1156,23 +1169,23 @@ $bookCalQuery = static function (array $extra): string {
 .bcf-cal-fac-select {
     width: 100%;
     padding: 0.72rem 0.95rem 0.72rem 2.75rem;
-    border: 2px solid #e1e6f3;
+    border: 2px solid var(--border-color, #e1e6f3);
     border-radius: 10px;
     font-size: 0.95rem;
     font-family: inherit;
     font-weight: 500;
-    color: var(--gov-blue-dark, #1e3a5f);
-    background: #fafbfd;
+    color: var(--text-primary, var(--gov-blue-dark, #1e3a5f));
+    background: var(--bg-tertiary, #fafbfd);
     min-height: 46px;
     cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     appearance: auto;
 }
-.bcf-cal-fac-select:hover { background: #fff; border-color: #cdd6ea; }
+.bcf-cal-fac-select:hover { background: var(--bg-secondary, #fff); border-color: var(--border-color, #cdd6ea); }
 .bcf-cal-fac-select:focus {
     outline: none;
-    border-color: var(--gov-blue, #0047ab);
-    background: #fff;
+    border-color: var(--primary-color, var(--gov-blue, #0047ab));
+    background: var(--bg-secondary, #fff);
     box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
 }
 .bcf-cal-nav-cluster {
@@ -1314,11 +1327,11 @@ ul.bcf-scroll-select-menu {
     font-style: italic;
 }
 .bcf-purpose-first-card {
-    border: 1px solid #e1e6f3;
+    border: 1px solid var(--border-color, #e1e6f3);
     border-radius: 10px;
     padding: 0.85rem 1rem;
     margin-bottom: 1rem;
-    background: #fafbff;
+    background: var(--bg-secondary, #fafbff);
 }
 .bcf-purpose-first-card textarea {
     width: 100%;
@@ -1326,9 +1339,16 @@ ul.bcf-scroll-select-menu {
     margin-top: 0.35rem;
     padding: 0.55rem 0.65rem;
     border-radius: 8px;
-    border: 2px solid #dbe3f5;
+    border: 2px solid var(--border-color, #dbe3f5);
+    background: var(--bg-tertiary, #fff);
+    color: var(--text-primary, inherit);
     font-size: 0.92rem;
     box-sizing: border-box;
+}
+.bcf-purpose-first-card input {
+    background: var(--bg-tertiary, #fff);
+    color: var(--text-primary, inherit);
+    border-color: var(--border-color, #dbe3f5);
 }
 .bcf-purpose-first-row {
     display: flex;
@@ -1339,20 +1359,31 @@ ul.bcf-scroll-select-menu {
 }
 .bcf-purpose-first-row label {
     font-size: 0.82rem;
-    color: #475569;
+    color: var(--text-secondary, #475569);
 }
 .bcf-smart-hints-bar {
     margin-top: 0.75rem;
     padding: 0.65rem 0.75rem;
     border-radius: 8px;
-    background: #f5f3ff;
-    border: 1px solid #ddd6fe;
+    background: var(--accent-ai-bg, #f5f3ff);
+    border: 1px solid var(--accent-ai-border, #ddd6fe);
     font-size: 0.84rem;
-    color: #4c1d95;
+    color: var(--accent-ai-text, #4c1d95);
     line-height: 1.45;
     display: none;
 }
 .bcf-smart-hints-bar.is-visible { display: block; }
+.bcf-smart-hints-actions { margin-top: 0.5rem; }
+.bcf-smart-hints-link {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    text-decoration: none;
+    border-radius: 8px;
+    border: 1px solid var(--accent-ai-border, #7c3aed);
+    color: var(--accent-ai-text, #5b21b6);
+    font-weight: 600;
+}
 .my-reservations-calendar-cell.bcf-ai-suggest-date:not(.empty) {
     box-shadow: inset 0 0 0 2px #7c3aed;
     background: linear-gradient(135deg, rgba(124, 58, 237, 0.07), rgba(255, 255, 255, 0));
@@ -1367,7 +1398,6 @@ ul.bcf-scroll-select-menu {
         <span>Reservations</span><span class="sep">/</span><span><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></span>
     </div>
     <h1><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></h1>
-    <small><?= $reservationsHubMine ? 'View and manage your bookings on the calendar below.' : 'Submit a reservation request for LGU-managed venues.'; ?></small>
 </div>
 
 <?php if (!empty($message)): ?>
@@ -1398,17 +1428,21 @@ ul.bcf-scroll-select-menu {
     <div id="booking-pane-book" style="display: <?= !$reservationsHubMine ? 'block' : 'none'; ?>;">
         <div class="booking-hub-grid">
             <div class="booking-card booking-calendar-myres-panel">
-                <h2 style="margin-top:0;">Book a facility</h2>
-                <p style="color:#6c757d; font-size:0.88rem;">Describe your event first to see AI-assisted picks: suggested venues (by distance and fit) and calendar days with availability for the top match. Then choose a facility and date as usual.</p>
+                <h2 class="bcf-label-row" style="margin-top:0;">
+                    Book a facility
+                    <?= frs_field_tip('Describe your event first to see AI-assisted picks: suggested venues (by distance and fit) and calendar days with availability for the top match. Then choose a facility and date as usual.'); ?>
+                </h2>
                 <div class="bcf-purpose-first-card" id="bcf-purpose-first-card">
-                    <label for="bcf-purpose-preview" style="font-weight:600; font-size:0.9rem; color:#1e293b;">Purpose of reservation</label>
+                    <label for="bcf-purpose-preview" class="bcf-label-row" style="font-weight:600; font-size:0.9rem; color:var(--text-primary, #1e293b);">
+                        Purpose of reservation
+                        <?= frs_field_tip('This stays in sync with the booking form. Purple-ring days on the calendar = open or partially booked days for the best-matching facility this month.'); ?>
+                    </label>
                     <textarea id="bcf-purpose-preview" name="bcf_purpose_preview" maxlength="2000" placeholder="e.g., Youth basketball practice, barangay assembly, zumba class…"></textarea>
                     <div class="bcf-purpose-first-row">
-                        <label>Expected attendees (optional for hints)
+                        <label>Expected attendees (optional)
                             <input type="number" id="bcf-purpose-attendees-preview" min="1" max="50000" placeholder="50" style="display:block; width:7rem; margin-top:0.25rem; padding:0.45rem 0.5rem; border-radius:8px; border:2px solid #dbe3f5;">
                         </label>
                     </div>
-                    <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#64748b;">This stays in sync with the booking form. Purple-ring days = open or partially booked days for the best-matching facility this month.</p>
                     <div id="bcf-smart-hints-bar" class="bcf-smart-hints-bar" role="status" aria-live="polite"></div>
                 </div>
                 <?php
@@ -1522,8 +1556,10 @@ ul.bcf-scroll-select-menu {
                         <?php endfor; ?>
                     </div>
                 </div>
-                <button type="button" class="btn-primary" id="bcf-open-booking-explicit" style="margin-top:1rem;">Open booking form</button>
-                <small style="display:block;margin-top:0.5rem;color:#8b95b5;">Tap a coloured future day above, or use this button if you already know your date.</small>
+                <div class="bcf-label-row" style="margin-top:1rem; gap:0.5rem;">
+                    <button type="button" class="btn-primary" id="bcf-open-booking-explicit">Open booking form</button>
+                    <?= frs_field_tip('Tap a coloured future day on the calendar, or use this button if you already know your date.'); ?>
+                </div>
             </div>
 
             <aside class="booking-card bcf-aside-col">
@@ -1569,9 +1605,11 @@ ul.bcf-scroll-select-menu {
         <form id="main-booking-form" class="booking-form" method="POST" enctype="multipart/form-data">
             <?= csrf_field(); ?>
             <?php if ($canBookOnBehalf && !empty($walkInResidents)): ?>
-            <div style="padding:1rem; background:#eff6ff; border:1px solid #93c5fd; border-radius:8px; margin-bottom:1rem;">
-                <h4 style="margin:0 0 0.5rem; color:#1e40af; font-size:1rem;">Walk-in / assisted booking</h4>
-                <p style="margin:0 0 0.75rem; color:#1e3a8a; font-size:0.88rem;">Create a reservation on behalf of a resident (barangay counter service).</p>
+            <div class="bcf-walkin-box">
+                <h4 class="bcf-label-row bcf-walkin-title">
+                    Walk-in / assisted booking
+                    <?= frs_field_tip('Create a reservation on behalf of a resident (barangay counter service).'); ?>
+                </h4>
                 <label>
                     Resident
                     <select name="book_for_user_id" id="book-for-user-id" style="width:100%; padding:0.55rem; border-radius:8px; border:2px solid #dbe3f5;">
@@ -1599,19 +1637,17 @@ ul.bcf-scroll-select-menu {
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">All facilities are provided free of charge.</small>
                 </div>
             </label>
 
 
             <label>
-                Reservation Date
+                <span class="bcf-label-row">Reservation Date <?= frs_field_tip('Chosen from the month grid on the booking page (not editable here).'); ?></span>
                 <input type="hidden" name="reservation_date" id="reservation-date" value="">
                 <div class="input-wrapper bcf-res-date-wrapper">
                     <i class="bi bi-calendar input-icon"></i>
                     <div id="bcf-reservation-date-display" class="bcf-res-date-readonly bcf-res-date-readonly-empty" role="status" aria-live="polite">Select a date on the calendar.</div>
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Chosen from the month grid on the booking page (not editable here).</small>
             </label>
 
             <label>
@@ -1637,7 +1673,6 @@ ul.bcf-scroll-select-menu {
                         ?>
                     </select>
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
             </label>
 
             <label>
@@ -1663,20 +1698,16 @@ ul.bcf-scroll-select-menu {
                         ?>
                     </select>
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                    Must be after start time. Maximum duration: 4 hours (if facility has auto-approval enabled).
-                </small>
             </label>
 
             <label>
-                Quick slot (from gaps on this day)
+                <span class="bcf-label-row">Quick slot (from gaps on this day) <?= frs_field_tip('Populated from availability for the chosen date; pick a range, then fine-tune start/end below if needed.'); ?></span>
                 <div class="input-wrapper">
                     <i class="bi bi-clock input-icon"></i>
                     <select id="bcf-slot-from-availability">
                         <option value="">Load by choosing facility + date…</option>
                     </select>
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Populated from the existing public availability response for the chosen date; pick a range, then fine-tune below if needed.</small>
             </label>
 
             <div id="conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
@@ -1690,13 +1721,12 @@ ul.bcf-scroll-select-menu {
                     <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
                 </div>
                 <p id="conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
-                <small id="conflict-hint" style="display:none; font-size:0.8rem; opacity:0.8;">Risk factors may include holidays/events, pending requests, and historical demand.</small>
+                <span id="conflict-hint-wrap" style="display:none;"><?= frs_field_tip('Risk factors may include holidays/events, pending requests, and historical demand.'); ?></span>
             </div>
 
             <label>
                 Purpose of Use
                 <textarea name="purpose" id="purpose-input" rows="3" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required></textarea>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Describe your event - AI will suggest the best facilities for you.</small>
             </label>
 
             <label>
@@ -1705,9 +1735,6 @@ ul.bcf-scroll-select-menu {
                     <i class="bi bi-people input-icon"></i>
                     <input type="number" name="expected_attendees" id="expected-attendees" min="1" required inputmode="numeric" placeholder="e.g., 50">
                 </div>
-                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                    Required. Cannot exceed this facility&apos;s listed maximum occupancy when capacity is configured.
-                </small>
                 <p id="bcf-capacity-msg" style="display:none; color:#b23030; margin:0.35rem 0 0; font-size:0.85rem;"></p>
             </label>
 
@@ -1726,9 +1753,11 @@ ul.bcf-scroll-select-menu {
                 <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="1200" placeholder="Parking, setup time, accessibility, etc."></textarea>
             </label>
 
-            <div style="padding:1rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; margin-top:0.5rem;">
-                <h4 style="margin:0 0 0.5rem; font-size:0.95rem;">Supporting document (optional)</h4>
-                <p style="margin:0 0 0.75rem; font-size:0.85rem; color:#64748b;">Event permit, barangay resolution, or letter of request — recommended for large events.</p>
+            <div class="frs-notice-panel frs-notice-muted">
+                <h4 class="bcf-label-row" style="margin:0 0 0.75rem; font-size:0.95rem; color:var(--text-primary, inherit);">
+                    Supporting document (optional)
+                    <?= frs_field_tip('Event permit, barangay resolution, or letter of request — recommended for large events.'); ?>
+                </h4>
                 <label style="display:block; margin-bottom:0.5rem;">
                     Document type
                     <select name="event_document_type" style="width:100%; padding:0.5rem; border-radius:8px; margin-top:0.25rem;">
@@ -1746,17 +1775,14 @@ ul.bcf-scroll-select-menu {
 
             <?php if (!$isVerified && !$hasValidIdDocument && !($canBookOnBehalf && $selectedBookForUserId > 0)): ?>
             <div style="padding:1rem; background:#fff4e5; border:2px solid #ffc107; border-radius:8px; margin-top:1rem;">
-                <h4 style="margin:0 0 0.5rem; color:#856404; font-size:1rem;">⚠️ Valid ID Required</h4>
-                <p style="margin:0 0 1rem; color:#856404; font-size:0.9rem; line-height:1.5;">
-                    Your account is not yet verified. Please upload a valid government-issued ID to proceed with this reservation. Once verified, you'll be able to use auto-approval features.
-                </p>
+                <h4 class="bcf-label-row" style="margin:0 0 0.75rem; color:#856404; font-size:1rem;">
+                    ⚠️ Valid ID Required
+                    <?= frs_field_tip('Your account is not yet verified. Upload a valid government-issued ID to proceed. Accepted: PDF, JPG, PNG. Max 5MB (Birth Certificate, Barangay ID, Resident ID, Driver\'s License, etc.).'); ?>
+                </h4>
                 <label>
                     Upload Valid ID (Required for unverified accounts)
                     <input type="file" name="doc_valid_id" accept=".pdf,image/*" required style="margin-top:0.5rem; padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%;">
                 </label>
-                <small style="color:#856404; font-size:0.85rem; display:block; margin-top:0.5rem;">
-                    Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
-                </small>
             </div>
             <?php elseif (!$isVerified && $hasValidIdDocument): ?>
             <div style="padding:1rem; background:#e7f3ff; border:2px solid #2196F3; border-radius:8px; margin-top:1rem;">
@@ -1878,6 +1904,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tell main.js to skip its legacy conflict handler on this page
     window.DISABLE_CONFLICT_CHECK = true;
 
+    function frsFieldTipHtml(text) {
+        const safe = escapeHtml(String(text));
+        return '<span class="frs-tip"><button type="button" class="frs-tip-btn" data-frs-tip="' + safe + '" aria-describedby="frs-tip-float" aria-label="More information">i</button></span>';
+    }
+
     // Get form elements
     const facilitySel = document.getElementById('facility-select');
     const dateInput = document.getElementById('reservation-date');
@@ -1968,7 +1999,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (payload.primary_facility_id) {
             const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(BCF_CAL_YEAR)) + '&month=' + encodeURIComponent(String(BCF_CAL_MONTH)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
-            html += '<div style="margin-top:0.5rem;"><a class="btn-outline" style="display:inline-block;padding:0.35rem 0.75rem;font-size:0.82rem;text-decoration:none;border-radius:8px;border:1px solid #7c3aed;color:#5b21b6;font-weight:600;" href="' + u + '">Show this facility on the calendar</a></div>';
+            html += '<div class="bcf-smart-hints-actions"><a class="btn-outline bcf-smart-hints-link" href="' + u + '">Show this facility on the calendar</a></div>';
         }
         bar.innerHTML = html;
         bar.classList.add('is-visible');
@@ -2431,7 +2462,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Capacity</strong>';
                 html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6;">' + escapeHtml(facility.capacity) + '</p>';
                 if (facility.capacity_threshold) {
-                    html += '<small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Auto-approval threshold: ' + escapeHtml(facility.capacity_threshold) + '</small>';
+                    html += '<p style="margin: 0.35rem 0 0; color: #1b1b1f; line-height: 1.6;" class="bcf-label-row">Auto-approval: ' + escapeHtml(facility.capacity_threshold) + ' attendees '
+                        + frsFieldTipHtml('Bookings at or below this attendee count may be auto-approved when other rules allow.') + '</p>';
                 }
                 html += '</div>';
                 html += '</div>';
@@ -2474,12 +2506,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<div style="margin-top: 1rem; padding: 1rem; background: #f9fafc; border-radius: 8px; border-left: 4px solid var(--gov-blue);">';
                 html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Usage</strong>';
                 html += '<p style="margin: 0; color: #1b1b1f; font-weight: 600;">Free of Charge</p>';
-                html += '<small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: 0.25rem;">This facility is provided free of charge for public use by the LGU/Barangay.</small>';
                 html += '</div>';
             }
             
             // Update content
             facilityDetailsContent.innerHTML = html;
+            if (typeof window.frsRefreshFieldTips === 'function') {
+                window.frsRefreshFieldTips();
+            }
             window._bcfMaxFacilityCapacity = null;
             if (facility.capacity) {
                 const capMatch = String(facility.capacity).match(/(\d{1,7})/);
@@ -2880,16 +2914,6 @@ document.addEventListener('DOMContentLoaded', function() {
             endTimeInput.value = '';
         }
 
-        const startHelp = startTimeInput.parentElement && startTimeInput.parentElement.nextElementSibling;
-        if (startHelp && startHelp.tagName === 'SMALL') {
-            const eh = Math.floor(earliest / 60);
-            const em = earliest % 60;
-            const period = eh >= 12 ? 'PM' : 'AM';
-            const h12 = eh > 12 ? eh - 12 : (eh === 0 ? 12 : eh);
-            const earliestLabel = h12 + ':' + String(em).padStart(2, '0') + ' ' + period;
-            const base = startHelp.textContent.split(' · ')[0];
-            startHelp.textContent = base + ' · Today: earliest start ' + earliestLabel + ' or later';
-        }
     }
 
     // Time validation: ensure end time is after start time and within limits
@@ -3384,23 +3408,6 @@ document.addEventListener('DOMContentLoaded', function() {
             opt.style.display = isWithinHours ? '' : 'none';
             opt.disabled = !isWithinHours;
         });
-        
-        // Update help text
-        const startHelp = startTimeInput.parentElement.nextElementSibling;
-        const endHelp = endTimeInput.parentElement.nextElementSibling;
-        if (startHelp && startHelp.tagName === 'SMALL') {
-            if (operatingHours) {
-                const { start, end } = parseOperatingHours(operatingHours);
-                const formatHour = (h) => {
-                    const period = h >= 12 ? 'PM' : 'AM';
-                    const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-                    return `${hour12}:00 ${period}`;
-                };
-                startHelp.textContent = `Facility operating hours: ${formatHour(start)} - ${formatHour(end)}`;
-            } else {
-                startHelp.textContent = 'Facility operating hours: 8:00 AM - 9:00 PM';
-            }
-        }
         
         // Clear invalid selections
         const currentStart = startTimeInput.value;

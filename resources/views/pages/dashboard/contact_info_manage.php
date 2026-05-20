@@ -109,8 +109,7 @@ ob_start();
 
 <div class="booking-card">
     <div class="card-header-custom">
-        <h2>Update Contact Information</h2>
-        <small>Changes will be reflected on the public contact page</small>
+        <?= frs_heading_with_tip('Update Contact Information', 'Office name, hours, phone, and email shown on the public Contact page.'); ?>
     </div>
     
     <form method="POST" class="contact-info-form">

@@ -238,8 +238,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Administration</span><span class="sep">/</span><span>Facility Management</span>
     </div>
-    <h1>Facility Management</h1>
-    <small>Maintain facility records, capacities, and maintenance statuses.</small>
+    <?= frs_page_title('Facility Management', 'Add or edit venues, capacity, rates, and whether bookings can be auto-approved.'); ?>
 </div>
 
 <?php if ($message): ?>
@@ -431,35 +430,29 @@ ob_start();
                             <span class="chevron" id="auto-approval-chevron">▼</span>
                         </button>
                         <div class="collapsible-body is-collapsed" id="auto-approval-settings">
-                            <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
-                                When enabled, reservations meeting all conditions will be automatically approved without staff review.
+                            <p style="margin:0 0 1rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                                <span style="font-weight:600;">Auto-approval</span>
+                                <?= frs_field_tip('When enabled, reservations that meet capacity, duration, and verification rules can be approved without staff review.'); ?>
                             </p>
-
                             <label style="display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:1rem; cursor:pointer;">
                                 <input type="checkbox" name="auto_approve" value="1" id="form-auto-approve" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
                                 <span style="flex:1; line-height:1.5;">Enable auto-approval for this facility</span>
                             </label>
 
                             <label>
-                                Capacity Threshold (Optional)
+                                <span class="bcf-label-row">Capacity Threshold (Optional) <?= frs_field_tip('Max expected attendees for auto-approval. Leave blank for no limit.'); ?></span>
                                 <div class="input-wrapper">
                                     <span class="input-icon">👥</span>
                                     <input type="number" name="capacity_threshold" id="form-capacity-threshold" min="1" placeholder="e.g., 100">
                                 </div>
-                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                                    Maximum expected attendees allowed for auto-approval. Leave blank for no limit.
-                                </small>
                             </label>
 
                             <label>
-                                Maximum Duration (hours, Optional)
+                                <span class="bcf-label-row">Maximum Duration (hours, Optional) <?= frs_field_tip('Longest booking length (hours) eligible for auto-approval. Leave blank for no limit.'); ?></span>
                                 <div class="input-wrapper">
                                     <span class="input-icon">⏰</span>
                                     <input type="number" step="0.5" name="max_duration_hours" id="form-max-duration" min="0.5" placeholder="e.g., 4.0">
                                 </div>
-                                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                                    Maximum reservation duration in hours for auto-approval. Leave blank for no limit. (Default time slots are 4 hours each)
-                                </small>
                             </label>
                         </div>
                     </div>
@@ -471,10 +464,10 @@ ob_start();
                             <span class="chevron" id="extension-chevron">▼</span>
                         </button>
                         <div class="collapsible-body is-collapsed" id="extension-settings">
-                            <p style="margin:0 0 1rem; color:#5b6888; font-size:0.85rem; line-height:1.5;">
-                                Configure how users can extend their reservations, including fees and auto-approval rules.
+                            <p style="margin:0 0 1rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                                <span style="font-weight:600;">Extensions</span>
+                                <?= frs_field_tip('Same-day extension requests, hourly fee, and whether extensions can be auto-approved.'); ?>
                             </p>
-
                             <label>
                                 Extension Fee per Hour (₱)
                                 <div class="input-wrapper">

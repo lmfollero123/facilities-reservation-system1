@@ -131,8 +131,7 @@ ob_start();
 ?>
 
 <div class="dashboard-header-section">
-    <h1><i class="bi bi-megaphone"></i> Announcements Management</h1>
-    <p>Create and manage public announcements displayed on the homepage</p>
+    <h1 class="frs-heading-with-tip"><i class="bi bi-megaphone"></i> Announcements Management <?= frs_field_tip('Published items appear on the public homepage and announcements page.'); ?></h1>
 </div>
 
 <?php if ($message): ?>
@@ -147,7 +146,6 @@ ob_start();
 <div class="booking-card mb-4">
     <div class="card-header-custom">
         <h2>Create New Announcement</h2>
-        <small>Fill out the form below to create a new public announcement</small>
     </div>
     
     <form method="POST" enctype="multipart/form-data" class="announcement-form">

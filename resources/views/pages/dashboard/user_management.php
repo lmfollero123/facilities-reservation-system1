@@ -357,8 +357,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Administration</span><span class="sep">/</span><span>User Management</span>
     </div>
-    <h1>User Management</h1>
-    <small>Manage accounts, roles, and approvals for residents and LGU staff.</small>
+    <?= frs_page_title('User Management', 'Activate residents, assign Staff/Admin roles, and reset passwords.'); ?>
 </div>
 
 <?php if ($message): ?>

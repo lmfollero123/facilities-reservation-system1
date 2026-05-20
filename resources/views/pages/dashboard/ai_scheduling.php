@@ -26,8 +26,8 @@ try {
 }
 
 $filterFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : 0;
-$slotPage = max(1, (int)($_GET['slot_page'] ?? 1));
-$slotsPerPage = 12;
+$topSlotsPerFacility = 5;
+$maxFacilitySections = 12; // when viewing all facilities, cap how many facility blocks appear
 
 // Holiday / local event calendar (Philippines + Barangay Culiat) for current and next year
 $yearNow = (int)date('Y');
@@ -138,12 +138,68 @@ usort(
     }
 );
 
-$slotsTotal = count($slots);
-$slotOffset = ($slotPage - 1) * $slotsPerPage;
-$slotsPage = array_slice($slots, $slotOffset, $slotsPerPage);
-$slotsHasPrev = $slotPage > 1;
-$slotsHasNext = $slotOffset + $slotsPerPage < $slotsTotal;
-$slotsTotalPages = max(1, (int)ceil($slotsTotal / $slotsPerPage));
+// Top N recommendations per facility (sort within each facility, then take best 5)
+$slotsByFacility = [];
+foreach ($slots as $slot) {
+    $fid = (int)$slot['facility_id'];
+    if (!isset($slotsByFacility[$fid])) {
+        $slotsByFacility[$fid] = [
+            'facility_id' => $fid,
+            'facility' => (string)$slot['facility'],
+            'slots' => [],
+            'high_count' => 0,
+        ];
+    }
+    $slotsByFacility[$fid]['slots'][] = $slot;
+}
+foreach ($slotsByFacility as $fid => $group) {
+    usort(
+        $group['slots'],
+        static function ($a, $b) use ($scoreRank): int {
+            $sa = $scoreRank($a['score']);
+            $sb = $scoreRank($b['score']);
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+            if ((int)$a['count'] !== (int)$b['count']) {
+                return (int)$a['count'] <=> (int)$b['count'];
+            }
+            return strcmp((string)$a['day'], (string)$b['day']);
+        }
+    );
+    $group['slots'] = array_slice($group['slots'], 0, $topSlotsPerFacility);
+    $group['high_count'] = count(array_filter(
+        $group['slots'],
+        static fn(array $s): bool => ($s['score'] ?? '') === 'High'
+    ));
+    $slotsByFacility[$fid] = $group;
+}
+
+// Sort facility blocks: more High-tier slots first, then fewer past bookings, then name
+uasort(
+    $slotsByFacility,
+    static function (array $a, array $b): int {
+        if ($a['high_count'] !== $b['high_count']) {
+            return $b['high_count'] <=> $a['high_count'];
+        }
+        $aMin = empty($a['slots']) ? PHP_INT_MAX : min(array_column($a['slots'], 'count'));
+        $bMin = empty($b['slots']) ? PHP_INT_MAX : min(array_column($b['slots'], 'count'));
+        if ($aMin !== $bMin) {
+            return $aMin <=> $bMin;
+        }
+        return strcmp($a['facility'], $b['facility']);
+    }
+);
+
+if ($filterFacilityId === 0 && count($slotsByFacility) > $maxFacilitySections) {
+    $slotsByFacility = array_slice($slotsByFacility, 0, $maxFacilitySections, true);
+}
+
+$slotsTotalShown = 0;
+foreach ($slotsByFacility as $group) {
+    $slotsTotalShown += count($group['slots']);
+}
+$facilitiesWithRecs = count($slotsByFacility);
 
 // Compute simple insights: peak day and peak time slot across all facilities
 $peakDayStmt = $pdo->prepare(
@@ -187,8 +243,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Analytics</span><span class="sep">/</span><span>Smart Scheduler</span>
     </div>
-    <h1>Smart Scheduler</h1>
-    <small>AI-powered recommendations for optimal booking times based on historical reservation data and demand patterns.</small>
+    <?= frs_page_title('Smart Scheduler', 'Suggests low-conflict day/time patterns from the last 6 months of approved bookings, plus local holidays.'); ?>
 </div>
 
 <div class="reports-grid">
@@ -201,20 +256,14 @@ ob_start();
                 </div>
                 <span style="color: #285ccd; font-size: 0.9rem; font-weight: 500;">View Insights →</span>
             </div>
-            <p class="resource-meta" style="margin: 0; color: #6c757d;">
-                Click to view AI-powered insights about booking patterns, peak times, and demand forecasts.
-            </p>
         </div>
         
         <!-- Recommended Time Slots -->
         <div class="report-card">
-            <h2>Recommended Time Slots</h2>
-            <p style="color:#6c757d; font-size:0.9rem; margin-bottom:1rem; line-height:1.5;">
-                <strong>How recommendations work:</strong> The system analyzes historical booking patterns over the last 6 months. 
-                <strong>High recommendation</strong> means very few past bookings (1 or less) for that day/time combination, indicating lower conflict risk. 
-                <strong>Medium</strong> has moderate usage (2-3 bookings), while <strong>Low</strong> has frequent bookings (4+) and higher competition. 
-                These rankings are derived entirely from existing reservation history (no separate scoring API).
-            </p>
+            <?= frs_heading_with_tip(
+                'Recommended Time Slots',
+                'Up to ' . (int)$topSlotsPerFacility . ' best day/time windows per facility (fewest past conflicts). High = 0–1 past bookings, Medium = 2–3, Low = 4+. Filter by facility to focus on one venue.'
+            ); ?>
             <form method="get" action="" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
                 <label style="display:flex; flex-direction:column; gap:0.35rem; font-size:0.9rem; color:#3d4f6f;">
                     <span style="font-weight:600;">Facility</span>
@@ -228,82 +277,81 @@ ob_start();
                     </select>
                 </label>
                 <button type="submit" class="btn-primary" style="padding:0.5rem 1rem; border-radius:8px;">Apply filter</button>
-                <?php if ($slotsTotal): ?>
+                <?php if ($slotsTotalShown > 0): ?>
                     <span style="color:#8b95b5; font-size:0.88rem; margin-left:auto;">
-                        Showing <?= (int)min($slotsTotal, $slotOffset + 1); ?>–<?= (int)min($slotsTotal, $slotOffset + count($slotsPage)); ?> of <?= (int)$slotsTotal; ?> pattern<?= $slotsTotal === 1 ? '' : 's'; ?>
+                        <?= (int)$slotsTotalShown; ?> top slot<?= $slotsTotalShown === 1 ? '' : 's'; ?>
+                        across <?= (int)$facilitiesWithRecs; ?> facilit<?= $facilitiesWithRecs === 1 ? 'y' : 'ies'; ?>
+                        (max <?= (int)$topSlotsPerFacility; ?> per facility)
                     </span>
                 <?php endif; ?>
             </form>
-            <?php if (empty($slots)): ?>
+            <?php if (empty($slotsByFacility)): ?>
                 <p style="color:#8b95b5; padding:1rem 0;">Not enough historical data yet to generate recommendations for this scope. Try “All facilities” or check back once more approved reservations are recorded.</p>
             <?php else: ?>
-                <table class="table">
-                    <thead>
-                    <tr>
-                        <th>Facility</th>
-                        <th>Day</th>
-                        <th>Historical time window</th>
-                        <th>Suggested tier</th>
-                        <th>Pattern insight</th>
-                        <th>Past bookings</th>
-                        <th>Action</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($slotsPage as $slot): ?>
-                        <?php
-                            $patternLabel = ($slot['score'] === 'High')
-                                ? 'Lower historical demand'
-                                : (($slot['score'] === 'Medium') ? 'Moderate demand' : 'Frequent bookings in this pattern');
-                            ?>
-                        <tr>
-                            <td><?= htmlspecialchars($slot['facility']); ?></td>
-                            <td><?= htmlspecialchars($slot['day']); ?></td>
-                            <td><?= htmlspecialchars($slot['time']); ?></td>
-                            <td>
-                                <span class="status-badge <?= $slot['score'] === 'High' ? 'status-approved' : ($slot['score'] === 'Medium' ? 'status-pending' : 'status-cancelled'); ?>">
-                                    <?= htmlspecialchars($slot['score']); ?>
-                                </span>
-                            </td>
-                            <td style="max-width:220px; color:#55607a; font-size:0.88rem;">
-                                <?= htmlspecialchars($patternLabel); ?> · <?= htmlspecialchars((string)$slot['reason']); ?>
-                            </td>
-                            <td><?= (int)$slot['count']; ?></td>
-                            <td>
-                                <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
-                                   href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode((string)$slot['facility_id']); ?>&time_slot=<?= urlencode((string)$slot['time']); ?>">
-                                    Book this slot
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php if ($slotsTotalPages > 1): ?>
-                    <nav style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-top:1rem;" aria-label="Recommended slots pagination">
-                        <?php
-                        $pagerBase = function (int $p) use ($filterFacilityId): string {
-                            $q = ['slot_page' => (string)$p];
-                            if ($filterFacilityId > 0) {
-                                $q['facility_id'] = (string)$filterFacilityId;
-                            }
-                            return '?' . http_build_query($q);
-                        };
-                        ?>
-                        <?php if ($slotsHasPrev): ?>
-                            <a class="btn-outline" href="<?= htmlspecialchars($pagerBase($slotPage - 1)); ?>" style="text-decoration:none; padding:0.4rem 0.75rem;">← Previous</a>
-                        <?php else: ?>
-                            <span class="btn-outline" style="opacity:0.45; padding:0.4rem 0.75rem;">← Previous</span>
-                        <?php endif; ?>
-                        <span style="color:#6c757d; font-size:0.88rem;">
-                            Page <?= (int)$slotPage; ?> of <?= (int)$slotsTotalPages; ?>
-                        </span>
-                        <?php if ($slotsHasNext): ?>
-                            <a class="btn-outline" href="<?= htmlspecialchars($pagerBase($slotPage + 1)); ?>" style="text-decoration:none; padding:0.4rem 0.75rem;">Next →</a>
-                        <?php else: ?>
-                            <span class="btn-outline" style="opacity:0.45; padding:0.4rem 0.75rem;">Next →</span>
-                        <?php endif; ?>
-                    </nav>
+                <?php foreach ($slotsByFacility as $group): ?>
+                    <div class="scheduler-facility-block" style="margin-bottom:1.5rem;">
+                        <h3 style="margin:0 0 0.75rem; font-size:1.05rem; color:var(--gov-blue-dark, #1e3a5f); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <?= htmlspecialchars($group['facility']); ?>
+                            <span style="font-size:0.8rem; font-weight:500; color:#8b95b5;">Top <?= count($group['slots']); ?> recommended</span>
+                        </h3>
+                        <table class="table">
+                            <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Day</th>
+                                <th>Historical time window</th>
+                                <th>Suggested tier</th>
+                                <th>Pattern insight</th>
+                                <th>Past bookings</th>
+                                <th>Action</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($group['slots'] as $rank => $slot): ?>
+                                <?php
+                                    $patternLabel = ($slot['score'] === 'High')
+                                        ? 'Lower historical demand'
+                                        : (($slot['score'] === 'Medium') ? 'Moderate demand' : 'Frequent bookings in this pattern');
+                                    ?>
+                                <tr>
+                                    <td><strong>#<?= (int)$rank + 1; ?></strong></td>
+                                    <td><?= htmlspecialchars($slot['day']); ?></td>
+                                    <td><?= htmlspecialchars($slot['time']); ?></td>
+                                    <td>
+                                        <span class="status-badge <?= $slot['score'] === 'High' ? 'status-approved' : ($slot['score'] === 'Medium' ? 'status-pending' : 'status-cancelled'); ?>">
+                                            <?= htmlspecialchars($slot['score']); ?>
+                                        </span>
+                                    </td>
+                                    <td style="max-width:220px; color:#55607a; font-size:0.88rem;">
+                                        <?= htmlspecialchars($patternLabel); ?> · <?= htmlspecialchars((string)$slot['reason']); ?>
+                                    </td>
+                                    <td><?= (int)$slot['count']; ?></td>
+                                    <td>
+                                        <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
+                                           href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode((string)$slot['facility_id']); ?>&time_slot=<?= urlencode((string)$slot['time']); ?>">
+                                            Book this slot
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endforeach; ?>
+                <?php if ($filterFacilityId === 0 && count($slots) > 0): ?>
+                    <?php
+                    $allFacilityIdsWithData = [];
+                    foreach ($slots as $s) {
+                        $allFacilityIdsWithData[(int)$s['facility_id']] = true;
+                    }
+                    $hiddenFacilityCount = count($allFacilityIdsWithData) - $facilitiesWithRecs;
+                    ?>
+                    <?php if ($hiddenFacilityCount > 0): ?>
+                        <p style="color:#8b95b5; font-size:0.88rem; margin:0;">
+                            Showing the <?= (int)$facilitiesWithRecs; ?> facilities with the strongest recommendations.
+                            <?= (int)$hiddenFacilityCount; ?> more <?= $hiddenFacilityCount === 1 ? 'has' : 'have'; ?> data — pick a facility above to see its top <?= (int)$topSlotsPerFacility; ?>.
+                        </p>
+                    <?php endif; ?>
                 <?php endif; ?>
             <?php endif; ?>
         </div>
@@ -312,7 +360,10 @@ ob_start();
 
 <div class="reports-grid" style="margin-top:1.5rem;">
     <section class="report-card">
-        <h2>Upcoming Holidays & Local Events (Next 120 Days)</h2>
+        <?= frs_heading_with_tip(
+            'Upcoming Holidays & Local Events (Next 120 Days)',
+            'PH national holidays and Barangay Culiat events (e.g. Fiesta). Booking demand is often higher around these dates.'
+        ); ?>
         <?php if (empty($eventRisk)): ?>
             <p style="color:#8b95b5;">No tagged holidays/events in the next 120 days.</p>
         <?php else: ?>
@@ -337,85 +388,58 @@ ob_start();
                 </tbody>
             </table>
         <?php endif; ?>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-top:0.75rem;">
-            Risk is elevated on holidays and Barangay Culiat events (e.g., Fiesta, Founding Day). Prefer alternate dates or earlier lead times.
-        </p>
     </section>
 </div>
 <!-- AI Demand Forecast Modal -->
-<div id="aiForecastModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb;">
+<div id="aiForecastModal" class="modal-overlay" style="display: none;" role="dialog" aria-labelledby="aiForecastTitle" aria-modal="true">
+    <div class="modal-content ai-forecast-dialog">
+        <div class="ai-forecast-header">
             <div>
                 <div class="ai-chip" style="margin-bottom: 0.5rem;">
                     <span>AI</span> <span>Demand Forecast</span>
                 </div>
-                <h2 style="margin: 0; color: #1e3a5f;">Insights Overview</h2>
+                <h2 id="aiForecastTitle">Insights Overview</h2>
             </div>
-            <button type="button" onclick="closeAIModal()" style="background: none; border: none; font-size: 1.5rem; color: #6c757d; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'; this.style.color='#333';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
+            <button type="button" class="ai-forecast-close" onclick="closeAIModal()" aria-label="Close">&times;</button>
         </div>
-        <div class="modal-body">
-            <ul style="line-height:1.8; margin: 0; padding-left: 1.25rem; color: #4a5568;">
+        <div class="modal-body ai-forecast-body">
+            <ul>
                 <?php if ($peakDay): ?>
-                    <li style="margin-bottom: 1rem;"><strong>Peak day:</strong> Most approved reservations fall on <strong><?= htmlspecialchars($peakDay['day_name']); ?>s</strong>.</li>
+                    <li><strong>Peak day:</strong> Most approved reservations fall on <strong><?= htmlspecialchars($peakDay['day_name']); ?>s</strong>.</li>
                 <?php endif; ?>
                 <?php if ($peakTime): ?>
-                    <li style="margin-bottom: 1rem;"><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
+                    <li><strong>Busy time window:</strong> The <strong><?= htmlspecialchars($peakTime['time_slot']); ?></strong> slot sees the highest activity.</li>
                 <?php endif; ?>
-                <li style="margin-bottom: 1rem;"><strong>Recommendation Scores:</strong>
+                <li><strong>Recommendation Scores:</strong>
                     <ul style="margin-top:0.5rem; padding-left:1.5rem; list-style-type:disc;">
                         <li><strong>High</strong> = 0-1 past bookings (low conflict risk, best choice)</li>
                         <li><strong>Medium</strong> = 2-3 past bookings (moderate usage)</li>
                         <li><strong>Low</strong> = 4+ past bookings (high competition, more conflicts)</li>
                     </ul>
                 </li>
-                <li style="margin-bottom: 1rem;">Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
-                <li style="margin-bottom: 0;">These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
+                <li>Consider scheduling official LGU events on days and time windows with fewer past bookings to reduce conflicts.</li>
+                <li>These insights are based on approved reservations from the last 6 months and tagged PH holidays + Barangay Culiat events.</li>
             </ul>
         </div>
-        <div class="modal-footer" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; text-align: right;">
-            <button type="button" onclick="closeAIModal()" class="btn-primary" style="padding: 0.5rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Close</button>
+        <div class="modal-footer ai-forecast-footer">
+            <button type="button" onclick="closeAIModal()" class="btn-primary">Close</button>
         </div>
     </div>
 </div>
 
 <style>
-.modal-overlay {
+#aiForecastModal.modal-overlay {
     position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
+    inset: 0 !important;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(4px);
-    z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
 }
 
-.modal-content {
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-    padding: 2rem;
-    width: 100%;
-    animation: modalSlideIn 0.3s ease-out;
-}
-
-@keyframes modalSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-.modal-overlay.show {
+#aiForecastModal.modal-overlay.show {
     display: flex !important;
 }
 

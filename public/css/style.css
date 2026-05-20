@@ -66,6 +66,11 @@
     --card-bg: rgba(255, 255, 255, 0.25);
     --card-blur: blur(15px);
 
+    /* AI / accent panels (book facility hints) */
+    --accent-ai-bg: #f5f3ff;
+    --accent-ai-border: #ddd6fe;
+    --accent-ai-text: #4c1d95;
+
     /* Mobile-first responsive sizing */
     --container-padding: 1rem;
     --container-max-width: 100%;
@@ -128,6 +133,10 @@
     --gov-text: #e4e6eb;
     --gov-white: #252837;
     --card-bg: rgba(37, 40, 55, 0.5);
+
+    --accent-ai-bg: #2e2447;
+    --accent-ai-border: #5b21b6;
+    --accent-ai-text: #e9d5ff;
 }
 
 *,
@@ -3878,7 +3887,7 @@ footer small {
 
 .booking-card,
 .facility-card-admin {
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.95));
     backdrop-filter: blur(10px);
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -4680,7 +4689,7 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
 
 /* VISUAL CHANGE ONLY - Booking card updated */
 .booking-card {
-    background: var(--gov-white);
+    background: var(--bg-secondary, var(--gov-white));
     border: none;
     border-radius: 12px;
     padding: 1rem;
@@ -10474,4 +10483,773 @@ html[data-theme="dark"] .info-warning {
     .timeline-note {
         font-size: 0.9375rem;
     }
+}
+
+/* Per-chart filter bars (dashboard & reports analytics) */
+.chart-filter-bar {
+    margin: 0 0 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: var(--bg-secondary, #f8fafc);
+    border: 1px solid var(--border-color, #e8ecf4);
+}
+
+.chart-filter-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: flex-end;
+}
+
+.chart-filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 120px;
+    flex: 1 1 120px;
+}
+
+.chart-filter-item span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+}
+
+.chart-filter-control {
+    font-size: 0.85rem !important;
+    padding: 0.4rem 0.55rem !important;
+}
+
+.chart-filter-apply {
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.85rem !important;
+    flex: 0 0 auto;
+    align-self: flex-end;
+}
+
+.chart-filter-active {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--text-muted, #8b95b5);
+    font-size: 0.8rem;
+}
+
+html[data-theme="dark"] .chart-filter-bar {
+    background: var(--bg-secondary, #1e293b);
+    border-color: var(--border-color, #475569);
+}
+
+html[data-theme="dark"] .chart-filter-item span,
+html[data-theme="dark"] .chart-filter-active {
+    color: #94a3b8;
+}
+
+/* Field help: compact “i” tooltip (hover, focus, tap) */
+.bcf-label-row,
+.frs-label-with-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.frs-tip {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.frs-tip-btn {
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    border: 1px solid var(--frs-tip-border, #94a3b8);
+    background: var(--frs-tip-bg, #f1f5f9);
+    color: var(--frs-tip-fg, #475569);
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1;
+    cursor: help;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.frs-tip-btn:hover,
+.frs-tip-btn:focus-visible {
+    background: var(--frs-tip-bg-hover, #e2e8f0);
+    border-color: var(--frs-tip-border-hover, #64748b);
+    color: var(--frs-tip-fg-hover, #1e293b);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+/* Legacy hidden popups (migrated to data-frs-tip on button) */
+.frs-tip-popup {
+    display: none !important;
+}
+
+/* Single floating tooltip layer (position set in JS — do not use left/right !important here) */
+.frs-tip-float {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 13050;
+    display: none;
+    width: max-content;
+    max-width: min(300px, calc(100vw - 2rem));
+    padding: 0.5rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    color: var(--frs-tip-popup-fg, #334155);
+    background: var(--frs-tip-popup-bg, #fff);
+    border: 1px solid var(--frs-tip-popup-border, #cbd5e1);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+}
+
+.frs-tip-float.is-visible {
+    display: block;
+}
+
+html[data-theme="dark"] .frs-tip-btn {
+    --frs-tip-border: #64748b;
+    --frs-tip-bg: #334155;
+    --frs-tip-fg: #cbd5e1;
+    --frs-tip-bg-hover: #475569;
+    --frs-tip-border-hover: #94a3b8;
+    --frs-tip-fg-hover: #f1f5f9;
+}
+
+html[data-theme="dark"] .frs-tip-float {
+    --frs-tip-popup-fg: #e2e8f0;
+    --frs-tip-popup-bg: #1e293b;
+    --frs-tip-popup-border: #475569;
+    color: var(--frs-tip-popup-fg, #e2e8f0);
+    background: var(--frs-tip-popup-bg, #1e293b);
+    border-color: var(--frs-tip-popup-border, #475569);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Section / page titles with ⓘ */
+.frs-heading-with-tip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.page-header h1.frs-heading-with-tip {
+    margin-bottom: 0;
+}
+
+/* Smart Scheduler — Demand Forecast modal */
+#aiForecastModal.modal-overlay {
+    z-index: 10000;
+}
+
+#aiForecastModal .ai-forecast-dialog {
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--card-bg, #fff);
+    color: var(--text-primary, #1e293b);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    padding: 2rem;
+    width: 100%;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+#aiForecastModal .ai-forecast-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color, #e5e7eb);
+}
+
+#aiForecastModal .ai-forecast-header h2 {
+    margin: 0;
+    color: var(--text-primary, #1e3a5f);
+}
+
+#aiForecastModal .ai-forecast-close {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted, #6c757d);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+#aiForecastModal .ai-forecast-close:hover {
+    background: var(--bg-secondary, #f0f0f0);
+    color: var(--text-primary, #333);
+}
+
+#aiForecastModal .ai-forecast-body ul {
+    line-height: 1.8;
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--text-secondary, #475569);
+}
+
+#aiForecastModal .ai-forecast-body li {
+    margin-bottom: 1rem;
+    color: var(--text-secondary, #475569);
+}
+
+#aiForecastModal .ai-forecast-body strong {
+    color: var(--text-primary, #1e293b);
+}
+
+#aiForecastModal .ai-forecast-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+    text-align: right;
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-dialog {
+    background: var(--card-bg, #1e293b);
+    color: var(--text-primary, #f1f5f9);
+    border: 1px solid var(--border-color, #475569);
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-header {
+    border-bottom-color: var(--border-color, #475569);
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-header h2 {
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-body ul,
+html[data-theme="dark"] #aiForecastModal .ai-forecast-body li {
+    color: var(--text-secondary, #cbd5e1);
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-body strong {
+    color: var(--text-primary, #f8fafc);
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-close {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-close:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] #aiForecastModal .ai-forecast-footer {
+    border-top-color: var(--border-color, #475569);
+}
+
+/* Reports — AI summary modal */
+#frsAiSummaryModal.frs-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100050;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+#frsAiSummaryModal.frs-modal-overlay.is-open {
+    display: flex;
+}
+
+#frsAiSummaryModal .frs-modal-panel {
+    width: min(920px, 95vw);
+    max-height: 92vh;
+    overflow: auto;
+    background: var(--card-bg, #fff);
+    color: var(--text-primary, #111827);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+
+#frsAiSummaryModal .frs-modal-panel-header,
+#frsAiSummaryModal .frs-modal-panel-body {
+    padding: 1rem 1.1rem;
+}
+
+#frsAiSummaryModal .frs-modal-panel-header {
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+#frsAiSummaryModal .frs-modal-panel-header h3 {
+    margin: 0;
+    color: var(--text-primary, #111827);
+}
+
+#frsAiSummaryModal .frs-modal-meta {
+    color: var(--text-muted, #6b7280);
+}
+
+#frsAiSummaryModal .frs-modal-panel-body {
+    color: var(--text-secondary, #374151);
+}
+
+html[data-theme="dark"] #frsAiSummaryModal .frs-modal-panel {
+    background: var(--card-bg, #1e293b);
+    color: var(--text-primary, #f1f5f9);
+    border: 1px solid var(--border-color, #475569);
+}
+
+html[data-theme="dark"] #frsAiSummaryModal .frs-modal-panel-header {
+    border-bottom-color: var(--border-color, #475569);
+}
+
+html[data-theme="dark"] #frsAiSummaryModal .frs-modal-panel-header h3,
+html[data-theme="dark"] #frsAiSummaryModal .frs-modal-panel-body,
+html[data-theme="dark"] #frsAiSummaryModal .frs-modal-meta {
+    color: var(--text-secondary, #cbd5e1);
+}
+
+/* Book-a-facility modal — dark mode */
+html[data-theme="dark"] .bcf-modal-dialog {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px var(--shadow-strong);
+}
+
+html[data-theme="dark"] .bcf-modal-head {
+    border-bottom-color: var(--border-color);
+    background: var(--bg-secondary);
+}
+
+html[data-theme="dark"] .bcf-modal-head h2,
+html[data-theme="dark"] #bcf-modal-title {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-modal-body {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-modal-body .booking-form label {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-modal-body .booking-form .input-icon {
+    color: var(--text-tertiary);
+}
+
+html[data-theme="dark"] .bcf-scroll-select-trigger {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-scroll-select-trigger:hover,
+html[data-theme="dark"] .bcf-scroll-select-trigger:focus {
+    background: var(--bg-primary);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+}
+
+html[data-theme="dark"] .bcf-scroll-select-chevron {
+    color: var(--text-tertiary);
+}
+
+html[data-theme="dark"] ul.bcf-scroll-select-menu {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: 0 12px 40px var(--shadow-strong);
+}
+
+html[data-theme="dark"] .bcf-scroll-select-option:hover,
+html[data-theme="dark"] .bcf-scroll-select-option[data-active="1"] {
+    background: var(--sidebar-active);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-res-date-readonly {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-res-date-readonly-empty {
+    color: var(--text-tertiary);
+}
+
+html[data-theme="dark"] .bcf-walkin-box {
+    background: var(--info-bg);
+    border-color: var(--info-border);
+}
+
+html[data-theme="dark"] .bcf-walkin-title {
+    color: var(--info-text);
+}
+
+html[data-theme="dark"] .bcf-modal-body .booking-form select,
+html[data-theme="dark"] .bcf-modal-body .booking-form input,
+html[data-theme="dark"] .bcf-modal-body .booking-form textarea {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-modal-body .booking-form select:focus,
+html[data-theme="dark"] .bcf-modal-body .booking-form input:focus,
+html[data-theme="dark"] .bcf-modal-body .booking-form textarea:focus {
+    background: var(--bg-primary);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+}
+
+html[data-theme="dark"] .bcf-modal-body .booking-form select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-modal-body #bcf-close-booking-modal {
+    color: var(--text-primary);
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+html[data-theme="dark"] .bcf-modal-body div[style*="f8fafc"],
+html[data-theme="dark"] .bcf-modal-body div[style*="fff4e5"],
+html[data-theme="dark"] .bcf-modal-body div[style*="e3f8ef"] {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .bcf-modal-body div[style*="f8fafc"] h4,
+html[data-theme="dark"] .bcf-modal-body div[style*="fff4e5"] h4,
+html[data-theme="dark"] .bcf-modal-body div[style*="e3f8ef"] h4,
+html[data-theme="dark"] .bcf-modal-body div[style*="856404"],
+html[data-theme="dark"] .bcf-modal-body div[style*="0d7a43"] {
+    color: var(--text-primary) !important;
+}
+
+/* ============================================================
+   Dark mode — dashboard cards & hardcoded light surfaces
+   ============================================================ */
+html[data-theme="dark"] .booking-card,
+html[data-theme="dark"] .book-facility-compact .booking-card,
+html[data-theme="dark"] .booking-calendar-myres-panel.booking-card {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary);
+    box-shadow: 0 4px 16px var(--shadow);
+}
+
+html[data-theme="dark"] .booking-card h2,
+html[data-theme="dark"] .book-facility-compact h2 {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .booking-hub-tabs {
+    border-bottom-color: var(--border-color);
+}
+
+html[data-theme="dark"] .booking-hub-tab {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .booking-hub-tab.is-active {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    border-bottom-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-purpose-first-card {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .bcf-purpose-first-card textarea,
+html[data-theme="dark"] .bcf-purpose-first-card input {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-purpose-first-row label,
+html[data-theme="dark"] .bcf-purpose-first-card label {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-smart-hints-bar {
+    background: var(--accent-ai-bg) !important;
+    border-color: var(--accent-ai-border) !important;
+    color: var(--accent-ai-text) !important;
+}
+
+html[data-theme="dark"] .bcf-smart-hints-bar a,
+html[data-theme="dark"] .bcf-smart-hints-link {
+    color: var(--accent-ai-text) !important;
+    border-color: var(--accent-ai-border) !important;
+}
+
+html[data-theme="dark"] .bcf-cal-fac-select,
+html[data-theme="dark"] .bcf-cal-fac-select:hover,
+html[data-theme="dark"] .bcf-cal-fac-select:focus {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-cal-month-heading {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .bcf-cal-fac-field-label {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .book-facility-compact .booking-form label {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .book-facility-compact .booking-form select,
+html[data-theme="dark"] .book-facility-compact .booking-form input,
+html[data-theme="dark"] .book-facility-compact .booking-form textarea {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Reusable notice panels (replaces inline light backgrounds) */
+.frs-notice-panel {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 0.5rem;
+    line-height: 1.55;
+    font-size: 0.9rem;
+}
+
+.frs-notice-muted {
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    color: var(--text-secondary);
+}
+
+.frs-notice-warn {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    color: var(--warning-text);
+}
+
+.frs-notice-success {
+    background: var(--success-bg);
+    border: 1px solid var(--success-border);
+    color: var(--success-text);
+}
+
+/* Inline style backgrounds — common light hex values */
+html[data-theme="dark"] [style*="background:#fff"],
+html[data-theme="dark"] [style*="background: #fff"],
+html[data-theme="dark"] [style*="background:#ffffff"],
+html[data-theme="dark"] [style*="background: #ffffff"],
+html[data-theme="dark"] [style*="background: white"],
+html[data-theme="dark"] [style*="background:white"],
+html[data-theme="dark"] [style*="background:#fafbff"],
+html[data-theme="dark"] [style*="background: #fafbff"],
+html[data-theme="dark"] [style*="background:#fafbfd"],
+html[data-theme="dark"] [style*="background: #fafbfd"],
+html[data-theme="dark"] [style*="background:#f8fafc"],
+html[data-theme="dark"] [style*="background: #f8fafc"],
+html[data-theme="dark"] [style*="background:#f8fbff"],
+html[data-theme="dark"] [style*="background:#f4f7fc"],
+html[data-theme="dark"] [style*="background:#f9fafc"],
+html[data-theme="dark"] [style*="background: #f9fafc"],
+html[data-theme="dark"] [style*="background:#f9fafb"],
+html[data-theme="dark"] [style*="background:#f5f3ff"],
+html[data-theme="dark"] [style*="background:#eff6ff"],
+html[data-theme="dark"] [style*="background: #eff6ff"],
+html[data-theme="dark"] [style*="background:#f8f9fa"],
+html[data-theme="dark"] [style*="background: #f8f9fa"] {
+    background: var(--bg-tertiary) !important;
+}
+
+html[data-theme="dark"] [style*="background:#fff4e5"],
+html[data-theme="dark"] [style*="background: #fff4e5"],
+html[data-theme="dark"] [style*="background:#fff3cd"],
+html[data-theme="dark"] [style*="background: #fff3cd"],
+html[data-theme="dark"] [style*="background:#fff7ed"] {
+    background: var(--warning-bg) !important;
+    border-color: var(--warning-border) !important;
+    color: var(--warning-text) !important;
+}
+
+html[data-theme="dark"] [style*="background:#e3f8ef"],
+html[data-theme="dark"] [style*="background: #e3f8ef"] {
+    background: var(--success-bg) !important;
+    border-color: var(--success-border) !important;
+    color: var(--success-text) !important;
+}
+
+html[data-theme="dark"] [style*="background:#e7f3ff"],
+html[data-theme="dark"] [style*="background: #e7f3ff"] {
+    background: var(--info-bg) !important;
+    border-color: var(--info-border) !important;
+    color: var(--info-text) !important;
+}
+
+html[data-theme="dark"] .modal-dialog[style*="background: white"],
+html[data-theme="dark"] .modal-dialog[style*="background:white"],
+html[data-theme="dark"] .modal-dialog[style*="background:#fff"],
+html[data-theme="dark"] .modal-dialog[style*="background: #fff"],
+html[data-theme="dark"] .modal-dialog[style*="background:#ffffff"] {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #ai-chatbot-panel,
+html[data-theme="dark"] .ai-chatbot-messages,
+html[data-theme="dark"] .ai-chatbot-input-area {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ============================================
+   Blackout dates page — dark mode
+   ============================================ */
+html[data-theme="dark"] .frs-blackout-page {
+    --bo-cell-bg: #1e293b;
+    --bo-cell-border: #475569;
+    --bo-cell-blocked-bg: #450a0a;
+    --bo-cell-blocked-border: #991b1b;
+    --bo-cell-blocked-hover: #7f1d1d;
+    --bo-dow-fg: #94a3b8;
+    --bo-day-num-fg: #e2e8f0;
+    --bo-today-num-fg: #93c5fd;
+    --bo-today-ring: #3b82f6;
+    --bo-chip-bg: rgba(127, 29, 29, 0.9);
+    --bo-chip-fg: #fecaca;
+    color: var(--text-primary, #e2e8f0);
+}
+
+html[data-theme="dark"] .frs-blackout-page .text-slate-900,
+html[data-theme="dark"] .frs-blackout-page .text-slate-800,
+html[data-theme="dark"] .frs-blackout-page .text-slate-700,
+html[data-theme="dark"] .frs-blackout-page .font-bold.text-slate-900 {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .text-slate-500,
+html[data-theme="dark"] .frs-blackout-page .text-slate-400,
+html[data-theme="dark"] .frs-blackout-page .text-slate-300 {
+    color: var(--text-muted, #94a3b8) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .text-blue-600,
+html[data-theme="dark"] .frs-blackout-page .text-blue-700 {
+    color: #93c5fd !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .bg-white,
+html[data-theme="dark"] .frs-blackout-page section.rounded-2xl.bg-white,
+html[data-theme="dark"] .frs-blackout-page #bo-add-modal .relative.bg-white,
+html[data-theme="dark"] .frs-blackout-page #bo-day-modal .relative.bg-white {
+    background: var(--card-bg, #1e293b) !important;
+    color: var(--text-primary, #e2e8f0);
+}
+
+html[data-theme="dark"] .frs-blackout-page .bg-slate-50\/50,
+html[data-theme="dark"] .frs-blackout-page .bg-slate-50,
+html[data-theme="dark"] .frs-blackout-page article.bg-slate-50\/50 {
+    background: var(--bg-secondary, #0f172a) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .bg-slate-100 {
+    background: var(--bg-secondary, #334155) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .border-slate-200,
+html[data-theme="dark"] .frs-blackout-page .border-slate-100 {
+    border-color: var(--border-color, #475569) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .hover\:bg-slate-50:hover {
+    background: var(--bg-secondary, #334155) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page select.bg-white,
+html[data-theme="dark"] .frs-blackout-page .rounded-lg.border.border-slate-200.bg-white {
+    background: var(--input-bg, #0f172a) !important;
+    border-color: var(--border-color, #475569) !important;
+    color: var(--text-primary, #e2e8f0) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .inline-flex.rounded-lg.border.border-slate-200.bg-white {
+    background: var(--card-bg, #1e293b) !important;
+    border-color: var(--border-color, #475569) !important;
+    color: var(--text-primary, #e2e8f0) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .border-red-200.bg-white {
+    background: var(--card-bg, #1e293b) !important;
+    border-color: #991b1b !important;
+    color: #fca5a5 !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .border-amber-200.bg-amber-50 {
+    background: var(--warning-bg, #422006) !important;
+    border-color: var(--warning-border, #b45309) !important;
+    color: var(--warning-text, #fde68a) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .border-emerald-200.bg-emerald-50 {
+    background: var(--success-bg, #052e16) !important;
+    border-color: var(--success-border, #166534) !important;
+    color: var(--success-text, #86efac) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .border-red-200.bg-red-50 {
+    background: #450a0a !important;
+    border-color: #991b1b !important;
+    color: #fecaca !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .shadow-sm,
+html[data-theme="dark"] .frs-blackout-page .shadow-xl {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page #bo-add-modal .absolute.inset-0,
+html[data-theme="dark"] .frs-blackout-page #bo-day-modal .absolute.inset-0 {
+    background: rgba(0, 0, 0, 0.65) !important;
+}
+
+html[data-theme="dark"] .frs-blackout-page .frs-bo-tabs.calendar-tabs button {
+    color: var(--text-muted, #94a3b8);
+}
+
+html[data-theme="dark"] .frs-blackout-page .frs-bo-tabs.calendar-tabs button.active {
+    color: var(--text-primary, #f1f5f9);
+    border-bottom-color: #3b82f6;
 }

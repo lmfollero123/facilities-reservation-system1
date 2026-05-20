@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../config/app.php';
+require_once __DIR__ . '/../../../config/ui_helpers.php';
 $isLoggedIn = $_SESSION['user_authenticated'] ?? false;
 if (!$isLoggedIn) {
     header('Location: ' . base_path() . '/login');
@@ -223,6 +224,16 @@ $mainJsPath = dirname(__DIR__, 3) . '/public/js/main.js';
 $mainJsVer = is_file($mainJsPath) ? (string)filemtime($mainJsPath) : '1';
 ?>
 <script src="<?= base_path(); ?>/public/js/main.js?v=<?= htmlspecialchars($mainJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php
+$frsTipsJsPath = dirname(__DIR__, 3) . '/public/js/frs-field-tips.js';
+$frsTipsJsVer = is_file($frsTipsJsPath) ? (string)filemtime($frsTipsJsPath) : '1';
+?>
+<script src="<?= base_path(); ?>/public/js/frs-field-tips.js?v=<?= htmlspecialchars($frsTipsJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php
+$chartFiltersJsPath = dirname(__DIR__, 3) . '/public/js/chart-filters.js';
+$chartFiltersJsVer = is_file($chartFiltersJsPath) ? (string)filemtime($chartFiltersJsPath) : '1';
+?>
+<script src="<?= base_path(); ?>/public/js/chart-filters.js?v=<?= htmlspecialchars($chartFiltersJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function () {
     const modal = document.getElementById('sessionTimeoutModal');

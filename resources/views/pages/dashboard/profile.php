@@ -512,14 +512,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     }
 }
 
+$profileHasCoords = $user && !empty($user['latitude']) && !empty($user['longitude']);
+$profileCoordsSummary = $profileHasCoords
+    ? ('Saved: ' . htmlspecialchars((string)$user['latitude']) . ', ' . htmlspecialchars((string)$user['longitude']))
+    : 'Usually auto-filled from your address';
+
 ob_start();
 ?>
+<style>
+.profile-collapsible {
+    margin-top: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+.profile-collapsible > summary {
+    cursor: pointer;
+    padding: 0.65rem 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.profile-collapsible > summary::-webkit-details-marker { display: none; }
+.profile-collapsible > summary::before {
+    content: '▸';
+    margin-right: 0.35rem;
+    color: #64748b;
+    transition: transform 0.15s ease;
+}
+.profile-collapsible[open] > summary::before {
+    transform: rotate(90deg);
+}
+.profile-collapsible-hint {
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+.profile-collapsible-body {
+    padding: 0 0.85rem 0.85rem;
+    border-top: 1px solid #e2e8f0;
+}
+.profile-collapsible-nested {
+    margin-top: 0.75rem;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    background: #fff;
+}
+.profile-collapsible-nested > summary {
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #991b1b;
+    list-style: none;
+}
+.profile-collapsible-nested > summary::-webkit-details-marker { display: none; }
+.profile-deactivate-zone {
+    grid-column: 1 / -1;
+    border: 1px solid #fecaca !important;
+    background: #fffafb !important;
+}
+.profile-deactivate-zone .profile-collapsible {
+    border-color: #fecaca;
+    background: #fff;
+}
+.profile-deactivate-zone .profile-collapsible > summary {
+    color: #991b1b;
+}
+.profile-coords-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+@media (max-width: 640px) {
+    .profile-coords-grid { grid-template-columns: 1fr; }
+}
+</style>
 <div class="page-header">
     <div class="breadcrumb">
         <span>Account</span><span class="sep">/</span><span>Profile</span>
     </div>
     <h1>My Profile</h1>
-    <small>Keep your account information up to date and secure.</small>
 </div>
 
 <?php if ($error): ?>
@@ -619,33 +697,35 @@ ob_start();
                         <span class="input-icon">📍</span>
                         <input type="text" name="address" id="profile-address" value="<?= htmlspecialchars($user['address'] ?? ''); ?>" placeholder="e.g., Barangay Culiat, Quezon City" class="profile-input" autocomplete="address-line1">
                     </div>
-                    <small class="profile-help-text">Your address helps us recommend nearby facilities. Latitude and longitude update automatically when you type and blur.</small>
+                    <small class="profile-help-text">Used for nearby facility recommendations. Coordinates update automatically when you save your address.</small>
                 </label>
-                
-                <label class="profile-form-label">
-                    <span class="profile-label-text">Latitude (Optional - for location-based recommendations)</span>
-                    <div class="input-wrapper">
-                        <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="latitude" id="profile-latitude" value="<?= htmlspecialchars($user['latitude'] ?? ''); ?>" placeholder="14.6760" class="profile-input">
+
+                <details class="profile-collapsible" id="profile-coords-panel">
+                    <summary>
+                        <span>Location coordinates (optional)</span>
+                        <span class="profile-collapsible-hint" id="profile-coords-summary"><?= $profileCoordsSummary; ?></span>
+                    </summary>
+                    <div class="profile-collapsible-body">
+                        <p class="profile-help-text" style="margin:0 0 0.75rem;">Only change these if auto-fill from your address is wrong. <a href="https://www.google.com/maps" target="_blank" rel="noopener">Google Maps</a> → right-click → copy coordinates.</p>
+                        <div class="profile-coords-grid">
+                            <label class="profile-form-label" style="margin:0;">
+                                <span class="profile-label-text">Latitude</span>
+                                <div class="input-wrapper">
+                                    <span class="input-icon">🌐</span>
+                                    <input type="number" step="any" name="latitude" id="profile-latitude" value="<?= htmlspecialchars($user['latitude'] ?? ''); ?>" placeholder="14.6760" class="profile-input">
+                                </div>
+                            </label>
+                            <label class="profile-form-label" style="margin:0;">
+                                <span class="profile-label-text">Longitude</span>
+                                <div class="input-wrapper">
+                                    <span class="input-icon">🌐</span>
+                                    <input type="number" step="any" name="longitude" id="profile-longitude" value="<?= htmlspecialchars($user['longitude'] ?? ''); ?>" placeholder="121.0437" class="profile-input">
+                                </div>
+                            </label>
+                        </div>
+                        <div id="profile-geocode-status" class="profile-help-text" style="margin-top:0.5rem; display:none;"></div>
                     </div>
-                    <small class="profile-help-text">Auto-filled from address via Google Geocoding, or enter manually. <a href="https://www.google.com/maps" target="_blank">Google Maps</a> (right-click → coordinates)</small>
-                </label>
-                
-                <label class="profile-form-label">
-                    <span class="profile-label-text">Longitude (Optional - for location-based recommendations)</span>
-                    <div class="input-wrapper">
-                        <span class="input-icon">🌐</span>
-                        <input type="number" step="any" name="longitude" id="profile-longitude" value="<?= htmlspecialchars($user['longitude'] ?? ''); ?>" placeholder="121.0437" class="profile-input">
-                    </div>
-                    <small class="profile-help-text">Auto-filled from address.</small>
-                </label>
-                <div id="profile-geocode-status" class="profile-help-text" style="margin-top:0.25rem; display:none;"></div>
-                
-                <?php if (!empty($user['latitude']) && !empty($user['longitude'])): ?>
-                    <div style="background:#e3f8ef; color:#0d7a43; padding:0.75rem; border-radius:6px; margin-top:0.5rem; font-size:0.9rem;">
-                        ✓ Location coordinates saved (<?= htmlspecialchars($user['latitude']); ?>, <?= htmlspecialchars($user['longitude']); ?>)
-                    </div>
-                <?php endif; ?>
+                </details>
 
                 <div style="margin-top:2rem; padding-top:1.5rem; border-top:2px solid #e1e7f0; display:flex; justify-content:flex-end;">
                     <button class="btn-primary" type="submit" style="padding:0.85rem 2rem; font-size:1rem; font-weight:600;">Save Changes</button>
@@ -654,7 +734,7 @@ ob_start();
         </section>
 
         <section class="booking-card" id="notification-preferences">
-            <h2>Notification Preferences</h2>
+            <?= frs_heading_with_tip('Notification Preferences', 'Choose which booking events send email. Reminders still depend on the server cron job being configured.'); ?>
             <p style="color:#5b6888; margin:0 0 1rem; font-size:0.95rem;">Choose how you receive booking updates and 24-hour reminders. In-app notifications always respect these settings.</p>
             <form method="POST" class="booking-form">
                 <?= csrf_field(); ?>
@@ -1031,55 +1111,48 @@ ob_start();
             </div>
         </div>
         
-        <!-- Account Deactivation Section (Residents only) -->
+        <!-- Account Deactivation (Residents only) — collapsed by default -->
         <?php if ($user && !in_array($user['role'], ['Admin', 'Staff'])): ?>
-        <section class="booking-card" style="grid-column: 1 / -1; border: 2px solid #fee2e2; background: linear-gradient(135deg, rgba(254, 226, 226, 0.3), rgba(254, 242, 242, 0.5));">
-            <h2 style="color: #991b1b; display: flex; align-items: center; gap: 0.5rem;">
-                <span>⚠️</span>
-                <span>Account Deactivation</span>
-            </h2>
-            <div style="background: #fff; padding: 1.25rem; border-radius: 8px; margin-top: 1rem; border: 1px solid #fecaca;">
-                <p style="color: #7f1d1d; line-height: 1.7; margin: 0 0 1rem; font-size: 0.95rem;">
-                    <strong>Important:</strong> Deactivating your account will immediately disable your ability to log in and access the system. 
-                    However, in compliance with LGU record-keeping requirements and the Data Privacy Act:
-                </p>
-                <ul style="color: #7f1d1d; line-height: 1.8; margin: 0 0 1.25rem 1.25rem; font-size: 0.9rem; padding-left: 0.75rem;">
-                    <li>Your reservation history will be <strong>retained</strong> as public records</li>
-                    <li>Your uploaded documents (IDs, certificates) will be <strong>restricted from your access</strong> but retained for audit/compliance purposes</li>
-                    <li>Your audit trail entries will be <strong>preserved</strong> for accountability</li>
-                    <li>Personally identifiable information will be <strong>minimized</strong> but not completely deleted</li>
-                    <li>Only authorized LGU administrators will have access to your data after deactivation</li>
-                </ul>
-                <p style="color: #991b1b; font-weight: 600; margin: 0 0 1rem; font-size: 0.95rem;">
-                    This action cannot be undone by you. To restore access, contact the LGU IT office.
-                </p>
-                <form method="POST" id="deactivate-form" onsubmit="return confirmDeactivation(event);">
-                    <input type="hidden" name="deactivate_account" value="1">
-                    <input type="hidden" name="csrf_token" value="<?= bin2hex(random_bytes(32)); ?>">
-                    <label style="display: block; margin-bottom: 0.75rem;">
-                        <span style="display: block; font-weight: 600; color: #7f1d1d; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                            Reason for Deactivation (Optional)
-                        </span>
-                        <textarea 
-                            name="deactivation_reason" 
-                            rows="3" 
-                            placeholder="Please let us know why you're deactivating your account (optional, helps us improve our services)"
-                            style="width: 100%; padding: 0.75rem; border: 2px solid #fecaca; border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: vertical;"
-                        ></textarea>
-                    </label>
-                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                        <button 
-                            type="submit" 
-                            class="btn-outline" 
-                            style="padding: 0.85rem 1.5rem; font-size: 0.95rem; font-weight: 600; border-color: #dc2626; color: #dc2626; background: #fff;"
-                            onmouseover="this.style.background='#fee2e2';" 
-                            onmouseout="this.style.background='#fff';"
+        <section class="booking-card profile-deactivate-zone">
+            <details class="profile-collapsible">
+                <summary>
+                    <span>⚠️ Deactivate account</span>
+                    <span class="profile-collapsible-hint">Permanent — contact LGU IT to restore access</span>
+                </summary>
+                <div class="profile-collapsible-body">
+                    <p style="color:#7f1d1d; margin:0 0 0.75rem; font-size:0.9rem; line-height:1.55;">
+                        You will be logged out immediately and cannot sign in again. LGU records (reservations, audit trail) are retained per law; only admins can access your data afterward.
+                    </p>
+                    <details class="profile-collapsible-nested">
+                        <summary>What happens to my data?</summary>
+                        <ul style="color:#7f1d1d; margin:0.5rem 0.75rem 0.75rem; padding-left:1.1rem; font-size:0.85rem; line-height:1.55;">
+                            <li>Reservation history is <strong>retained</strong> as public records</li>
+                            <li>Uploaded IDs are <strong>restricted</strong> from you but kept for audit</li>
+                            <li>Audit entries are <strong>preserved</strong>; PII is minimized, not erased</li>
+                        </ul>
+                    </details>
+                    <form method="POST" id="deactivate-form" style="margin-top:0.85rem;" onsubmit="return confirmDeactivation(event);">
+                        <input type="hidden" name="deactivate_account" value="1">
+                        <input type="hidden" name="csrf_token" value="<?= bin2hex(random_bytes(32)); ?>">
+                        <label style="display:block; margin-bottom:0.5rem;">
+                            <span style="font-weight:600; color:#7f1d1d; font-size:0.88rem;">Reason (optional)</span>
+                            <textarea
+                                name="deactivation_reason"
+                                rows="2"
+                                placeholder="Optional feedback for the LGU"
+                                style="width:100%; margin-top:0.35rem; padding:0.6rem 0.75rem; border:1px solid #fecaca; border-radius:6px; font-family:inherit; font-size:0.88rem; resize:vertical;"
+                            ></textarea>
+                        </label>
+                        <button
+                            type="submit"
+                            class="btn-outline"
+                            style="padding:0.55rem 1rem; font-size:0.9rem; font-weight:600; border-color:#dc2626; color:#dc2626; background:#fff;"
                         >
-                            Request Account Deactivation
+                            Request account deactivation
                         </button>
-                    </div>
-                </form>
-            </div>
+                    </form>
+                </div>
+            </details>
         </section>
         <?php endif; ?>
     </div>
@@ -1264,7 +1337,17 @@ function confirmDeactivation(event) {
     const latEl = document.getElementById('profile-latitude');
     const lngEl = document.getElementById('profile-longitude');
     const statusEl = document.getElementById('profile-geocode-status');
+    const summaryEl = document.getElementById('profile-coords-summary');
     if (!addressEl || !latEl || !lngEl) return;
+
+    function updateCoordsSummary() {
+        if (!summaryEl) return;
+        const lat = (latEl.value || '').trim();
+        const lng = (lngEl.value || '').trim();
+        summaryEl.textContent = (lat && lng)
+            ? ('Saved: ' + lat + ', ' + lng)
+            : 'Usually auto-filled from your address';
+    }
 
     let geocodeTimer = null;
     function showGeocodeStatus(msg, isError) {
@@ -1293,6 +1376,7 @@ function confirmDeactivation(event) {
                 if (data.lat != null && data.lng != null) {
                     latEl.value = data.lat;
                     lngEl.value = data.lng;
+                    updateCoordsSummary();
                     showGeocodeStatus('✓ Coordinates updated from address', false);
                     setTimeout(function() { showGeocodeStatus('', false); }, 3000);
                 } else {
@@ -1309,6 +1393,8 @@ function confirmDeactivation(event) {
         if (geocodeTimer) clearTimeout(geocodeTimer);
         geocodeTimer = setTimeout(fetchGeocode, 800);
     });
+    latEl.addEventListener('input', updateCoordsSummary);
+    lngEl.addEventListener('input', updateCoordsSummary);
 })();
 </script>
 

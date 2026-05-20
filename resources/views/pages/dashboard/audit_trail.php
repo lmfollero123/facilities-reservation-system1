@@ -90,8 +90,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Governance</span><span class="sep">/</span><span>Audit Trail</span>
     </div>
-    <h1>Audit Trail</h1>
-    <small>Trace key actions across reservations, facilities, and user accounts.</small>
+    <?= frs_page_title('Audit Trail', 'Searchable log of who changed reservations, facilities, and accounts.'); ?>
 </div>
 
 <div class="booking-wrapper">

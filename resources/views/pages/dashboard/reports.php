@@ -20,6 +20,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
 $pdo = db();
 $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 
@@ -272,53 +273,58 @@ if (isset($_GET['export'])) {
     }
 }
 
-// Get date parameters (default to current month, or 'all' for all time)
-$reportYear = isset($_GET['year']) ? ($_GET['year'] === 'all' ? null : (int)$_GET['year']) : date('Y');
-$reportMonth = isset($_GET['month']) ? ($_GET['month'] === 'all' ? null : (int)$_GET['month']) : date('m');
+$defaultYear = (int)date('Y');
+$defaultMonth = (int)date('m');
 
-// Get facility filter parameter
-$facilityFilter = isset($_GET['facility']) && $_GET['facility'] !== 'all' ? (int)$_GET['facility'] : null;
-
-// Fetch all facilities for dropdown
 $facilitiesStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
 $allFacilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get selected facility name for label
+// Legacy global query params → overview (kpi) filters
+if (!isset($_GET['kpi_month']) && (isset($_GET['month']) || isset($_GET['year']) || isset($_GET['facility']))) {
+    if (isset($_GET['month'])) {
+        $_GET['kpi_month'] = $_GET['month'];
+    }
+    if (isset($_GET['year'])) {
+        $_GET['kpi_year'] = $_GET['year'];
+    }
+    if (isset($_GET['facility'])) {
+        $_GET['kpi_facility'] = $_GET['facility'];
+    }
+}
+
+// Independent filter period per widget (defaults: current month, all facilities)
+$kpiPeriod = frs_parse_reports_period('kpi', $defaultYear, $defaultMonth, null);
+$trendPeriod = frs_parse_reports_period('trend', $defaultYear, $defaultMonth, null);
+$statusPeriod = frs_parse_reports_period('status', $defaultYear, $defaultMonth, null);
+$topfacPeriod = frs_parse_reports_period('topfac', $defaultYear, $defaultMonth, null);
+$forecastPeriod = frs_parse_reports_period('forecast', $defaultYear, $defaultMonth, null);
+$utilPeriod = frs_parse_reports_period('util', $defaultYear, $defaultMonth, null);
+$outcomesPeriod = frs_parse_reports_period('outcomes', $defaultYear, $defaultMonth, null);
+
+$occFacilityFilter = (isset($_GET['occ_facility']) && $_GET['occ_facility'] !== '' && $_GET['occ_facility'] !== 'all')
+    ? (int)$_GET['occ_facility'] : null;
+
+// KPI / overview block uses kpi period
+$reportYear = $kpiPeriod['year'];
+$reportMonth = $kpiPeriod['month'];
+$facilityFilter = $kpiPeriod['facility'];
+$startDate = $kpiPeriod['start'];
+$endDate = $kpiPeriod['end'];
+$filterLabel = $kpiPeriod['label'];
+$dateFilterClause = $kpiPeriod['clause'];
+$dateParams = $kpiPeriod['params'];
+
 $facilityName = 'All Facilities';
 if ($facilityFilter) {
     foreach ($allFacilities as $fac) {
-        if ($fac['id'] == $facilityFilter) {
+        if ((int)$fac['id'] === $facilityFilter) {
             $facilityName = $fac['name'];
             break;
         }
     }
-}
-
-if ($reportYear === null || $reportMonth === null) {
-    // Show all time data (no date filter)
-    $startDate = null;
-    $endDate = null;
-    $filterLabel = 'All Time';
-    $dateFilterClause = '';
-    $dateParams = [];
-} else {
-    // Filter by specific month/year
-    $startDate = date('Y-m-01', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    $endDate = date('Y-m-t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    $filterLabel = date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    $dateFilterClause = 'WHERE reservation_date >= :start AND reservation_date <= :end';
-    $dateParams = ['start' => $startDate, 'end' => $endDate];
-}
-
-// Add facility filter to clause
-if ($facilityFilter) {
-    if ($dateFilterClause) {
-        $dateFilterClause .= ' AND facility_id = :facility_id';
-    } else {
-        $dateFilterClause = 'WHERE facility_id = :facility_id';
+    if (strpos($filterLabel, $facilityName) === false) {
+        $filterLabel .= ' - ' . $facilityName;
     }
-    $dateParams['facility_id'] = $facilityFilter;
-    $filterLabel .= ' - ' . $facilityName;
 }
 
 // Calculate KPIs (Global Statistics for Admin/Staff)
@@ -421,38 +427,46 @@ $avgReservationsPerUser = $activeUsers > 0 ? round($totalReservations / $activeU
 $totalAllTimeStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
 $totalAllTime = (int)$totalAllTimeStmt->fetchColumn();
 
-// Facility utilization
-if ($dateFilterClause) {
+// Facility utilization bars (util chart filters)
+if ($utilPeriod['start'] && $utilPeriod['end']) {
+    $utilParams = [
+        'start' => $utilPeriod['start'],
+        'end' => $utilPeriod['end'],
+        'start2' => $utilPeriod['start'],
+        'end2' => $utilPeriod['end'],
+    ];
     $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
-                (SELECT COUNT(*) FROM reservations r2 
-                 WHERE r2.facility_id = f.id 
-                 AND r2.reservation_date >= :start 
-                 AND r2.reservation_date <= :end 
-                 AND r2.status = "approved") as approved_count
-         FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id 
-             AND r.reservation_date >= :start2 
-             AND r.reservation_date <= :end2
-         GROUP BY f.id, f.name
-         ORDER BY approved_count DESC';
-    $facilityUtilStmt = $pdo->prepare($facilityUtilSql);
-    $facilityUtilStmt->execute([
-        'start' => $startDate,
-        'end' => $endDate,
-        'start2' => $startDate,
-        'end2' => $endDate,
-    ]);
-} else {
-    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
-                (SELECT COUNT(*) FROM reservations r2 
-                 WHERE r2.facility_id = f.id 
+                (SELECT COUNT(*) FROM reservations r2
+                 WHERE r2.facility_id = f.id
+                 AND r2.reservation_date >= :start
+                 AND r2.reservation_date <= :end
                  AND r2.status = "approved") as approved_count
          FROM facilities f
          LEFT JOIN reservations r ON f.id = r.facility_id
-         GROUP BY f.id, f.name
-         ORDER BY approved_count DESC';
+             AND r.reservation_date >= :start2
+             AND r.reservation_date <= :end2';
+    if ($utilPeriod['facility']) {
+        $facilityUtilSql .= ' AND f.id = :facility_id';
+        $utilParams['facility_id'] = $utilPeriod['facility'];
+    }
+    $facilityUtilSql .= ' GROUP BY f.id, f.name ORDER BY approved_count DESC';
     $facilityUtilStmt = $pdo->prepare($facilityUtilSql);
-    $facilityUtilStmt->execute();
+    $facilityUtilStmt->execute($utilParams);
+} else {
+    $utilParams = [];
+    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
+                (SELECT COUNT(*) FROM reservations r2
+                 WHERE r2.facility_id = f.id
+                 AND r2.status = "approved") as approved_count
+         FROM facilities f
+         LEFT JOIN reservations r ON f.id = r.facility_id';
+    if ($utilPeriod['facility']) {
+        $facilityUtilSql .= ' WHERE f.id = :facility_id';
+        $utilParams['facility_id'] = $utilPeriod['facility'];
+    }
+    $facilityUtilSql .= ' GROUP BY f.id, f.name ORDER BY approved_count DESC';
+    $facilityUtilStmt = $pdo->prepare($facilityUtilSql);
+    $facilityUtilStmt->execute($utilParams);
 }
 $facilityData = $facilityUtilStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -462,14 +476,14 @@ foreach ($facilityData as $fac) {
     $maxBookings = max($maxBookings, (int)$fac['approved_count']);
 }
 
-// Reservation outcomes breakdown
+// Reservation outcomes (outcomes chart filters)
 $outcomesSql = 'SELECT status, COUNT(*) as count FROM reservations';
-if ($dateFilterClause) {
-    $outcomesSql .= ' ' . $dateFilterClause;
+if ($outcomesPeriod['clause']) {
+    $outcomesSql .= ' ' . $outcomesPeriod['clause'];
 }
 $outcomesSql .= ' GROUP BY status';
 $outcomesStmt = $pdo->prepare($outcomesSql);
-$outcomesStmt->execute($dateParams);
+$outcomesStmt->execute($outcomesPeriod['params']);
 $outcomes = $outcomesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $outcomesMap = [
@@ -494,37 +508,78 @@ foreach ($outcomesMap as $status => $count) {
     $outcomesShare[$status] = $share;
 }
 
-// Charts data - Reservation Trends (respects filters)
+// Charts data - Reservation Trends (trend chart filters)
 $monthlyLabels = [];
 $monthlyData = [];
 
-if ($reportYear === null || $reportMonth === null) {
-    // All Time: Show last 6 months
+if ($trendPeriod['year'] === null || $trendPeriod['month'] === null) {
     for ($i = 5; $i >= 0; $i--) {
         $monthStart = date('Y-m-01', strtotime("-$i months"));
         $monthEnd = date('Y-m-t', strtotime("-$i months"));
-        $monthLabel = date('M Y', strtotime("-$i months"));
-        $monthlyLabels[] = $monthLabel;
-        $monthStmt = $pdo->prepare(
-            'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
-        );
-        $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+        $monthlyLabels[] = date('M Y', strtotime("-$i months"));
+        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
+        $params = ['start' => $monthStart, 'end' => $monthEnd];
+        if ($trendPeriod['facility']) {
+            $sql .= ' AND facility_id = :facility_id';
+            $params['facility_id'] = $trendPeriod['facility'];
+        }
+        $monthStmt = $pdo->prepare($sql);
+        $monthStmt->execute($params);
         $monthlyData[] = (int)$monthStmt->fetchColumn();
     }
 } else {
-    // Specific month selected: Show 6 months centered around selected month (2 before, selected, 3 after)
-    $selectedDate = mktime(0, 0, 0, $reportMonth, 1, $reportYear);
+    $selectedDate = mktime(0, 0, 0, (int)$trendPeriod['month'], 1, (int)$trendPeriod['year']);
     for ($i = 2; $i >= -3; $i--) {
         $monthTimestamp = strtotime("$i months", $selectedDate);
         $monthStart = date('Y-m-01', $monthTimestamp);
         $monthEnd = date('Y-m-t', $monthTimestamp);
-        $monthLabel = date('M Y', $monthTimestamp);
-        $monthlyLabels[] = $monthLabel;
-        $monthStmt = $pdo->prepare(
-            'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end'
-        );
-        $monthStmt->execute(['start' => $monthStart, 'end' => $monthEnd]);
+        $monthlyLabels[] = date('M Y', $monthTimestamp);
+        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
+        $params = ['start' => $monthStart, 'end' => $monthEnd];
+        if ($trendPeriod['facility']) {
+            $sql .= ' AND facility_id = :facility_id';
+            $params['facility_id'] = $trendPeriod['facility'];
+        }
+        $monthStmt = $pdo->prepare($sql);
+        $monthStmt->execute($params);
         $monthlyData[] = (int)$monthStmt->fetchColumn();
+    }
+}
+
+// Forecast series (forecast chart filters)
+$forecastMonthlyLabels = [];
+$forecastMonthlyData = [];
+if ($forecastPeriod['year'] === null || $forecastPeriod['month'] === null) {
+    for ($i = 5; $i >= 0; $i--) {
+        $monthStart = date('Y-m-01', strtotime("-$i months"));
+        $monthEnd = date('Y-m-t', strtotime("-$i months"));
+        $forecastMonthlyLabels[] = date('M Y', strtotime("-$i months"));
+        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
+        $params = ['start' => $monthStart, 'end' => $monthEnd];
+        if ($forecastPeriod['facility']) {
+            $sql .= ' AND facility_id = :facility_id';
+            $params['facility_id'] = $forecastPeriod['facility'];
+        }
+        $monthStmt = $pdo->prepare($sql);
+        $monthStmt->execute($params);
+        $forecastMonthlyData[] = (int)$monthStmt->fetchColumn();
+    }
+} else {
+    $selectedDate = mktime(0, 0, 0, (int)$forecastPeriod['month'], 1, (int)$forecastPeriod['year']);
+    for ($i = 2; $i >= -3; $i--) {
+        $monthTimestamp = strtotime("$i months", $selectedDate);
+        $monthStart = date('Y-m-01', $monthTimestamp);
+        $monthEnd = date('Y-m-t', $monthTimestamp);
+        $forecastMonthlyLabels[] = date('M Y', $monthTimestamp);
+        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
+        $params = ['start' => $monthStart, 'end' => $monthEnd];
+        if ($forecastPeriod['facility']) {
+            $sql .= ' AND facility_id = :facility_id';
+            $params['facility_id'] = $forecastPeriod['facility'];
+        }
+        $monthStmt = $pdo->prepare($sql);
+        $monthStmt->execute($params);
+        $forecastMonthlyData[] = (int)$monthStmt->fetchColumn();
     }
 }
 
@@ -570,10 +625,10 @@ function buildSimpleForecast(array $series, int $periods = 3): array
     return $forecast;
 }
 
-$forecastValues = buildSimpleForecast($monthlyData, 3);
+$forecastValues = buildSimpleForecast($forecastMonthlyData, 3);
 $forecastLabels = [];
-if ($reportYear !== null && $reportMonth !== null) {
-    $baseTs = mktime(0, 0, 0, $reportMonth, 1, $reportYear);
+if ($forecastPeriod['year'] !== null && $forecastPeriod['month'] !== null) {
+    $baseTs = mktime(0, 0, 0, (int)$forecastPeriod['month'], 1, (int)$forecastPeriod['year']);
 } else {
     $baseTs = strtotime(date('Y-m-01'));
 }
@@ -611,14 +666,32 @@ try {
     // Keep page resilient; fall back to empty occupancy card.
 }
 
-// Status distribution (for selected period)
+if ($occFacilityFilter && !empty($occupancyNow['items'])) {
+    $occupancyNow['items'] = array_values(array_filter(
+        $occupancyNow['items'],
+        static fn(array $item): bool => (int)($item['facility_id'] ?? 0) === $occFacilityFilter
+    ));
+    $occupied = 0;
+    foreach ($occupancyNow['items'] as $item) {
+        if (!empty($item['is_occupied'])) {
+            $occupied++;
+        }
+    }
+    $total = count($occupancyNow['items']);
+    $occupancyNow['total_facilities'] = $total;
+    $occupancyNow['occupied_facilities'] = $occupied;
+    $occupancyNow['available_now'] = max(0, $total - $occupied);
+    $occupancyNow['occupancy_rate'] = $total > 0 ? round(($occupied / $total) * 100, 1) : 0;
+}
+
+// Status distribution (status chart filters)
 $statusSql = 'SELECT status, COUNT(*) as count FROM reservations';
-if ($dateFilterClause) {
-    $statusSql .= ' ' . $dateFilterClause;
+if ($statusPeriod['clause']) {
+    $statusSql .= ' ' . $statusPeriod['clause'];
 }
 $statusSql .= ' GROUP BY status';
 $statusStmt = $pdo->prepare($statusSql);
-$statusStmt->execute($dateParams);
+$statusStmt->execute($statusPeriod['params']);
 $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
 $statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
 foreach ($statusData as $row) {
@@ -631,32 +704,34 @@ $statusLabels = ['Approved','Pending','Denied','Cancelled'];
 $statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['denied'], $statusMap['cancelled']];
 $statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
 
-// Top facilities by approved bookings (for selected period)
-if ($dateFilterClause) {
-    // Create date-only params (without facility_id) for this query
-    $dateOnlyParams = ['start' => $startDate, 'end' => $endDate];
-    
+// Top facilities bar chart (topfac chart filters)
+if ($topfacPeriod['start'] && $topfacPeriod['end']) {
+    $topfacParams = ['start' => $topfacPeriod['start'], 'end' => $topfacPeriod['end']];
     $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
          FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id 
+         LEFT JOIN reservations r ON f.id = r.facility_id
              AND r.status = "approved"
-             AND r.reservation_date >= :start 
-             AND r.reservation_date <= :end
-         GROUP BY f.id, f.name
-         ORDER BY booking_count DESC
-         LIMIT 5';
+             AND r.reservation_date >= :start
+             AND r.reservation_date <= :end';
+    if ($topfacPeriod['facility']) {
+        $facilitySql .= ' AND r.facility_id = :facility_id';
+        $topfacParams['facility_id'] = $topfacPeriod['facility'];
+    }
+    $facilitySql .= ' GROUP BY f.id, f.name ORDER BY booking_count DESC LIMIT 5';
     $facilityStmt = $pdo->prepare($facilitySql);
-    $facilityStmt->execute($dateOnlyParams);
+    $facilityStmt->execute($topfacParams);
 } else {
+    $topfacParams = [];
     $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
          FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id 
-             AND r.status = "approved"
-         GROUP BY f.id, f.name
-         ORDER BY booking_count DESC
-         LIMIT 5';
+         LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"';
+    if ($topfacPeriod['facility']) {
+        $facilitySql .= ' AND r.facility_id = :facility_id';
+        $topfacParams['facility_id'] = $topfacPeriod['facility'];
+    }
+    $facilitySql .= ' GROUP BY f.id, f.name ORDER BY booking_count DESC LIMIT 5';
     $facilityStmt = $pdo->prepare($facilitySql);
-    $facilityStmt->execute();
+    $facilityStmt->execute($topfacParams);
 }
 $facilityDataChart = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
 $facilityLabels = [];
@@ -791,10 +866,30 @@ if (isset($_GET['ai_summary'])) {
 }
 
 if (isset($_GET['live_occupancy'])) {
+    $liveOccFacility = (isset($_GET['occ_facility']) && $_GET['occ_facility'] !== '' && $_GET['occ_facility'] !== 'all')
+        ? (int)$_GET['occ_facility'] : null;
+    $liveOcc = $occupancyNow;
+    if ($liveOccFacility && !empty($liveOcc['items'])) {
+        $liveOcc['items'] = array_values(array_filter(
+            $liveOcc['items'],
+            static fn(array $item): bool => (int)($item['facility_id'] ?? 0) === $liveOccFacility
+        ));
+        $occupied = 0;
+        foreach ($liveOcc['items'] as $item) {
+            if (!empty($item['is_occupied'])) {
+                $occupied++;
+            }
+        }
+        $total = count($liveOcc['items']);
+        $liveOcc['total_facilities'] = $total;
+        $liveOcc['occupied_facilities'] = $occupied;
+        $liveOcc['available_now'] = max(0, $total - $occupied);
+        $liveOcc['occupancy_rate'] = $total > 0 ? round(($occupied / $total) * 100, 1) : 0;
+    }
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'success' => true,
-        'occupancy' => $occupancyNow,
+        'occupancy' => $liveOcc,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -807,116 +902,64 @@ ob_start();
     </div>
     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
         <div>
-            <h1>Reports & Analytics</h1>
-            <small>Review reservation statistics and usage patterns.</small>
+            <?= frs_page_title('Reports & Analytics', 'Each chart has its own filter. Print and AI summary use the Overview KPIs filter at the bottom.'); ?>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <select name="facility" id="facility-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
-                <option value="all" <?= ($facilityFilter === null) ? 'selected' : ''; ?>>All Facilities</option>
-                <?php foreach ($allFacilities as $facility): ?>
-                    <option value="<?= $facility['id']; ?>" <?= ($facilityFilter !== null && $facilityFilter == $facility['id']) ? 'selected' : ''; ?>>
-                        <?= htmlspecialchars($facility['name']); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <select name="month" id="month-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
-                <option value="all" <?= ($reportMonth === null) ? 'selected' : ''; ?>>All Time</option>
-                <?php for ($m = 1; $m <= 12; $m++): ?>
-                    <option value="<?= $m; ?>" <?= ($reportMonth !== null && $m == $reportMonth) ? 'selected' : ''; ?>>
-                        <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
-                    </option>
-                <?php endfor; ?>
-            </select>
-            <select name="year" id="year-filter" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
-                <option value="all" <?= ($reportYear === null) ? 'selected' : ''; ?>>All Years</option>
-                <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
-                    <option value="<?= $y; ?>" <?= ($reportYear !== null && $y == $reportYear) ? 'selected' : ''; ?>>
-                        <?= $y; ?>
-                    </option>
-                <?php endfor; ?>
-            </select>
-            <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Update</button>
-        </form>
         <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
             📄 Print Summary
         </button>
         <button type="button" onclick="openAiSummaryModal()" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap;">
             ✨ Generate AI Summary
         </button>
-        <script>
-        // Auto-submit when "All Time" is selected in month or year
-        document.getElementById('month-filter')?.addEventListener('change', function() {
-            if (this.value === 'all') {
-                document.getElementById('year-filter').value = 'all';
-                this.form.submit();
-            }
-        });
-        document.getElementById('year-filter')?.addEventListener('change', function() {
-            if (this.value === 'all') {
-                document.getElementById('month-filter').value = 'all';
-                this.form.submit();
-            }
-        });
-        
-        // Print Summary function
-        function printSummary() {
-            const facility = document.getElementById('facility-filter').value;
-            const month = document.getElementById('month-filter').value;
-            const year = document.getElementById('year-filter').value;
-            const printUrl = `?print=1&facility=${facility}&month=${month}&year=${year}`;
-            window.open(printUrl, '_blank');
-        }
-        </script>
         </div>
     </div>
 </div>
 
-<div id="aiSummaryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100050; align-items:center; justify-content:center; padding:1rem;">
-    <div style="width:min(920px,95vw); max-height:92vh; overflow:auto; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
-        <div style="padding:1rem 1.1rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+<div id="frsAiSummaryModal" class="frs-modal-overlay" role="dialog" aria-labelledby="aiSummaryTitle" aria-modal="true">
+    <div class="frs-modal-panel">
+        <div class="frs-modal-panel-header">
             <div>
-                <h3 style="margin:0; color:#111827;">AI Summary</h3>
-                <small id="aiSummaryMeta" style="color:#6b7280;">Generate insights based on current filters.</small>
+                <h3 id="aiSummaryTitle">AI Summary</h3>
+                <small id="aiSummaryMeta" class="frs-modal-meta">Uses Overview KPIs filter.</small>
             </div>
             <div style="display:flex; gap:0.5rem;">
                 <button class="btn-outline" type="button" onclick="printAiSummary()">🖨️ Print</button>
                 <button class="btn-outline" type="button" onclick="closeAiSummaryModal()">✕ Close</button>
             </div>
         </div>
-        <div id="aiSummaryContent" style="padding:1rem 1.1rem;">
-            <p style="margin:0; color:#6b7280;">Click "Generate AI Summary" to load insights.</p>
+        <div id="aiSummaryContent" class="frs-modal-panel-body">
+            <p>Click “Generate AI Summary” to load insights.</p>
         </div>
     </div>
 </div>
 
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
-        <h2>Reservation Trends<?= ($reportYear !== null && $reportMonth !== null) ? ' (Around ' . date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)) . ')' : ' (Last 6 Months)'; ?></h2>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Total reservations per month<?= ($reportYear !== null && $reportMonth !== null) ? ' - showing 6 months around selected period' : ''; ?></p>
+        <?= frs_heading_with_tip('Reservation Trends', 'Monthly count of reservations for the selected facility and period.'); ?>
+        <?= frs_reports_period_filter_form('rpt-trend', 'trend', $allFacilities, $trendPeriod, ['status', 'topfac', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
         <canvas id="monthlyChart" style="max-height: 320px;"></canvas>
     </section>
     <section class="booking-card">
-        <h2>Status Breakdown</h2>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Distribution of reservation statuses</p>
+        <?= frs_heading_with_tip('Status Breakdown', 'Share of approved, pending, denied, and cancelled reservations in the selected period.'); ?>
+        <?= frs_reports_period_filter_form('rpt-status', 'status', $allFacilities, $statusPeriod, ['trend', 'topfac', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
         <canvas id="statusChart" style="max-height: 320px;"></canvas>
     </section>
 </div>
 
-<?php if (!empty($facilityLabels)): ?>
 <div class="booking-card" style="margin-bottom: 1.5rem;">
-    <h2>Top Facilities by Approved Bookings</h2>
-    <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">Highest utilized facilities</p>
+    <?= frs_heading_with_tip('Top Facilities by Approved Bookings', 'Facilities ranked by approved bookings in the selected period (top 5).'); ?>
+    <?= frs_reports_period_filter_form('rpt-topfac', 'topfac', $allFacilities, $topfacPeriod, ['trend', 'status', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
+    <?php if (!empty($facilityLabels)): ?>
     <canvas id="facilityChart" style="max-height: 320px;"></canvas>
+    <?php else: ?>
+    <p style="color:#8b95b5; padding:1rem 0;">No data for the selected filters.</p>
+    <?php endif; ?>
 </div>
-<?php endif; ?>
 
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
-        <h2>Predictive Analytics Forecast</h2>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">
-            Projected reservation demand for the next 3 months (trend-based).
-        </p>
+        <?= frs_heading_with_tip('Predictive Analytics Forecast', 'Simple linear trend projection for the next 3 months based on historical monthly counts in the selected period.'); ?>
+        <?= frs_reports_period_filter_form('rpt-forecast', 'forecast', $allFacilities, $forecastPeriod, ['trend', 'status', 'topfac', 'occ', 'kpi', 'util', 'outcomes']); ?>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
             <?php foreach ($forecastLabels as $idx => $label): ?>
                 <div style="padding:0.85rem; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb;">
@@ -930,11 +973,12 @@ ob_start();
         </div>
     </section>
     <section class="booking-card">
-        <h2>Operational Occupancy</h2>
-        <p style="color:#8b95b5; font-size:0.9rem; margin-bottom:1rem;">
-            <?= htmlspecialchars($occupancyNow['disclaimer'] ?: 'Estimated status from bookings, check-in/out, and staff updates.'); ?>
-            <a href="<?= base_path(); ?>/dashboard/occupancy-monitor" style="margin-left:0.35rem;">Open live board</a>
-        </p>
+        <?= frs_heading_with_tip(
+            'Operational Occupancy',
+            ($occupancyNow['disclaimer'] ?: 'Estimated from today’s bookings, check-in/out, and staff overrides.') . ' Open Live Occupancy Board for real-time updates.'
+        ); ?>
+        <?= frs_reports_occ_filter_form($allFacilities, $occFacilityFilter, ['trend', 'status', 'topfac', 'forecast', 'kpi', 'util', 'outcomes']); ?>
+        <p style="margin:0 0 0.85rem;"><a href="<?= base_path(); ?>/dashboard/occupancy-monitor">Open live occupancy board →</a></p>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:0.7rem; margin-bottom:0.85rem;">
             <div style="padding:0.75rem; background:#f8fafc; border-radius:8px;">
                 <div style="font-size:0.75rem; color:#6b7280;">Total Facilities</div>
@@ -965,12 +1009,13 @@ ob_start();
 
 <section>
     <div class="report-card">
-        <h2>Monthly Reservation Volume</h2>
+        <?= frs_heading_with_tip('Monthly Reservation Volume (Overview KPIs)', 'Headline counts for the selected month/facility. Also drives Print Summary and AI Summary.'); ?>
+        <?= frs_reports_period_filter_form('rpt-kpi', 'kpi', $allFacilities, $kpiPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'util', 'outcomes']); ?>
         <div class="kpi-row">
             <div class="kpi">
                 <span>Total Reservations (This Month)</span>
                 <strong><?= number_format($totalReservations); ?></strong>
-                <small>Across all facilities in <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></small>
+                <small>Period: <?= htmlspecialchars($filterLabel); ?></small>
             </div>
             <div class="kpi">
                 <span>Approval Rate</span>
@@ -1033,7 +1078,8 @@ ob_start();
         </div>
         
         <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Facility Utilization</h3>
+            <?= frs_heading_with_tip('Facility Utilization', 'Approved bookings per facility vs. the busiest facility in the selected period (horizontal bars).', 'h3'); ?>
+            <?= frs_reports_period_filter_form('rpt-util', 'util', $allFacilities, $utilPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'kpi', 'outcomes']); ?>
             <?php if (empty($facilityData)): ?>
                 <p style="color: #8b95b5; padding: 1rem 0;">No facility data available for this period.</p>
             <?php else: ?>
@@ -1056,7 +1102,8 @@ ob_start();
     </div>
 
     <div class="report-card" style="margin-top: 1.5rem;">
-        <h2>Reservation Outcomes</h2>
+        <?= frs_heading_with_tip('Reservation Outcomes', 'Count and percentage share of each final status in the selected period.'); ?>
+        <?= frs_reports_period_filter_form('rpt-outcomes', 'outcomes', $allFacilities, $outcomesPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'kpi', 'util']); ?>
         <table class="table">
             <thead>
             <tr>
@@ -1095,8 +1142,11 @@ ob_start();
 
 <script>
 function closeAiSummaryModal() {
-    const modal = document.getElementById('aiSummaryModal');
-    if (modal) modal.style.display = 'none';
+    const modal = document.getElementById('frsAiSummaryModal');
+    if (modal) {
+        modal.classList.remove('is-open');
+        document.body.style.overflow = '';
+    }
 }
 
 function renderAiSummaryContent(payload) {
@@ -1138,17 +1188,31 @@ function renderAiSummaryContent(payload) {
     `;
 }
 
+function getKpiFilterQuery() {
+    const form = document.getElementById('filter-rpt-kpi');
+    if (!form) return '';
+    const params = new URLSearchParams(new FormData(form));
+    return params.toString();
+}
+
+function printSummary() {
+    const q = getKpiFilterQuery();
+    window.open('?' + (q ? q + '&' : '') + 'print=1', '_blank');
+}
+
 function openAiSummaryModal() {
-    const modal = document.getElementById('aiSummaryModal');
+    const modal = document.getElementById('frsAiSummaryModal');
     const contentEl = document.getElementById('aiSummaryContent');
     if (!modal || !contentEl) return;
-    modal.style.display = 'flex';
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
     contentEl.innerHTML = '<p style="margin:0; color:#6b7280;">Generating AI summary...</p>';
 
-    const facility = document.getElementById('facility-filter')?.value || 'all';
-    const month = document.getElementById('month-filter')?.value || 'all';
-    const year = document.getElementById('year-filter')?.value || 'all';
-    const url = `?ai_summary=1&facility=${encodeURIComponent(facility)}&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+    const q = getKpiFilterQuery();
+    const url = '?' + (q ? q + '&' : '') + 'ai_summary=1';
 
     fetch(url, { headers: { 'Accept': 'application/json' } })
         .then(r => r.json())
@@ -1233,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    const modal = document.getElementById('aiSummaryModal');
+    const modal = document.getElementById('frsAiSummaryModal');
     if (modal) {
         // Move modal to <body> so fixed positioning is viewport-based
         // (avoids transformed ancestors affecting placement).
@@ -1349,10 +1413,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Realtime occupancy polling (every 30s).
     function refreshRealtimeOccupancy() {
-        const url = '?live_occupancy=1&facility='
-            + encodeURIComponent(document.getElementById('facility-filter')?.value || 'all')
-            + '&month=' + encodeURIComponent(document.getElementById('month-filter')?.value || 'all')
-            + '&year=' + encodeURIComponent(document.getElementById('year-filter')?.value || 'all');
+        const occFac = document.querySelector('#filter-occ [name="occ_facility"]')?.value || 'all';
+        const url = '?live_occupancy=1&occ_facility=' + encodeURIComponent(occFac);
         fetch(url, { headers: { 'Accept': 'application/json' } })
             .then(r => r.json())
             .then(data => {
