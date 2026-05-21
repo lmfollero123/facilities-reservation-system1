@@ -159,8 +159,7 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 64px; width: auto; display: block; margin: 0 auto 1.25rem; object-fit: contain;">
-            <h1>Email Verification</h1>
-            <p>Please enter the verification code sent to your email to continue.</p>
+            <?= frs_heading_with_tip('Email Verification', 'Enter the code from your email to verify your address before registration or login continues.', 'h1'); ?>
         </div>
 
         <?php if ($error): ?>

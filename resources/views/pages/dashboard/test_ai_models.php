@@ -347,8 +347,7 @@ pre {
 </style>
 
 <div class="test-container">
-    <h1>🤖 AI Models Testing & Status</h1>
-    <p>Test all available ML models and verify their integration status.</p>
+    <?= frs_page_title('AI Models Testing & Status', 'Developer page: checks Python ML service health and which models are wired into booking, chatbot, and reports.'); ?>
 
     <?php
     // Get model status

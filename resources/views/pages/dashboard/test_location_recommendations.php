@@ -87,8 +87,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Testing</span><span class="sep">/</span><span>Location Recommendations</span>
     </div>
-    <h1>Test Location-Based Recommendations</h1>
-    <small>Verify that location-based facility recommendations are working correctly</small>
+    <?= frs_page_title('Test Location-Based Recommendations', 'Debug page: checks profile coordinates, Haversine distance, and AI facility ranking for a sample purpose.'); ?>
 </div>
 
 <div class="booking-wrapper">

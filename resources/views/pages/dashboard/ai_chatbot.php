@@ -327,9 +327,12 @@ $userName  = $_SESSION['name'] ?? 'User';
 ob_start();
 ?>
 
-<!-- =======================
-     MINIMAL GOVERNMENT UI
-======================== -->
+<div class="page-header">
+    <div class="breadcrumb">
+        <span>Tools</span><span class="sep">/</span><span>AI Assistant</span>
+    </div>
+    <?= frs_page_title('AI Assistant', 'Ask about facility availability, booking policies, and your reservations. The floating assistant on other pages uses the same backend.'); ?>
+</div>
 
 <style>
 .gov-chat-container {

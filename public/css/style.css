@@ -11127,12 +11127,86 @@ html[data-theme="dark"] .modal-dialog[style*="background:#ffffff"] {
     color: var(--text-primary) !important;
 }
 
-html[data-theme="dark"] #ai-chatbot-panel,
-html[data-theme="dark"] .ai-chatbot-messages,
-html[data-theme="dark"] .ai-chatbot-input-area {
+/* Floating AI Assistant widget — dark mode */
+html[data-theme="dark"] .chatbot-panel {
     background: var(--bg-secondary) !important;
-    border-color: var(--border-color) !important;
     color: var(--text-primary) !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="dark"] .chatbot-messages {
+    background: var(--bg-primary) !important;
+}
+
+html[data-theme="dark"] .chatbot-messages::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+}
+
+html[data-theme="dark"] .chatbot-panel .message-content {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+}
+
+html[data-theme="dark"] .chatbot-panel .message-note,
+html[data-theme="dark"] .chatbot-panel .message-meta {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .chatbot-input-area {
+    background: var(--bg-secondary) !important;
+    border-top-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .chatbot-input-wrapper textarea {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .chatbot-input-wrapper textarea::placeholder {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] #sessionTimeoutModal > div {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: #f97316 !important;
+}
+
+html[data-theme="dark"] #sessionTimeoutModal p {
+    color: var(--text-secondary) !important;
+}
+
+/* Standalone AI chat page (.gov-chat-*) */
+html[data-theme="dark"] .gov-chat-container {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .gov-chat-messages {
+    background: var(--bg-primary);
+}
+
+html[data-theme="dark"] .gov-message.bot .bubble {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .gov-chat-input {
+    border-top-color: var(--border-color);
+    background: var(--bg-secondary);
+}
+
+html[data-theme="dark"] .gov-chat-input input {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .gov-chat-input input::placeholder {
+    color: var(--text-secondary);
 }
 
 /* ============================================
@@ -11252,4 +11326,68 @@ html[data-theme="dark"] .frs-blackout-page .frs-bo-tabs.calendar-tabs button {
 html[data-theme="dark"] .frs-blackout-page .frs-bo-tabs.calendar-tabs button.active {
     color: var(--text-primary, #f1f5f9);
     border-bottom-color: #3b82f6;
+}
+
+/* ============================================
+   Document Management — theme-aware panels
+   ============================================ */
+.frs-doc-mgmt-page .frs-legal-basis-panel {
+    background: var(--accent-info-bg, #f0f7ff);
+    border-left: 4px solid var(--accent-primary, #2563eb);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.frs-doc-mgmt-page .frs-legal-basis-panel h3,
+.frs-doc-mgmt-page .frs-retention-policy-card h3 {
+    color: var(--text-primary, #1e3a5f);
+}
+
+.frs-doc-mgmt-page .frs-legal-basis-panel p,
+.frs-doc-mgmt-page .frs-legal-basis-panel li,
+.frs-doc-mgmt-page .frs-retention-policy-card p,
+.frs-doc-mgmt-page .frs-retention-policy-card li {
+    color: var(--text-secondary, #4a5568);
+}
+
+.frs-retention-policy-card {
+    padding: 1.25rem;
+    background: var(--bg-secondary, #ffffff);
+    border: 2px solid var(--border-color, #e5e7eb);
+    border-radius: 8px;
+    border-left-width: 4px;
+}
+
+.frs-retention-policy-card--blue { border-left-color: #2563eb; }
+.frs-retention-policy-card--green { border-left-color: #10b981; }
+.frs-retention-policy-card--purple { border-left-color: #8b5cf6; }
+.frs-retention-policy-card--amber { border-left-color: #f59e0b; }
+.frs-retention-policy-card--red { border-left-color: #ef4444; }
+
+html[data-theme="dark"] .frs-doc-mgmt-page .frs-legal-basis-panel {
+    background: rgba(37, 99, 235, 0.12);
+}
+
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#1e3a5f"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#374151"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#4a5568"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#6b7280"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#5b6888"] {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .frs-doc-mgmt-page h3[style*="color:#1e3a5f"] {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f9fafb"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f0f9ff"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#fef3c7"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#fee2e2"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#e0f2fe"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#d1fae5"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f3f4f6"] {
+    background: var(--bg-tertiary) !important;
+    border-color: var(--border-color) !important;
 }

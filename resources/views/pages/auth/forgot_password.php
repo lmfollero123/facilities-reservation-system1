@@ -126,8 +126,7 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <div class="auth-icon">🔒</div>
-            <h1>Forgot Password</h1>
-            <p>Enter your email address to receive a password reset link</p>
+            <?= frs_heading_with_tip('Forgot Password', 'Enter the email on your account. If it exists, we send a reset link (check spam). The link expires after a short time.', 'h1'); ?>
         </div>
         
         <?php if ($message): ?>

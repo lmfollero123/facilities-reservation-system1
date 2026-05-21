@@ -11,7 +11,7 @@ $phpSelf = $_SERVER['PHP_SELF'] ?? '';
 $isHomePage = strpos($phpSelf, 'home.php') !== false || $requestPath === '/' || (strpos($requestPath, '/home') !== false);
 $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/announcements') !== false ||
-                strpos($phpSelf, 'facilities.php') !== false || 
+                strpos($phpSelf, 'facilities.php') !== false ||
                 strpos($requestPath, '/facilities') !== false ||
                 strpos($phpSelf, 'facility_details.php') !== false ||
                 strpos($requestPath, '/facility-details') !== false ||
@@ -19,6 +19,13 @@ $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/contact') !== false ||
                 strpos($phpSelf, 'faq.php') !== false ||
                 strpos($requestPath, '/faq') !== false ||
+                strpos($requestPath, '/faqs') !== false ||
+                strpos($phpSelf, 'privacy.php') !== false ||
+                strpos($requestPath, '/privacy') !== false ||
+                strpos($phpSelf, 'terms.php') !== false ||
+                strpos($requestPath, '/terms') !== false ||
+                strpos($phpSelf, 'legal.php') !== false ||
+                strpos($requestPath, '/legal') !== false ||
                 strpos($phpSelf, 'login.php') !== false ||
                 strpos($requestPath, '/login') !== false ||
                 strpos($phpSelf, 'login_otp.php') !== false ||
@@ -80,19 +87,22 @@ if ($isHomePage || $isPublicPage) {
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($customCss); ?>?v=<?= $cssVersion; ?>">
     <link rel="stylesheet" href="<?= $base; ?>/public/css/dark-mode-public.css?v=<?= file_exists($appRoot . '/public/css/dark-mode-public.css') ? filemtime($appRoot . '/public/css/dark-mode-public.css') : time(); ?>">
+    <?php if ($isHomePage || $isPublicPage):
+        $publicCssPath = $appRoot . '/public/css/public-pages.css';
+        $publicCssVersion = file_exists($publicCssPath) ? filemtime($publicCssPath) : time();
+    ?>
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/public-pages.css?v=<?= $publicCssVersion; ?>">
+    <?php endif; ?>
     <link rel="icon" href="<?= $base; ?>/public/img/infragov-logo.png?v=<?= file_exists($appRoot . '/public/img/infragov-logo.png') ? filemtime($appRoot . '/public/img/infragov-logo.png') : time(); ?>" type="image/png">
     <?php if (!empty($useTailwind)): 
         $homeCssPath = $appRoot . '/public/css/home.css';
-        $publicCssPath = $appRoot . '/public/css/public-pages.css';
         $tailwindPath = $appRoot . '/public/css/tailwind.css';
         $homeCssVersion = file_exists($homeCssPath) ? filemtime($homeCssPath) : time();
-        $publicCssVersion = file_exists($publicCssPath) ? filemtime($publicCssPath) : time();
         $tailwindVersion = file_exists($tailwindPath) ? filemtime($tailwindPath) : time();
     ?>
     <!-- Tailwind CSS (built via CLI) - Preflight/collapse disabled in tailwind.config.js -->
     <link rel="stylesheet" href="<?= $base; ?>/public/css/tailwind.css?v=<?= $tailwindVersion; ?>">
     <link rel="stylesheet" href="<?= $base; ?>/public/css/home.css?v=<?= $homeCssVersion; ?>">
-    <link rel="stylesheet" href="<?= $base; ?>/public/css/public-pages.css?v=<?= $publicCssVersion; ?>">
     <?php endif; ?>
     <style>
         /* Fallback: Ensure critical styles load even if external CSS fails */
@@ -283,6 +293,9 @@ if ($isHomePage || $isPublicPage) {
     </style>
 </head>
 <body id="page-top" class="<?= htmlspecialchars($bodyClass); ?>">
+<?php if ($isHomePage || $isPublicPage): ?>
+<div class="public-nav-progress" id="publicNavProgress" aria-hidden="true"></div>
+<?php endif; ?>
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner">
@@ -310,6 +323,16 @@ $frsTipsJsPath = dirname(__DIR__, 3) . '/public/js/frs-field-tips.js';
 $frsTipsJsVer = is_file($frsTipsJsPath) ? (string)filemtime($frsTipsJsPath) : '1';
 ?>
 <script src="<?= htmlspecialchars($base); ?>/public/js/frs-field-tips.js?v=<?= htmlspecialchars($frsTipsJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php
+$publicNavJsPath = dirname(__DIR__, 3) . '/public/js/public-navigation.js';
+$homeAnimJsPath = dirname(__DIR__, 3) . '/public/js/home-animations.js';
+if ($isHomePage || $isPublicPage):
+    $publicNavJsVer = is_file($publicNavJsPath) ? (string)filemtime($publicNavJsPath) : '1';
+    $homeAnimJsVer = is_file($homeAnimJsPath) ? (string)filemtime($homeAnimJsPath) : '1';
+?>
+<script src="<?= htmlspecialchars($base); ?>/public/js/home-animations.js?v=<?= htmlspecialchars($homeAnimJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?= htmlspecialchars($base); ?>/public/js/public-navigation.js?v=<?= htmlspecialchars($publicNavJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php endif; ?>
 </body>
 </html>
 

@@ -1246,15 +1246,15 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 </script>
 
 <!-- All Reservations Modal (only opens when user clicks "All Reservations" button) -->
-<div id="allReservationsModal" class="modal-overlay" data-all-reservations-modal style="display: none;">
-    <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e5e7eb;">
-            <h2 style="margin: 0; color: #1e3a5f;">All Reservations</h2>
+<div id="allReservationsModal" class="modal-overlay frs-all-reservations-modal" data-all-reservations-modal style="display: none;">
+    <div class="modal-content frs-all-reservations-modal__panel">
+        <div class="modal-header frs-all-reservations-modal__header">
+            <h2>All Reservations</h2>
             <button type="button" data-close-all-reservations-modal style="background: none; border: none; font-size: 1.5rem; color: #6c757d; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'; this.style.color='#333';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
         </div>
         
         <!-- Search and Filter Form -->
-        <form method="GET" id="modalSearchForm" style="margin-bottom: 1.5rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
+        <form method="GET" id="modalSearchForm" class="frs-all-reservations-modal__search">
             <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151;">Search Reservations</label>
@@ -1370,8 +1370,9 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     display: flex !important;
 }
 
-#allReservationsModal.modal-overlay .modal-content {
-    background: #ffffff;
+#allReservationsModal.frs-all-reservations-modal .frs-all-reservations-modal__panel {
+    background: var(--bg-secondary, #ffffff);
+    color: var(--text-primary, #1e293b);
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
     padding: 2rem;
@@ -1382,6 +1383,54 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     margin: auto !important;
     flex-shrink: 1;
     animation: allReservationsModalSlideIn 0.3s ease-out;
+}
+
+.frs-all-reservations-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color, #e5e7eb);
+}
+
+.frs-all-reservations-modal__header h2 {
+    margin: 0;
+    color: var(--text-primary, #1e3a5f);
+}
+
+.frs-all-reservations-modal__search {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-tertiary, #f9fafb);
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.frs-all-reservations-modal__search label {
+    color: var(--text-secondary, #374151);
+}
+
+.frs-all-reservations-modal__search input,
+.frs-all-reservations-modal__search select {
+    background: var(--bg-secondary, #fff);
+    color: var(--text-primary, #111);
+    border-color: var(--border-color, #e0e6ed);
+}
+
+html[data-theme="dark"] #allReservationsModal .facility-card-admin {
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] #allReservationsModal .facility-card-admin h3,
+html[data-theme="dark"] #allReservationsModal .facility-card-admin strong {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #allReservationsModal .facility-card-admin p,
+html[data-theme="dark"] #allReservationsModal .facility-card-admin small,
+html[data-theme="dark"] #allReservationsModal .facility-card-admin li {
+    color: var(--text-secondary) !important;
 }
 
 @keyframes allReservationsModalSlideIn {

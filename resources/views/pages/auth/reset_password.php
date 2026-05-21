@@ -173,8 +173,11 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <div class="auth-icon">🔑</div>
-            <h1><?= $success ? 'Password Reset Successful' : 'Reset Password'; ?></h1>
-            <p><?= $success ? 'Your password has been reset successfully.' : 'Enter your new password below'; ?></p>
+            <?php if ($success): ?>
+                <?= frs_heading_with_tip('Password Reset Successful', 'You can sign in with your new password. For security, other sessions may have been cleared.', 'h1'); ?>
+            <?php else: ?>
+                <?= frs_heading_with_tip('Reset Password', 'Choose a strong password (length and complexity rules apply). This link works once and expires.', 'h1'); ?>
+            <?php endif; ?>
         </div>
         
         <?php if ($success): ?>

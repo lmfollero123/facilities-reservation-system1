@@ -1397,7 +1397,11 @@ ul.bcf-scroll-select-menu {
     <div class="breadcrumb">
         <span>Reservations</span><span class="sep">/</span><span><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></span>
     </div>
-    <h1><?= $reservationsHubMine ? 'My Reservations' : 'Book a Facility'; ?></h1>
+    <?php if ($reservationsHubMine): ?>
+        <?= frs_page_title('My Reservations', 'Upcoming and past bookings: status, reschedule, payments, and permit downloads.'); ?>
+    <?php else: ?>
+        <?= frs_page_title('Book a Facility', 'Search facilities, pick date and time, attach event permits if required. Staff can book for a resident.'); ?>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($message)): ?>

@@ -241,8 +241,7 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <img src="<?= base_path(); ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 64px; width: auto; display: block; margin: 0 auto 1.25rem; object-fit: contain;">
-            <h1>Welcome Back</h1>
-            <p>Sign in to access your reservations</p>
+            <?= frs_heading_with_tip('Welcome Back', 'Residents and staff sign in with email. You may be asked for a one-time passcode (OTP) after your password.', 'h1'); ?>
         </div>
         
         <?php if (isset($_GET['deactivated']) && $_GET['deactivated'] == '1'): ?>

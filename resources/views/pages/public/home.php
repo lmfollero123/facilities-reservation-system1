@@ -377,28 +377,6 @@ ob_start();
     </div>
 </section>
 
-<script>
-// Scroll Animation Observer
-document.addEventListener('DOMContentLoaded', function() {
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -40px 0px'
-    };
-    
-    const observer = new IntersectionObserver(function(entries) {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, observerOptions);
-    
-    document.querySelectorAll('.home-animate, .home-animate-left, .home-animate-right, .home-animate-scale').forEach(el => {
-        observer.observe(el);
-    });
-});
-</script>
-
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';

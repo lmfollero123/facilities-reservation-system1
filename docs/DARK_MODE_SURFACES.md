@@ -19,7 +19,7 @@ These are covered by global `[style*="background:#fff"]` rules in dark mode, but
 | Profile | `profile.php` |
 | Dashboard home | `index.php` |
 | Auth / guest | `register.php`, `guest_layout.php` |
-| AI | `ai_chatbot.php`, `ai_scheduling.php` |
+| AI | `ai_chatbot.php` (`.gov-chat-*` — dark rules in `style.css`), floating `.chatbot-panel` (fixed), `ai_scheduling.php` forecast modal |
 | Other | `maintenance_integration.php`, `sms_test.php`, `dashboard_layout.php` (session modal) |
 
 ## Book a Facility — fixed in this pass

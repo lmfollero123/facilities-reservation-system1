@@ -151,14 +151,18 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <div class="auth-icon">🔐</div>
-            <h1>Enter One-Time Passcode</h1>
+            <?php
+            if ($emailOtpValid) {
+                $otpTip = 'We sent a 6-digit code to ' . $userEmail . '. You may also use an authenticator app if enabled. Codes expire in about one minute.';
+            } elseif ($hasTotp) {
+                $otpTip = 'Enter the 6-digit code from your authenticator app, or request an email code as a fallback.';
+            } else {
+                $otpTip = 'Enter the 6-digit code from your email to finish signing in.';
+            }
+            echo frs_heading_with_tip('Enter One-Time Passcode', $otpTip, 'h1');
+            ?>
             <?php if ($emailOtpValid): ?>
-                <p>We sent a 6-digit code to <?= htmlspecialchars($userEmail); ?>. You can also use the code from your authenticator app if you have it enabled.</p>
                 <p id="otpCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">Code expires in 01:00</p>
-            <?php elseif ($hasTotp): ?>
-                <p>Enter the 6-digit code from your authenticator app. If you can’t access it, you can request a 6-digit code via email as a fallback.</p>
-            <?php else: ?>
-                <p>Enter the 6-digit code from your email to continue.</p>
             <?php endif; ?>
         </div>
 

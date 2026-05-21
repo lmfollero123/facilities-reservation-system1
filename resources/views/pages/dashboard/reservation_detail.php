@@ -663,7 +663,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Reservations</span><span class="sep">/</span><span><a href="<?= base_path(); ?>/dashboard/reservations-manage" style="color:inherit;text-decoration:none;">Approvals</a></span><span class="sep">/</span><span>Details</span>
     </div>
-    <h1>Reservation #<?= (int)$reservationId; ?></h1>
+    <?= frs_page_title('Reservation #' . (int)$reservationId, 'Review requester info, permits, and history. Approve, deny, or add staff notes.'); ?>
 </div>
 
 <?php if ($message): ?>
@@ -674,7 +674,7 @@ ob_start();
 
 <div class="booking-wrapper reservation-detail-compact">
     <section class="booking-card">
-        <h2>Reservation Information</h2>
+        <?= frs_heading_with_tip('Reservation Information', 'Core booking fields: facility, date, time slot, status, and requester contact.'); ?>
         <div class="reservation-detail-meta-grid">
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Reservation ID</strong>

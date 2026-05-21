@@ -85,8 +85,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Admin</span><span class="sep">/</span><span>SMS Test</span>
     </div>
-    <h1>IPROG SMS Test</h1>
-    <small>Verify your IPROG API key and send a test message.</small>
+    <?= frs_page_title('IPROG SMS Test', 'Send a test SMS to confirm IPROG_API_TOKEN, sender ID, and default recipient in .env.'); ?>
 </div>
 
 <?php if ($resultMessage !== ''): ?>

@@ -819,8 +819,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }, animationDuration);
     }
 
-    // Intercept all internal link clicks
+    // Intercept internal link clicks (dashboard only — public pages use public-navigation.js)
     document.addEventListener('click', function (event) {
+        if (document.body.classList.contains('landing-page')) {
+            return;
+        }
+
         // Find the closest anchor tag
         const link = event.target.closest('a');
 
@@ -864,8 +868,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
     });
 
-    // Show loading on page unload (when navigating away)
+    // Show loading on page unload (dashboard only)
     window.addEventListener('beforeunload', function () {
+        if (document.body.classList.contains('landing-page')) {
+            return;
+        }
         showLoading();
     });
 

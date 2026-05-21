@@ -413,3 +413,22 @@ if (!function_exists('frs_dashboard_apply_chart_sql_filters')) {
         }
     }
 }
+
+if (!function_exists('frs_reports_export_href')) {
+    /**
+     * Build export URL preserving Overview KPIs (kpi_*) filter query params.
+     */
+    function frs_reports_export_href(string $type, string $prefix = 'kpi'): string
+    {
+        $query = ['export' => $type];
+        foreach ($_GET as $key => $value) {
+            if (!is_string($value) && !is_numeric($value)) {
+                continue;
+            }
+            if (str_starts_with($key, $prefix . '_')) {
+                $query[$key] = (string)$value;
+            }
+        }
+        return '?' . http_build_query($query);
+    }
+}

@@ -94,9 +94,11 @@ $contactInfo = [
 ob_start();
 ?>
 
-<div class="dashboard-header-section">
-    <h1><i class="bi bi-telephone"></i> Contact Information Management</h1>
-    <p>Manage Barangay Culiat contact information displayed on the public contact page</p>
+<div class="page-header">
+    <div class="breadcrumb">
+        <span>Admin</span><span class="sep">/</span><span>Contact Information</span>
+    </div>
+    <?= frs_page_title('Contact Information Management', 'Office name, address, phone, email, and hours shown on the public Contact page.'); ?>
 </div>
 
 <?php if ($message): ?>

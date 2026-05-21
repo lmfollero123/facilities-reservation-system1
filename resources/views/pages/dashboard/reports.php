@@ -24,255 +24,6 @@ require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
 $pdo = db();
 $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 
-// Handle export requests
-if (isset($_GET['export'])) {
-    $exportType = $_GET['export'];
-    $reportYear = (int)($_GET['year'] ?? date('Y'));
-    $reportMonth = (int)($_GET['month'] ?? date('m'));
-    $startDate = date('Y-m-01', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    $endDate = date('Y-m-t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    
-    if ($exportType === 'csv') {
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="reservations_report_' . date('Y-m-d') . '.csv"');
-        
-        $output = fopen('php://output', 'w');
-        
-        // Header row
-        fputcsv($output, ['Date', 'Facility', 'Requester', 'Time Slot', 'Status', 'Purpose']);
-        
-        // Data rows
-        $exportSql = 'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
-                    r.time_slot, r.status, r.purpose
-             FROM reservations r
-             JOIN facilities f ON r.facility_id = f.id
-             JOIN users u ON r.user_id = u.id';
-        if ($dateFilterClause) {
-            $exportSql .= ' WHERE r.reservation_date >= :start AND r.reservation_date <= :end';
-        }
-        $exportSql .= ' ORDER BY r.reservation_date DESC';
-        $exportStmt = $pdo->prepare($exportSql);
-        $exportStmt->execute($dateParams);
-        
-        while ($row = $exportStmt->fetch(PDO::FETCH_ASSOC)) {
-            fputcsv($output, [
-                $row['reservation_date'],
-                $row['facility_name'],
-                $row['requester_name'],
-                $row['time_slot'],
-                $row['status'],
-                substr($row['purpose'], 0, 100) // Limit purpose length
-            ]);
-        }
-        
-        fclose($output);
-        exit;
-    } elseif ($exportType === 'pdf') {
-        // Generate HTML-based PDF report (can be printed to PDF by browser)
-        header('Content-Type: text/html');
-        header('Content-Disposition: attachment; filename="reservations_report_' . date('Y-m-d') . '.html"');
-        
-        $exportSql = 'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name, 
-                    r.time_slot, r.status, r.purpose, u.email AS requester_email
-             FROM reservations r
-             JOIN facilities f ON r.facility_id = f.id
-             JOIN users u ON r.user_id = u.id';
-        if ($dateFilterClause) {
-            $exportSql .= ' WHERE r.reservation_date >= :start AND r.reservation_date <= :end';
-        }
-        $exportSql .= ' ORDER BY r.reservation_date DESC';
-        $exportStmt = $pdo->prepare($exportSql);
-        $exportStmt->execute($dateParams);
-        $reservations = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Calculate summary stats
-        $totalCount = count($reservations);
-        $approvedCount = 0;
-        $deniedCount = 0;
-        $pendingCount = 0;
-        $cancelledCount = 0;
-        
-        foreach ($reservations as $res) {
-            $status = strtolower($res['status']);
-            if ($status === 'approved') $approvedCount++;
-            elseif ($status === 'denied') $deniedCount++;
-            elseif ($status === 'pending') $pendingCount++;
-            elseif ($status === 'cancelled') $cancelledCount++;
-        }
-        
-        ?>
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Reservations Report - <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></title>
-            <style>
-                @media print {
-                    @page { margin: 1cm; }
-                    body { margin: 0; }
-                }
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 20px;
-                    color: #333;
-                }
-                .header {
-                    border-bottom: 3px solid #2563eb;
-                    padding-bottom: 15px;
-                    margin-bottom: 25px;
-                }
-                .header h1 {
-                    margin: 0;
-                    color: #2563eb;
-                    font-size: 24px;
-                }
-                .header p {
-                    margin: 5px 0 0 0;
-                    color: #666;
-                }
-                .summary {
-                    background: #f5f5f5;
-                    padding: 15px;
-                    border-radius: 5px;
-                    margin-bottom: 25px;
-                }
-                .summary h2 {
-                    margin: 0 0 10px 0;
-                    font-size: 18px;
-                    color: #2563eb;
-                }
-                .summary-grid {
-                    display: grid;
-                    grid-template-columns: repeat(4, 1fr);
-                    gap: 15px;
-                    margin-top: 10px;
-                }
-                .summary-item {
-                    text-align: center;
-                }
-                .summary-item strong {
-                    display: block;
-                    font-size: 24px;
-                    color: #2563eb;
-                }
-                .summary-item span {
-                    font-size: 12px;
-                    color: #666;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 20px;
-                }
-                th {
-                    background: #2563eb;
-                    color: white;
-                    padding: 10px;
-                    text-align: left;
-                    font-weight: bold;
-                }
-                td {
-                    padding: 8px 10px;
-                    border-bottom: 1px solid #ddd;
-                }
-                tr:nth-child(even) {
-                    background: #f9f9f9;
-                }
-                .status {
-                    padding: 3px 8px;
-                    border-radius: 3px;
-                    font-size: 11px;
-                    font-weight: bold;
-                    display: inline-block;
-                }
-                .status-approved { background: #28a745; color: white; }
-                .status-denied { background: #dc3545; color: white; }
-                .status-pending { background: #ffc107; color: #856404; }
-                .status-cancelled { background: #6c757d; color: white; }
-                .footer {
-                    margin-top: 30px;
-                    padding-top: 15px;
-                    border-top: 1px solid #ddd;
-                    text-align: center;
-                    color: #666;
-                    font-size: 12px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>Reservations Report</h1>
-                <p>Period: <?= date('F Y', mktime(0, 0, 0, $reportMonth, 1, $reportYear)); ?></p>
-                <p>Generated: <?= date('F j, Y g:i A'); ?></p>
-            </div>
-            
-            <div class="summary">
-                <h2>Summary Statistics</h2>
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <strong><?= $totalCount; ?></strong>
-                        <span>Total Reservations</span>
-                    </div>
-                    <div class="summary-item">
-                        <strong><?= $approvedCount; ?></strong>
-                        <span>Approved</span>
-                    </div>
-                    <div class="summary-item">
-                        <strong><?= $deniedCount; ?></strong>
-                        <span>Denied</span>
-                    </div>
-                    <div class="summary-item">
-                        <strong><?= $pendingCount; ?></strong>
-                        <span>Pending</span>
-                    </div>
-                </div>
-            </div>
-            
-            <h2>Reservation Details</h2>
-            <?php if (empty($reservations)): ?>
-                <p>No reservations found for this period.</p>
-            <?php else: ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Facility</th>
-                            <th>Requester</th>
-                            <th>Time Slot</th>
-                            <th>Status</th>
-                            <th>Purpose</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($reservations as $row): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($row['reservation_date']); ?></td>
-                                <td><?= htmlspecialchars($row['facility_name']); ?></td>
-                                <td><?= htmlspecialchars($row['requester_name']); ?></td>
-                                <td><?= htmlspecialchars($row['time_slot']); ?></td>
-                                <td>
-                                    <span class="status status-<?= strtolower($row['status']); ?>">
-                                        <?= ucfirst($row['status']); ?>
-                                    </span>
-                                </td>
-                                <td><?= htmlspecialchars(substr($row['purpose'], 0, 100)); ?><?= strlen($row['purpose']) > 100 ? '...' : ''; ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
-            
-            <div class="footer">
-                <p>LGU Facilities Reservation System - Generated Report</p>
-                <p>This report can be printed to PDF using your browser's print function (Ctrl+P / Cmd+P)</p>
-            </div>
-        </body>
-        </html>
-        <?php
-        exit;
-    }
-}
-
 $defaultYear = (int)date('Y');
 $defaultMonth = (int)date('m');
 
@@ -315,16 +66,166 @@ $dateFilterClause = $kpiPeriod['clause'];
 $dateParams = $kpiPeriod['params'];
 
 $facilityName = 'All Facilities';
-if ($facilityFilter) {
+if ($kpiPeriod['facility']) {
     foreach ($allFacilities as $fac) {
-        if ((int)$fac['id'] === $facilityFilter) {
+        if ((int)$fac['id'] === $kpiPeriod['facility']) {
             $facilityName = $fac['name'];
             break;
         }
     }
-    if (strpos($filterLabel, $facilityName) === false) {
-        $filterLabel .= ' - ' . $facilityName;
+}
+
+// Export CSV / printable HTML (uses Overview KPIs filter: kpi_year, kpi_month, kpi_facility)
+if (isset($_GET['export'])) {
+    $exportType = $_GET['export'];
+    $exportPeriod = $kpiPeriod;
+    $exportLabel = $exportPeriod['label'];
+    $reportYear = $exportPeriod['year'] ?? (int)date('Y');
+    $reportMonth = $exportPeriod['month'] ?? (int)date('m');
+
+    $exportConditions = [];
+    $exportParams = [];
+    if ($exportPeriod['start'] && $exportPeriod['end']) {
+        $exportConditions[] = 'r.reservation_date >= :start AND r.reservation_date <= :end';
+        $exportParams['start'] = $exportPeriod['start'];
+        $exportParams['end'] = $exportPeriod['end'];
     }
+    if ($exportPeriod['facility']) {
+        $exportConditions[] = 'r.facility_id = :facility_id';
+        $exportParams['facility_id'] = $exportPeriod['facility'];
+    }
+    $exportWhere = $exportConditions !== []
+        ? ' WHERE ' . implode(' AND ', $exportConditions)
+        : '';
+
+    $exportSql = 'SELECT r.reservation_date, f.name AS facility_name, u.name AS requester_name,
+            r.time_slot, r.status, r.purpose
+            FROM reservations r
+            INNER JOIN facilities f ON r.facility_id = f.id
+            INNER JOIN users u ON r.user_id = u.id'
+        . $exportWhere
+        . ' ORDER BY r.reservation_date DESC';
+
+    if ($exportType === 'csv') {
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="reservations_' . date('Y-m-d') . '.csv"');
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['Period', $exportLabel]);
+        fputcsv($output, ['Date', 'Facility', 'Requester', 'Time Slot', 'Status', 'Purpose']);
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($exportParams);
+        while ($row = $exportStmt->fetch(PDO::FETCH_ASSOC)) {
+            fputcsv($output, [
+                $row['reservation_date'],
+                $row['facility_name'],
+                $row['requester_name'],
+                $row['time_slot'],
+                $row['status'],
+                substr((string)$row['purpose'], 0, 100),
+            ]);
+        }
+        fclose($output);
+        exit;
+    }
+
+    if ($exportType === 'pdf') {
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="reservations_' . date('Y-m-d') . '.html"');
+        $exportStmt = $pdo->prepare($exportSql);
+        $exportStmt->execute($exportParams);
+        $reservations = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
+        $totalCount = count($reservations);
+        $approvedCount = $deniedCount = $pendingCount = $cancelledCount = 0;
+        foreach ($reservations as $res) {
+            $status = strtolower((string)$res['status']);
+            if ($status === 'approved') {
+                $approvedCount++;
+            } elseif ($status === 'denied') {
+                $deniedCount++;
+            } elseif ($status === 'pending') {
+                $pendingCount++;
+            } elseif ($status === 'cancelled') {
+                $cancelledCount++;
+            }
+        }
+        $periodTitle = $exportLabel;
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Reservations Report — <?= htmlspecialchars($periodTitle, ENT_QUOTES, 'UTF-8'); ?></title>
+            <style>
+                @media print { @page { margin: 1cm; } body { margin: 0; } }
+                body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+                .header { border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 25px; }
+                .header h1 { margin: 0; color: #2563eb; font-size: 24px; }
+                .header p { margin: 5px 0 0; color: #666; }
+                .summary { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 25px; }
+                .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 10px; }
+                .summary-item { text-align: center; }
+                .summary-item strong { display: block; font-size: 24px; color: #2563eb; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th { background: #2563eb; color: white; padding: 10px; text-align: left; }
+                td { padding: 8px 10px; border-bottom: 1px solid #ddd; }
+                tr:nth-child(even) { background: #f9f9f9; }
+                .status { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; }
+                .status-approved { background: #28a745; color: white; }
+                .status-denied { background: #dc3545; color: white; }
+                .status-pending { background: #ffc107; color: #856404; }
+                .status-cancelled { background: #6c757d; color: white; }
+                .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Reservations Report</h1>
+                <p>Period: <?= htmlspecialchars($periodTitle, ENT_QUOTES, 'UTF-8'); ?><?= $facilityName !== 'All Facilities' ? ' — ' . htmlspecialchars($facilityName, ENT_QUOTES, 'UTF-8') : ''; ?></p>
+                <p>Generated: <?= date('F j, Y g:i A'); ?></p>
+            </div>
+            <div class="summary">
+                <h2>Summary Statistics</h2>
+                <div class="summary-grid">
+                    <div class="summary-item"><strong><?= $totalCount; ?></strong><span>Total</span></div>
+                    <div class="summary-item"><strong><?= $approvedCount; ?></strong><span>Approved</span></div>
+                    <div class="summary-item"><strong><?= $deniedCount; ?></strong><span>Denied</span></div>
+                    <div class="summary-item"><strong><?= $pendingCount; ?></strong><span>Pending</span></div>
+                </div>
+            </div>
+            <h2>Reservation Details</h2>
+            <?php if (empty($reservations)): ?>
+                <p>No reservations found for this period.</p>
+            <?php else: ?>
+                <table>
+                    <thead>
+                        <tr><th>Date</th><th>Facility</th><th>Requester</th><th>Time Slot</th><th>Status</th><th>Purpose</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($reservations as $row): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($row['reservation_date']); ?></td>
+                                <td><?= htmlspecialchars($row['facility_name']); ?></td>
+                                <td><?= htmlspecialchars($row['requester_name']); ?></td>
+                                <td><?= htmlspecialchars($row['time_slot']); ?></td>
+                                <td><span class="status status-<?= htmlspecialchars(strtolower($row['status'])); ?>"><?= htmlspecialchars(ucfirst($row['status'])); ?></span></td>
+                                <td><?= htmlspecialchars(mb_substr((string)$row['purpose'], 0, 100)); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+            <div class="footer">
+                <p>LGU Facilities Reservation System — print to PDF via browser (Ctrl+P)</p>
+            </div>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+}
+
+if ($facilityFilter && strpos($filterLabel, $facilityName) === false) {
+    $filterLabel .= ' - ' . $facilityName;
 }
 
 // Calculate KPIs (Global Statistics for Admin/Staff)
@@ -905,6 +806,12 @@ ob_start();
             <?= frs_page_title('Reports & Analytics', 'Each chart has its own filter. Print and AI summary use the Overview KPIs filter at the bottom.'); ?>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <a href="<?= htmlspecialchars(frs_reports_export_href('csv'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Uses Overview KPIs month/year/facility filter">
+            ⬇ Export CSV
+        </a>
+        <a href="<?= htmlspecialchars(frs_reports_export_href('pdf'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Download printable HTML (save as PDF via browser)">
+            ⬇ Export PDF
+        </a>
         <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
             📄 Print Summary
         </button>

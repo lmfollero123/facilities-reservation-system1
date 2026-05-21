@@ -42,7 +42,7 @@ Close high-value gaps for capstone defense: reproducibility (README, CI), LGU-re
 | C1 | Event permit attachments | Upload on book + view/download on reservation detail & My Reservations | Done |
 | C2 | Staff walk-in booking | Staff/Admin resident picker on Book a Facility | Done |
 | C5 | Calendar iCal export | `/dashboard/calendar-export` + button on Calendar | Done |
-| C6 | Integration pages | Routes + sidebar (preview labels) | Done |
+| C6 | Integration pages | Routes + sidebar: Maintenance, Infrastructure Projects, Utilities | Done |
 
 ## Sprint C — Deferred
 
@@ -50,6 +50,20 @@ Close high-value gaps for capstone defense: reproducibility (README, CI), LGU-re
 |---|------|-------|
 | C3 | Live CIMM API | Requires external API from CIMM host |
 | C4 | Filipino/Tagalog UI | Partial i18n — large scope |
+
+---
+
+## Sprint D — Phase 2 (in progress)
+
+See **`docs/SPRINT_D_PLAN.md`** for full backlog.
+
+| # | Item | Status |
+|---|------|--------|
+| D1 | Reports CSV/PDF export buttons (KPI filter) | Done |
+| D2 | Document Management dark mode | Done |
+| D3 | All Reservations modal dark mode | Done |
+| D4 | Auth page field tips | Done |
+| D5–D9 | CIMM stub, maintenance API, i18n, cron docs | Planned |
 
 ---
 

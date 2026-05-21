@@ -90,7 +90,7 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
+<div class="booking-wrapper frs-doc-mgmt-page">
     <!-- Storage Statistics -->
     <section class="booking-card" style="grid-column: 1 / -1;">
         <h2>Storage Statistics</h2>
@@ -116,7 +116,7 @@ ob_start();
     <!-- Retention Policies -->
     <section class="booking-card" style="grid-column: 1 / -1;">
         <h2>Retention Policies</h2>
-        <div style="background: #f0f7ff; border-left: 4px solid #2563eb; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
+        <div class="frs-legal-basis-panel">
             <h3 style="margin: 0 0 0.75rem 0; color: #1e3a5f; font-size: 1.1rem;">Legal Basis</h3>
             <p style="margin: 0 0 0.5rem 0; color: #374151; line-height: 1.6; font-size: 0.95rem;">
                 Document retention periods are aligned with Philippine laws, including:
@@ -135,7 +135,7 @@ ob_start();
 
         <div style="display:flex; flex-direction:column; gap:1.25rem;">
             <!-- User Documents -->
-            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #2563eb;">
+            <div class="frs-retention-policy-card frs-retention-policy-card--blue">
                 <div style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">1. User Documents (Identity Records)</h3>
                     <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
@@ -173,7 +173,7 @@ ob_start();
             </div>
 
             <!-- Reservation Records -->
-            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #10b981;">
+            <div class="frs-retention-policy-card frs-retention-policy-card--green">
                 <div style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">2. Reservation Records</h3>
                     <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
@@ -211,7 +211,7 @@ ob_start();
             </div>
 
             <!-- Reservation History -->
-            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #8b5cf6;">
+            <div class="frs-retention-policy-card frs-retention-policy-card--purple">
                 <div style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">3. Reservation History (User-Facing Logs)</h3>
                     <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
@@ -245,7 +245,7 @@ ob_start();
             </div>
 
             <!-- Audit Logs -->
-            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #f59e0b;">
+            <div class="frs-retention-policy-card frs-retention-policy-card--amber">
                 <div style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">4. Audit Logs</h3>
                     <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
@@ -283,7 +283,7 @@ ob_start();
             </div>
 
             <!-- Security Logs -->
-            <div style="padding:1.25rem; background:#ffffff; border:2px solid #e5e7eb; border-radius:8px; border-left:4px solid #ef4444;">
+            <div class="frs-retention-policy-card frs-retention-policy-card--red">
                 <div style="margin-bottom:1rem;">
                     <h3 style="margin:0 0 0.5rem; color:#1e3a5f; font-size:1.15rem; font-weight:700;">5. Security Logs</h3>
                     <div style="background:#f9fafb; padding:0.75rem; border-radius:6px; margin-bottom:0.75rem;">
