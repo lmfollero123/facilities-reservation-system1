@@ -753,6 +753,17 @@ $reportStatsForAI = [
 
 if (isset($_GET['ai_summary'])) {
     header('Content-Type: application/json; charset=utf-8');
+    $summaryUserId = (int)($_SESSION['user_id'] ?? 0);
+    if (!checkGeminiReportSummaryRateLimit($summaryUserId)) {
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'error' => 'rate_limited',
+            'message' => 'AI summary limit reached. Please wait before generating again, or use the rule-based summary.',
+            'insights' => buildRuleBasedReportInsights($reportStatsForAI),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
     $insights = buildGeminiReportInsights($reportStatsForAI);
     if (!$insights) {
         $insights = buildRuleBasedReportInsights($reportStatsForAI);

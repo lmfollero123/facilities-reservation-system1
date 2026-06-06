@@ -24,14 +24,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=UTF-8');
     @set_time_limit(45);
 
+    if (!($_SESSION['user_authenticated'] ?? false) || empty($_SESSION['user_id'])) {
+        http_response_code(401);
+        echo json_encode([
+            'reply' => 'Please log in to use the AI assistant.',
+            'error' => 'session_expired',
+        ]);
+        exit;
+    }
+
     try {
         $pdo = db();
-    $userId   = $_SESSION['user_id'] ?? null;
+    $userId   = (int)$_SESSION['user_id'];
     $userName = $_SESSION['name'] ?? 'User';
     $message  = trim($_POST['message'] ?? '');
 
     if ($message === '') {
         echo json_encode(['reply' => getRandomResponse(getEmptyMessageResponses())]);
+        exit;
+    }
+
+    if (!checkGeminiChatbotRateLimit($userId)) {
+        http_response_code(429);
+        echo json_encode([
+            'reply' => 'You have sent many messages in a short time. Please wait a few minutes before using the AI assistant again.',
+            'error' => 'rate_limited',
+        ]);
         exit;
     }
 

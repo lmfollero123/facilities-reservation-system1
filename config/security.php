@@ -16,6 +16,13 @@ define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
 define('RATE_LIMIT_REGISTER_ATTEMPTS', 5); // Threshold before IP is blocked
 define('RATE_LIMIT_REGISTER_WINDOW', 3600); // 1 hour in seconds
 define('RATE_LIMIT_REGISTER_BLOCK_WINDOW', 21600); // 6 hours in seconds
+// Gemini / AI chatbot (protect API key from abuse via app endpoints)
+define('RATE_LIMIT_GEMINI_CHAT_USER_ATTEMPTS', 25); // Max chat messages per logged-in user
+define('RATE_LIMIT_GEMINI_CHAT_USER_WINDOW', 3600); // 1 hour
+define('RATE_LIMIT_GEMINI_CHAT_IP_ATTEMPTS', 40); // Max chat attempts per IP (fallback)
+define('RATE_LIMIT_GEMINI_CHAT_IP_WINDOW', 3600);
+define('RATE_LIMIT_GEMINI_REPORT_ATTEMPTS', 12); // AI summary on Reports page
+define('RATE_LIMIT_GEMINI_REPORT_WINDOW', 3600);
 define('SESSION_TIMEOUT', 300); // 5 minutes
 define('PASSWORD_MIN_LENGTH', 8);
 define('PASSWORD_REQUIRE_UPPERCASE', true);
@@ -193,6 +200,45 @@ function checkRegisterRateLimit(string $ip): bool
     $attemptStmt->execute([$ip, RATE_LIMIT_REGISTER_WINDOW]);
 
     return true;
+}
+
+/**
+ * Rate limit AI chatbot messages (per user, with IP fallback).
+ */
+function checkGeminiChatbotRateLimit(?int $userId = null): bool
+{
+    if ($userId !== null && $userId > 0) {
+        return checkRateLimit(
+            'gemini_chat_user',
+            'user:' . $userId,
+            RATE_LIMIT_GEMINI_CHAT_USER_ATTEMPTS,
+            RATE_LIMIT_GEMINI_CHAT_USER_WINDOW
+        );
+    }
+
+    return checkRateLimit(
+        'gemini_chat_ip',
+        'ip:' . getClientIP(),
+        RATE_LIMIT_GEMINI_CHAT_IP_ATTEMPTS,
+        RATE_LIMIT_GEMINI_CHAT_IP_WINDOW
+    );
+}
+
+/**
+ * Rate limit Reports page AI summary generation (Admin/Staff).
+ */
+function checkGeminiReportSummaryRateLimit(int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    return checkRateLimit(
+        'gemini_report',
+        'user:' . $userId,
+        RATE_LIMIT_GEMINI_REPORT_ATTEMPTS,
+        RATE_LIMIT_GEMINI_REPORT_WINDOW
+    );
 }
 
 /**

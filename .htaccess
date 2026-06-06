@@ -1,20 +1,29 @@
 # Security Headers and Protections
-# Apache Configuration for Facilities Reservation System
+# Apache / OpenLiteSpeed configuration for Facilities Reservation System
 
-# Enable Rewrite Engine
+# ---------------------------------------------------------------------------
+# BLOCK SENSITIVE FILES FIRST (before any rewrite-to-index.php logic)
+# OpenLiteSpeed/CyberPanel may ignore FilesMatch/Require but still honor RewriteRule.
+# ---------------------------------------------------------------------------
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # RewriteBase: omit for portability (works in subdir + vhost at root)
-    # When in subdirectory (e.g. htdocs/facilities_reservation_system1/), Apache
-    # uses the .htaccess directory as base. When at doc root (lgu.test vhost), base is /
-    
-    # Route requests to index.php for URL-based routing
+
+    # Dotenv and env backups — highest priority
+    RewriteRule (^|/)\.env(\.|$) - [F,L]
+    RewriteRule (^|/)env\.(local|production|backup|example)$ - [F,L,NC]
+
+    # Sensitive directories (URL path, not filesystem)
+    RewriteRule ^(config|database|storage|logs|scripts|vendor|tests|ai|\.git)(/|$) - [F,L]
+
+    # Sensitive root files
+    RewriteRule ^(composer\.(json|lock)|phpunit\.xml|\.gitignore|\.env\.example)$ - [F,L,NC]
+
+    # Route remaining requests to index.php for URL-based routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ index.php [L]
-    
+
     # Force HTTPS in production (uncomment when deploying with SSL certificate)
-    # NOTE: Uncomment this after obtaining SSL certificate and configuring HTTPS
     # RewriteCond %{HTTPS} off
     # RewriteCond %{HTTP_HOST} !^localhost [NC]
     # RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
@@ -26,64 +35,54 @@ DirectoryIndex index.php index.html
 
 # Security Headers
 <IfModule mod_headers.c>
-    # Prevent clickjacking
     Header always set X-Frame-Options "SAMEORIGIN"
-    
-    # XSS Protection
     Header always set X-XSS-Protection "1; mode=block"
-    
-    # Prevent MIME type sniffing
     Header always set X-Content-Type-Options "nosniff"
-    
-    # Referrer Policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    
-    # Content Security Policy (adjust as needed)
     Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.gstatic.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; frame-src 'self' https://www.google.com https://maps.google.com https://challenges.cloudflare.com; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cloudflareinsights.com https://challenges.cloudflare.com;"
-    
-    # Permissions Policy
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-    
-    # Remove server signature
     Header unset Server
     Header unset X-Powered-By
 </IfModule>
 
-# Protect sensitive files (Apache 2.4 syntax)
-<FilesMatch "\.(sql|log|ini|conf|env)$">
+# Explicit deny for .env (Apache 2.4)
+<Files ".env">
+    Require all denied
+</Files>
+<Files ".env.local">
+    Require all denied
+</Files>
+<Files ".env.production">
+    Require all denied
+</Files>
+<Files ".env.backup">
+    Require all denied
+</Files>
+
+# Apache 2.2 / legacy fallback
+<IfModule !mod_authz_core.c>
+    <Files ".env">
+        Order allow,deny
+        Deny from all
+    </Files>
+    <Files ".env.local">
+        Order allow,deny
+        Deny from all
+    </Files>
+</IfModule>
+
+# Protect sensitive extensions (narrow — do not block public css/js)
+<FilesMatch "\.(sql|log|ini|conf|env|bak)$">
     Require all denied
 </FilesMatch>
 
-# Protect config directory
-<IfModule mod_rewrite.c>
-    RewriteRule ^config/ - [F,L]
-</IfModule>
-
-# Protect database directory
-<IfModule mod_rewrite.c>
-    RewriteRule ^database/ - [F,L]
-</IfModule>
+# Protect hidden files (except .well-known for SSL)
+<FilesMatch "^\.(?!well-known)">
+    Require all denied
+</FilesMatch>
 
 # Disable directory browsing
 Options -Indexes
-
-# Prevent access to hidden files (Apache 2.4 syntax)
-<FilesMatch "^\.">
-    Require all denied
-</FilesMatch>
-
-# File upload size limits and PHP settings
-# NOTE: These directives only work with mod_php (not PHP-FPM/FastCGI)
-# For PHP-FPM (used by CyberPanel), configure these in php.ini or user.ini instead
-# Uncomment if using mod_php:
-# php_value upload_max_filesize 5M
-# php_value post_max_size 6M
-# php_value session.cookie_httponly 1
-# php_value session.cookie_secure 0
-# php_value session.use_strict_mode 1
-# php_value session.cookie_samesite Strict
-# php_flag display_errors Off
-# php_flag log_errors On
 
 # Character encoding
 AddDefaultCharset UTF-8
@@ -109,7 +108,6 @@ AddDefaultCharset UTF-8
     ExpiresByType application/json "access plus 1 hour"
 </IfModule>
 
-# Cache-Control for static assets (immutable) and short for HTML/PHP
 <IfModule mod_headers.c>
     <FilesMatch "\.(css|js|png|jpe?g|gif|webp|svg|woff2?|ttf)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
@@ -118,4 +116,3 @@ AddDefaultCharset UTF-8
         Header set Cache-Control "no-cache, no-store, must-revalidate"
     </FilesMatch>
 </IfModule>
-
