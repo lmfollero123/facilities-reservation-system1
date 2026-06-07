@@ -18,6 +18,9 @@
     # Sensitive root files
     RewriteRule ^(composer\.(json|lock)|phpunit\.xml|\.gitignore|\.env\.example)$ - [F,L,NC]
 
+    # Block debug/test scripts that must not run on production
+    RewriteRule ^(clear_cache|test_[^/]+)\.php$ - [F,L,NC]
+
     # Route remaining requests to index.php for URL-based routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
