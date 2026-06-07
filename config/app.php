@@ -83,7 +83,17 @@ if (!function_exists('env_value')) {
 }
 
 // Later keys in .env override earlier ones (avoids stale duplicate blocks).
-load_env_file(dirname(__DIR__) . '/.env', true);
+$envPath = env_value('CPRF_ENV_PATH', '', false);
+if ($envPath === '' || !is_file($envPath)) {
+    $envPath = dirname(__DIR__) . '/.env';
+}
+if (!is_file($envPath) && !empty($_SERVER['HOME'])) {
+    $privateEnv = rtrim((string) $_SERVER['HOME'], '/\\') . '/private/cprf.env';
+    if (is_file($privateEnv)) {
+        $envPath = $privateEnv;
+    }
+}
+load_env_file($envPath, true);
 
 if (!function_exists('base_path')) {
     /**

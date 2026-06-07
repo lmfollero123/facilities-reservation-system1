@@ -44,6 +44,9 @@ if (!function_exists('load_local_env_for_db')) {
 }
 
 load_local_env_for_db(dirname(__DIR__) . '/.env');
+if (!is_file(dirname(__DIR__) . '/.env') && !empty($_SERVER['HOME'])) {
+    load_local_env_for_db(rtrim((string) $_SERVER['HOME'], '/\\') . '/private/cprf.env');
+}
 
 const DB_HOST = 'localhost';
 const DB_NAME = 'facilities_reservation';
@@ -66,10 +69,12 @@ function db()
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
             PDO::ATTR_EMULATE_PREPARES => false,
             PDO::ATTR_PERSISTENT => false,
         ];
+        if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci';
+        }
         
         try {
             $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
