@@ -2966,6 +2966,15 @@ section.contact-section::before {
     font-weight: 700;
 }
 
+.auth-header h1.frs-heading-with-tip {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    max-width: 100%;
+}
+
 .auth-header p {
     margin: 0;
     color: #4c5b7c;
