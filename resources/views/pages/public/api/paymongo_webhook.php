@@ -17,6 +17,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $payload = file_get_contents('php://input') ?: '';
+$signatureHeader = (string)($_SERVER['HTTP_PAYMONGO_SIGNATURE'] ?? $_SERVER['HTTP_PAYmongo_SIGNATURE'] ?? '');
+
+if (!paymongoVerifyWebhookSignature($payload, $signatureHeader)) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Invalid webhook signature']);
+    exit;
+}
+
 $event = json_decode($payload, true);
 if (!is_array($event)) {
     http_response_code(400);

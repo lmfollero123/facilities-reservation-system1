@@ -50,7 +50,7 @@ if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
 }
 
 $pageTitle = $pageTitle ?? 'LGU Dashboard';
-$userName = $_SESSION['name'] ?? 'User';
+$userName = function_exists('frs_session_display_name') ? frs_session_display_name('User') : ($_SESSION['user_name'] ?? $_SESSION['name'] ?? 'User');
 $sessionTimeoutSeconds = defined('SESSION_TIMEOUT') ? (int)SESSION_TIMEOUT : 120;
 $lastActivityTs = isset($_SESSION['last_activity']) ? (int)$_SESSION['last_activity'] : time();
 $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivityTs));
@@ -84,6 +84,11 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <?php
+    $dashboardChartsJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-charts.js';
+    $dashboardChartsJsVer = is_file($dashboardChartsJsPath) ? (string)filemtime($dashboardChartsJsPath) : '1';
+    ?>
+    <script src="<?= base_path(); ?>/public/js/dashboard-charts.js?v=<?= htmlspecialchars($dashboardChartsJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 </head>
 <body class="dashboard dashboard-page">
 <!-- Loading Overlay -->
@@ -194,19 +199,22 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     </div>
 </div>
 
-<div id="sessionTimeoutModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100002; align-items:center; justify-content:center;">
-    <div style="width:min(520px, 92vw); background:#ffffff; color:#1f2937; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,0.35); padding:1.4rem 1.25rem; text-align:center; border:2px solid #f97316;">
-        <div style="font-size:2rem; margin-bottom:0.35rem;">⏳</div>
-        <h3 style="margin:0; font-size:1.35rem; color:#9a3412;">Session expiring soon</h3>
-        <p style="margin:0.6rem 0 0.35rem; color:#4b5563; font-size:0.95rem;">
+<div id="sessionTimeoutModal" class="session-timeout-overlay" style="display:none;">
+    <div class="session-timeout-dialog">
+        <div class="session-timeout-icon">⏳</div>
+        <h3 class="session-timeout-title">Session expiring soon</h3>
+        <p class="session-timeout-message">
             You will be logged out due to inactivity.
         </p>
-        <div id="sessionTimeoutCountdown" style="font-size:2rem; font-weight:800; color:#b91c1c; letter-spacing:1px; margin:0.35rem 0 0.8rem;">01:00</div>
-        <div style="display:flex; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
-            <button id="keepSessionBtn" type="button" class="btn-primary" style="padding:0.55rem 0.95rem;">
+        <div id="sessionTimeoutCountdown" class="session-timeout-countdown">01:00</div>
+        <div class="session-timeout-actions">
+            <button id="keepSessionBtn" type="button" class="btn-primary session-timeout-btn">
                 Keep me logged in
             </button>
-            <a href="<?= base_path(); ?>/logout" class="btn-outline" style="padding:0.55rem 0.95rem; text-decoration:none;">Log out now</a>
+            <form method="POST" action="<?= base_path(); ?>/logout" style="display:inline;margin:0;">
+                <?= csrf_field(); ?>
+                <button type="submit" class="btn-outline session-timeout-btn">Log out now</button>
+            </form>
         </div>
     </div>
 </div>
@@ -376,6 +384,11 @@ $chartFiltersJsVer = is_file($chartFiltersJsPath) ? (string)filemtime($chartFilt
 
         if (actionEl.dataset.facility && typeof editFacility === 'function') {
             editFacility(actionEl.dataset.facility);
+            return;
+        }
+
+        if (actionEl.form) {
+            actionEl.form.submit();
             return;
         }
 

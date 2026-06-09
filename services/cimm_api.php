@@ -256,14 +256,160 @@ function cimmMatchFacilityId(string $cimmLocation, array $facilities): ?int
 }
 
 /**
+ * Path to persisted CIMM sync metadata (last run time, summary).
+ */
+function frs_cimm_sync_state_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/cimm_sync_state.json';
+}
+
+/**
+ * Path to facility IDs that CIMM sync set to maintenance (not manual staff changes).
+ */
+function frs_cimm_managed_maintenance_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/cimm_managed_maintenance.json';
+}
+
+/**
+ * @return array{last_sync_at: ?string, last_summary: array<string,mixed>}
+ */
+function frs_cimm_load_sync_state(): array
+{
+    $path = frs_cimm_sync_state_path();
+    if (!is_file($path)) {
+        return ['last_sync_at' => null, 'last_summary' => []];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return ['last_sync_at' => null, 'last_summary' => []];
+    }
+    return [
+        'last_sync_at' => isset($data['last_sync_at']) ? (string)$data['last_sync_at'] : null,
+        'last_summary' => is_array($data['last_summary'] ?? null) ? $data['last_summary'] : [],
+    ];
+}
+
+function frs_cimm_save_sync_state(array $summary): void
+{
+    $path = frs_cimm_sync_state_path();
+    $payload = [
+        'last_sync_at' => date('c'),
+        'last_summary' => $summary,
+    ];
+    file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+/**
+ * @return array<int, true>
+ */
+function frs_cimm_load_managed_maintenance_ids(): array
+{
+    $path = frs_cimm_managed_maintenance_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return [];
+    }
+    $out = [];
+    foreach ($data as $id) {
+        $id = (int)$id;
+        if ($id > 0) {
+            $out[$id] = true;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param array<int, true> $ids
+ */
+function frs_cimm_save_managed_maintenance_ids(array $ids): void
+{
+    $path = frs_cimm_managed_maintenance_path();
+    file_put_contents($path, json_encode(array_values(array_map('intval', array_keys($ids))), JSON_PRETTY_PRINT));
+}
+
+/**
+ * Fetch CIMM schedules, sync facilities/blackouts, persist last-run metadata.
+ *
+ * @return array{success: bool, fetched: int, mapped: int, summary: array<string,mixed>, error: ?string, ran_at: string}
+ */
+function frs_cimm_run_sync(PDO $pdo): array
+{
+    $apiResult = fetchCIMMMaintenanceSchedules();
+    $rawSchedules = $apiResult['data'] ?? [];
+    $apiError = $apiResult['error'] ?? null;
+
+    if ($apiError) {
+        return [
+            'success' => false,
+            'fetched' => 0,
+            'mapped' => 0,
+            'summary' => [],
+            'error' => (string)$apiError,
+            'ran_at' => date('c'),
+        ];
+    }
+
+    $mappedSchedules = mapCIMMToCPRF($rawSchedules);
+    $syncSummary = syncFacilitiesFromCIMM($pdo, $mappedSchedules);
+    frs_cimm_save_sync_state($syncSummary);
+
+    return [
+        'success' => true,
+        'fetched' => count($rawSchedules),
+        'mapped' => count($mappedSchedules),
+        'summary' => $syncSummary,
+        'error' => null,
+        'ran_at' => date('c'),
+    ];
+}
+
+/**
+ * Expand a schedule window to Y-m-d date strings.
+ *
+ * @return string[]
+ */
+function cimmScheduleDateRange(array $schedule): array
+{
+    $startTs = strtotime((string)($schedule['scheduled_start'] ?? ''));
+    $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
+    if (!$startTs) {
+        return [];
+    }
+    if (!$endTs || $endTs < $startTs) {
+        $endTs = $startTs;
+    }
+
+    $periodStart = new DateTime(date('Y-m-d', $startTs));
+    $periodEnd = new DateTime(date('Y-m-d', $endTs));
+    $periodEnd->modify('+1 day');
+    $period = new DatePeriod($periodStart, new DateInterval('P1D'), $periodEnd);
+
+    $dates = [];
+    foreach ($period as $date) {
+        $dates[] = $date->format('Y-m-d');
+    }
+    return $dates;
+}
+
+/**
  * Sync facility maintenance status and blackout dates from mapped CIMM schedules.
  *
  * Rules:
  * - Facility goes `maintenance` when there is an active CIMM maintenance now
  *   (`in_progress`/`delayed`, and current time within schedule window).
- * - Facility returns to `available` only if it is CIMM-managed and has no active
- *   CIMM maintenance now.
- * - Future maintenance windows are synced into `facility_blackout_dates`.
+ * - Facility returns to `available` only if CIMM sync previously set it to maintenance
+ *   (storage/cimm_managed_maintenance.json) and CIMM has no active window now.
+ * - Future maintenance windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix).
+ * - Completed/cancelled schedules remove their CIMM Sync blackouts.
  *
  * @param PDO $pdo
  * @param array<int,array<string,mixed>> $mappedSchedules
@@ -275,6 +421,7 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         'updated_to_maintenance' => 0,
         'updated_to_available' => 0,
         'blackouts_added' => 0,
+        'blackouts_removed' => 0,
         'matched_schedule_count' => 0,
         'unmatched_schedule_count' => 0,
         'errors' => [],
@@ -294,7 +441,9 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
     $managedFacilityIds = [];
     $activeMaintenanceFacilityIds = [];
     $matchedSchedulesForBlackout = [];
+    $desiredBlackouts = [];
     $now = time();
+    $cimmManagedMaintenance = frs_cimm_load_managed_maintenance_ids();
 
     foreach ($mappedSchedules as $schedule) {
         $rawLocation = (string)($schedule['facility_name'] ?? $schedule['location'] ?? '');
@@ -330,21 +479,59 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
 
         foreach ($facilityById as $facilityId => $facility) {
             $currentStatus = strtolower((string)($facility['status'] ?? 'available'));
-            $isManaged = isset($managedFacilityIds[$facilityId]);
             $isActiveNow = isset($activeMaintenanceFacilityIds[$facilityId]);
+            $cimmManaged = isset($cimmManagedMaintenance[$facilityId]);
 
             if ($isActiveNow && $currentStatus !== 'maintenance') {
                 $upd = $pdo->prepare('UPDATE facilities SET status = "maintenance", updated_at = NOW() WHERE id = :id');
                 $upd->execute(['id' => $facilityId]);
+                $cimmManagedMaintenance[$facilityId] = true;
                 $summary['updated_to_maintenance']++;
-            } elseif ($isManaged && !$isActiveNow && $currentStatus === 'maintenance') {
+            } elseif (!$isActiveNow && $currentStatus === 'maintenance' && $cimmManaged) {
                 $upd = $pdo->prepare('UPDATE facilities SET status = "available", updated_at = NOW() WHERE id = :id');
                 $upd->execute(['id' => $facilityId]);
+                unset($cimmManagedMaintenance[$facilityId]);
                 $summary['updated_to_available']++;
             }
         }
 
-        // Sync blackout dates for non-completed schedules.
+        frs_cimm_save_managed_maintenance_ids($cimmManagedMaintenance);
+
+        // Build desired CIMM blackout dates from active (non-completed) schedules.
+        foreach ($matchedSchedulesForBlackout as $row) {
+            $facilityId = (int)$row['facility_id'];
+            $schedule = $row['schedule'];
+            $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
+            if (in_array($status, ['completed', 'cancelled'], true)) {
+                continue;
+            }
+            if (!isset($desiredBlackouts[$facilityId])) {
+                $desiredBlackouts[$facilityId] = [];
+            }
+            foreach (cimmScheduleDateRange($schedule) as $dateStr) {
+                $desiredBlackouts[$facilityId][$dateStr] = true;
+            }
+        }
+
+        // Remove stale CIMM Sync blackouts (completed schedules or no longer in feed).
+        $existingStmt = $pdo->query(
+            "SELECT id, facility_id, blackout_date FROM facility_blackout_dates WHERE reason LIKE 'CIMM Sync:%'"
+        );
+        $deleteStmt = $pdo->prepare('DELETE FROM facility_blackout_dates WHERE id = :id');
+        if ($existingStmt) {
+            foreach ($existingStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $facilityId = (int)($row['facility_id'] ?? 0);
+                $dateStr = (string)($row['blackout_date'] ?? '');
+                if ($facilityId <= 0 || $dateStr === '') {
+                    continue;
+                }
+                if (!isset($desiredBlackouts[$facilityId][$dateStr])) {
+                    $deleteStmt->execute(['id' => (int)$row['id']]);
+                    $summary['blackouts_removed']++;
+                }
+            }
+        }
+
         $existsStmt = $pdo->prepare(
             'SELECT id FROM facility_blackout_dates WHERE facility_id = :facility_id AND blackout_date = :blackout_date LIMIT 1'
         );
@@ -360,26 +547,9 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
                 continue;
             }
 
-            $startTs = strtotime((string)($schedule['scheduled_start'] ?? ''));
-            $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
-            if (!$startTs) {
-                continue;
-            }
-            if (!$endTs || $endTs < $startTs) {
-                $endTs = $startTs;
-            }
-
-            $startDate = date('Y-m-d', $startTs);
-            $endDate = date('Y-m-d', $endTs);
             $reason = 'CIMM Sync: ' . ((string)($schedule['maintenance_type'] ?? 'Maintenance'));
 
-            $periodStart = new DateTime($startDate);
-            $periodEnd = new DateTime($endDate);
-            $periodEnd->modify('+1 day');
-            $period = new DatePeriod($periodStart, new DateInterval('P1D'), $periodEnd);
-
-            foreach ($period as $date) {
-                $dateStr = $date->format('Y-m-d');
+            foreach (cimmScheduleDateRange($schedule) as $dateStr) {
                 $existsStmt->execute([
                     'facility_id' => $facilityId,
                     'blackout_date' => $dateStr,

@@ -107,28 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
             }
         }
         
-        // Check if reservation has already started (ongoing)
         $reservationDate = new DateTime($reservation['reservation_date']);
         $today = new DateTime('today');
-        $currentDate = date('Y-m-d');
-        $currentHour = (int)date('H');
-        $reservationTimeSlot = $reservation['time_slot'];
-        
-        $isOngoing = false;
-        if ($reservation['reservation_date'] < $currentDate) {
-            $isOngoing = true;
-        } elseif ($reservation['reservation_date'] === $currentDate) {
-            // Check if time slot has passed
-            if (strpos($reservationTimeSlot, 'Morning') !== false && $currentHour >= 12) {
-                $isOngoing = true;
-            } elseif (strpos($reservationTimeSlot, 'Afternoon') !== false && $currentHour >= 17) {
-                $isOngoing = true;
-            } elseif (strpos($reservationTimeSlot, 'Evening') !== false && $currentHour >= 21) {
-                $isOngoing = true;
-            }
-        }
-        
-        if ($isOngoing) {
+
+        if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])
+            || frs_reservation_slot_is_ongoing((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
             throw new Exception('Cannot reschedule a reservation that has already started or is ongoing.');
         }
         
@@ -178,24 +161,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
             throw new Exception('The facility is currently ' . $facilityStatus . ' and not available for the selected date. Please choose another date or facility.');
         }
         
-        // Check for conflicts (time slot must be free, no conflict with maintenance)
-        $conflictCheck = $pdo->prepare(
-            'SELECT id FROM reservations
-             WHERE facility_id = :facility_id
-             AND reservation_date = :new_date
-             AND time_slot = :new_time_slot
-             AND status IN ("pending_payment", "pending", "approved", "postponed")
-             AND id != :reservation_id'
-        );
-        $conflictCheck->execute([
-            'facility_id' => $reservation['facility_id'],
-            'new_date' => $newDate,
-            'new_time_slot' => $newTimeSlot,
-            'reservation_id' => $reservationId
-        ]);
-        
-        if ($conflictCheck->fetch()) {
-            throw new Exception('The selected date and time slot is already booked. Please choose another time.');
+        if (frs_has_overlapping_booking($pdo, (int)$reservation['facility_id'], $newDate, $newTimeSlot, $reservationId)) {
+            throw new Exception('The selected date and time overlaps an existing booking. Please choose another time.');
         }
         
         // Update reservation
@@ -320,18 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
             throw new Exception('Only pending-payment, pending, or approved reservations can be cancelled. This reservation is already ' . $reservation['status'] . '.');
         }
         
-        $currentDate = date('Y-m-d');
-        $currentHour = (int)date('H');
-        $isPast = false;
-        if ($reservation['reservation_date'] < $currentDate) {
-            $isPast = true;
-        } elseif ($reservation['reservation_date'] === $currentDate) {
-            if (strpos($reservation['time_slot'], 'Morning') !== false && $currentHour >= 12) $isPast = true;
-            elseif (strpos($reservation['time_slot'], 'Afternoon') !== false && $currentHour >= 17) $isPast = true;
-            elseif (strpos($reservation['time_slot'], 'Evening') !== false && $currentHour >= 21) $isPast = true;
-        }
-        
-        if ($isPast) {
+        if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
             throw new Exception('You cannot cancel a reservation that has already started or passed.');
         }
         

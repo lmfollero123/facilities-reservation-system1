@@ -759,7 +759,9 @@ if (isset($_GET['ai_summary'])) {
         echo json_encode([
             'success' => false,
             'error' => 'rate_limited',
-            'message' => 'AI summary limit reached. Please wait before generating again, or use the rule-based summary.',
+            'message' => 'AI summary limit reached. Showing rule-based summary instead. Please wait before generating again.',
+            'filter_label' => $filterLabel,
+            'generated_at' => date('Y-m-d H:i:s'),
             'insights' => buildRuleBasedReportInsights($reportStatsForAI),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
@@ -820,8 +822,8 @@ ob_start();
         <a href="<?= htmlspecialchars(frs_reports_export_href('csv'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Uses Overview KPIs month/year/facility filter">
             ⬇ Export CSV
         </a>
-        <a href="<?= htmlspecialchars(frs_reports_export_href('pdf'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Download printable HTML (save as PDF via browser)">
-            ⬇ Export PDF
+        <a href="<?= htmlspecialchars(frs_reports_export_href('pdf'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Download printable HTML — open in browser and use Print → Save as PDF">
+            ⬇ Export HTML (Print to PDF)
         </a>
         <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
             📄 Print Summary
@@ -931,7 +933,7 @@ ob_start();
         <?= frs_reports_period_filter_form('rpt-kpi', 'kpi', $allFacilities, $kpiPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'util', 'outcomes']); ?>
         <div class="kpi-row">
             <div class="kpi">
-                <span>Total Reservations (This Month)</span>
+                <span>Total Reservations (<?= htmlspecialchars($filterLabel); ?>)</span>
                 <strong><?= number_format($totalReservations); ?></strong>
                 <small>Period: <?= htmlspecialchars($filterLabel); ?></small>
             </div>
@@ -953,7 +955,7 @@ ob_start();
                 <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
                     <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total Users</div>
                     <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalUsers); ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active this month</div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active in period</div>
                 </div>
                 <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
                     <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Available Facilities</div>
@@ -968,13 +970,13 @@ ob_start();
                 <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
                     <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Avg per User</div>
                     <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= $avgReservationsPerUser; ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">This month</div>
+                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= htmlspecialchars($filterLabel); ?></div>
                 </div>
             </div>
         </div>
         
         <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (This Month)</h3>
+            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (<?= htmlspecialchars($filterLabel); ?>)</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
                 <div style="padding: 0.75rem; background: #e8f5e9; border-radius: 6px; text-align: center;">
                     <div style="font-size: 1.5rem; font-weight: 700; color: #388e3c;"><?= number_format($approvedCount); ?></div>
@@ -1133,10 +1135,18 @@ function openAiSummaryModal() {
     const url = '?' + (q ? q + '&' : '') + 'ai_summary=1';
 
     fetch(url, { headers: { 'Accept': 'application/json' } })
-        .then(r => r.json())
-        .then(data => {
+        .then(r => r.json().then(data => ({ status: r.status, data: data })))
+        .then(({ status, data }) => {
+            if (data && data.insights && (data.error === 'rate_limited' || status === 429)) {
+                renderAiSummaryContent(data);
+                const notice = document.createElement('p');
+                notice.style.cssText = 'margin:0 0 0.85rem; padding:0.65rem 0.75rem; background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; color:#92400e; font-size:0.9rem;';
+                notice.textContent = data.message || 'AI limit reached. Showing rule-based summary.';
+                contentEl.prepend(notice);
+                return;
+            }
             if (!data || !data.success) {
-                throw new Error('Unable to generate AI summary.');
+                throw new Error((data && data.message) ? data.message : 'Unable to generate AI summary.');
             }
             renderAiSummaryContent(data);
         })
@@ -1181,40 +1191,6 @@ function printAiSummary() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Draw values directly on chart elements so users don't need hover/tooltips.
-    const alwaysValueLabelsPlugin = {
-        id: 'alwaysValueLabels',
-        afterDatasetsDraw(chart, args, pluginOptions) {
-            const opts = pluginOptions || {};
-            const color = opts.color || '#111827';
-            const fontSize = opts.fontSize || 12;
-            const weight = opts.fontWeight || '700';
-            const formatter = typeof opts.formatter === 'function'
-                ? opts.formatter
-                : (v) => String(v);
-
-            const ctx = chart.ctx;
-            ctx.save();
-            ctx.fillStyle = color;
-            ctx.font = `${weight} ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            chart.data.datasets.forEach((dataset, datasetIndex) => {
-                const meta = chart.getDatasetMeta(datasetIndex);
-                if (meta.hidden) return;
-                meta.data.forEach((element, dataIndex) => {
-                    const raw = dataset.data[dataIndex];
-                    if (raw === null || raw === undefined || Number(raw) === 0) return;
-                    const label = formatter(raw, dataIndex, dataset, chart);
-                    const pos = element.tooltipPosition();
-                    ctx.fillText(label, pos.x, pos.y);
-                });
-            });
-            ctx.restore();
-        }
-    };
-
     const modal = document.getElementById('frsAiSummaryModal');
     if (modal) {
         // Move modal to <body> so fixed positioning is viewport-based
@@ -1226,106 +1202,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === modal) closeAiSummaryModal();
         });
     }
-    const monthlyCtx = document.getElementById('monthlyChart');
-    if (monthlyCtx && window.Chart) {
-        new Chart(monthlyCtx, {
-            type: 'line',
-            plugins: [alwaysValueLabelsPlugin],
-            data: {
-                labels: <?= json_encode($monthlyLabels); ?>,
-                datasets: [{
-                    label: 'Reservations',
-                    data: <?= json_encode($monthlyData); ?>,
-                    borderColor: '#0047ab',
-                    backgroundColor: 'rgba(0, 71, 171, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    borderWidth: 2,
-                    pointBackgroundColor: '#0047ab',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: false },
-                    alwaysValueLabels: { color: '#1f2937', fontSize: 11 }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1 },
-                        grid: { color: 'rgba(0,0,0,0.05)' }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
-    }
-
-    const statusCtx = document.getElementById('statusChart');
-    if (statusCtx && window.Chart) {
-        new Chart(statusCtx, {
-            type: 'doughnut',
-            plugins: [alwaysValueLabelsPlugin],
-            data: {
-                labels: <?= json_encode($statusLabels); ?>,
-                datasets: [{
-                    data: <?= json_encode($statusCounts); ?>,
-                    backgroundColor: <?= json_encode($statusColors); ?>,
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { padding: 15, font: { size: 12 } }
-                    },
-                    alwaysValueLabels: { color: '#ffffff', fontSize: 12 }
-                },
-                cutout: '60%'
-            }
-        });
-    }
-
-    const facilityCtx = document.getElementById('facilityChart');
-    if (facilityCtx && window.Chart) {
-        new Chart(facilityCtx, {
-            type: 'bar',
-            plugins: [alwaysValueLabelsPlugin],
-            data: {
-                labels: <?= json_encode($facilityLabels); ?>,
-                datasets: [{
-                    label: 'Approved Bookings',
-                    data: <?= json_encode($facilityCounts); ?>,
-                    backgroundColor: 'rgba(0, 71, 171, 0.85)',
-                    borderColor: '#0047ab',
-                    borderWidth: 1.5,
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: false },
-                    alwaysValueLabels: { color: '#111827', fontSize: 11 }
-                },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
-                    x: { grid: { display: false } }
-                }
-            }
+    if (window.frsInitReservationCharts) {
+        window.frsInitReservationCharts({
+            monthlyLabels: <?= json_encode($monthlyLabels); ?>,
+            monthlyData: <?= json_encode($monthlyData); ?>,
+            statusLabels: <?= json_encode($statusLabels); ?>,
+            statusCounts: <?= json_encode($statusCounts); ?>,
+            statusColors: <?= json_encode($statusColors); ?>,
+            facilityLabels: <?= json_encode($facilityLabels); ?>,
+            facilityCounts: <?= json_encode($facilityCounts); ?>,
+            showValueLabels: true
         });
     }
 

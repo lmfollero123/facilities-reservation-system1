@@ -4,18 +4,19 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
+require_once __DIR__ . '/../../../../config/captcha.php';
 
 $pageTitle = 'Login | LGU Facilities Reservation';
 $error = '';
 $lockNotice = '';
 $next = '';
 
-// Capture redirect target (relative paths only)
+// Capture redirect target (same-origin relative paths only)
 if (isset($_GET['next'])) {
-    $candidate = trim($_GET['next']);
-    if ($candidate !== '' && str_starts_with($candidate, '/')) {
-        $next = $candidate;
-        $_SESSION['post_login_redirect'] = $candidate;
+    $safeNext = frs_safe_redirect_path((string)$_GET['next']);
+    if ($safeNext !== null) {
+        $next = $safeNext;
+        $_SESSION['post_login_redirect'] = $safeNext;
     }
 }
 
@@ -26,6 +27,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Invalid security token. Please refresh the page and try again.';
         logSecurityEvent('csrf_validation_failed', 'Login form', 'warning');
     } else {
+        $clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (frs_captcha_enabled() && frs_turnstile_site_key() !== '') {
+            $captcha = frs_verify_turnstile($_POST['cf-turnstile-response'] ?? null, (string)$clientIp);
+            if (!$captcha['ok']) {
+                $error = $captcha['error'];
+                logSecurityEvent('captcha_validation_failed', 'Login form', 'warning');
+            }
+        }
+        if ($error === '') {
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
         $password = $_POST['password'] ?? '';
         
@@ -33,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';
         } else {
-            // Check rate limiting
+            // Check rate limiting (failed attempts only)
             if (!checkLoginRateLimit($email)) {
                 $error = 'Too many login attempts. Please try again in 15 minutes.';
                 logSecurityEvent('rate_limit_exceeded', "Login attempts exceeded for: $email", 'warning');
@@ -109,10 +119,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
 
                                 // Successful password check -> check OTP preference
-                                // Require OTP if email OTP is enabled OR Google Authenticator is enabled
-                                $enableOtp = (bool)($user['enable_otp'] ?? true); // Default to enabled for security
+                                $enableOtp = (bool)($user['enable_otp'] ?? true);
                                 $totpEnabled = (bool)($user['totp_enabled'] ?? false);
                                 $requiresOtp = $enableOtp || $totpEnabled;
+                                if (frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
+                                    $requiresOtp = true;
+                                    $enableOtp = true;
+                                }
                                 
                                 if ($requiresOtp) {
                                     // OTP is enabled -> proceed to OTP
@@ -166,6 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $_SESSION['user_authenticated'] = true;
                                     $_SESSION['user_id'] = $user['id'];
                                     $_SESSION['user_name'] = $user['name'];
+                                    $_SESSION['name'] = $user['name'];
                                     $_SESSION['user_email'] = $user['email'];
                                     $_SESSION['role'] = $user['role'];
                                     $_SESSION['user_org'] = $user['role'];
@@ -174,8 +188,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     logSecurityEvent('login_success', "User logged in successfully: $email (OTP disabled)", 'info');
 
                                     // Redirect to requested page or dashboard
-                                    if ($next && str_starts_with($next, '/')) {
-                                        header('Location: ' . $next);
+                                    $safeRedirect = frs_safe_redirect_path($next !== '' ? $next : ($_SESSION['post_login_redirect'] ?? null));
+                                    if ($safeRedirect !== null) {
+                                        header('Location: ' . $safeRedirect);
                                     } else {
                                         header('Location: ' . base_path() . '/dashboard');
                                     }
@@ -205,6 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $error = 'Invalid email or password.';
                                 }
                                 
+                                recordLoginRateLimitFailure($email);
+
                                 // Update failed attempts
                                 $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?");
                                 $updateStmt->execute([$failedAttempts, $lockUntil, $user['id']]);
@@ -219,6 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         // User not found - don't reveal this to prevent email enumeration
                         $error = 'Invalid email or password.';
+                        recordLoginRateLimitFailure($email);
                         logSecurityEvent('login_attempt_invalid_email', "Login attempt with non-existent email: $email", 'info');
                     }
                 } catch (Exception $e) {
@@ -226,6 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     logSecurityEvent('login_error', "Database error during login: " . $e->getMessage(), 'error');
                 }
             }
+        }
         }
     }
 }
@@ -269,6 +288,11 @@ ob_start();
         
         <form method="POST" class="auth-form">
             <?= csrf_field(); ?>
+            <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
+                <div style="margin: 0.25rem 0 0.5rem;">
+                    <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                </div>
+            <?php endif; ?>
             <label>
                 Email Address
                 <div class="input-wrapper">

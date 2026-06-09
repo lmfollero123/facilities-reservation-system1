@@ -114,6 +114,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $geminiConfigured = defined('GEMINI_API_KEY')
+        && GEMINI_API_KEY !== ''
+        && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE';
+    if ($geminiConfigured && function_exists('geminiChatbotResponse')) {
+        $bookingLike = preg_match(
+            '/\b(book|reserve|reservation|pa book|mag-book|mag book|risk score|conflict|availability)\b/i',
+            $message
+        );
+        if ($bookingLike) {
+            echo json_encode([
+                'reply' => 'The AI assistant could not reach Gemini right now (invalid API key, quota, or network). '
+                    . 'Booking prefill and smart answers need a working GEMINI_API_KEY. '
+                    . 'Please use Book Facility in the dashboard for now, or ask an admin to update GEMINI_API_KEY in .env or ~/private/cprf.env.',
+                'error' => 'gemini_unavailable',
+            ]);
+            exit;
+        }
+    }
+
     // Classify intent using ML model
     $intent = 'unknown';
     $confidence = 0.0;
@@ -455,14 +474,49 @@ form.addEventListener('submit', function(e) {
     addMessage(message, 'user');
     input.value = '';
 
-    fetch('ai_chatbot.php', {
+    const formData = new URLSearchParams();
+    formData.append('message', message);
+
+    fetch('<?= base_path(); ?>/dashboard/ai-chatbot', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ message })
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        },
+        body: formData
     })
-    .then(res => res.json())
-    .then(data => addMessage(data.reply, 'bot'))
-    .catch(() => addMessage('Service unavailable. Please try again.', 'bot'));
+    .then(function (response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            throw new Error('non_json');
+        }
+        return response.json().then(function (data) {
+            if (!response.ok && data && data.reply) {
+                return data;
+            }
+            if (!response.ok) {
+                throw new Error('request_failed');
+            }
+            return data;
+        });
+    })
+    .then(function (data) {
+        addMessage(data.reply || 'I could not process that request. Please try again.', 'bot');
+        if (data.action === 'prefill_booking' && data.data && typeof data.data === 'object') {
+            const d = data.data;
+            const params = new URLSearchParams();
+            if (d.facility_id) params.set('facility_id', d.facility_id);
+            if (d.reservation_date) params.set('reservation_date', d.reservation_date);
+            if (d.time_slot) params.set('time_slot', d.time_slot);
+            if (params.toString()) {
+                window.location.href = '<?= base_path(); ?>/dashboard/book-facility?' + params.toString();
+            }
+        }
+    })
+    .catch(function () {
+        addMessage('Service unavailable. Please try again.', 'bot');
+    });
 });
 
 function addMessage(text, type) {

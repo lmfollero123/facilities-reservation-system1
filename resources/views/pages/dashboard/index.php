@@ -164,6 +164,23 @@ $upcomingStmt->execute();
 $upcomingReservations = $upcomingStmt->fetchAll(PDO::FETCH_ASSOC);
 $upcomingCount = count($upcomingReservations);
 
+$upcomingWeekCount = 0;
+if (!in_array($userRole, ['Admin', 'Staff'], true)) {
+    $weekCountStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations r
+         WHERE r.user_id = :user_id
+           AND r.reservation_date >= :today
+           AND r.reservation_date <= :week_end
+           AND r.status IN ("approved", "pending")'
+    );
+    $weekCountStmt->execute([
+        'user_id' => $userId,
+        'today' => $today,
+        'week_end' => $weekFromNow,
+    ]);
+    $upcomingWeekCount = (int)$weekCountStmt->fetchColumn();
+}
+
 // Pending count will be calculated with filters in the statistics section below
 $pendingCount = 0;
 $pendingReservations = [];
@@ -772,13 +789,13 @@ ob_start();
         </a>
     <?php else: ?>
         <!-- Resident Statistics -->
-        <a href="<?= buildFilterUrl(base_path(), '/dashboard/my-reservations', '', $facilityFilter, $startDateFilter, $endDateFilter); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
+        <a href="<?= buildFilterUrl(base_path(), '/dashboard/my-reservations', '', $facilityFilter, $today, $weekFromNow); ?>" class="stat-card stat-card-clickable" style="text-decoration: none; color: inherit;">
             <h3>My Upcoming Reservations</h3>
             <p style="font-size: 1.5rem; font-weight: 600; color: var(--gov-blue); margin: 0.3rem 0;">
-                <?= $upcomingCount; ?>
+                <?= $upcomingWeekCount; ?>
             </p>
             <small style="color: #8b95b5;">
-                <?= $upcomingCount === 1 ? 'reservation' : 'reservations'; ?> in the next 7 days
+                <?= $upcomingWeekCount === 1 ? 'reservation' : 'reservations'; ?> in the next 7 days
             </small>
         </a>
         
@@ -1026,132 +1043,16 @@ ob_start();
 })();
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Monthly Trends Chart
-    const monthlyCtx = document.getElementById('monthlyChart');
-    if (monthlyCtx) {
-        new Chart(monthlyCtx, {
-            type: 'line',
-            data: {
-                labels: <?= json_encode($monthlyLabels); ?>,
-                datasets: [{
-                    label: 'Reservations',
-                    data: <?= json_encode($monthlyData); ?>,
-                    borderColor: '#0047ab',
-                    backgroundColor: 'rgba(0, 71, 171, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    borderWidth: 2,
-                    pointBackgroundColor: '#0047ab',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // Status Breakdown Chart
-    const statusCtx = document.getElementById('statusChart');
-    if (statusCtx) {
-        new Chart(statusCtx, {
-            type: 'doughnut',
-            data: {
-                labels: <?= json_encode($statusLabels); ?>,
-                datasets: [{
-                    data: <?= json_encode($statusCounts); ?>,
-                    backgroundColor: <?= json_encode($statusColors); ?>,
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 15,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // Facility Chart
-    const facilityCtx = document.getElementById('facilityChart');
-    if (facilityCtx) {
-        new Chart(facilityCtx, {
-            type: 'bar',
-            data: {
-                labels: <?= json_encode($facilityLabels); ?>,
-                datasets: [{
-                    label: 'Bookings',
-                    data: <?= json_encode($facilityCounts); ?>,
-                    backgroundColor: '#0047ab',
-                    borderRadius: 6,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45
-                        }
-                    }
-                }
-            }
+    if (window.frsInitReservationCharts) {
+        window.frsInitReservationCharts({
+            monthlyLabels: <?= json_encode($monthlyLabels); ?>,
+            monthlyData: <?= json_encode($monthlyData); ?>,
+            statusLabels: <?= json_encode($statusLabels); ?>,
+            statusCounts: <?= json_encode($statusCounts); ?>,
+            statusColors: <?= json_encode($statusColors); ?>,
+            facilityLabels: <?= json_encode($facilityLabels); ?>,
+            facilityCounts: <?= json_encode($facilityCounts); ?>,
+            rotateFacilityLabels: true
         });
     }
 });

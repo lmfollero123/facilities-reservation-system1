@@ -35,6 +35,34 @@ if (!function_exists('frs_heading_with_tip')) {
     }
 }
 
+if (!function_exists('frs_logout_form')) {
+    /**
+     * POST logout control with CSRF (replaces GET /logout links).
+     */
+    function frs_logout_form(string $buttonClass = 'btn btn-primary', string $label = 'Logout', string $confirmMessage = 'Are you sure you want to log out?'): string
+    {
+        $action = htmlspecialchars((string)base_path() . '/logout', ENT_QUOTES, 'UTF-8');
+        $btnClass = htmlspecialchars($buttonClass, ENT_QUOTES, 'UTF-8');
+        $btnLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
+        $confirm = htmlspecialchars($confirmMessage, ENT_QUOTES, 'UTF-8');
+        $csrf = csrf_field();
+
+        return '<form method="POST" action="' . $action . '" style="display:inline;margin:0;">'
+            . $csrf
+            . '<button type="submit" class="' . $btnClass . ' confirm-action" data-message="' . $confirm . '">'
+            . $btnLabel
+            . '</button></form>';
+    }
+}
+
+if (!function_exists('frs_session_display_name')) {
+    function frs_session_display_name(string $fallback = 'User'): string
+    {
+        $name = trim((string)($_SESSION['user_name'] ?? $_SESSION['name'] ?? ''));
+        return $name !== '' ? $name : $fallback;
+    }
+}
+
 if (!function_exists('frs_page_title')) {
     /**
      * Page &lt;h1&gt; with optional ⓘ (omit generic subtitle paragraphs).

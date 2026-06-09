@@ -44,13 +44,18 @@ try {
 
     // Handle form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['otp'])) {
+        if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            $error = 'Invalid security token. Please refresh the page and try again.';
+            logSecurityEvent('csrf_validation_failed', 'OTP verify form', 'warning');
+        }
+
         $otpInput = trim($_POST['otp']);
 
-        if (!$otpInput) {
+        if (empty($error) && !$otpInput) {
             $error = 'Please enter the OTP from your email or authenticator app.';
-        } elseif ($user['otp_attempts'] >= 5) {
+        } elseif (empty($error) && $user['otp_attempts'] >= 5) {
             $error = 'Too many incorrect attempts. Please log in again.';
-        } else {
+        } elseif (empty($error)) {
             $valid = false;
             // 1) If Google Authenticator is enabled, try TOTP first
             if (($user['totp_enabled'] ?? 0) && !empty($user['totp_secret'])) {
@@ -95,6 +100,7 @@ try {
             $_SESSION['user_authenticated'] = true;
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
+            $_SESSION['name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
             $_SESSION['role'] = $user['role'];
             $_SESSION['user_org'] = $user['role'];
@@ -103,9 +109,9 @@ try {
             unset($_SESSION['pending_otp_user_id'], $_SESSION['pending_otp_email'], $_SESSION['pending_otp_name']);
 
             // Redirect to requested page if provided and safe, otherwise dashboard
-            $redirect = $_SESSION['post_login_redirect'] ?? '';
+            $redirect = frs_safe_redirect_path($_SESSION['post_login_redirect'] ?? null);
             unset($_SESSION['post_login_redirect']);
-            if ($redirect && str_starts_with($redirect, '/')) {
+            if ($redirect !== null) {
                 header('Location: ' . $redirect);
             } else {
                 header('Location: ' . base_path() . '/dashboard');
@@ -116,10 +122,15 @@ try {
 
     // Send/resend Email OTP (fallback)
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
+        if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            $error = 'Invalid security token. Please refresh the page and try again.';
+            logSecurityEvent('csrf_validation_failed', 'OTP resend form', 'warning');
+        }
+
         $lastSent = $user['otp_last_sent_at'] ? strtotime($user['otp_last_sent_at']) : 0;
-        if (time() - $lastSent < 60) {
+        if (empty($error) && time() - $lastSent < 60) {
             $error = 'Please wait a moment before requesting another code.';
-        } else {
+        } elseif (empty($error)) {
             $otp = random_int(100000, 999999);
             $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
             $otpExpiry = date('Y-m-d H:i:s', time() + 60);

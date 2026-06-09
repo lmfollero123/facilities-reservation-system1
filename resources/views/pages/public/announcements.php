@@ -95,7 +95,7 @@ ob_start();
         <div class="controls-section">
             <div class="sort-wrapper">
                 <label for="sort-select">Sort by:</label>
-                <select id="sort-select" name="sort" onchange="updateSort(this.value)" class="sort-select">
+                <select id="sort-select" name="sort" class="sort-select">
                     <option value="newest" <?= $sort === 'newest' ? 'selected' : ''; ?>>Newest First</option>
                     <option value="oldest" <?= $sort === 'oldest' ? 'selected' : ''; ?>>Oldest First</option>
                 </select>
@@ -644,17 +644,6 @@ ob_start();
     }
 }
 </style>
-
-<script>
-function updateSort(value) {
-    const search = new URLSearchParams(window.location.search).get('search') || '';
-    let url = '<?= $base; ?>/announcements?sort=' + value;
-    if (search) {
-        url += '&search=' + encodeURIComponent(search);
-    }
-    window.location.href = url;
-}
-</script>
 
 <?php
 $content = ob_get_clean();

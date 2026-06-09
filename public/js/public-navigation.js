@@ -11,7 +11,7 @@
 
     const MAIN_SEL = '.guest-content';
     const AUTH_PATH_RE = /\/(login|register|logout|forgot-password|reset-password|verify-email|login-otp|dashboard)(\/|$)/i;
-    const NAV_ORDER = ['/', '/facilities', '/announcements', '/faqs', '/faq', '/contact'];
+    const NAV_ORDER = ['/', '/facilities', '/announcements', '/faqs', '/contact'];
     const SLIDE_MS = 340;
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -202,14 +202,151 @@
         });
     }
 
+    function initAnnouncementsSort(root) {
+        const container = root || document.querySelector(MAIN_SEL);
+        if (!container) {
+            return;
+        }
+        const select = container.querySelector('#sort-select');
+        if (!select || select.dataset.frsSortBound === '1') {
+            return;
+        }
+        select.dataset.frsSortBound = '1';
+        select.removeAttribute('onchange');
+        select.addEventListener('change', function () {
+            const search = new URLSearchParams(window.location.search).get('search') || '';
+            let url = basePath() + '/announcements?sort=' + encodeURIComponent(select.value);
+            if (search) {
+                url += '&search=' + encodeURIComponent(search);
+            }
+            navigate(url);
+        });
+    }
+
+    function initContactForm(root) {
+        const container = root || document.querySelector(MAIN_SEL);
+        if (!container) {
+            return;
+        }
+        const form = container.querySelector('#contact-inquiry-form');
+        if (!form || form.dataset.frsContactBound === '1') {
+            return;
+        }
+        form.dataset.frsContactBound = '1';
+
+        const feedback = container.querySelector('#contact-form-feedback');
+        const submitBtn = container.querySelector('#contact-submit-btn');
+        const handlerUrl = basePath() + '/contact-handler';
+
+        container.querySelectorAll('.cf-turnstile').forEach(function (el) {
+            if (el.dataset.frsTurnstileRendered === '1' || !window.turnstile) {
+                return;
+            }
+            el.dataset.frsTurnstileRendered = '1';
+            try {
+                window.turnstile.render(el);
+            } catch (e) {
+                /* widget may already be rendered */
+            }
+        });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (feedback) {
+                feedback.textContent = '';
+                feedback.className = 'contact-form-feedback';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+
+            const formData = new FormData(form);
+            const turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
+            if (turnstileInput && turnstileInput.value) {
+                formData.set('cf-turnstile-response', turnstileInput.value);
+            }
+
+            fetch(handlerUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+                body: formData,
+            })
+                .then(function (r) {
+                    return r.json().then(function (data) {
+                        return { ok: r.ok, data: data };
+                    });
+                })
+                .then(function (result) {
+                    if (result.ok && result.data && result.data.success) {
+                        if (feedback) {
+                            feedback.textContent = result.data.message || 'Thank you! Your inquiry has been sent.';
+                            feedback.className = 'contact-form-feedback is-success';
+                        }
+                        form.reset();
+                        if (window.turnstile) {
+                            const widget = form.querySelector('.cf-turnstile');
+                            if (widget) {
+                                window.turnstile.reset(widget);
+                            }
+                        }
+                    } else {
+                        throw new Error(
+                            (result.data && result.data.message)
+                                ? result.data.message
+                                : 'Unable to send your message.'
+                        );
+                    }
+                })
+                .catch(function (err) {
+                    if (feedback) {
+                        feedback.textContent = err.message || 'Unable to send your message. Please try again.';
+                        feedback.className = 'contact-form-feedback is-error';
+                    }
+                })
+                .finally(function () {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+                });
+        });
+    }
+
+    function initFacilityCalendarClicks(root) {
+        const container = root || document.querySelector(MAIN_SEL);
+        if (!container) {
+            return;
+        }
+        const days = container.querySelectorAll('.calendar .day');
+        if (!days.length) {
+            return;
+        }
+        const loginNext = encodeURIComponent(basePath() + '/dashboard/calendar');
+        const loginUrl = basePath() + '/login?next=' + loginNext;
+        days.forEach(function (day) {
+            if (day.dataset.frsCalendarBound === '1') {
+                return;
+            }
+            day.dataset.frsCalendarBound = '1';
+            day.style.cursor = 'pointer';
+            day.addEventListener('click', function () {
+                window.location.href = loginUrl;
+            });
+        });
+    }
+
     function reinitAfterSwap() {
         closeMobileNav();
+        const main = document.querySelector(MAIN_SEL);
         if (typeof window.initMobileTables === 'function') {
             window.initMobileTables();
         }
         if (typeof window.frsInitHomeScrollAnimations === 'function') {
-            window.frsInitHomeScrollAnimations(document.querySelector(MAIN_SEL));
+            window.frsInitHomeScrollAnimations(main);
         }
+        initAnnouncementsSort(main);
+        initFacilityCalendarClicks(main);
+        initContactForm(main);
         document.dispatchEvent(new CustomEvent('frs:public-page-loaded', {
             bubbles: true,
             detail: { path: window.location.pathname },
@@ -254,10 +391,12 @@
 
         const fromPath = pathOnly(window.location.href);
         const toPath = pathOnly(url);
+        const fromUrl = new URL(window.location.href);
+        const toUrl = new URL(url, window.location.origin);
 
-        if (fromPath === toPath) {
+        if (fromPath === toPath && fromUrl.search === toUrl.search) {
             if (url.includes('#')) {
-                const hash = new URL(url, window.location.origin).hash;
+                const hash = toUrl.hash;
                 const target = hash ? document.querySelector(hash) : null;
                 if (target) {
                     target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
@@ -371,6 +510,11 @@
     if (history.state === null) {
         history.replaceState({ frsPublicNav: true, path: lastPath }, '', window.location.href);
     }
+
+    const initialMain = document.querySelector(MAIN_SEL);
+    initAnnouncementsSort(initialMain);
+    initFacilityCalendarClicks(initialMain);
+    initContactForm(initialMain);
 
     window.frsPublicNavigate = navigate;
 })();

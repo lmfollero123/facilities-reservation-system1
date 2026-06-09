@@ -8,7 +8,15 @@ $__mineCalQ = static function (array $q) use ($__frsMineMod): string {
 $__mineCalPath = $__frsMineOnBookHub
     ? (base_path() . '/dashboard/book-facility')
     : (base_path() . '/dashboard/my-reservations');
-$calendarScope = (isset($_GET['scope']) && $_GET['scope'] === 'all') ? 'all' : 'mine';
+$hubUserRole = (string)($_SESSION['role'] ?? 'Resident');
+$hubStaffView = in_array($hubUserRole, ['Admin', 'Staff'], true);
+$calendarScope = (isset($_GET['scope']) && $_GET['scope'] === 'all' && $hubStaffView) ? 'all' : 'mine';
+$hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $__frsMineOnBookHub): string {
+    if ($__frsMineOnBookHub) {
+        return base_path() . '/dashboard/book-facility?module=mine&reservation_id=' . $reservationId;
+    }
+    return base_path() . '/dashboard/my-reservations?reservation_id=' . $reservationId;
+};
 ?>
 <!-- Calendar View for My Reservations -->
 <style>
@@ -235,9 +243,11 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
             <a class="<?= $calendarScope === 'mine' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'mine', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
                 My Current Reservations
             </a>
+            <?php if ($hubStaffView): ?>
             <a class="<?= $calendarScope === 'all' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'all', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
                 All Reservations
             </a>
+            <?php endif; ?>
         </div>
         <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
             <a class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabPrevYear, 'month' => $mineTabPrevMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">&larr; Prev</a>
@@ -363,34 +373,23 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                         // Re-apply business rules for actions (same as pre-refactor)
                         $reservationDate = new DateTime($reservation['reservation_date']);
                         $today = new DateTime('today');
-                        $currentDate = date('Y-m-d');
-                        $currentHour = (int)date('H');
                         $daysUntil = $today->diff($reservationDate)->days;
                         $rescheduleCount = (int)($reservation['reschedule_count'] ?? 0);
 
-                        $isOngoing = false;
-                        if ($reservation['reservation_date'] < $currentDate) {
-                            $isOngoing = true;
-                        } elseif ($reservation['reservation_date'] === $currentDate) {
-                            if (strpos($reservation['time_slot'], 'Morning') !== false && $currentHour >= 12) {
-                                $isOngoing = true;
-                            } elseif (strpos($reservation['time_slot'], 'Afternoon') !== false && $currentHour >= 17) {
-                                $isOngoing = true;
-                            } elseif (strpos($reservation['time_slot'], 'Evening') !== false && $currentHour >= 21) {
-                                $isOngoing = true;
-                            }
-                        }
+                        $slotHasPassed = frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
+                        $isOngoing = frs_reservation_slot_is_ongoing((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
+                        $slotStartedOrPassed = $slotHasPassed || $isOngoing;
 
                         $canReschedule = $isOwnReservation && ($daysUntil >= 3)
                             && $rescheduleCount < 1
                             && in_array($reservation['status'], ['pending', 'approved', 'postponed'], true)
-                            && !$isOngoing
+                            && !$slotStartedOrPassed
                             && (($reservation['facility_status'] ?? 'available') === 'available');
 
                         // Resident can cancel own reservation only when: status pending/approved, and before start time
-                        $canCancel = $isOwnReservation && in_array($reservation['status'], ['pending_payment', 'pending', 'approved'], true) && !$isOngoing;
+                        $canCancel = $isOwnReservation && in_array($reservation['status'], ['pending_payment', 'pending', 'approved'], true) && !$slotHasPassed;
 
-                        $canEditDetails = $isOwnReservation && in_array($reservation['status'], ['pending', 'approved', 'postponed'], true) && !$isOngoing;
+                        $canEditDetails = $isOwnReservation && in_array($reservation['status'], ['pending', 'approved', 'postponed'], true) && !$slotHasPassed;
                         $canPayNow = $isOwnReservation && (($reservation['status'] ?? '') === 'pending_payment');
                     ?>
                     <div style="border:1px solid var(--border-color,#e5e7eb); border-radius:12px; padding:1rem;">
@@ -415,7 +414,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                                     <?php endif; ?>
                                 </span>
                                 <?php if (!($calendarScope === 'all' && !$isOwnReservation && !$canViewOtherReservationDetails)): ?>
-                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:10px;">Reservation page</a>
+                                    <a href="<?= htmlspecialchars($hubMineDetailUrl((int)$reservation['id']), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:10px;">View details</a>
                                 <?php endif; ?>
                             </div>
                         </div>

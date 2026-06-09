@@ -45,3 +45,69 @@
 .dashboard-content .stat-card:nth-child(6) { animation-delay: 0.3s; }
 .dashboard-content .stat-card:nth-child(7) { animation-delay: 0.35s; }
 .dashboard-content .stat-card:nth-child(8) { animation-delay: 0.4s; }
+
+/* Session timeout modal */
+.session-timeout-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100002;
+    align-items: center;
+    justify-content: center;
+}
+.session-timeout-dialog {
+    width: min(520px, 92vw);
+    background: #ffffff;
+    color: #1f2937;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    padding: 1.4rem 1.25rem;
+    text-align: center;
+    border: 2px solid #f97316;
+}
+.session-timeout-icon { font-size: 2rem; margin-bottom: 0.35rem; }
+.session-timeout-title { margin: 0; font-size: 1.35rem; color: #9a3412; }
+.session-timeout-message { margin: 0.6rem 0 0.35rem; color: #4b5563; font-size: 0.95rem; }
+.session-timeout-countdown {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #b91c1c;
+    letter-spacing: 1px;
+    margin: 0.35rem 0 0.8rem;
+}
+.session-timeout-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+.session-timeout-btn { padding: 0.55rem 0.95rem; }
+
+/* Dark mode dashboard polish */
+[data-theme="dark"] .dashboard-content .booking-card,
+[data-theme="dark"] .dashboard-content .stat-card,
+[data-theme="dark"] .dashboard-content .report-card {
+    background: var(--bg-secondary, #1e293b);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary, #e2e8f0);
+}
+
+[data-theme="dark"] .dashboard-content .page-header,
+[data-theme="dark"] .dashboard-content .breadcrumb {
+    color: var(--text-secondary, #94a3b8);
+}
+
+[data-theme="dark"] .dashboard-content canvas {
+    filter: brightness(0.95);
+}
+
+[data-theme="dark"] .session-timeout-dialog {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #f97316;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .session-timeout-title { color: #fdba74; }
+[data-theme="dark"] .session-timeout-message { color: #cbd5e1; }
+[data-theme="dark"] .session-timeout-countdown { color: #fca5a5; }

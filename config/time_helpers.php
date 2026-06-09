@@ -181,6 +181,77 @@ function frs_is_start_time_past_for_date(string $dateYmd, string $startHi, ?Date
     return frs_hhmm_to_minutes($startHi) < frs_earliest_bookable_start_minutes($now);
 }
 
+/**
+ * Whether a reservation's time slot has fully ended (date in past, or today after slot end).
+ */
+function frs_reservation_slot_has_passed(string $reservationDate, string $timeSlot, ?DateTimeInterface $now = null): bool
+{
+    if ($now === null) {
+        $now = new DateTime('now', frs_app_timezone());
+    }
+    $today = $now->format('Y-m-d');
+    if ($reservationDate < $today) {
+        return true;
+    }
+    if ($reservationDate > $today) {
+        return false;
+    }
+
+    $parsed = parseTimeSlot($timeSlot);
+    if ($parsed) {
+        $endMinutes = (int)$parsed['end']->format('H') * 60 + (int)$parsed['end']->format('i');
+        $nowMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
+        return $nowMinutes >= $endMinutes;
+    }
+
+    $hour = (int)$now->format('H');
+    if (stripos($timeSlot, 'Morning') !== false) {
+        return $hour >= 12;
+    }
+    if (stripos($timeSlot, 'Afternoon') !== false) {
+        return $hour >= 17;
+    }
+    if (stripos($timeSlot, 'Evening') !== false) {
+        return $hour >= 21;
+    }
+
+    return false;
+}
+
+/**
+ * Whether a reservation is currently in progress (today, between slot start and end).
+ */
+function frs_reservation_slot_is_ongoing(string $reservationDate, string $timeSlot, ?DateTimeInterface $now = null): bool
+{
+    if ($now === null) {
+        $now = new DateTime('now', frs_app_timezone());
+    }
+    if ($reservationDate !== $now->format('Y-m-d')) {
+        return $reservationDate < $now->format('Y-m-d');
+    }
+
+    $parsed = parseTimeSlot($timeSlot);
+    if ($parsed) {
+        $startMinutes = (int)$parsed['start']->format('H') * 60 + (int)$parsed['start']->format('i');
+        $endMinutes = (int)$parsed['end']->format('H') * 60 + (int)$parsed['end']->format('i');
+        $nowMinutes = (int)$now->format('H') * 60 + (int)$now->format('i');
+        return $nowMinutes >= $startMinutes && $nowMinutes < $endMinutes;
+    }
+
+    $hour = (int)$now->format('H');
+    if (stripos($timeSlot, 'Morning') !== false) {
+        return $hour >= 8 && $hour < 12;
+    }
+    if (stripos($timeSlot, 'Afternoon') !== false) {
+        return $hour >= 12 && $hour < 17;
+    }
+    if (stripos($timeSlot, 'Evening') !== false) {
+        return $hour >= 17 && $hour < 21;
+    }
+
+    return false;
+}
+
 
 
 

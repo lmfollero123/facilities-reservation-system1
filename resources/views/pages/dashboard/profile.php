@@ -273,8 +273,14 @@ if (isset($_SESSION['totp_pending_secret']) && $user && !empty($user['email'])) 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     // Handle OTP preference update separately (if only OTP toggle is changed)
     if (isset($_POST['enable_otp']) && !isset($_POST['name']) && !isset($_POST['current_password'])) {
+        if (!frs_verify_post_csrf()) {
+            $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+        } else {
         // This is an OTP preference-only update
         $enableOtp = (int)$_POST['enable_otp'];
+        if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
+            $error = 'Two-factor authentication is required for Admin and Staff accounts and cannot be disabled.';
+        } else {
         try {
             $updateStmt = $pdo->prepare('UPDATE users SET enable_otp = :enable_otp, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
             $updateStmt->execute(['enable_otp' => $enableOtp, 'id' => $userId]);
@@ -293,6 +299,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
             $success = $enableOtp ? 'OTP has been enabled. You will receive a code via email on each login.' : 'OTP has been disabled. You can now log in with just your password.';
         } catch (Exception $e) {
             $error = 'Unable to update OTP preference. Please try again.';
+        }
+        }
         }
     }
     
@@ -428,6 +436,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     
                     // Only update fields that were actually changed
                     $enableOtp = isset($_POST['enable_otp']) ? (int)$_POST['enable_otp'] : ($user['enable_otp'] ?? 1);
+                    if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
+                        throw new Exception('Two-factor authentication is required for Admin and Staff accounts and cannot be disabled.');
+                    }
                     $updateStmt = $pdo->prepare(
                         'UPDATE users 
                          SET name = :name, email = :email, mobile = :mobile, address = :address, latitude = :latitude, longitude = :longitude, profile_picture = :profile_picture, password_hash = :password_hash, enable_otp = :enable_otp, updated_at = CURRENT_TIMESTAMP 

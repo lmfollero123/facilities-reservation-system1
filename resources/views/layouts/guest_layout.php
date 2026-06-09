@@ -31,7 +31,13 @@ $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($phpSelf, 'login_otp.php') !== false ||
                 strpos($requestPath, '/login-otp') !== false ||
                 strpos($phpSelf, 'register.php') !== false ||
-                strpos($requestPath, '/register') !== false;
+                strpos($requestPath, '/register') !== false ||
+                strpos($phpSelf, 'verify_email.php') !== false ||
+                strpos($requestPath, '/verify-email') !== false ||
+                strpos($phpSelf, 'forgot_password.php') !== false ||
+                strpos($requestPath, '/forgot-password') !== false ||
+                strpos($phpSelf, 'reset_password.php') !== false ||
+                strpos($requestPath, '/reset-password') !== false;
 if ($isHomePage || $isPublicPage) {
     $bodyClass = ($bodyClass ? $bodyClass . ' ' : '') . 'landing-page';
 }
@@ -140,28 +146,30 @@ if ($isHomePage || $isPublicPage) {
         .auth-card {
             max-width: 440px;
             width: 100%;
-            background: #ffffff !important;
             border-radius: 18px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
             padding: 2.5rem;
+        }
+        html:not([data-theme="dark"]) .auth-card {
+            background: #ffffff !important;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
             border: none;
         }
-        .auth-header {
+        html:not([data-theme="dark"]) .auth-header {
             text-align: center;
             margin-bottom: 2rem;
         }
-        .auth-header h1 {
+        html:not([data-theme="dark"]) .auth-header h1 {
             margin: 0 0 0.5rem;
             color: #1b1b1f !important;
             font-size: 1.75rem;
             font-weight: 700;
         }
-        .auth-header p {
+        html:not([data-theme="dark"]) .auth-header p {
             margin: 0;
             color: #4c5b7c !important;
             font-size: 0.95rem;
         }
-        .auth-form label {
+        html:not([data-theme="dark"]) .auth-form label {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
@@ -169,10 +177,10 @@ if ($isHomePage || $isPublicPage) {
             color: #1b1b1f !important;
             font-size: 0.9rem;
         }
-        .auth-form .input-wrapper {
+        html:not([data-theme="dark"]) .auth-form .input-wrapper {
             position: relative;
         }
-        .auth-form .input-icon {
+        html:not([data-theme="dark"]) .auth-form .input-icon {
             position: absolute;
             left: 1rem;
             top: 50%;
@@ -181,8 +189,8 @@ if ($isHomePage || $isPublicPage) {
             font-size: 1.1rem;
             pointer-events: none;
         }
-        .auth-form input,
-        .auth-form textarea {
+        html:not([data-theme="dark"]) .auth-form input,
+        html:not([data-theme="dark"]) .auth-form textarea {
             width: 100%;
             padding: 0.9rem 1rem !important;
             border: 2px solid #cdd5e4 !important;
@@ -193,15 +201,15 @@ if ($isHomePage || $isPublicPage) {
             background: #ffffff !important;
             color: #1b1b1f !important;
         }
-        .auth-form input:focus,
-        .auth-form textarea:focus {
+        html:not([data-theme="dark"]) .auth-form input:focus,
+        html:not([data-theme="dark"]) .auth-form textarea:focus {
             outline: none;
             border-color: #6384d2 !important;
             background: #ffffff !important;
             box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.1);
         }
-        .auth-form input::placeholder,
-        .auth-form textarea::placeholder {
+        html:not([data-theme="dark"]) .auth-form input::placeholder,
+        html:not([data-theme="dark"]) .auth-form textarea::placeholder {
             color: #8b94a8 !important;
         }
         .btn-primary {

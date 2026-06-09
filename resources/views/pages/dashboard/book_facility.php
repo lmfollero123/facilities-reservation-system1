@@ -553,6 +553,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                 $insertPlaceholders[] = ':payment_due_at';
             }
 
+            $pdo->beginTransaction();
+            frs_lock_facility_for_booking($pdo, $facilityId);
+            $recheckConflict = detectBookingConflict($facilityId, $date, $timeSlot);
+            if ($recheckConflict['has_conflict']) {
+                $pdo->rollBack();
+                throw new Exception('Conflict detected: ' . ($recheckConflict['message'] ?? 'This time slot is no longer available.'));
+            }
+
             $stmt = $pdo->prepare(
                 'INSERT INTO reservations (' . implode(', ', $insertColumns) . ')
                  VALUES (' . implode(', ', $insertPlaceholders) . ')'
@@ -601,6 +609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             if ($staffAssistedBooking) {
                 logAudit('Walk-in booking created', 'Reservations', 'RES-' . $newReservationId . ' for user #' . $bookingUserId . ' by ' . $staffLabel, $sessionActorId);
             }
+            $pdo->commit();
             if (!empty($eventPermitFile['tmp_name']) && ($eventPermitFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
                 $docResult = frs_store_reservation_document((int)$newReservationId, $eventPermitFile, $sessionActorId, $eventPermitType);
                 if (!$docResult['ok']) {
@@ -650,7 +659,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                 $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
             }
         } catch (Throwable $e) {
-            $error = 'Unable to submit reservation. Please try again later.';
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if (str_starts_with($e->getMessage(), 'Conflict detected')) {
+                $error = '⚠️ ' . $e->getMessage();
+            } else {
+                $error = 'Unable to submit reservation. Please try again later.';
+            }
             error_log('Reservation submission error: ' . $e->getMessage());
         }
         }
@@ -757,6 +773,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                 $insertPlaceholders[] = ':payment_due_at';
             }
 
+            $pdo->beginTransaction();
+            frs_lock_facility_for_booking($pdo, $facilityId);
+            $recheckConflict = detectBookingConflict($facilityId, $date, $timeSlot);
+            if ($recheckConflict['has_conflict']) {
+                $pdo->rollBack();
+                throw new Exception('Conflict detected: ' . ($recheckConflict['message'] ?? 'This time slot is no longer available.'));
+            }
+
             $stmt = $pdo->prepare(
                 'INSERT INTO reservations (' . implode(', ', $insertColumns) . ')
                  VALUES (' . implode(', ', $insertPlaceholders) . ')'
@@ -789,6 +813,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             ]);
 
             logAudit('Created reservation request (admin exempt)', 'Reservations', 'RES-' . $newReservationId . ' – ' . $facilityName . ' (' . $date . ' ' . $timeSlot . ')');
+            $pdo->commit();
             if (!empty($eventPermitFile['tmp_name']) && ($eventPermitFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
                 $docResult = frs_store_reservation_document((int)$newReservationId, $eventPermitFile, $sessionActorId, $eventPermitType);
                 if (!$docResult['ok']) {
@@ -835,7 +860,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             $smsStatusKey = $initialStatus === 'pending_payment' ? 'pending_payment' : ($initialStatus === 'approved' ? 'approved' : 'pending');
             sendReservationStatusSms($bookingSmsPayload, $smsStatusKey);
         } catch (Throwable $e) {
-            $error = 'Unable to submit reservation. Please try again later.';
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if (str_starts_with($e->getMessage(), 'Conflict detected')) {
+                $error = '⚠️ ' . $e->getMessage();
+            } else {
+                $error = 'Unable to submit reservation. Please try again later.';
+            }
             error_log('Reservation submission error (admin exempt): ' . $e->getMessage());
         }
     }
@@ -916,7 +948,7 @@ if ($bookFacilityPick > 0) {
     $bookPaneQuery['book_fac'] = $bookFacilityPick;
 }
 $minePaneQuery = array_merge(['module' => 'mine'], $bookPaneQuery);
-if (isset($_GET['scope']) && $_GET['scope'] === 'all') {
+if (isset($_GET['scope']) && $_GET['scope'] === 'all' && in_array((string)($_SESSION['role'] ?? ''), ['Admin', 'Staff'], true)) {
     $minePaneQuery['scope'] = 'all';
 }
 

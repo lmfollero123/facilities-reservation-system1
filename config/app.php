@@ -82,18 +82,21 @@ if (!function_exists('env_value')) {
     }
 }
 
-// Later keys in .env override earlier ones (avoids stale duplicate blocks).
-$envPath = env_value('CPRF_ENV_PATH', '', false);
-if ($envPath === '' || !is_file($envPath)) {
-    $envPath = dirname(__DIR__) . '/.env';
-}
-if (!is_file($envPath) && !empty($_SERVER['HOME'])) {
-    $privateEnv = rtrim((string) $_SERVER['HOME'], '/\\') . '/private/cprf.env';
-    if (is_file($privateEnv)) {
-        $envPath = $privateEnv;
+// Single env bootstrap — all entry points should require app.php (not ad-hoc .env loaders).
+if (!defined('CPRF_ENV_BOOTSTRAPPED')) {
+    define('CPRF_ENV_BOOTSTRAPPED', true);
+    $envPath = env_value('CPRF_ENV_PATH', '', false);
+    if ($envPath === '' || !is_file($envPath)) {
+        $envPath = dirname(__DIR__) . '/.env';
     }
+    if (!is_file($envPath) && !empty($_SERVER['HOME'])) {
+        $privateEnv = rtrim((string) $_SERVER['HOME'], '/\\') . '/private/cprf.env';
+        if (is_file($privateEnv)) {
+            $envPath = $privateEnv;
+        }
+    }
+    load_env_file($envPath, true);
 }
-load_env_file($envPath, true);
 
 if (!function_exists('base_path')) {
     /**

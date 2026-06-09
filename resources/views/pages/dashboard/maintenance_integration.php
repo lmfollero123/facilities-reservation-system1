@@ -69,22 +69,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch maintenance schedules from CIMM API
+// Fetch maintenance schedules from CIMM API (read-only on page load — DB sync runs via cron/manual sync)
 $apiResult = fetchCIMMMaintenanceSchedules();
 $rawSchedules = $apiResult['data'] ?? [];
 $apiError = $apiResult['error'] ?? null;
 $maintenanceSchedules = mapCIMMToCPRF($rawSchedules);
-$syncSummary = [
+$cimmSyncState = frs_cimm_load_sync_state();
+$syncSummary = $cimmSyncState['last_summary'] ?: [
     'updated_to_maintenance' => 0,
     'updated_to_available' => 0,
     'blackouts_added' => 0,
+    'blackouts_removed' => 0,
     'matched_schedule_count' => 0,
     'unmatched_schedule_count' => 0,
     'errors' => [],
 ];
-if (empty($apiError) && !empty($maintenanceSchedules)) {
-    $syncSummary = syncFacilitiesFromCIMM($pdo, $maintenanceSchedules);
-}
 
 // Separate completed schedules for history
 $mockMaintenanceHistory = [];
@@ -236,10 +235,11 @@ try {
     $predictiveMaintenanceRows = [];
 }
 
-// Integration status (real check)
+// Integration status (API read + last persisted sync run)
+$lastSyncAt = $cimmSyncState['last_sync_at'] ?? null;
 $integrationStatus = [
     'connected' => !empty($rawSchedules) && empty($apiError),
-    'last_sync' => date('Y-m-d H:i:s'),
+    'last_sync' => $lastSyncAt ?: null,
     'sync_status' => empty($apiError) && !empty($rawSchedules) ? 'success' : (empty($apiError) ? 'no_data' : 'failed'),
     'pending_updates' => (int)($syncSummary['unmatched_schedule_count'] ?? 0),
     'error' => $apiError,
@@ -264,7 +264,9 @@ ob_start();
                     <?= $integrationStatus['connected'] ? '✓ Connected' : '✗ Disconnected'; ?>
                 </span>
                 <small style="color: #8b95b5;">
-                    Last sync: <?= date('M d, Y H:i', strtotime($integrationStatus['last_sync'])); ?>
+                    Last sync: <?= $integrationStatus['last_sync']
+                        ? date('M d, Y H:i', strtotime($integrationStatus['last_sync']))
+                        : 'Never (run cron or Sync Now)'; ?>
                 </small>
                 <?php if ($integrationStatus['pending_updates'] > 0): ?>
                     <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
@@ -298,11 +300,12 @@ ob_start();
         </button>
     </div>
     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-        <?php if (empty($apiError) && !empty($maintenanceSchedules)): ?>
+        <?php if (!empty($integrationStatus['last_sync'])): ?>
             <div style="margin-top:0.65rem; color:#4b5563; font-size:0.85rem; display:flex; gap:0.8rem; flex-wrap:wrap;">
                 <span>🔁 Updated to maintenance: <strong><?= (int)($syncSummary['updated_to_maintenance'] ?? 0); ?></strong></span>
                 <span>✅ Updated to available: <strong><?= (int)($syncSummary['updated_to_available'] ?? 0); ?></strong></span>
-                <span>📅 Blackout dates added: <strong><?= (int)($syncSummary['blackouts_added'] ?? 0); ?></strong></span>
+                <span>📅 Blackouts added: <strong><?= (int)($syncSummary['blackouts_added'] ?? 0); ?></strong></span>
+                <span>🗑️ Blackouts removed: <strong><?= (int)($syncSummary['blackouts_removed'] ?? 0); ?></strong></span>
                 <span>🎯 Matched schedules: <strong><?= (int)($syncSummary['matched_schedule_count'] ?? 0); ?></strong></span>
                 <span>⚠️ Unmatched schedules: <strong><?= (int)($syncSummary['unmatched_schedule_count'] ?? 0); ?></strong></span>
             </div>
@@ -311,6 +314,13 @@ ob_start();
                     <strong>Sync warnings:</strong> <?= htmlspecialchars(implode(' | ', (array)$syncSummary['errors'])); ?>
                 </div>
             <?php endif; ?>
+            <small style="color:#8b95b5; display:block; margin-top:0.5rem;">
+                Facility status and blackout writes run via <code>scripts/sync_cimm_maintenance.php</code> (cron or Sync Now), not on every page view.
+            </small>
+        <?php else: ?>
+            <small style="color:#8b95b5;">
+                No sync has run yet. Schedule <code>php scripts/sync_cimm_maintenance.php</code> in cron, or click Sync Now.
+            </small>
         <?php endif; ?>
     </div>
 </div>
@@ -662,11 +672,28 @@ function syncMaintenanceData() {
     const originalText = btn.textContent;
     btn.disabled = true;
     btn.textContent = '🔄 Syncing...';
-    
-    // Reload page to fetch fresh data from API
-    setTimeout(() => {
-        window.location.reload();
-    }, 500);
+
+    fetch('<?= base_path(); ?>/scripts/sync_cimm_maintenance.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }
+    })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (result) {
+        if (result.ok && result.data && result.data.success) {
+            window.location.reload();
+            return;
+        }
+        const msg = (result.data && (result.data.message || result.data.error)) ? (result.data.message || result.data.error) : 'Sync failed.';
+        alert(msg);
+        btn.disabled = false;
+        btn.textContent = originalText;
+    })
+    .catch(function () {
+        alert('Sync request failed. Check server logs or run: php scripts/sync_cimm_maintenance.php');
+        btn.disabled = false;
+        btn.textContent = originalText;
+    });
 }
 
 // Test CIMM connection (for debugging)

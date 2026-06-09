@@ -2,13 +2,17 @@
 
 ## Current Integration Status
 
-### ✅ Currently Integrated: **NONE**
+| System | Status | Direction | Notes |
+|--------|--------|-----------|-------|
+| **CIMM (Maintenance)** | ✅ Partial | Outbound pull | `scripts/sync_cimm_maintenance.php`; requires `CIMM_API_KEY` |
+| **Infrastructure Management** | 🟡 Preview | — | Mock UI only; not connected |
+| **Utilities Billing** | 🟡 Preview | — | Mock UI only; not connected |
+| **Inbound REST webhooks** | ❌ Not deployed | Inbound | `/api/integrations/*` returns HTTP 501 |
 
-Your **Public Facilities Reservation System** is currently a **standalone system** with **NO active integrations** with the other LGU 1 systems.
-
-### Current External Services (Not LGU Systems)
+### External Services (Non-LGU)
 - **SMTP Email Service**: Gmail (planned: Brevo/domain SMTP)
-- **Geocoding Service**: OpenStreetMap Nominatim (free, optional Google Maps API)
+- **Geocoding Service**: OpenStreetMap Nominatim (optional Google Maps API)
+- **Gemini AI**: Chatbot + reports when `GEMINI_API_KEY` is configured
 
 ---
 
@@ -38,10 +42,11 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 - **Outbound**: Facility status changes, maintenance window requests
 - **Inbound**: Maintenance schedules, maintenance completion notifications
 
-**Implementation**:
-- API endpoint to receive maintenance schedules
-- Webhook or scheduled sync to update facility status
-- Shared database view or API integration
+**Implementation (current)**:
+- **Outbound**: CPRF pulls schedules from CIMM API (`fetchCIMMMaintenanceSchedules` in `services/cimm_api.php`)
+- **Sync job**: `php scripts/sync_cimm_maintenance.php` (cron recommended every 15 min)
+- **UI**: `/dashboard/maintenance-integration` displays schedules; DB writes happen only via sync job
+- **Inbound webhooks**: Not deployed — documented routes return HTTP 501
 
 ---
 
@@ -138,28 +143,34 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 ## Technical Requirements for Integration
 
 ### For Your System (Public Facilities Reservation)
-1. **API Endpoints** (to receive data):
-   - `POST /api/integrations/maintenance/schedule` - Receive maintenance schedules
+
+#### ✅ Implemented
+- **CIMM outbound sync**: Pull maintenance schedules; update facility status and blackout dates via cron
+- **Facility Status Management**: `available`, `maintenance`, `offline`
+- **Calendar / blackout system**: Date-based blocking (`facility_blackout_dates`)
+- **Notification, audit, export** capabilities
+
+#### 🟡 Preview UI only
+- Infrastructure Projects integration page (mock sample data)
+- Utilities Billing integration page (mock sample data)
+
+#### ❌ Planned — not deployed (inbound API)
+The following routes are **documented for future LGU-to-CPRF integration** but return **HTTP 501 Not Implemented** if called today:
+   - `POST /api/integrations/maintenance/schedule` - Receive maintenance schedules *(501 — use outbound CIMM pull instead)*
    - `POST /api/integrations/projects/timeline` - Receive project timelines
    - `POST /api/integrations/utilities/outage` - Receive utility outage alerts
 
-2. **API Endpoints** (to send data):
+2. **Outbound endpoints** (CPRF would expose to other LGU systems — also planned):
    - `GET /api/integrations/facilities/status` - Provide facility status
    - `GET /api/integrations/reservations/analytics` - Provide usage analytics
    - `GET /api/integrations/facilities/locations` - Provide facility locations
    - `GET /api/integrations/facilities/usage` - Provide facility usage data for billing
 
-3. **Webhook Support**:
-   - Real-time notifications for critical events
-   - Event-driven updates
+3. **Webhook support** (planned): Real-time event notifications
 
-4. **Authentication**:
-   - API keys or OAuth for inter-system communication
-   - Secure token exchange
+4. **Authentication** (planned): API keys or OAuth for inter-system communication
 
-5. **Data Format**:
-   - JSON for API communication
-   - Standardized data schemas
+5. **Data format**: JSON (standardized schemas TBD)
 
 ---
 
@@ -172,34 +183,31 @@ Your **Public Facilities Reservation System** is currently a **standalone system
 - **Audit Trail**: Tracks all facility and reservation changes
 - **Data Export**: CSV and HTML-for-PDF reports
 - **Geocoding**: Facility location coordinates
+- **CIMM outbound sync**: `scripts/sync_cimm_maintenance.php`
 
 ### 🔧 Needs Development:
-- **REST API Endpoints**: For receiving/sending data
+- **Inbound REST API Endpoints**: Documented routes return 501 until implemented
 - **Webhook Handler**: For real-time event processing
-- **Integration Authentication**: API keys/OAuth
+- **Integration Authentication**: API keys/OAuth for third-party callers
 - **Data Mapping Layer**: Convert between system formats
-- **Error Handling**: For integration failures
-- **Logging**: Integration activity logs
+- **Infrastructure / Utilities live APIs**: Replace preview mock pages
 
 ---
 
 ## Summary
 
-**Current State**: Your Public Facilities Reservation System is **standalone** with **no active integrations** with other LGU 1 systems.
+**Current State**: CPRF has **partial CIMM integration** (outbound pull + cron sync). Infrastructure and Utilities pages are **preview/mock UI only**. Inbound `/api/integrations/*` routes are **not deployed**.
 
-**Recommended First Integration**: **Community Infrastructure Maintenance Management** - highest value, most logical connection.
+**Recommended First Integration**: **CIMM maintenance sync** — already partially live; stabilize cron and facility matching.
 
-**Integration Approach**: API Gateway pattern with REST APIs and webhooks for real-time updates.
+**Integration Approach**: Outbound pull for CIMM today; API Gateway + inbound webhooks when other LGU systems are ready.
 
-**Planned Integrations**:
-1. **Community Infrastructure Maintenance Management** (High Priority)
-2. **Infrastructure Management** (Medium Priority)
-3. **Utilities Billing & Management** (Medium Priority)
+**Status by system**:
+1. **Community Infrastructure Maintenance Management** — ✅ Partial (outbound)
+2. **Infrastructure Management** — 🟡 Preview UI
+3. **Utilities Billing & Management** — 🟡 Preview UI
 
 **Next Steps**:
-1. Define integration requirements with other LGU system teams
-2. Design API contracts and data schemas
-3. Implement API endpoints in your system
-4. Test integration with staging environments
-5. Deploy and monitor integration health
-
+1. Schedule `sync_cimm_maintenance.php` in cron on production
+2. Define inbound API contracts with other LGU teams when ready
+3. Replace Infrastructure/Utilities preview pages with live APIs

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/paymongo_helper.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 
 if (!($_SESSION['user_authenticated'] ?? false) || empty($_SESSION['user_id'])) {
     header('Location: ' . base_path() . '/login');
@@ -41,6 +42,9 @@ if (!$error) {
         $error = 'Reservation not found.';
     } elseif (($reservation['status'] ?? '') !== 'pending_payment') {
         $error = 'This reservation is not awaiting payment.';
+    } elseif (!empty($reservation['payment_due_at']) && strtotime((string)$reservation['payment_due_at']) < time()) {
+        autoDeclineExpiredReservations();
+        $error = 'The payment window for this reservation has expired. Please book again.';
     }
 }
 

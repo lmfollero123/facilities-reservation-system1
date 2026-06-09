@@ -79,13 +79,14 @@ try {
     // Ignore error
 }
 
-// Integration status (mock - will be replaced with actual API health check)
+// Integration status — preview only (sample data, not connected to external API)
 $integrationStatus = [
-    'connected' => true,
-    'last_sync' => '2025-01-20 11:30:15',
-    'sync_status' => 'success',
-    'active_projects' => 3,
-    'pending_notifications' => 1,
+    'connected' => false,
+    'preview' => true,
+    'last_sync' => null,
+    'sync_status' => 'preview',
+    'active_projects' => count($mockProjects),
+    'pending_notifications' => 0,
 ];
 
 ob_start();
@@ -98,35 +99,30 @@ ob_start();
 </div>
 
 <!-- Integration Status Card -->
-<div class="booking-card" style="margin-bottom: 1.5rem;">
+<div class="booking-card" style="margin-bottom: 1.5rem; border-left: 4px solid #f59e0b;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h2 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Integration Status</h2>
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                <span class="status-badge <?= $integrationStatus['connected'] ? 'active' : 'offline'; ?>" style="font-size: 0.9rem;">
-                    <?= $integrationStatus['connected'] ? '✓ Connected' : '✗ Disconnected'; ?>
+                <span class="status-badge offline" style="font-size: 0.9rem;">
+                    Preview — Not Connected
                 </span>
-                <small style="color: #8b95b5;">
-                    Last sync: <?= date('M d, Y H:i', strtotime($integrationStatus['last_sync'])); ?>
-                </small>
-                <span style="background: #d1ecf1; color: #0c5460; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                    <?= $integrationStatus['active_projects']; ?> active project(s)
+                <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
+                    Sample data only
                 </span>
-                <?php if ($integrationStatus['pending_notifications'] > 0): ?>
-                    <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                        <?= $integrationStatus['pending_notifications']; ?> notification(s)
-                    </span>
-                <?php endif; ?>
+                <span style="background: #e0f2fe; color: #075985; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
+                    <?= (int)$integrationStatus['active_projects']; ?> sample project(s)
+                </span>
             </div>
         </div>
-        <button class="btn-outline" onclick="syncProjectData()" style="padding: 0.5rem 1rem;">
-            🔄 Sync Now
+        <button class="btn-outline" type="button" disabled title="External API not connected yet" style="padding: 0.5rem 1rem; opacity: 0.6; cursor: not-allowed;">
+            Sync unavailable (preview)
         </button>
     </div>
     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
         <small style="color: #8b95b5;">
-            <strong>Note:</strong> This integration connects to the Infrastructure Project Management system. 
-            Projects automatically block facilities during construction and add new facilities upon completion.
+            <strong>Preview module:</strong> Tables below show mock project data for UI planning only.
+            No external Infrastructure Management API is connected. Facilities are not blocked automatically.
         </small>
     </div>
 </div>
@@ -135,7 +131,7 @@ ob_start();
     <!-- Active Projects -->
     <section class="booking-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Active Projects</h2>
+            <h2>Active Projects <small style="font-weight:500; color:#8b95b5;">(sample data)</small></h2>
             <div style="display: flex; gap: 0.5rem;">
                 <select id="filterStatus" onchange="filterProjects()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
                     <option value="all">All Status</option>

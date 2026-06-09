@@ -99,3 +99,45 @@ function paymongoRetrieveCheckoutSession(string $checkoutId): array
 {
     return paymongoRequest('GET', 'checkout_sessions/' . rawurlencode($checkoutId));
 }
+
+/**
+ * Verify PayMongo webhook signature (Paymongo-Signature: t=...,te=...,li=...).
+ *
+ * @see https://developers.paymongo.com/docs/webhook-implementation-best-practices
+ */
+function paymongoVerifyWebhookSignature(string $rawPayload, string $signatureHeader, ?string $webhookSecret = null, int $toleranceSeconds = 300): bool
+{
+    $secret = trim((string)($webhookSecret ?? paymongoConfig()['webhook_secret'] ?? ''));
+    if ($secret === '' || $signatureHeader === '' || $rawPayload === '') {
+        return false;
+    }
+
+    $parts = [];
+    foreach (explode(',', $signatureHeader) as $segment) {
+        $segment = trim($segment);
+        if ($segment === '') {
+            continue;
+        }
+        $pair = explode('=', $segment, 2);
+        if (count($pair) === 2) {
+            $parts[trim($pair[0])] = trim($pair[1]);
+        }
+    }
+
+    $timestamp = $parts['t'] ?? '';
+    $liveSig = $parts['li'] ?? '';
+    $testSig = $parts['te'] ?? '';
+    $providedSig = $liveSig !== '' ? $liveSig : $testSig;
+
+    if ($timestamp === '' || $providedSig === '') {
+        return false;
+    }
+
+    if ($toleranceSeconds > 0 && abs(time() - (int)$timestamp) > $toleranceSeconds) {
+        return false;
+    }
+
+    $expected = hash_hmac('sha256', $timestamp . '.' . $rawPayload, $secret);
+
+    return hash_equals($expected, $providedSig);
+}

@@ -59,24 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 // Check if reservation date has passed
                 $reservationDate = $reservation['reservation_date'];
                 $reservationTimeSlot = $reservation['time_slot'];
-                $currentDate = date('Y-m-d');
-                $currentHour = (int)date('H');
                 
-                $isPast = false;
-                if ($reservationDate < $currentDate) {
-                    $isPast = true;
-                } elseif ($reservationDate === $currentDate) {
-                    // Check if time slot has passed
-                    if (strpos($reservationTimeSlot, 'Morning') !== false && $currentHour >= 12) {
-                        $isPast = true;
-                    } elseif (strpos($reservationTimeSlot, 'Afternoon') !== false && $currentHour >= 17) {
-                        $isPast = true;
-                    } elseif (strpos($reservationTimeSlot, 'Evening') !== false && $currentHour >= 21) {
-                        $isPast = true;
-                    }
-                }
-                
-                if ($isPast) {
+                if (frs_reservation_slot_has_passed((string)$reservationDate, (string)$reservationTimeSlot)) {
                     throw new Exception('Cannot modify past reservations. Only upcoming approved reservations can be modified.');
                 }
                 
@@ -123,22 +107,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     $newExpectedAttendees = null;
                 }
                 
-                // Check if new date/time is available (no conflicts)
-                $conflictCheck = $pdo->prepare(
-                    'SELECT id FROM reservations 
-                     WHERE facility_id = (SELECT facility_id FROM reservations WHERE id = ?)
-                     AND reservation_date = ?
-                     AND time_slot = ?
-                     AND status IN ("pending", "approved", "postponed")
-                     AND id != ?'
-                );
-                $facilityStmt = $pdo->prepare('SELECT facility_id FROM reservations WHERE id = ?');
-                $facilityStmt->execute([$reservationId]);
-                $facilityId = $facilityStmt->fetchColumn();
-                
-                $conflictCheck->execute([$reservationId, $newDate, $newTimeSlot, $reservationId]);
-                if ($conflictCheck->fetch()) {
-                    throw new Exception('The selected date and time slot is already booked. Please choose another time.');
+                $facilityId = (int)($reservation['facility_id'] ?? 0);
+                if ($facilityId <= 0) {
+                    $facilityStmt = $pdo->prepare('SELECT facility_id FROM reservations WHERE id = ?');
+                    $facilityStmt->execute([$reservationId]);
+                    $facilityId = (int)$facilityStmt->fetchColumn();
+                }
+                if (frs_has_overlapping_booking($pdo, $facilityId, $newDate, $newTimeSlot, $reservationId)) {
+                    throw new Exception('The selected date and time overlaps an existing booking. Please choose another time.');
                 }
                 
                 // Update reservation (date, time, purpose, expected_attendees)
@@ -191,27 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 $message = 'Reservation modified successfully.';
                 
             } elseif ($action === 'postpone') {
-                // Check if reservation date has passed
-                $reservationDate = $reservation['reservation_date'];
-                $reservationTimeSlot = $reservation['time_slot'];
-                $currentDate = date('Y-m-d');
-                $currentHour = (int)date('H');
-                
-                $isPast = false;
-                if ($reservationDate < $currentDate) {
-                    $isPast = true;
-                } elseif ($reservationDate === $currentDate) {
-                    // Check if time slot has passed
-                    if (strpos($reservationTimeSlot, 'Morning') !== false && $currentHour >= 12) {
-                        $isPast = true;
-                    } elseif (strpos($reservationTimeSlot, 'Afternoon') !== false && $currentHour >= 17) {
-                        $isPast = true;
-                    } elseif (strpos($reservationTimeSlot, 'Evening') !== false && $currentHour >= 21) {
-                        $isPast = true;
-                    }
-                }
-                
-                if ($isPast) {
+                if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
                     throw new Exception('Cannot postpone past reservations. Only upcoming approved reservations can be postponed.');
                 }
                 
@@ -249,22 +205,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     throw new Exception('Reason is required for postponing an approved reservation.');
                 }
                 
-                // Check if new date/time is available (include postponed - they also occupy slots)
-                $conflictCheck = $pdo->prepare(
-                    'SELECT id FROM reservations 
-                     WHERE facility_id = (SELECT facility_id FROM reservations WHERE id = ?)
-                     AND reservation_date = ?
-                     AND time_slot = ?
-                     AND status IN ("pending", "approved", "postponed")
-                     AND id != ?'
-                );
-                $facilityStmt = $pdo->prepare('SELECT facility_id FROM reservations WHERE id = ?');
-                $facilityStmt->execute([$reservationId]);
-                $facilityId = $facilityStmt->fetchColumn();
-                
-                $conflictCheck->execute([$reservationId, $newDate, $newTimeSlot, $reservationId]);
-                if ($conflictCheck->fetch()) {
-                    throw new Exception('The selected date and time slot is already booked. Please choose another time.');
+                $facilityId = (int)($reservation['facility_id'] ?? 0);
+                if ($facilityId <= 0) {
+                    $facilityStmt = $pdo->prepare('SELECT facility_id FROM reservations WHERE id = ?');
+                    $facilityStmt->execute([$reservationId]);
+                    $facilityId = (int)$facilityStmt->fetchColumn();
+                }
+                if (frs_has_overlapping_booking($pdo, $facilityId, $newDate, $newTimeSlot, $reservationId)) {
+                    throw new Exception('The selected date and time overlaps an existing booking. Please choose another time.');
                 }
                 
                 // Update reservation - set to postponed with priority (distinct state, requires re-approval)
@@ -317,33 +265,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 $message = 'Reservation postponed successfully. It now has postponed status with priority and requires re-approval.';
                 
             } else {
-                // Standard approve/deny/cancel actions
                 if ($action === 'cancelled' && $reservation['status'] === 'approved') {
-                    // Check if reservation date has passed
-                    $reservationDate = $reservation['reservation_date'];
-                    $reservationTimeSlot = $reservation['time_slot'];
-                    $currentDate = date('Y-m-d');
-                    $currentHour = (int)date('H');
-                    
-                    $isPast = false;
-                    if ($reservationDate < $currentDate) {
-                        $isPast = true;
-                    } elseif ($reservationDate === $currentDate) {
-                        // Check if time slot has passed
-                        if (strpos($reservationTimeSlot, 'Morning') !== false && $currentHour >= 12) {
-                            $isPast = true;
-                        } elseif (strpos($reservationTimeSlot, 'Afternoon') !== false && $currentHour >= 17) {
-                            $isPast = true;
-                        } elseif (strpos($reservationTimeSlot, 'Evening') !== false && $currentHour >= 21) {
-                            $isPast = true;
-                        }
-                    }
-                    
-                    if ($isPast) {
+                    if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
                         throw new Exception('Cannot cancel past reservations. Only upcoming approved reservations can be cancelled.');
                     }
-                    
-                    // Require reason for cancelling approved reservations
                     $reason = trim($_POST['reason'] ?? '');
                     if (empty($reason)) {
                         throw new Exception('Reason is required for cancelling an approved reservation.');
@@ -352,139 +277,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 } else {
                     $note = $_POST['note'] ?? null;
                 }
-                
-                // Validate facility status before approval
-                if ($action === 'approved') {
-                    $facilityStatus = strtolower($reservation['facility_status'] ?? 'available');
-                    if ($facilityStatus === 'maintenance' || $facilityStatus === 'offline') {
-                        $statusLabel = ucfirst($facilityStatus);
-                        throw new Exception('Cannot approve reservation: The facility "' . htmlspecialchars($reservation['facility_name']) . '" is currently under ' . $statusLabel . '. Please change the facility status to "Available" before approving reservations.');
-                    }
-                }
-                
-                $finalAction = $action;
-                $finalNote = $note;
 
-                // Hybrid policy: manual approval transitions to payment-required state.
-                if ($action === 'approved' && $approvalFirstThenPayment && ($reservation['status'] ?? '') === 'pending') {
-                    $finalAction = 'pending_payment';
-                    $approvalPaymentNote = 'Approved by staff. Awaiting payment confirmation to finalize reservation.';
-                    $finalNote = !empty($finalNote) ? ($finalNote . ' | ' . $approvalPaymentNote) : $approvalPaymentNote;
-                }
-
-                // If approving a postponed reservation, clear postponed_at timestamp (priority flag remains for tracking)
-                if ($finalAction === 'approved' && $reservation['status'] === 'postponed') {
-                    $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                } else {
-                    $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                }
-                $stmt->execute([
-                    'status' => $finalAction,
-                    'id' => $reservationId,
-                ]);
-                $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)');
-                $hist->execute([
-                    'id' => $reservationId,
-                    'status' => $finalAction,
-                    'note' => $finalNote,
-                    'user' => $_SESSION['user_id'] ?? null,
-                ]);
-                
-                // Log audit event
-                $details = 'RES-' . $reservationId . ' – ' . ($reservation ? $reservation['facility_name'] : 'Unknown Facility');
-                if ($reservation) {
-                    $details .= ' (' . $reservation['reservation_date'] . ' ' . $reservation['time_slot'] . ')';
-                }
-                if (!empty($finalNote)) {
-                    $details .= ' – Note: ' . $finalNote;
-                }
-                logAudit(ucfirst($finalAction) . ' reservation', 'Reservations', $details);
-                
-                // Create notification for the requester
-                if ($reservation) {
-                    $notifTitle = $finalAction === 'approved'
-                        ? 'Reservation Approved'
-                        : ($finalAction === 'pending_payment'
-                            ? 'Reservation Approved - Payment Required'
-                            : ($finalAction === 'denied' ? 'Reservation Denied' : 'Reservation Cancelled'));
-                    $notifMessage = 'Your reservation request for ' . $reservation['facility_name'];
-                    $notifMessage .= ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ')';
-                    if ($finalAction === 'pending_payment') {
-                        $notifMessage .= ' has been approved and is awaiting payment confirmation.';
-                    } else {
-                        $notifMessage .= ' has been ' . $finalAction . '.';
-                    }
-                    
-                    // Check if this was a postponed reservation with priority
-                    if ($finalAction === 'approved' && $reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])) {
-                        $notifMessage .= ' This reservation had priority due to previous postponement.';
-                    }
-                    
-                    if (!empty($finalNote)) {
-                        $notifMessage .= ' Note: ' . $finalNote;
-                    }
-                    
-                    $notifLink = $finalAction === 'pending_payment'
-                        ? (base_path() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId)
-                        : (base_path() . '/dashboard/my-reservations');
-                    createNotification($reservation['requester_id'], 'booking', $notifTitle, $notifMessage, $notifLink);
-                    
-                    // Send email notification (if user opted in)
-                    $requesterId = (int)($reservation['requester_id'] ?? 0);
-                    $reservation['user_id'] = $requesterId;
-                    if ($requesterId > 0
-                        && frs_user_wants_notification($requesterId, 'booking', 'email')
-                        && !empty($reservation['requester_email'])
-                        && !empty($reservation['requester_name'])) {
-                        if ($finalAction === 'approved') {
-                            // Use the new professional template for approvals
-                            $emailBody = getReservationApprovedEmailTemplate(
-                                $reservation['requester_name'],
-                                $reservation['facility_name'],
-                                $reservation['reservation_date'],
-                                $reservation['time_slot'],
-                                $note ?? ''
-                            );
-                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Approved', $emailBody);
-                            sendReservationStatusSms($reservation, 'approved');
-                        } elseif ($finalAction === 'pending_payment') {
-                            $emailBody = '<p>Hi ' . htmlspecialchars($reservation['requester_name']) . ',</p>'
-                                . '<p>Your reservation for <strong>' . htmlspecialchars($reservation['facility_name']) . '</strong> on '
-                                . '<strong>' . date('F j, Y', strtotime($reservation['reservation_date'])) . '</strong> ('
-                                . htmlspecialchars($reservation['time_slot']) . ') has been approved.</p>'
-                                . '<p><strong>Next step:</strong> Please complete your payment to finalize the reservation.</p>'
-                                . '<p><a href="' . htmlspecialchars(base_url() . '/dashboard/pay-now?reservation_id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8') . '">Pay Now</a></p>';
-                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Approved - Payment Required', $emailBody);
-                            sendReservationStatusSms($reservation, 'pending_payment');
-                        } elseif ($finalAction === 'denied') {
-                            // Use professional template for denials
-                            $emailBody = getReservationDeniedEmailTemplate(
-                                $reservation['requester_name'],
-                                $reservation['facility_name'],
-                                $reservation['reservation_date'],
-                                $reservation['time_slot'],
-                                $note ?? ''
-                            );
-                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Denied', $emailBody);
-                            sendReservationStatusSms($reservation, 'denied');
-                        } elseif ($finalAction === 'cancelled') {
-                            // Use professional template for cancellations
-                            $emailBody = getReservationCancelledEmailTemplate(
-                                $reservation['requester_name'],
-                                $reservation['facility_name'],
-                                $reservation['reservation_date'],
-                                $reservation['time_slot'],
-                                $note ?? ''
-                            );
-                            sendEmail($reservation['requester_email'], $reservation['requester_name'], 'Reservation Cancelled', $emailBody);
-                            sendReservationStatusSms($reservation, 'cancelled');
-                        }
-                    }
-                }
-                
-                $message = $finalAction === 'pending_payment'
-                    ? 'Reservation approved. User must complete payment to finalize the booking.'
-                    : (ucfirst($finalAction) . ' reservation successfully.');
+                $statusResult = frs_staff_apply_status_decision(
+                    $pdo,
+                    $reservationId,
+                    $action,
+                    $reservation,
+                    $approvalFirstThenPayment,
+                    $note
+                );
+                $message = $statusResult['message'];
             }
         } catch (Throwable $e) {
             $message = $e->getMessage();

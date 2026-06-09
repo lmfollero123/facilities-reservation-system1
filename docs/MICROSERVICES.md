@@ -64,36 +64,27 @@
   - Safety filtering and allow-listing
 - **Communication Pattern**: REST API to AI provider, queries internal DB for context
 
-### **Maintenance Management Integration Service** (Design Complete, Not Implemented)
-- **Status**: Planned, high priority
-- **Planned Features**:
-  - Receive maintenance schedules via API/webhook
-  - Auto-update facility status to `maintenance`
-  - Block booking dates during maintenance windows
-  - Notify affected users
-- **Communication Pattern**: Webhook/API from Maintenance Management system
+### **Maintenance Management Integration (CIMM)** — Partial (Outbound Pull)
+- **Status**: Outbound integration live; inbound webhooks not deployed
+- **Implemented**:
+  - Pull maintenance schedules from CIMM API (`services/cimm_api.php`)
+  - Cron/manual sync via `scripts/sync_cimm_maintenance.php` (facility status + `CIMM Sync:` blackout dates)
+  - Admin UI at `/dashboard/maintenance-integration` (read-only schedule display)
+- **Not implemented**: Inbound `POST /api/integrations/maintenance/*` webhooks (returns 501)
 
-### **Infrastructure Management Integration Service** (Design Complete, Not Implemented)
-- **Status**: Planned, medium priority
-- **Planned Features**:
-  - Receive project timelines via API
-  - Auto-block facilities during construction
-  - Auto-create facilities when projects complete
-  - Update facility capacity for expansions
-- **Communication Pattern**: REST API for project data exchange
+### **Infrastructure Management Integration** — Preview UI Only
+- **Status**: Dashboard preview page with **sample/mock data** — not connected
+- **Page**: `/dashboard/infrastructure-projects-integration`
+- **Planned**: Project timeline sync, auto-block during construction, new facility creation
 
-### **Utilities Billing Integration Service** (Design Complete, Not Implemented)
-- **Status**: Planned, medium priority
-- **Planned Features**:
-  - Receive utility outage alerts via API
-  - Block facilities when utilities are unavailable
-  - Provide facility usage data for billing
-  - Track utility consumption per reservation
-- **Communication Pattern**: REST API for utility data exchange
+### **Utilities Billing Integration** — Preview UI Only
+- **Status**: Dashboard preview page with **sample/mock data** — not connected
+- **Page**: `/dashboard/utilities-integration`
+- **Planned**: Outage alerts, usage/cost tracking, billing reconciliation
 
 ## Notes
-- Current deployment is monolithic PHP with modular responsibilities; the "services" above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today. 
-- **Future Integrations**: Brevo/domain SMTP is planned to replace Gmail SMTP. AI chatbot UI is implemented and ready for model integration. LGU system integrations (Maintenance Management, Infrastructure Management, Utilities Billing) are designed but not yet implemented.
+- Current deployment is monolithic PHP with modular responsibilities; the "services" above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today.
+- **Integrations (May 2026)**: CIMM outbound sync is partially live (`scripts/sync_cimm_maintenance.php`). Infrastructure and Utilities dashboard pages are preview/mock UI only. Inbound `/api/integrations/*` routes return HTTP 501 until implemented. Gemini powers the AI chatbot when `GEMINI_API_KEY` is configured.
 
 
 

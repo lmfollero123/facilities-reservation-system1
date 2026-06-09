@@ -275,7 +275,7 @@ ob_start();
             <div class="auth-logo-wrapper">
                 <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-logo">
             </div>
-            <?= frs_heading_with_tip('Create Account', 'Barangay Culiat residents only. Upload a valid ID; an admin must approve your account before you can log in.', 'h1'); ?>
+            <?= frs_heading_with_tip('Create Account', 'Barangay Culiat residents only. Verify your email to activate your account. Upload a valid ID now or later from your profile to enable auto-approval on bookings.', 'h1'); ?>
         </div>
         
         <?php if ($message): ?>

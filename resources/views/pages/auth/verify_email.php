@@ -15,12 +15,15 @@ $error = '';
 $info = '';
 $verificationRemainingSeconds = 0;
 
-// Determine which account is being verified (for display only)
+// Require session-bound verification flow (do not trust ?email= alone)
+if (empty($_SESSION['pending_email_verify_user_id'])) {
+    header('Location: ' . base_path() . '/login');
+    exit;
+}
+
 $email = '';
 if (!empty($_SESSION['pending_email_verify_email'])) {
     $email = sanitizeInput($_SESSION['pending_email_verify_email'], 'email');
-} elseif (isset($_GET['email'])) {
-    $email = sanitizeInput($_GET['email'], 'email');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -39,42 +42,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($code === '') {
             $error = 'Please enter the verification code that was sent to your email.';
         } else {
+            $pendingUserId = (int)($_SESSION['pending_email_verify_user_id'] ?? 0);
+            if (!checkEmailVerifyRateLimit($pendingUserId)) {
+                $error = 'Too many incorrect attempts. Please wait 15 minutes or register again.';
+                logSecurityEvent('rate_limit_exceeded', 'Email verification attempts exceeded for user id: ' . $pendingUserId, 'warning');
+            } else {
             try {
                 $pdo = db();
-                $user = null;
-
-                // Prefer pending session user ID for safety
-                $pendingUserId = $_SESSION['pending_email_verify_user_id'] ?? null;
-                if ($pendingUserId) {
-                    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
-                    $stmt->execute([$pendingUserId]);
-                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                } elseif (!empty($email)) {
-                    $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
-                    $stmt->execute([$email]);
-                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                }
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
+                $stmt->execute([$pendingUserId]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$user) {
+                    unset($_SESSION['pending_email_verify_user_id'], $_SESSION['pending_email_verify_email']);
                     $error = 'We could not find an account to verify. Please register again.';
                 } else {
-                    // Keep email in sync with the account we actually loaded (for display)
                     $email = $user['email'] ?? $email;
 
-                    // Already verified: just log the user in and go to dashboard
                     $emailVerified = isset($user['email_verified']) ? (bool)$user['email_verified'] : true;
                     if ($emailVerified) {
-                        session_regenerate_id(true);
-                        secureSession();
-                        $_SESSION['user_authenticated'] = true;
-                        $_SESSION['user_id'] = $user['id'];
-                        $_SESSION['user_name'] = $user['name'];
-                        $_SESSION['user_email'] = $user['email'];
-                        $_SESSION['role'] = $user['role'];
-                        $_SESSION['user_org'] = $user['role'];
-                        $_SESSION['last_activity'] = time();
-
-                        header('Location: ' . base_path() . '/dashboard');
+                        unset($_SESSION['pending_email_verify_user_id'], $_SESSION['pending_email_verify_email']);
+                        header('Location: ' . base_path() . '/login?verified=1');
                         exit;
                     }
 
@@ -85,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         $hash = $user['email_verification_code_hash'] ?? '';
                         if (!$hash || !password_verify($code, $hash)) {
+                            recordEmailVerifyRateLimitFailure($pendingUserId);
                             $error = 'The verification code you entered is incorrect.';
                         } else {
                             // Mark email as verified and clear code fields
@@ -106,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $_SESSION['user_authenticated'] = true;
                             $_SESSION['user_id'] = $user['id'];
                             $_SESSION['user_name'] = $user['name'];
+                            $_SESSION['name'] = $user['name'];
                             $_SESSION['user_email'] = $user['email'];
                             $_SESSION['role'] = $user['role'];
                             $_SESSION['user_org'] = $user['role'];
@@ -123,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Unable to verify your email at the moment. Please try again later.';
                 logSecurityEvent('email_verification_error', 'Error during email verification: ' . $e->getMessage(), 'error');
             }
+            }
         }
     }
 }
@@ -131,14 +122,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 try {
     $pdoCountdown = db();
     $countdownUser = null;
-    $pendingUserId = $_SESSION['pending_email_verify_user_id'] ?? null;
-    if ($pendingUserId) {
+    $pendingUserId = (int)($_SESSION['pending_email_verify_user_id'] ?? 0);
+    if ($pendingUserId > 0) {
         $stmtCountdown = $pdoCountdown->prepare("SELECT email_verification_expires_at FROM users WHERE id = ? LIMIT 1");
         $stmtCountdown->execute([$pendingUserId]);
-        $countdownUser = $stmtCountdown->fetch(PDO::FETCH_ASSOC);
-    } elseif (!empty($email)) {
-        $stmtCountdown = $pdoCountdown->prepare("SELECT email_verification_expires_at FROM users WHERE email = ? LIMIT 1");
-        $stmtCountdown->execute([$email]);
         $countdownUser = $stmtCountdown->fetch(PDO::FETCH_ASSOC);
     }
     if (!empty($countdownUser['email_verification_expires_at'])) {

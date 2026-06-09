@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
+require_once __DIR__ . '/reservation_helpers.php';
 
 // Load ML integration if available
 if (file_exists(__DIR__ . '/ai_ml_integration.php')) {
@@ -44,14 +45,13 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
     
     $combinedStmt = $pdo->prepare(
         'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.purpose, r.priority_level,
-                f.name AS facility_name, u.name AS requester_name, r.created_at, r.expires_at
+                f.name AS facility_name, u.name AS requester_name, r.created_at, r.expires_at, r.payment_due_at
          FROM reservations r
          JOIN facilities f ON r.facility_id = f.id
          JOIN users u ON r.user_id = u.id
          WHERE r.facility_id = :facility_id
            AND r.reservation_date = :date
-           AND r.status IN ("approved", "pending")
-           AND (r.status = "approved" OR (r.status = "pending" AND (r.expires_at IS NULL OR r.expires_at > NOW())))
+           AND r.status IN ("approved", "pending", "pending_payment")
            ' . $excludeClause . '
          ORDER BY r.status DESC, r.priority_level ASC, r.created_at ASC'
     );
@@ -59,11 +59,14 @@ function detectBookingConflict($facilityId, $date, $timeSlot, $excludeReservatio
     $combinedStmt->execute($conflictParams);
     $allReservations = $combinedStmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Separate approved and pending in PHP (faster than two queries)
+    // Separate hard-block (approved + active payment holds) vs soft (pending)
     $approvedReservations = [];
     $pendingReservations = [];
     foreach ($allReservations as $reservation) {
-        if ($reservation['status'] === 'approved') {
+        if (!frs_reservation_blocks_booking($reservation)) {
+            continue;
+        }
+        if ($reservation['status'] === 'approved' || $reservation['status'] === 'pending_payment') {
             $approvedReservations[] = $reservation;
         } else {
             $pendingReservations[] = $reservation;

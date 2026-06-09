@@ -4,14 +4,25 @@
  * Tests all available ML models and their integration
  */
 
+require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/database.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$frsAiTestIsAdmin = ($_SESSION['user_authenticated'] ?? false)
+    && strtolower((string)($_SESSION['role'] ?? '')) === 'admin';
+
 // Handle AJAX requests FIRST before any output
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
-    // Start session for AJAX requests
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    if (!$frsAiTestIsAdmin) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+        exit;
     }
-    
-    require_once __DIR__ . '/../../../../config/database.php';
+
     require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
     
     // Suppress any output before JSON
@@ -30,7 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
     }
     
     $pdo = db();
-    $userId = $_SESSION['user_id'] ?? 1;
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    if ($userId <= 0) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+        exit;
+    }
     
     try {
         switch ($testType) {
@@ -233,23 +249,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
 }
 
 // Regular page load (not AJAX)
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!($_SESSION['user_authenticated'] ?? false)) {
-    require_once __DIR__ . '/../../../../config/app.php';
-    header('Location: ' . base_path() . '/login');
+if (!$frsAiTestIsAdmin) {
+    header('Location: ' . base_path() . '/dashboard');
     exit;
 }
 
-require_once __DIR__ . '/../../../../config/app.php';
-require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 
 $pageTitle = 'AI Models Testing | LGU Facilities Reservation';
 $pdo = db();
-$userId = $_SESSION['user_id'] ?? 1;
+$userId = (int)($_SESSION['user_id'] ?? 0);
 
 ob_start();
 ?>

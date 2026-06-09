@@ -186,6 +186,13 @@
 
 [data-theme="dark"] .auth-card {
     background: #1e293b !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .auth-header {
+    text-align: center;
+    margin-bottom: 2rem;
 }
 
 [data-theme="dark"] .auth-header h1,

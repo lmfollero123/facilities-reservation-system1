@@ -191,32 +191,6 @@ ob_start();
             <!-- Token validation error - show error page -->
             <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
                 <?= htmlspecialchars($error); ?>
-                <?php if (!empty($token)): ?>
-                    <?php 
-                    $debugHash = hash('sha256', $token);
-                    try {
-                        $pdo = db();
-                        // Get recent tokens for comparison
-                        $recentStmt = $pdo->query("SELECT id, LEFT(token_hash, 20) as hash_prefix, expires_at, used_at, created_at FROM password_reset_tokens ORDER BY id DESC LIMIT 3");
-                        $recentTokens = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
-                    } catch (Exception $e) {
-                        $recentTokens = [];
-                    }
-                    ?>
-                    <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(178, 48, 48, 0.2); font-size: 0.8rem; color: #8b5a5a;">
-                        <strong>Debug Info:</strong><br>
-                        Token: <?= substr($token, 0, 20); ?>...<?= substr($token, -10); ?><br>
-                        Token Length: <?= strlen($token); ?> characters<br>
-                        Token Format: <?= ctype_xdigit($token) ? 'Valid hex' : 'Invalid'; ?><br>
-                        Token Hash (first 20): <?= substr($debugHash, 0, 20); ?>...<br>
-                        <?php if (!empty($recentTokens)): ?>
-                            <br><strong>Recent tokens in database:</strong><br>
-                            <?php foreach ($recentTokens as $rt): ?>
-                                Hash: <?= htmlspecialchars($rt['hash_prefix']); ?>... | Created: <?= $rt['created_at']; ?><br>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
             </div>
             <div class="auth-footer">
                 <a href="<?= base_path(); ?>/forgot-password">Request New Reset Link</a>

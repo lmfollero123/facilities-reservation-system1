@@ -7,6 +7,7 @@ header('Content-Type: application/json');
 
 try {
     require_once __DIR__ . '/../../../../../config/database.php';
+    require_once __DIR__ . '/../../../../../config/reservation_helpers.php';
     
     // Set error reporting for API (don't display errors, just log them)
     error_reporting(E_ALL);
@@ -65,18 +66,21 @@ foreach ($facilities as $facility) {
 
     // Fetch booked slots
     $stmt = $pdo->prepare("
-        SELECT time_slot
+        SELECT time_slot, status, payment_due_at, expires_at
         FROM reservations
         WHERE facility_id = ?
           AND reservation_date = ?
-          AND status IN ('approved', 'pending')
+          AND status IN ('approved', 'pending', 'pending_payment')
         ORDER BY time_slot
     ");
     $stmt->execute([$facility['id'], $date]);
-    $bookedSlots = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
     $bookedRanges = [];
-    foreach ($bookedSlots as $slot) {
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if (!frs_reservation_blocks_booking($row)) {
+            continue;
+        }
+        $slot = (string)$row['time_slot'];
         if (preg_match('/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/', $slot, $m)) {
             $bookedRanges[] = [$m[1], $m[2]];
         }

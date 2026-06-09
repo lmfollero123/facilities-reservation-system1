@@ -86,12 +86,13 @@ try {
     // Ignore error
 }
 
-// Integration status (mock - will be replaced with actual API health check)
+// Integration status — preview only (sample data, not connected to external API)
 $integrationStatus = [
-    'connected' => true,
-    'last_sync' => '2025-01-20 13:45:20',
-    'sync_status' => 'success',
-    'active_outages' => 2,
+    'connected' => false,
+    'preview' => true,
+    'last_sync' => null,
+    'sync_status' => 'preview',
+    'active_outages' => count($mockUtilityOutages),
     'pending_alerts' => 0,
 ];
 
@@ -105,32 +106,32 @@ ob_start();
 </div>
 
 <!-- Integration Status Card -->
-<div class="booking-card" style="margin-bottom: 1.5rem;">
+<div class="booking-card" style="margin-bottom: 1.5rem; border-left: 4px solid #f59e0b;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h2 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Integration Status</h2>
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                <span class="status-badge <?= $integrationStatus['connected'] ? 'active' : 'offline'; ?>" style="font-size: 0.9rem;">
-                    <?= $integrationStatus['connected'] ? '✓ Connected' : '✗ Disconnected'; ?>
+                <span class="status-badge offline" style="font-size: 0.9rem;">
+                    Preview — Not Connected
                 </span>
-                <small style="color: #8b95b5;">
-                    Last sync: <?= date('M d, Y H:i', strtotime($integrationStatus['last_sync'])); ?>
-                </small>
+                <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
+                    Sample data only
+                </span>
                 <?php if ($integrationStatus['active_outages'] > 0): ?>
                     <span style="background: #f8d7da; color: #721c24; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                        ⚠️ <?= $integrationStatus['active_outages']; ?> active outage(s)
+                        <?= (int)$integrationStatus['active_outages']; ?> sample outage(s)
                     </span>
                 <?php endif; ?>
             </div>
         </div>
-        <button class="btn-outline" onclick="syncUtilityData()" style="padding: 0.5rem 1rem;">
-            🔄 Sync Now
+        <button class="btn-outline" type="button" disabled title="External API not connected yet" style="padding: 0.5rem 1rem; opacity: 0.6; cursor: not-allowed;">
+            Sync unavailable (preview)
         </button>
     </div>
     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
         <small style="color: #8b95b5;">
-            <strong>Note:</strong> This integration connects to the Utilities Billing & Management system. 
-            Utility outages automatically block facilities, and usage data is shared for billing reconciliation.
+            <strong>Preview module:</strong> Outage alerts and cost tables below are mock data for UI planning only.
+            No Utilities Billing API is connected. Facilities are not blocked automatically.
         </small>
     </div>
 </div>
@@ -139,7 +140,7 @@ ob_start();
     <!-- Utility Outage Alerts -->
     <section class="booking-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Utility Outage Alerts</h2>
+            <h2>Utility Outage Alerts <small style="font-weight:500; color:#8b95b5;">(sample data)</small></h2>
             <select id="filterOutageType" onchange="filterOutages()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
                 <option value="all">All Types</option>
                 <option value="Water">Water</option>

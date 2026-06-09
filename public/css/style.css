@@ -8181,8 +8181,8 @@ body:not(.dashboard-page) {
 }
 
 body:not(.dashboard-page)[data-theme="dark"] {
-    background: #ffffff !important;
-    color: #1b1b1f !important;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%) !important;
+    color: #e2e8f0 !important;
 }
 
 /* Only apply dark mode to dashboard pages */

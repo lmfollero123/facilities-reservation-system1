@@ -8,8 +8,10 @@
 // Security Configuration
 define('CSRF_TOKEN_NAME', 'csrf_token');
 define('CSRF_TOKEN_EXPIRY', 3600); // 1 hour
-define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max login attempts
+define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max failed login attempts per email
 define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
+define('RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS', 10); // Max wrong codes per pending user
+define('RATE_LIMIT_EMAIL_VERIFY_WINDOW', 900); // 15 minutes
 // Registration rate limit:
 // - Allow up to 5 registrations per IP within a 1-hour rolling window
 // - If more than 5 attempts occur in that window, block registrations from that IP for 6 hours
@@ -101,46 +103,105 @@ function csrf_field(): string
 }
 
 /**
- * Rate limiting - Check if action is rate limited
+ * Count active rate-limit records for an action + identifier.
  */
-function checkRateLimit(string $action, string $identifier, int $maxAttempts, int $windowSeconds): bool
+function frs_rate_limit_count(string $action, string $identifier): int
 {
     require_once __DIR__ . '/database.php';
     $pdo = db();
-    
-    // Clean old entries
-    $pdo->exec("DELETE FROM rate_limits WHERE expires_at < NOW()");
-    
-    // Check current attempts
+    $pdo->exec('DELETE FROM rate_limits WHERE expires_at < NOW()');
     $stmt = $pdo->prepare(
-        "SELECT COUNT(*) as attempts 
-         FROM rate_limits 
-         WHERE action = ? AND identifier = ? AND expires_at > NOW()"
+        'SELECT COUNT(*) AS attempts
+         FROM rate_limits
+         WHERE action = ? AND identifier = ? AND expires_at > NOW()'
     );
     $stmt->execute([$action, $identifier]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $attempts = (int)($result['attempts'] ?? 0);
-    
-    if ($attempts >= $maxAttempts) {
-        return false; // Rate limited
-    }
-    
-    // Record this attempt
-    $stmt = $pdo->prepare(
-        "INSERT INTO rate_limits (action, identifier, expires_at) 
-         VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))"
-    );
-    $stmt->execute([$action, $identifier, $windowSeconds]);
-    
-    return true; // Not rate limited
+    return (int)($stmt->fetch(PDO::FETCH_ASSOC)['attempts'] ?? 0);
 }
 
 /**
- * Check login rate limit
+ * Record a rate-limit attempt (failed login, wrong verify code, etc.).
+ */
+function frs_record_rate_limit(string $action, string $identifier, int $windowSeconds): void
+{
+    require_once __DIR__ . '/database.php';
+    $pdo = db();
+    $stmt = $pdo->prepare(
+        'INSERT INTO rate_limits (action, identifier, expires_at)
+         VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))'
+    );
+    $stmt->execute([$action, $identifier, $windowSeconds]);
+}
+
+/**
+ * Rate limiting — check and optionally record in one call (legacy).
+ */
+function checkRateLimit(string $action, string $identifier, int $maxAttempts, int $windowSeconds): bool
+{
+    if (frs_rate_limit_count($action, $identifier) >= $maxAttempts) {
+        return false;
+    }
+    frs_record_rate_limit($action, $identifier, $windowSeconds);
+    return true;
+}
+
+/**
+ * True when identifier has exceeded max attempts (does not record).
+ */
+function frs_is_rate_limited(string $action, string $identifier, int $maxAttempts): bool
+{
+    return frs_rate_limit_count($action, $identifier) >= $maxAttempts;
+}
+
+/**
+ * Check login rate limit (failed attempts only — does not record).
  */
 function checkLoginRateLimit(string $email): bool
 {
-    return checkRateLimit('login', $email, RATE_LIMIT_LOGIN_ATTEMPTS, RATE_LIMIT_LOGIN_WINDOW);
+    return !frs_is_rate_limited('login', strtolower(trim($email)), RATE_LIMIT_LOGIN_ATTEMPTS);
+}
+
+/**
+ * Record a failed login attempt against email rate limit.
+ */
+function recordLoginRateLimitFailure(string $email): void
+{
+    frs_record_rate_limit('login', strtolower(trim($email)), RATE_LIMIT_LOGIN_WINDOW);
+}
+
+/**
+ * Email verification code brute-force protection (per pending user id).
+ */
+function checkEmailVerifyRateLimit(int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+    return !frs_is_rate_limited('email_verify', 'user:' . $userId, RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS);
+}
+
+function recordEmailVerifyRateLimitFailure(int $userId): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+    frs_record_rate_limit('email_verify', 'user:' . $userId, RATE_LIMIT_EMAIL_VERIFY_WINDOW);
+}
+
+/**
+ * Admin/Staff must always complete a second factor at login.
+ */
+function frs_role_requires_two_factor(string $role): bool
+{
+    return in_array($role, ['Admin', 'Staff'], true);
+}
+
+/**
+ * Dashboard session is valid only when both flags are set.
+ */
+function frs_dashboard_is_authenticated(): bool
+{
+    return !empty($_SESSION['user_authenticated']) && !empty($_SESSION['user_id']);
 }
 
 /**
@@ -477,6 +538,32 @@ function e(string $string): string
 /**
  * Read CSRF token from POST body or X-CSRF-Token header (AJAX).
  */
+/**
+ * Validate a post-login redirect path (blocks open redirects like //evil.com).
+ */
+function frs_safe_redirect_path(?string $candidate): ?string
+{
+    if ($candidate === null) {
+        return null;
+    }
+    $path = trim($candidate);
+    if ($path === '' || !str_starts_with($path, '/')) {
+        return null;
+    }
+    if (str_starts_with($path, '//')) {
+        return null;
+    }
+    if (preg_match('/[\x00-\x1F\x7F\\\\@]/', $path)) {
+        return null;
+    }
+    $parsed = parse_url($path);
+    if (!is_array($parsed) || isset($parsed['host']) || isset($parsed['scheme'])) {
+        return null;
+    }
+
+    return $path;
+}
+
 function frs_request_csrf_token(): string
 {
     $fromPost = $_POST[CSRF_TOKEN_NAME] ?? '';

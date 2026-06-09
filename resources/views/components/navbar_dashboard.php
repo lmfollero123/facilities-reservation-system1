@@ -88,7 +88,7 @@ $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashbo
                 <span class="theme-icon theme-icon-dark">🌙</span>
             </button>
         </div>
-        <a class="btn btn-primary confirm-action" data-message="Are you sure you want to log out?" href="<?= $base; ?>/logout">Logout</a>
+        <?= frs_logout_form('btn btn-primary', 'Logout', 'Are you sure you want to log out?'); ?>
     </div>
 </header>
 <script>

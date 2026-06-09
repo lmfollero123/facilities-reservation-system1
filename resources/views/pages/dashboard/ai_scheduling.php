@@ -109,11 +109,18 @@ foreach ($rawSlots as $row) {
         $reason = 'Frequent past bookings; expect higher competition for this window.';
     }
 
+    $todayForSlot = new DateTimeImmutable('today');
+    $dayName = (string)$row['day_name'];
+    $reservationDate = strcasecmp($todayForSlot->format('l'), $dayName) === 0
+        ? $todayForSlot->format('Y-m-d')
+        : $todayForSlot->modify('next ' . $dayName)->format('Y-m-d');
+
     $slots[] = [
         'facility' => $row['facility'],
         'facility_id' => $row['facility_id'],
-        'day' => $row['day_name'],
+        'day' => $dayName,
         'time' => $row['time_slot'],
+        'reservation_date' => $reservationDate,
         'reason' => $reason,
         'score' => $score,
         'count' => $count,
@@ -328,7 +335,7 @@ ob_start();
                                     <td><?= (int)$slot['count']; ?></td>
                                     <td>
                                         <a class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.85rem; text-decoration:none;"
-                                           href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode((string)$slot['facility_id']); ?>&time_slot=<?= urlencode((string)$slot['time']); ?>">
+                                           href="<?= base_path(); ?>/dashboard/book-facility?facility_id=<?= urlencode((string)$slot['facility_id']); ?>&reservation_date=<?= urlencode((string)$slot['reservation_date']); ?>&time_slot=<?= urlencode((string)$slot['time']); ?>">
                                             Book this slot
                                         </a>
                                     </td>

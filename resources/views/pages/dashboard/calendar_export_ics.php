@@ -79,7 +79,10 @@ foreach ($rows as $r) {
     $lines[] = 'DTEND;TZID=' . $tz . ':' . $dtEnd;
     $lines[] = 'SUMMARY:' . $summary;
     $lines[] = 'DESCRIPTION:' . $desc;
-    $lines[] = 'URL:' . frs_ics_escape((function_exists('base_url') ? base_url() : '') . '/dashboard/reservation-detail?id=' . (int)$r['id']);
+    $eventUrl = in_array($role, ['Admin', 'Staff'], true)
+        ? ((function_exists('base_url') ? base_url() : '') . '/dashboard/reservation-detail?id=' . (int)$r['id'])
+        : ((function_exists('base_url') ? base_url() : '') . '/dashboard/book-facility?module=mine&reservation_id=' . (int)$r['id']);
+    $lines[] = 'URL:' . frs_ics_escape($eventUrl);
     $lines[] = 'END:VEVENT';
 }
 $lines[] = 'END:VCALENDAR';

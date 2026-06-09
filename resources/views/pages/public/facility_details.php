@@ -56,6 +56,7 @@ for ($i = 0; $i < 14; $i++) {
     $hasBookings = isset($byDate[$key]);
     $calendar[] = [
         'label' => $date->format('M j'),
+        'date' => $key,
         'status' => $facility['status'] !== 'available'
             ? 'unavailable'
             : ($hasBookings ? 'unavailable' : 'available'),
@@ -145,7 +146,7 @@ ob_start();
                 <h3>Availability (Next 14 Days)</h3>
                 <div class="calendar" role="grid">
                     <?php foreach ($calendar as $slot): ?>
-                        <div class="day <?= $slot['status']; ?>" data-label="<?= htmlspecialchars($slot['label']); ?>">
+                        <div class="day <?= $slot['status']; ?>" data-label="<?= htmlspecialchars($slot['label']); ?>" data-date="<?= htmlspecialchars($slot['date']); ?>">
                             <?= htmlspecialchars($slot['label']); ?>
                         </div>
                     <?php endforeach; ?>
@@ -171,20 +172,4 @@ ob_start();
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
-
-?>
-
-<script>
-// Make calendar dates clickable: send user to login with redirect to booking calendar
-document.addEventListener('DOMContentLoaded', function() {
-    const loginUrl = '<?= $base; ?>/login?next=<?= urlencode($base . '/dashboard/calendar'); ?>';
-    document.querySelectorAll('.calendar .day').forEach(day => {
-        day.style.cursor = 'pointer';
-        day.addEventListener('click', () => {
-            window.location.href = loginUrl;
-        });
-    });
-});
-</script>
-
 

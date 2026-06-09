@@ -34,16 +34,30 @@ if ($isApiRoute) {
     exit;
 }
 
+$isIntegrationsApi = (
+    $apiPath === 'api/integrations' ||
+    strpos($apiPath, 'api/integrations/') === 0
+);
+if ($isIntegrationsApi) {
+    require_once __DIR__ . '/resources/views/pages/public/api/integrations_not_implemented.php';
+    exit;
+}
+
 // Load app configuration (includes base_path function) - AFTER API routes
 require_once __DIR__ . '/config/app.php';
 
 // Route the request
 if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/public/announcements.php';
-} elseif ($path === 'faqs' || $path === 'faq') {
+} elseif ($path === 'faq') {
+    header('Location: ' . base_path() . '/faqs', true, 301);
+    exit;
+} elseif ($path === 'faqs') {
     require_once __DIR__ . '/resources/views/pages/public/faq.php';
 } elseif ($path === 'contact') {
     require_once __DIR__ . '/resources/views/pages/public/contact.php';
+} elseif ($path === 'contact-handler') {
+    require_once __DIR__ . '/resources/views/pages/public/contact_handler.php';
 } elseif ($path === 'facilities') {
     require_once __DIR__ . '/resources/views/pages/public/facilities.php';
 } elseif ($path === 'facility-details') {
@@ -95,8 +109,8 @@ if ($path === 'announcements') {
         'session-keepalive',
     ];
 
-    // Dashboard routes - check if user is logged in
-    if (!isset($_SESSION['user_id'])) {
+    // Dashboard routes - require full authenticated session
+    if (!frs_dashboard_is_authenticated()) {
         $isJsonApiPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
             && in_array($dashboardPath, $dashboardJsonPostRoutes, true);
         if ($isJsonApiPost) {
