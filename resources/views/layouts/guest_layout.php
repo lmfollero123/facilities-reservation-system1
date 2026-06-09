@@ -65,7 +65,26 @@ if ($isHomePage || $isPublicPage) {
     }
     ?>
     <?php if ($captchaEnabled && $turnstileSiteKey !== ''): ?>
-        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=frsTurnstileOnLoad" async defer></script>
+        <script>
+        function frsTurnstileOnLoad() {
+            if (!window.turnstile) return;
+            document.querySelectorAll('.cf-turnstile').forEach(function (el) {
+                if (el.dataset.frsTurnstileRendered === '1') return;
+                var sitekey = el.getAttribute('data-sitekey');
+                if (!sitekey) return;
+                try {
+                    window.turnstile.render(el, { sitekey: sitekey });
+                    el.dataset.frsTurnstileRendered = '1';
+                } catch (e) { /* already rendered */ }
+            });
+        }
+        if (document.readyState !== 'loading') {
+            frsTurnstileOnLoad();
+        } else {
+            document.addEventListener('DOMContentLoaded', frsTurnstileOnLoad);
+        }
+        </script>
     <?php endif; ?>
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />

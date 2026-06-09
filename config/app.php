@@ -82,7 +82,36 @@ if (!function_exists('env_value')) {
     }
 }
 
-// Single env bootstrap — project .env first, then ~/private/cprf.env overrides (production secrets).
+if (!function_exists('frs_private_env_candidates')) {
+    /**
+     * Possible locations for ~/private/cprf.env (cPanel and local dev).
+     *
+     * @return list<string>
+     */
+    function frs_private_env_candidates(): array
+    {
+        $candidates = [];
+        $projectRoot = dirname(__DIR__);
+        $accountHome = dirname($projectRoot);
+        if ($accountHome !== '' && $accountHome !== '/' && $accountHome !== '\\' && $accountHome !== '.') {
+            $candidates[] = $accountHome . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'cprf.env';
+        }
+        foreach (['HOME', 'USERPROFILE'] as $key) {
+            $fromServer = $_SERVER[$key] ?? '';
+            if (is_string($fromServer) && $fromServer !== '') {
+                $candidates[] = rtrim($fromServer, '/\\') . '/private/cprf.env';
+            }
+            $fromEnv = getenv($key);
+            if (is_string($fromEnv) && $fromEnv !== '') {
+                $candidates[] = rtrim($fromEnv, '/\\') . '/private/cprf.env';
+            }
+        }
+
+        return array_values(array_unique(array_filter($candidates)));
+    }
+}
+
+// Single env bootstrap — project .env first, then private/cprf.env overrides (production secrets).
 if (!defined('CPRF_ENV_BOOTSTRAPPED')) {
     define('CPRF_ENV_BOOTSTRAPPED', true);
     $explicitEnv = trim((string)env_value('CPRF_ENV_PATH', '', false));
@@ -93,10 +122,10 @@ if (!defined('CPRF_ENV_BOOTSTRAPPED')) {
         if (is_file($projectEnv)) {
             load_env_file($projectEnv, false);
         }
-        if (!empty($_SERVER['HOME'])) {
-            $privateEnv = rtrim((string) $_SERVER['HOME'], '/\\') . '/private/cprf.env';
+        foreach (frs_private_env_candidates() as $privateEnv) {
             if (is_file($privateEnv)) {
                 load_env_file($privateEnv, true);
+                break;
             }
         }
     }
