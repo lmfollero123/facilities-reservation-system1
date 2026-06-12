@@ -207,24 +207,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
 
                             if ($messageType !== 'error' && $messageType !== 'warning') {
-                                // Generate email verification code (6-digit) valid for 1 minute
-                                $verificationCode = (string)random_int(100000, 999999);
-                                $verificationHash = password_hash($verificationCode, PASSWORD_DEFAULT);
-                                $expiry = date('Y-m-d H:i:s', time() + 60); // 1 minute
-
-                                $updateStmt = $pdo->prepare(
-                                    "UPDATE users 
-                                     SET email_verification_code_hash = ?, email_verification_expires_at = ?, email_verified = 0 
-                                     WHERE id = ?"
-                                );
-                                $updateStmt->execute([$verificationHash, $expiry, $userId]);
-
-                                // Send verification email
                                 try {
-                                    $body = getEmailVerificationEmailTemplate($fullName, $verificationCode, 1);
-                                    sendEmail($email, $fullName, 'Verify Your Email Address', $body);
+                                    frs_send_email_verification($pdo, $userId, $email, $fullName);
                                 } catch (Exception $e) {
-                                    // Log but don't expose internal error
                                     logSecurityEvent('registration_email_error', 'Failed to send email verification: ' . $e->getMessage(), 'error');
                                 }
 

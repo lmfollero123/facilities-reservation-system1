@@ -12,6 +12,8 @@ define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max failed login attempts per email
 define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
 define('RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS', 10); // Max wrong codes per pending user
 define('RATE_LIMIT_EMAIL_VERIFY_WINDOW', 900); // 15 minutes
+define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60); // Registration email code lifetime
+define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before resend
 // Registration rate limit:
 // - Allow up to 5 registrations per IP within a 1-hour rolling window
 // - If more than 5 attempts occur in that window, block registrations from that IP for 6 hours
@@ -186,6 +188,117 @@ function recordEmailVerifyRateLimitFailure(int $userId): void
         return;
     }
     frs_record_rate_limit('email_verify', 'user:' . $userId, RATE_LIMIT_EMAIL_VERIFY_WINDOW);
+}
+
+/**
+ * Issue a new registration email verification code (expiry uses MySQL NOW() for clock consistency).
+ */
+function frs_issue_email_verification_code(PDO $pdo, int $userId): string
+{
+    if ($userId <= 0) {
+        throw new InvalidArgumentException('Invalid user id for email verification.');
+    }
+
+    $code = (string) random_int(100000, 999999);
+    $hash = password_hash($code, PASSWORD_DEFAULT);
+    $ttl = (int) EMAIL_VERIFICATION_CODE_TTL_SECONDS;
+
+    $stmt = $pdo->prepare(
+        "UPDATE users
+         SET email_verification_code_hash = ?,
+             email_verification_expires_at = DATE_ADD(NOW(), INTERVAL {$ttl} SECOND),
+             email_verified = 0
+         WHERE id = ?"
+    );
+    $stmt->execute([$hash, $userId]);
+
+    return $code;
+}
+
+/**
+ * Whether the pending user's verification code is still valid (MySQL clock).
+ */
+function frs_email_verification_code_is_valid(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT 1
+         FROM users
+         WHERE id = ?
+           AND email_verification_expires_at IS NOT NULL
+           AND email_verification_expires_at >= NOW()
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Seconds until the current verification code expires (0 if expired or missing).
+ */
+function frs_email_verification_remaining_seconds(PDO $pdo, int $userId): int
+{
+    if ($userId <= 0) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), email_verification_expires_at)) AS remaining
+         FROM users
+         WHERE id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return (int) ($row['remaining'] ?? 0);
+}
+
+/**
+ * Track when a verification email was last sent (resend cooldown).
+ */
+function frs_mark_email_verification_sent(): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['email_verify_last_sent_at'] = time();
+}
+
+/**
+ * Whether the user can request another verification email yet.
+ */
+function frs_can_resend_email_verification(): bool
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $lastSent = (int) ($_SESSION['email_verify_last_sent_at'] ?? 0);
+    if ($lastSent <= 0) {
+        return true;
+    }
+
+    return (time() - $lastSent) >= (int) EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS;
+}
+
+/**
+ * Generate, store, and email a registration verification code.
+ */
+function frs_send_email_verification(PDO $pdo, int $userId, string $email, string $name): void
+{
+    require_once __DIR__ . '/email_templates.php';
+    require_once __DIR__ . '/mail_helper.php';
+
+    $code = frs_issue_email_verification_code($pdo, $userId);
+    $expiryMinutes = max(1, (int) ceil(((int) EMAIL_VERIFICATION_CODE_TTL_SECONDS) / 60));
+    $body = getEmailVerificationEmailTemplate($name, $code, $expiryMinutes);
+    sendEmail($email, $name, 'Verify Your Email Address', $body);
+    frs_mark_email_verification_sent();
 }
 
 /**

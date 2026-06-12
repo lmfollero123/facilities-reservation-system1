@@ -30,6 +30,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $error = 'Invalid security token. Please refresh the page and try again.';
         logSecurityEvent('csrf_validation_failed', 'Email verification form', 'warning');
+    } elseif (isset($_POST['resend'])) {
+        $pendingUserId = (int)($_SESSION['pending_email_verify_user_id'] ?? 0);
+        if (!frs_can_resend_email_verification()) {
+            $error = 'Please wait a moment before requesting another code.';
+        } elseif ($pendingUserId <= 0) {
+            $error = 'We could not find an account to verify. Please register again.';
+        } else {
+            try {
+                $pdo = db();
+                $stmt = $pdo->prepare("SELECT id, email, name, email_verified FROM users WHERE id = ? LIMIT 1");
+                $stmt->execute([$pendingUserId]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$user) {
+                    unset($_SESSION['pending_email_verify_user_id'], $_SESSION['pending_email_verify_email']);
+                    $error = 'We could not find an account to verify. Please register again.';
+                } elseif (!empty($user['email_verified'])) {
+                    unset($_SESSION['pending_email_verify_user_id'], $_SESSION['pending_email_verify_email']);
+                    header('Location: ' . base_path() . '/login?verified=1');
+                    exit;
+                } else {
+                    $email = $user['email'] ?? $email;
+                    frs_send_email_verification($pdo, $pendingUserId, (string) $user['email'], (string) $user['name']);
+                    $info = 'A new verification code has been sent to your email.';
+                    logSecurityEvent('email_verification_resent', "Verification code resent for user id: {$pendingUserId}", 'info');
+                }
+            } catch (Exception $e) {
+                $error = 'Unable to send a new verification code right now. Please try again later.';
+                logSecurityEvent('email_verification_resend_error', 'Failed to resend verification email: ' . $e->getMessage(), 'error');
+            }
+        }
     } else {
         // Accept code as 6 separate boxes (array) or single string fallback
         $rawCode = $_POST['code'] ?? '';
@@ -44,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $pendingUserId = (int)($_SESSION['pending_email_verify_user_id'] ?? 0);
             if (!checkEmailVerifyRateLimit($pendingUserId)) {
-                $error = 'Too many incorrect attempts. Please wait 15 minutes or register again.';
+                $error = 'Too many incorrect attempts. Please wait 15 minutes or use Resend Code after the cooldown.';
                 logSecurityEvent('rate_limit_exceeded', 'Email verification attempts exceeded for user id: ' . $pendingUserId, 'warning');
             } else {
             try {
@@ -66,10 +97,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    // Check expiry
-                    $expiresAt = $user['email_verification_expires_at'] ?? null;
-                    if (empty($expiresAt) || strtotime($expiresAt) < time()) {
-                        $error = 'Your verification code has expired. Please register again to create a new account.';
+                    // Check expiry (MySQL clock — avoids PHP/MySQL timezone mismatches)
+                    if (!frs_email_verification_code_is_valid($pdo, $pendingUserId)) {
+                        $error = 'Your verification code has expired. Click "Resend Code" below to get a new one.';
                     } else {
                         $hash = $user['email_verification_code_hash'] ?? '';
                         if (!$hash || !password_verify($code, $hash)) {
@@ -121,15 +151,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load countdown expiry display (if available)
 try {
     $pdoCountdown = db();
-    $countdownUser = null;
     $pendingUserId = (int)($_SESSION['pending_email_verify_user_id'] ?? 0);
     if ($pendingUserId > 0) {
-        $stmtCountdown = $pdoCountdown->prepare("SELECT email_verification_expires_at FROM users WHERE id = ? LIMIT 1");
-        $stmtCountdown->execute([$pendingUserId]);
-        $countdownUser = $stmtCountdown->fetch(PDO::FETCH_ASSOC);
-    }
-    if (!empty($countdownUser['email_verification_expires_at'])) {
-        $verificationRemainingSeconds = max(0, strtotime($countdownUser['email_verification_expires_at']) - time());
+        $verificationRemainingSeconds = frs_email_verification_remaining_seconds($pdoCountdown, $pendingUserId);
     }
 } catch (Throwable $e) {
     $verificationRemainingSeconds = 0;
@@ -186,6 +210,11 @@ ob_start();
             </label>
 
             <button class="btn-primary" type="submit" style="margin-top: 1.5rem;">Verify Email</button>
+        </form>
+
+        <form method="POST" style="margin-top:0.75rem; text-align:center;">
+            <?= csrf_field(); ?>
+            <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Resend Code</button>
         </form>
 
         <div class="auth-footer">
@@ -279,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const ss = String(remaining % 60).padStart(2, '0');
             countdownEl.textContent = remaining > 0
                 ? `Code expires in ${mm}:${ss}`
-                : 'Code expired. Please register again to request a new code.';
+                : 'Code expired. Click "Resend Code" below to get a new one.';
             countdownEl.style.color = remaining > 0 ? '#b45309' : '#b23030';
         };
         renderCountdown();
