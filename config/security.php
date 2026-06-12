@@ -14,6 +14,8 @@ define('RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS', 10); // Max wrong codes per pending u
 define('RATE_LIMIT_EMAIL_VERIFY_WINDOW', 900); // 15 minutes
 define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60); // Registration email code lifetime
 define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before resend
+define('LOGIN_OTP_CODE_TTL_SECONDS', 60); // Login email OTP lifetime
+define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', 60); // Min wait before login OTP resend
 // Registration rate limit:
 // - Allow up to 5 registrations per IP within a 1-hour rolling window
 // - If more than 5 attempts occur in that window, block registrations from that IP for 6 hours
@@ -299,6 +301,116 @@ function frs_send_email_verification(PDO $pdo, int $userId, string $email, strin
     $body = getEmailVerificationEmailTemplate($name, $code, $expiryMinutes);
     sendEmail($email, $name, 'Verify Your Email Address', $body);
     frs_mark_email_verification_sent();
+}
+
+/**
+ * Issue a new login email OTP (expiry uses MySQL NOW() for clock consistency).
+ *
+ * @return string Plain 6-digit OTP (caller sends via email/SMS).
+ */
+function frs_issue_login_otp_code(PDO $pdo, int $userId, ?string $lastLoginIp = null): string
+{
+    if ($userId <= 0) {
+        throw new InvalidArgumentException('Invalid user id for login OTP.');
+    }
+
+    $code = (string) random_int(100000, 999999);
+    $hash = password_hash($code, PASSWORD_DEFAULT);
+    $ttl = (int) LOGIN_OTP_CODE_TTL_SECONDS;
+
+    if ($lastLoginIp !== null) {
+        $stmt = $pdo->prepare(
+            "UPDATE users
+             SET failed_login_attempts = 0,
+                 locked_until = NULL,
+                 otp_code_hash = ?,
+                 otp_expires_at = DATE_ADD(NOW(), INTERVAL {$ttl} SECOND),
+                 otp_attempts = 0,
+                 otp_last_sent_at = NOW(),
+                 last_login_ip = ?
+             WHERE id = ?"
+        );
+        $stmt->execute([$hash, $lastLoginIp, $userId]);
+    } else {
+        $stmt = $pdo->prepare(
+            "UPDATE users
+             SET otp_code_hash = ?,
+                 otp_expires_at = DATE_ADD(NOW(), INTERVAL {$ttl} SECOND),
+                 otp_attempts = 0,
+                 otp_last_sent_at = NOW()
+             WHERE id = ?"
+        );
+        $stmt->execute([$hash, $userId]);
+    }
+
+    return $code;
+}
+
+/**
+ * Whether the user's login email OTP is still valid (MySQL clock).
+ */
+function frs_login_otp_code_is_valid(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT 1
+         FROM users
+         WHERE id = ?
+           AND otp_expires_at IS NOT NULL
+           AND otp_expires_at >= NOW()
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Seconds until the login OTP expires (0 if expired or missing).
+ */
+function frs_login_otp_remaining_seconds(PDO $pdo, int $userId): int
+{
+    if ($userId <= 0) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), otp_expires_at)) AS remaining
+         FROM users
+         WHERE id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return (int) ($row['remaining'] ?? 0);
+}
+
+/**
+ * Whether the user can request another login OTP yet (MySQL clock).
+ */
+function frs_can_resend_login_otp(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $cooldown = (int) LOGIN_OTP_RESEND_COOLDOWN_SECONDS;
+    $stmt = $pdo->prepare(
+        "SELECT (
+            otp_last_sent_at IS NULL
+            OR TIMESTAMPDIFF(SECOND, otp_last_sent_at, NOW()) >= {$cooldown}
+         ) AS can_resend
+         FROM users
+         WHERE id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+
+    return (bool) $stmt->fetchColumn();
 }
 
 /**

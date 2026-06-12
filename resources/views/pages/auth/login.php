@@ -114,13 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 
                                 if ($requiresOtp) {
                                     // OTP is enabled -> proceed to OTP
-                                    $otp = random_int(100000, 999999);
-                                    $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
-                                    $otpExpiry = date('Y-m-d H:i:s', time() + 60); // 1 minute
-
-                                    // Store OTP details
-                                    $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, otp_code_hash = ?, otp_expires_at = ?, otp_attempts = 0, otp_last_sent_at = NOW(), last_login_ip = ? WHERE id = ?");
-                                    $updateStmt->execute([$otpHash, $otpExpiry, getClientIP(), $user['id']]);
+                                    $otp = frs_issue_login_otp_code($pdo, (int) $user['id'], getClientIP());
 
                                     // Log successful password stage
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
@@ -129,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // Send OTP email only if email OTP is enabled
                                     if ($enableOtp) {
                                         require_once __DIR__ . '/../../../../config/email_templates.php';
-                                        $otpBody = getOTPEmailTemplate($user['name'], $otp, 1);
+                                        $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
                                         sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
                                         if (!empty($user['mobile'])) {
                                             require_once __DIR__ . '/../../../../config/sms_helper.php';

@@ -74,13 +74,14 @@ try {
                 }
             }
             // 2) Otherwise, or if TOTP failed, try email OTP
-            if (!$valid && $user['otp_code_hash'] && $user['otp_expires_at'] && strtotime($user['otp_expires_at']) >= time()) {
-                if (password_verify($otpInput, $user['otp_code_hash'])) {
+            if (!$valid && frs_login_otp_code_is_valid($pdo, $userId)) {
+                $hash = $user['otp_code_hash'] ?? '';
+                if ($hash && password_verify($otpInput, $hash)) {
                     $valid = true;
                 }
             }
             if (!$valid) {
-                $emailOk = $user['otp_code_hash'] && $user['otp_expires_at'] && strtotime($user['otp_expires_at']) >= time();
+                $emailOk = frs_login_otp_code_is_valid($pdo, $userId);
                 $hasTotp = ($user['totp_enabled'] ?? 0) && !empty($user['totp_secret']);
                 if (!$hasTotp && !$emailOk) {
                     $error = 'OTP has expired. Please request a new code.';
@@ -127,19 +128,13 @@ try {
             logSecurityEvent('csrf_validation_failed', 'OTP resend form', 'warning');
         }
 
-        $lastSent = $user['otp_last_sent_at'] ? strtotime($user['otp_last_sent_at']) : 0;
-        if (empty($error) && time() - $lastSent < 60) {
+        if (empty($error) && !frs_can_resend_login_otp($pdo, $userId)) {
             $error = 'Please wait a moment before requesting another code.';
         } elseif (empty($error)) {
-            $otp = random_int(100000, 999999);
-            $otpHash = password_hash((string)$otp, PASSWORD_DEFAULT);
-            $otpExpiry = date('Y-m-d H:i:s', time() + 60);
-
-            $pdo->prepare("UPDATE users SET otp_code_hash = ?, otp_expires_at = ?, otp_attempts = 0, otp_last_sent_at = NOW() WHERE id = ?")
-                ->execute([$otpHash, $otpExpiry, $userId]);
+            $otp = frs_issue_login_otp_code($pdo, $userId);
 
             require_once __DIR__ . '/../../../../config/email_templates.php';
-            $otpBody = getOTPEmailTemplate($user['name'], $otp, 1);
+            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
             sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
             $success = 'A 6-digit code has been sent to your email.';
         }
@@ -149,12 +144,9 @@ try {
 }
 
 $hasTotp = (bool)($user['totp_enabled'] ?? 0) && !empty($user['totp_secret']);
-$emailOtpValid = !empty($user['otp_code_hash']) && !empty($user['otp_expires_at']) && strtotime($user['otp_expires_at']) >= time();
+$emailOtpValid = frs_login_otp_code_is_valid($pdo, $userId);
 $emailOtpEnabled = (bool)($user['enable_otp'] ?? 1);
-$otpRemainingSeconds = 0;
-if (!empty($user['otp_expires_at'])) {
-    $otpRemainingSeconds = max(0, strtotime($user['otp_expires_at']) - time());
-}
+$otpRemainingSeconds = frs_login_otp_remaining_seconds($pdo, $userId);
 
 ob_start();
 ?>
