@@ -30,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $currentUserId = $_SESSION['user_id'] ?? null;
     
     // Prevent self-modification for certain actions
-    if ($userId === $currentUserId && in_array($action, ['lock', 'unlock'], true)) {
-        $message = 'You cannot lock or unlock your own account.';
+    if ($userId === $currentUserId && in_array($action, ['lock', 'unlock', 'delete'], true)) {
+        $message = 'You cannot perform this action on your own account.';
         $messageType = 'error';
     } else {
         try {
@@ -265,6 +265,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                         }
                     }
                     break;
+
+                case 'delete':
+                    $deleteReason = trim($_POST['delete_reason'] ?? '');
+                    if (strlen($deleteReason) < 10) {
+                        $message = 'Please provide a deletion reason (at least 10 characters).';
+                        $messageType = 'error';
+                        break;
+                    }
+
+                    $userStmt = $pdo->prepare('SELECT id, name, email, role FROM users WHERE id = :id');
+                    $userStmt->execute(['id' => $userId]);
+                    $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$userInfo) {
+                        $message = 'User not found.';
+                        $messageType = 'error';
+                        break;
+                    }
+
+                    if (($userInfo['role'] ?? '') === 'Admin') {
+                        $adminCountStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role = "Admin"');
+                        $adminCount = (int) $adminCountStmt->fetchColumn();
+                        if ($adminCount <= 1) {
+                            $message = 'Cannot delete the only remaining administrator account.';
+                            $messageType = 'error';
+                            break;
+                        }
+                    }
+
+                    $reservationCheck = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE user_id = :id');
+                    $reservationCheck->execute(['id' => $userId]);
+                    if ((int) $reservationCheck->fetchColumn() > 0) {
+                        $message = 'Cannot delete an account with reservation history. Lock the account instead.';
+                        $messageType = 'error';
+                        break;
+                    }
+
+                    $adminName = $_SESSION['user_name'] ?? 'System Administrator';
+                    if (!empty($userInfo['email'])) {
+                        try {
+                            $body = getAccountDeletedEmailTemplate($userInfo['name'], $deleteReason, $adminName);
+                            sendEmail($userInfo['email'], $userInfo['name'], 'Your Account Has Been Removed', $body);
+                        } catch (Exception $e) {
+                            error_log('Failed to send account deletion email: ' . $e->getMessage());
+                        }
+                    }
+
+                    try {
+                        $pdo->beginTransaction();
+                        $pdo->prepare('UPDATE reservation_history SET created_by = NULL WHERE created_by = ?')->execute([$userId]);
+                        $pdo->prepare('UPDATE users SET verified_by = NULL WHERE verified_by = ?')->execute([$userId]);
+                        $pdo->prepare('UPDATE facility_blackout_dates SET created_by = NULL WHERE created_by = ?')->execute([$userId]);
+                        $pdo->prepare('UPDATE contact_inquiries SET responded_by = NULL WHERE responded_by = ?')->execute([$userId]);
+                        $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
+                        $pdo->commit();
+                    } catch (Throwable $e) {
+                        if ($pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                        throw $e;
+                    }
+
+                    logAudit(
+                        'Deleted user account',
+                        'User Management',
+                        ($userInfo['name'] . ' (' . $userInfo['email'] . ') — Reason: ' . $deleteReason)
+                    );
+                    $message = 'Account deleted successfully. The user has been notified by email.';
+                    break;
                     
                 default:
                     $message = 'Invalid action.';
@@ -280,6 +349,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 // Get filter parameters
 $filterRole = $_GET['role'] ?? '';
 $filterStatus = $_GET['status'] ?? '';
+$searchQuery = trim($_GET['q'] ?? '');
 
 // Build query with filters
 $whereConditions = [];
@@ -291,22 +361,29 @@ if ($filterRole && $filterRole !== 'all') {
 }
 
 if ($filterStatus && $filterStatus !== 'all') {
-    // Map UI status to DB status
     $statusMap = [
         'active' => 'active',
         'pending' => 'pending',
-        'locked' => 'locked'
+        'locked' => 'locked',
+        'email_unverified' => 'email_unverified',
     ];
-    if (isset($statusMap[$filterStatus])) {
+    if ($filterStatus === 'email_unverified') {
+        $whereConditions[] = '(email_verified = 0 OR email_verified IS NULL)';
+    } elseif (isset($statusMap[$filterStatus])) {
         $whereConditions[] = 'status = :status';
         $params['status'] = $statusMap[$filterStatus];
     }
 }
 
+if ($searchQuery !== '') {
+    $whereConditions[] = '(name LIKE :search OR email LIKE :search)';
+    $params['search'] = '%' . $searchQuery . '%';
+}
+
 $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
 
 // Pagination
-$perPage = 5;
+$perPage = 8;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
@@ -318,7 +395,7 @@ $totalRows = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch users
-$sql = 'SELECT id, name, email, role, status, is_verified, verified_at, created_at, updated_at FROM users ' . $whereClause . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+$sql = 'SELECT id, name, email, role, status, is_verified, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM users ' . $whereClause . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
 $stmt = $pdo->prepare($sql);
 foreach ($params as $key => $value) {
     $stmt->bindValue(':' . $key, $value);
@@ -341,9 +418,18 @@ if (!empty($users)) {
     }
 }
 
-// Get approval queue stats
+// Summary stats
 $pendingCountStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE status = "pending"');
 $pendingCount = (int)$pendingCountStmt->fetchColumn();
+
+$emailUnverifiedStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE email_verified = 0 OR email_verified IS NULL');
+$emailUnverifiedCount = (int)$emailUnverifiedStmt->fetchColumn();
+
+$lockedCountStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE status = "locked"');
+$lockedCount = (int)$lockedCountStmt->fetchColumn();
+
+$totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users');
+$totalUsersCount = (int)$totalUsersStmt->fetchColumn();
 
 $activeStaffStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role IN ("Admin", "Staff") AND status = "active"');
 $activeStaffCount = (int)$activeStaffStmt->fetchColumn();
@@ -351,32 +437,61 @@ $activeStaffCount = (int)$activeStaffStmt->fetchColumn();
 $lastApprovalStmt = $pdo->query('SELECT MAX(updated_at) FROM users WHERE status = "active" AND updated_at != created_at');
 $lastApproval = $lastApprovalStmt->fetchColumn();
 
+$retentionHours = (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24);
+$currentUserId = (int)($_SESSION['user_id'] ?? 0);
+
 ob_start();
 ?>
 <div class="page-header">
     <div class="breadcrumb">
         <span>Administration</span><span class="sep">/</span><span>User Management</span>
     </div>
-    <?= frs_page_title('User Management', 'Activate residents, assign Staff/Admin roles, and reset passwords.'); ?>
+    <?= frs_page_title('User Management', 'Manage resident accounts, roles, verification, and access.'); ?>
 </div>
 
 <?php if ($message): ?>
-    <div class="message <?= $messageType; ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.25rem;background:<?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>;color:<?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>;">
+    <div class="um-alert um-alert-<?= $messageType === 'success' ? 'success' : 'error'; ?>" role="status">
         <?= htmlspecialchars($message); ?>
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
-    <section class="booking-card">
-        <h2>Accounts Directory</h2>
-        <div class="section-header" style="margin-bottom: 1rem;">
-            <p>Filter by role and status to quickly locate user records.</p>
+<div class="um-stats-grid">
+    <div class="stat-card">
+        <span class="um-stat-label">Total accounts</span>
+        <strong class="um-stat-value"><?= $totalUsersCount; ?></strong>
+    </div>
+    <div class="stat-card">
+        <span class="um-stat-label">Pending approval</span>
+        <strong class="um-stat-value"><?= $pendingCount; ?></strong>
+    </div>
+    <div class="stat-card">
+        <span class="um-stat-label">Email unverified</span>
+        <strong class="um-stat-value"><?= $emailUnverifiedCount; ?></strong>
+    </div>
+    <div class="stat-card">
+        <span class="um-stat-label">Locked</span>
+        <strong class="um-stat-value"><?= $lockedCount; ?></strong>
+    </div>
+</div>
+
+<div class="um-layout">
+    <section class="booking-card um-main">
+        <div class="um-section-head">
+            <div>
+                <h2>Accounts Directory</h2>
+                <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
+            </div>
         </div>
-        <form method="GET" class="booking-form" style="margin-bottom: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+
+        <form method="GET" class="um-toolbar">
+            <label class="um-search">
+                <span class="sr-only">Search users</span>
+                <input type="search" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search name or email…">
+            </label>
             <label>
                 Role
-                <select name="role" onchange="this.form.submit()">
-                    <option value="all" <?= $filterRole === '' || $filterRole === 'all' ? 'selected' : ''; ?>>All Roles</option>
+                <select name="role">
+                    <option value="all" <?= $filterRole === '' || $filterRole === 'all' ? 'selected' : ''; ?>>All roles</option>
                     <option value="Admin" <?= $filterRole === 'Admin' ? 'selected' : ''; ?>>Admin</option>
                     <option value="Staff" <?= $filterRole === 'Staff' ? 'selected' : ''; ?>>Staff</option>
                     <option value="Resident" <?= $filterRole === 'Resident' ? 'selected' : ''; ?>>Resident</option>
@@ -384,238 +499,400 @@ ob_start();
             </label>
             <label>
                 Status
-                <select name="status" onchange="this.form.submit()">
-                    <option value="all" <?= $filterStatus === '' || $filterStatus === 'all' ? 'selected' : ''; ?>>All Statuses</option>
+                <select name="status">
+                    <option value="all" <?= $filterStatus === '' || $filterStatus === 'all' ? 'selected' : ''; ?>>All statuses</option>
                     <option value="active" <?= $filterStatus === 'active' ? 'selected' : ''; ?>>Active</option>
-                    <option value="pending" <?= $filterStatus === 'pending' ? 'selected' : ''; ?>>Pending Approval</option>
+                    <option value="pending" <?= $filterStatus === 'pending' ? 'selected' : ''; ?>>Pending approval</option>
                     <option value="locked" <?= $filterStatus === 'locked' ? 'selected' : ''; ?>>Locked</option>
+                    <option value="email_unverified" <?= $filterStatus === 'email_unverified' ? 'selected' : ''; ?>>Email unverified</option>
                 </select>
             </label>
+            <button type="submit" class="btn-primary um-filter-btn">Apply</button>
         </form>
-        
+
         <?php if (empty($users)): ?>
-            <p>No users found matching the selected filters.</p>
+            <div class="um-empty">No users match your filters.</div>
         <?php else: ?>
-            <div class="table-responsive">
-            <table class="table">
-                <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Verification</th>
-                    <th>Documents</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($users as $user): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($user['name']); ?></td>
-                        <td><?= htmlspecialchars($user['email']); ?></td>
-                        <td>
-                            <?php if ($_SESSION['role'] === 'Admin'): ?>
-                                <form method="POST" style="display:inline;" class="role-change-form">
-            <?= csrf_field(); ?>
-                                    <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                    <input type="hidden" name="action" value="change_role">
-                                    <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" style="border:1px solid #dfe3ef; border-radius:6px; padding:0.25rem 0.5rem;">
-                                        <option value="Admin" <?= $user['role'] === 'Admin' ? 'selected' : ''; ?>>Admin</option>
-                                        <option value="Staff" <?= $user['role'] === 'Staff' ? 'selected' : ''; ?>>Staff</option>
-                                        <option value="Resident" <?= $user['role'] === 'Resident' ? 'selected' : ''; ?>>Resident</option>
-                                    </select>
-                                </form>
-                            <?php else: ?>
-                                <span class="status-badge <?= strtolower($user['role']); ?>"><?= htmlspecialchars($user['role']); ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php
-                            $statusDisplay = ucfirst($user['status']);
-                            if ($user['status'] === 'pending') {
-                                $statusDisplay = 'Pending Approval';
-                            }
-                            $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'maintenance' : 'offline');
-                            ?>
-                            <span class="status-badge <?= $statusClass; ?>"><?= $statusDisplay; ?></span>
-                        </td>
-                        <td>
-                            <?php
-                            $isVerified = (bool)($user['is_verified'] ?? false);
-                            $hasValidIdDoc = isset($docsByUser[$user['id']]) && 
-                                !empty(array_filter($docsByUser[$user['id']], fn($d) => ($d['document_type'] ?? '') === 'valid_id'));
-                            
-                            if ($isVerified):
-                            ?>
-                                <span class="status-badge active" style="background:#28a745;">✓ Verified</span>
-                            <?php elseif ($hasValidIdDoc): ?>
-                                <span class="status-badge maintenance" style="background:#ffc107; color:#856404;">Pending Verification</span>
-                                <form method="POST" style="display:inline; margin-left:0.5rem;">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                    <input type="hidden" name="action" value="verify">
-                                    <button type="submit" class="btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="return confirm('Verify this user\\'s account? This will enable auto-approval features.');">Verify</button>
-                                </form>
-                            <?php else: ?>
-                                <span class="status-badge offline" style="background:#6c757d;">Not Verified</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (!empty($docsByUser[$user['id']])): ?>
-                                <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                    <?php 
-                                    require_once __DIR__ . '/../../../../config/secure_documents.php';
-                                    foreach ($docsByUser[$user['id']] as $doc): 
-                                        $docId = $doc['id'] ?? null;
-                                        if ($docId):
-                                            $secureUrl = getSecureDocumentUrl($docId, 'view');
-                                    ?>
-                                        <a href="<?= htmlspecialchars($secureUrl); ?>" target="_blank" rel="noopener" class="btn-outline" style="padding:0.35rem 0.5rem; font-size:0.85rem;">
-                                            <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
-                                        </a>
-                                    <?php 
-                                        else:
-                                            // Fallback for documents without ID (shouldn't happen, but safety)
-                                    ?>
-                                        <span class="status-badge maintenance"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?></span>
-                                    <?php 
-                                        endif;
-                                    endforeach; 
-                                    ?>
-                                </div>
-                            <?php else: ?>
-                                <span class="status-badge maintenance">No docs</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <?php if ($user['status'] === 'pending'): ?>
-                                    <form method="POST" style="display:inline;">
-            <?= csrf_field(); ?>
-                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                        <input type="hidden" name="action" value="approve">
-                                        <button class="btn-primary confirm-action" data-message="Approve this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Approve</button>
-                                    </form>
-                                    <form method="POST" style="display:inline;">
-            <?= csrf_field(); ?>
-                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                        <input type="hidden" name="action" value="deny">
-                                        <button class="btn-outline confirm-action" data-message="Remove this pending user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Deny</button>
-                                    </form>
-                                <?php elseif ($user['status'] === 'active'): ?>
-                                    <form method="POST" style="display:inline;">
-            <?= csrf_field(); ?>
-                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                        <input type="hidden" name="action" value="lock">
-                                        <input type="text" name="lock_reason" placeholder="Reason (optional)" style="width:180px; padding:0.35rem 0.5rem; border:1px solid #d7deed; border-radius:8px; font-size:0.85rem; margin-right:0.35rem;">
-                                        <button class="btn-outline confirm-action" data-message="Lock this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Lock</button>
-                                    </form>
-                                <?php elseif ($user['status'] === 'locked'): ?>
-                                    <form method="POST" style="display:inline;">
-            <?= csrf_field(); ?>
-                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                        <input type="hidden" name="action" value="unlock">
-                                        <button class="btn-primary confirm-action" data-message="Unlock this user account?" type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Unlock</button>
-                                    </form>
+            <div class="um-user-list">
+                <?php foreach ($users as $user):
+                    $isSelf = ((int)$user['id'] === $currentUserId);
+                    $initial = strtoupper(substr((string)$user['name'], 0, 1));
+                    $emailVerified = (bool)($user['email_verified'] ?? false);
+                    $isIdVerified = (bool)($user['is_verified'] ?? false);
+                    $hasValidIdDoc = isset($docsByUser[$user['id']]) &&
+                        !empty(array_filter($docsByUser[$user['id']], static fn($d) => ($d['document_type'] ?? '') === 'valid_id'));
+                    $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'pending' : 'locked');
+                    $statusLabel = $user['status'] === 'pending' ? 'Pending approval' : ucfirst($user['status']);
+                ?>
+                <article class="um-user-card">
+                    <div class="um-user-main">
+                        <div class="um-avatar" aria-hidden="true"><?= htmlspecialchars($initial); ?></div>
+                        <div class="um-user-info">
+                            <div class="um-user-title">
+                                <h3><?= htmlspecialchars($user['name']); ?></h3>
+                                <?php if ($isSelf): ?><span class="um-badge um-badge-self">You</span><?php endif; ?>
+                            </div>
+                            <p class="um-email"><?= htmlspecialchars($user['email']); ?></p>
+                            <div class="um-badges">
+                                <span class="um-badge um-badge-role"><?= htmlspecialchars($user['role']); ?></span>
+                                <span class="um-badge um-badge-<?= $statusClass; ?>"><?= htmlspecialchars($statusLabel); ?></span>
+                                <?php if (!$emailVerified): ?>
+                                    <span class="um-badge um-badge-warn">Email not verified</span>
                                 <?php endif; ?>
-                                <!-- Password Reset Button (available for all active/locked users) -->
-                                <?php if (in_array($user['status'], ['active', 'locked'])): ?>
-                                    <form method="POST" style="display:inline;">
-            <?= csrf_field(); ?>
-                                        <input type="hidden" name="user_id" value="<?= $user['id']; ?>">
-                                        <input type="hidden" name="action" value="reset_password">
-                                        <button class="btn-outline confirm-action" data-message="Reset password for this user? New credentials will be sent to their email." type="submit" style="padding:0.4rem 0.75rem; font-size:0.9rem; background:#ff9800; color:#fff; border-color:#ff9800;">Reset Password</button>
-                                    </form>
+                                <?php if ($isIdVerified): ?>
+                                    <span class="um-badge um-badge-ok">ID verified</span>
+                                <?php elseif ($hasValidIdDoc): ?>
+                                    <span class="um-badge um-badge-warn">ID pending review</span>
+                                <?php else: ?>
+                                    <span class="um-badge um-badge-muted">No ID on file</span>
                                 <?php endif; ?>
                             </div>
-                        </td>
-                    </tr>
+                            <p class="um-meta">Registered <?= date('M j, Y', strtotime($user['created_at'])); ?></p>
+                        </div>
+                    </div>
+
+                    <div class="um-user-side">
+                        <form method="POST" class="role-change-form um-role-form">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                            <input type="hidden" name="action" value="change_role">
+                            <label class="um-role-label">
+                                Role
+                                <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" <?= $isSelf ? 'disabled' : ''; ?>>
+                                    <option value="Admin" <?= $user['role'] === 'Admin' ? 'selected' : ''; ?>>Admin</option>
+                                    <option value="Staff" <?= $user['role'] === 'Staff' ? 'selected' : ''; ?>>Staff</option>
+                                    <option value="Resident" <?= $user['role'] === 'Resident' ? 'selected' : ''; ?>>Resident</option>
+                                </select>
+                            </label>
+                        </form>
+
+                        <?php if (!empty($docsByUser[$user['id']])): ?>
+                            <div class="um-docs">
+                                <?php
+                                require_once __DIR__ . '/../../../../config/secure_documents.php';
+                                foreach ($docsByUser[$user['id']] as $doc):
+                                    $docId = $doc['id'] ?? null;
+                                    if (!$docId) continue;
+                                    $secureUrl = getSecureDocumentUrl($docId, 'view');
+                                ?>
+                                    <a href="<?= htmlspecialchars($secureUrl); ?>" target="_blank" rel="noopener" class="um-doc-link">
+                                        <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="um-actions">
+                            <?php if ($user['status'] === 'pending'): ?>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="approve">
+                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Approve this account?">Approve</button>
+                                </form>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="deny">
+                                    <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove this pending registration?">Deny</button>
+                                </form>
+                            <?php endif; ?>
+
+                            <?php if (!$isIdVerified && $hasValidIdDoc): ?>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="verify">
+                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Verify this user's ID and enable auto-approval features?">Verify ID</button>
+                                </form>
+                            <?php endif; ?>
+
+                            <?php if ($user['status'] === 'active' && !$isSelf): ?>
+                                <button type="button" class="btn-outline um-btn-sm js-open-lock-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>">Lock</button>
+                            <?php elseif ($user['status'] === 'locked' && !$isSelf): ?>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="unlock">
+                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Unlock this account?">Unlock</button>
+                                </form>
+                            <?php endif; ?>
+
+                            <?php if (in_array($user['status'], ['active', 'locked'], true) && !$isSelf): ?>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="reset_password">
+                                    <button type="submit" class="btn-outline um-btn-sm um-btn-warn confirm-action" data-message="Reset password? New credentials will be emailed to the user.">Reset password</button>
+                                </form>
+                            <?php endif; ?>
+
+                            <?php if (!$isSelf): ?>
+                                <button type="button" class="btn-outline um-btn-sm um-btn-danger js-open-delete-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" data-user-email="<?= htmlspecialchars($user['email'], ENT_QUOTES); ?>">Delete account</button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </article>
                 <?php endforeach; ?>
-                </tbody>
-            </table>
             </div>
 
             <?php if ($totalPages > 1): ?>
-                <div class="pagination" style="margin-top:1rem;">
+                <div class="pagination um-pagination">
+                    <?php
+                    $pageQuery = http_build_query(array_filter([
+                        'page' => max(1, $page - 1),
+                        'role' => $filterRole !== 'all' ? $filterRole : null,
+                        'status' => $filterStatus !== 'all' ? $filterStatus : null,
+                        'q' => $searchQuery !== '' ? $searchQuery : null,
+                    ]));
+                    $nextQuery = http_build_query(array_filter([
+                        'page' => min($totalPages, $page + 1),
+                        'role' => $filterRole !== 'all' ? $filterRole : null,
+                        'status' => $filterStatus !== 'all' ? $filterStatus : null,
+                        'q' => $searchQuery !== '' ? $searchQuery : null,
+                    ]));
+                    ?>
                     <?php if ($page > 1): ?>
-                        <a href="?page=<?= $page - 1; ?>&role=<?= htmlspecialchars($filterRole); ?>&status=<?= htmlspecialchars($filterStatus); ?>">&larr; Prev</a>
+                        <a href="?<?= htmlspecialchars($pageQuery); ?>">&larr; Previous</a>
                     <?php endif; ?>
                     <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                     <?php if ($page < $totalPages): ?>
-                        <a href="?page=<?= $page + 1; ?>&role=<?= htmlspecialchars($filterRole); ?>&status=<?= htmlspecialchars($filterStatus); ?>">Next &rarr;</a>
+                        <a href="?<?= htmlspecialchars($nextQuery); ?>">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
     </section>
 
-    <aside class="booking-card">
-        <h2>Account Approval Queue</h2>
-        <p class="resource-meta">Used by Admin/Staff to validate new resident registrations before granting access.</p>
-        <ul class="audit-list">
-            <li><strong><?= $pendingCount; ?></strong> <?= $pendingCount === 1 ? 'account' : 'accounts'; ?> awaiting validation.</li>
+    <aside class="booking-card um-aside">
+        <h2>Approval queue</h2>
+        <p class="resource-meta">Overview of registration and staff activity.</p>
+        <ul class="audit-list um-aside-list">
+            <li><strong><?= $pendingCount; ?></strong> <?= $pendingCount === 1 ? 'account' : 'accounts'; ?> awaiting approval.</li>
+            <li><strong><?= $emailUnverifiedCount; ?></strong> with unverified email<?= $retentionHours ? ' (purged after ' . $retentionHours . 'h)' : ''; ?>.</li>
             <?php if ($lastApproval): ?>
-                <li>Last approval processed on <?= date('M d, Y', strtotime($lastApproval)); ?>.</li>
+                <li>Last approval: <?= date('M j, Y', strtotime($lastApproval)); ?>.</li>
             <?php else: ?>
                 <li>No approvals processed yet.</li>
             <?php endif; ?>
-            <li><strong><?= $activeStaffCount; ?></strong> staff account<?= $activeStaffCount !== 1 ? 's' : ''; ?> currently active and in good standing.</li>
+            <li><strong><?= $activeStaffCount; ?></strong> active staff/admin <?= $activeStaffCount === 1 ? 'account' : 'accounts'; ?>.</li>
         </ul>
+        <div class="um-policy-note">
+            <strong>Deletion policy</strong>
+            <p>Accounts with reservation history cannot be deleted — lock them instead. Deletion requires a reason and notifies the user by email.</p>
+        </div>
     </aside>
 </div>
+
+<div id="lockUserModal" class="um-modal" aria-hidden="true">
+    <div class="um-modal-backdrop js-close-modal" data-target="lockUserModal"></div>
+    <div class="um-modal-panel" role="dialog" aria-labelledby="lockModalTitle" aria-modal="true">
+        <h3 id="lockModalTitle">Lock account</h3>
+        <p class="um-modal-sub" id="lockModalUser"></p>
+        <form method="POST" id="lockUserForm">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="user_id" id="lockUserId" value="">
+            <input type="hidden" name="action" value="lock">
+            <label>
+                Reason (optional)
+                <textarea name="lock_reason" rows="3" placeholder="Explain why this account is being locked…"></textarea>
+            </label>
+            <div class="um-modal-actions">
+                <button type="button" class="btn-outline js-close-modal" data-target="lockUserModal">Cancel</button>
+                <button type="submit" class="btn-primary">Lock account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="deleteUserModal" class="um-modal" aria-hidden="true">
+    <div class="um-modal-backdrop js-close-modal" data-target="deleteUserModal"></div>
+    <div class="um-modal-panel um-modal-panel-danger" role="dialog" aria-labelledby="deleteModalTitle" aria-modal="true">
+        <h3 id="deleteModalTitle">Delete account permanently</h3>
+        <p class="um-modal-sub" id="deleteModalUser"></p>
+        <p class="um-modal-warning">This cannot be undone. The user will receive an email with your reason before the account is removed.</p>
+        <form method="POST" id="deleteUserForm">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="user_id" id="deleteUserId" value="">
+            <input type="hidden" name="action" value="delete">
+            <label>
+                Reason for deletion <span class="um-required">*</span>
+                <textarea name="delete_reason" id="deleteReasonInput" rows="4" required minlength="10" maxlength="1000" placeholder="Provide a clear reason (minimum 10 characters). This will be included in the email to the user."></textarea>
+            </label>
+            <div class="um-modal-actions">
+                <button type="button" class="btn-outline js-close-modal" data-target="deleteUserModal">Cancel</button>
+                <button type="submit" class="btn-primary um-btn-danger-solid">Delete account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.um-alert { padding: 0.85rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: 0.95rem; }
+.um-alert-success { background: #e3f8ef; color: #0d7a43; border: 1px solid #b7ebd0; }
+.um-alert-error { background: #fdecee; color: #b23030; border: 1px solid #f5c2c7; }
+.um-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.um-stat-label { display: block; font-size: 0.82rem; color: #64748b; margin-bottom: 0.35rem; }
+.um-stat-value { font-size: 1.75rem; color: #1e293b; line-height: 1; }
+.um-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1.25rem; align-items: start; }
+.um-section-head { margin-bottom: 1rem; }
+.um-toolbar { display: grid; grid-template-columns: 1.4fr 0.8fr 0.9fr auto; gap: 0.75rem; align-items: end; margin-bottom: 1.25rem; }
+.um-toolbar label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: #475569; }
+.um-toolbar select, .um-search input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; background: #fff; }
+.um-filter-btn { padding: 0.55rem 1rem; white-space: nowrap; }
+.um-user-list { display: flex; flex-direction: column; gap: 0.85rem; }
+.um-user-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr); gap: 1rem; padding: 1rem 1.1rem; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.um-user-main { display: flex; gap: 0.85rem; min-width: 0; }
+.um-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.um-user-info { min-width: 0; }
+.um-user-title { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.um-user-title h3 { margin: 0; font-size: 1.05rem; color: #0f172a; }
+.um-email { margin: 0.15rem 0 0.5rem; color: #64748b; font-size: 0.9rem; word-break: break-word; }
+.um-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+.um-badge { display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.um-badge-role { background: #eef2ff; color: #3730a3; }
+.um-badge-active { background: #dcfce7; color: #166534; }
+.um-badge-pending { background: #fef3c7; color: #92400e; }
+.um-badge-locked { background: #fee2e2; color: #991b1b; }
+.um-badge-ok { background: #dcfce7; color: #166534; }
+.um-badge-warn { background: #fef3c7; color: #92400e; }
+.um-badge-muted { background: #f1f5f9; color: #64748b; }
+.um-badge-self { background: #dbeafe; color: #1d4ed8; }
+.um-meta { margin: 0; font-size: 0.8rem; color: #94a3b8; }
+.um-user-side { display: flex; flex-direction: column; gap: 0.65rem; border-left: 1px solid #eef2f7; padding-left: 1rem; }
+.um-role-label { font-size: 0.82rem; color: #475569; display: flex; flex-direction: column; gap: 0.35rem; }
+.um-role-form select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 8px; border: 1px solid #d7deed; }
+.um-docs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.um-doc-link { font-size: 0.78rem; padding: 0.25rem 0.55rem; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; text-decoration: none; }
+.um-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.um-inline-form { display: inline; }
+.um-btn-sm { padding: 0.38rem 0.7rem !important; font-size: 0.82rem !important; }
+.um-btn-warn { border-color: #fb923c !important; color: #c2410c !important; }
+.um-btn-danger { border-color: #f87171 !important; color: #b91c1c !important; }
+.um-btn-danger-solid { background: #dc2626 !important; border-color: #dc2626 !important; }
+.um-empty { padding: 2rem; text-align: center; color: #64748b; background: #f8fafc; border-radius: 10px; }
+.um-pagination { margin-top: 1.25rem; }
+.um-aside-list { margin-top: 0.75rem; }
+.um-policy-note { margin-top: 1rem; padding: 0.85rem; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.85rem; color: #475569; }
+.um-policy-note p { margin: 0.35rem 0 0; }
+.um-modal { position: fixed; inset: 0; z-index: 1200; display: none; align-items: center; justify-content: center; padding: 1rem; }
+.um-modal.open { display: flex; }
+.um-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+.um-modal-panel { position: relative; width: min(100%, 480px); background: #fff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18); }
+.um-modal-panel-danger { border-top: 4px solid #dc2626; }
+.um-modal-panel h3 { margin: 0 0 0.35rem; color: #0f172a; }
+.um-modal-sub { margin: 0 0 0.75rem; color: #64748b; font-size: 0.92rem; }
+.um-modal-warning { margin: 0 0 0.85rem; padding: 0.65rem 0.75rem; border-radius: 8px; background: #fef2f2; color: #991b1b; font-size: 0.85rem; }
+.um-modal-panel label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.88rem; color: #334155; }
+.um-modal-panel textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; resize: vertical; min-height: 90px; font-family: inherit; }
+.um-required { color: #dc2626; }
+.um-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+@media (max-width: 1100px) {
+    .um-layout { grid-template-columns: 1fr; }
+    .um-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .um-user-card { grid-template-columns: 1fr; }
+    .um-user-side { border-left: 0; padding-left: 0; border-top: 1px solid #eef2f7; padding-top: 0.85rem; }
+}
+@media (max-width: 720px) {
+    .um-toolbar { grid-template-columns: 1fr; }
+    .um-stats-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+
 <script>
-// Role change dropdown confirmation using the modal system
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('confirmModal');
-    if (!modal) return;
-    
-    const messageEl = modal.querySelector('.confirm-message');
-    const cancelBtn = modal.querySelector('[data-confirm-cancel]');
-    const acceptBtn = modal.querySelector('[data-confirm-accept]');
-    let pendingSelect = null;
-    
-    document.querySelectorAll('.role-select').forEach(function(select) {
-        select.addEventListener('change', function(e) {
-            const newRole = this.value;
-            const originalRole = this.dataset.originalRole;
-            const userName = this.dataset.userName || 'this user';
-            
-            // If role hasn't actually changed, do nothing
-            if (newRole === originalRole) {
-                // Reset to original value
-                this.value = originalRole;
-                return;
-            }
-            
-            e.preventDefault();
-            pendingSelect = this;
-            messageEl.textContent = 'Change ' + userName + '\'s role from ' + originalRole + ' to ' + newRole + '?';
-            modal.classList.add('open');
+    if (modal) {
+        const messageEl = modal.querySelector('.confirm-message');
+        const cancelBtn = modal.querySelector('[data-confirm-cancel]');
+        const acceptBtn = modal.querySelector('[data-confirm-accept]');
+        let pendingSelect = null;
+
+        document.querySelectorAll('.role-select').forEach(function(select) {
+            if (select.disabled) return;
+            select.addEventListener('change', function() {
+                const newRole = this.value;
+                const originalRole = this.dataset.originalRole;
+                const userName = this.dataset.userName || 'this user';
+                if (newRole === originalRole) {
+                    this.value = originalRole;
+                    return;
+                }
+                pendingSelect = this;
+                messageEl.textContent = 'Change ' + userName + '\'s role from ' + originalRole + ' to ' + newRole + '?';
+                modal.classList.add('open');
+            });
+        });
+
+        if (cancelBtn && acceptBtn) {
+            cancelBtn.addEventListener('click', function() {
+                if (pendingSelect) {
+                    pendingSelect.value = pendingSelect.dataset.originalRole;
+                    pendingSelect = null;
+                }
+                modal.classList.remove('open');
+            });
+            acceptBtn.addEventListener('click', function() {
+                if (pendingSelect) {
+                    pendingSelect.closest('.role-change-form')?.submit();
+                    pendingSelect = null;
+                }
+                modal.classList.remove('open');
+            });
+        }
+    }
+
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.add('open');
+            el.setAttribute('aria-hidden', 'false');
+        }
+    }
+    function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('open');
+            el.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    document.querySelectorAll('.js-close-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            closeModal(this.dataset.target);
         });
     });
-    
-    if (cancelBtn && acceptBtn) {
-        cancelBtn.addEventListener('click', function() {
-            if (pendingSelect) {
-                // Reset select to original value
-                pendingSelect.value = pendingSelect.dataset.originalRole;
-                pendingSelect = null;
-            }
-            modal.classList.remove('open');
+
+    document.querySelectorAll('.js-open-lock-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('lockUserId').value = this.dataset.userId;
+            document.getElementById('lockModalUser').textContent = 'Lock account for ' + this.dataset.userName + '?';
+            openModal('lockUserModal');
         });
-        
-        acceptBtn.addEventListener('click', function() {
-            if (pendingSelect) {
-                const form = pendingSelect.closest('.role-change-form');
-                if (form) {
-                    form.submit();
-                }
-                pendingSelect = null;
-            }
-            modal.classList.remove('open');
+    });
+
+    document.querySelectorAll('.js-open-delete-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('deleteUserId').value = this.dataset.userId;
+            document.getElementById('deleteReasonInput').value = '';
+            document.getElementById('deleteModalUser').textContent =
+                'Delete ' + this.dataset.userName + ' (' + this.dataset.userEmail + ')?';
+            openModal('deleteUserModal');
         });
-    }
+    });
+
+    document.getElementById('deleteUserForm')?.addEventListener('submit', function(e) {
+        const reason = document.getElementById('deleteReasonInput')?.value.trim() || '';
+        if (reason.length < 10) {
+            e.preventDefault();
+            alert('Please enter a deletion reason of at least 10 characters.');
+            return;
+        }
+        if (!confirm('Permanently delete this account? The user will be notified by email.')) {
+            e.preventDefault();
+        }
+    });
 });
 </script>
 <?php

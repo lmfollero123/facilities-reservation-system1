@@ -154,7 +154,9 @@ function getEmailVerificationEmailTemplate($userName, $verificationCode, $expiry
             <strong>⏱️ This verification code will expire in ' . (int)$expiryMinutes . ' minute' . ((int)$expiryMinutes === 1 ? '' : 's') . '.</strong>
         </p>
         <p style="margin: 10px 0 0; color: #6b7280; font-size: 14px;">
-            If this registration was not made by you, you can safely ignore this email. Unverified accounts are automatically removed after the verification window expires.
+            If this registration was not made by you, you can safely ignore this email. Unverified accounts are automatically removed after '
+            . (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? (int) UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24)
+            . ' hours to protect your privacy.
         </p>
     ';
 
@@ -221,6 +223,49 @@ function getAccountVerifiedEmailTemplate($userName) {
         </p>
     ';
     
+    return $header . $content . $footer;
+}
+
+/**
+ * Account deleted by administrator — sent before the record is removed.
+ */
+function getAccountDeletedEmailTemplate(string $userName, string $reason, string $adminName = 'System Administrator'): string
+{
+    $header = getEmailHeader('Account Removed');
+    $footer = getEmailFooter();
+    $contactUrl = base_url() . '/contact';
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">Your Account Has Been Removed</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            An administrator has removed your account from the <strong>Barangay Culiat Public Facilities Reservation System</strong>.
+            You will no longer be able to sign in or make new bookings with this account.
+        </p>
+
+        ' . getEmailInfoBox('
+            <p style="margin: 0 0 8px; color: #374151; font-size: 15px;"><strong>Reason provided by the administrator:</strong></p>
+            <p style="margin: 0; color: #1f2937; font-size: 15px; white-space: pre-wrap;">' . nl2br(htmlspecialchars($reason)) . '</p>
+        ', '#fdecee', '#dc3545') . '
+
+        ' . getEmailInfoBox('
+            <p style="margin: 0; color: #374151; font-size: 14px;">
+                <strong>Processed by:</strong> ' . htmlspecialchars($adminName) . '<br>
+                <strong>Date:</strong> ' . htmlspecialchars(date('F j, Y g:i A')) . ' (Philippines)
+            </p>
+        ', '#f8f9fa', '#6b7280') . '
+
+        <p style="margin: 20px 0 0; color: #4a5568; font-size: 16px;">
+            If you believe this was a mistake or you need further assistance, please contact the Barangay Culiat LGU office.
+        </p>
+
+        ' . getEmailButton('Contact Support', $contactUrl, '#6384d2') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            If you wish to use the system again in the future, you may register a new account subject to LGU approval policies.
+        </p>
+    ';
+
     return $header . $content . $footer;
 }
 

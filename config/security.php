@@ -16,6 +16,8 @@ define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60); // Registration email code li
 define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before resend
 define('LOGIN_OTP_CODE_TTL_SECONDS', 60); // Login email OTP lifetime
 define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', 60); // Min wait before login OTP resend
+/** Hours to retain registrations that never completed email verification (industry norm: 24–72h). */
+define('UNVERIFIED_ACCOUNT_RETENTION_HOURS', 24);
 // Registration rate limit:
 // - Allow up to 5 registrations per IP within a 1-hour rolling window
 // - If more than 5 attempts occur in that window, block registrations from that IP for 6 hours

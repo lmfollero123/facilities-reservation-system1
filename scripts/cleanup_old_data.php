@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit.php';
+require_once __DIR__ . '/../config/security.php';
 
 // Parse command line arguments
 $options = getopt('', ['dry-run', 'type:', 'verbose']);
@@ -141,20 +142,22 @@ if ($type === 'all' || $type === 'rate_limits') {
     echo "\n";
 }
 
-// Clean up unverified user accounts older than 24 hours
+// Clean up registrations that never completed email verification
 if ($type === 'all' || $type === 'unverified_users') {
+    $retentionHours = max(1, (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24));
     echo "=== Cleaning up Unverified User Accounts ===\n";
+    echo "Retention: {$retentionHours} hours since registration\n";
 
     $stmt = $pdo->prepare(
         "SELECT COUNT(*) as count 
          FROM users 
          WHERE (email_verified = 0 OR email_verified IS NULL)
-           AND created_at < DATE_SUB(NOW(), INTERVAL 1 DAY)"
+           AND created_at < DATE_SUB(NOW(), INTERVAL {$retentionHours} HOUR)"
     );
     $stmt->execute();
     $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
 
-    echo "Found {$count} unverified user accounts older than 24 hours\n";
+    echo "Found {$count} unverified user accounts older than {$retentionHours} hours\n";
 
     if ($dryRun) {
         echo "[DRY RUN] Would delete {$count} unverified accounts\n";
@@ -163,7 +166,7 @@ if ($type === 'all' || $type === 'unverified_users') {
             $delStmt = $pdo->prepare(
                 "DELETE FROM users 
                  WHERE (email_verified = 0 OR email_verified IS NULL)
-                   AND created_at < DATE_SUB(NOW(), INTERVAL 1 DAY)"
+                   AND created_at < DATE_SUB(NOW(), INTERVAL {$retentionHours} HOUR)"
             );
             $delStmt->execute();
             $deleted = $delStmt->rowCount();
