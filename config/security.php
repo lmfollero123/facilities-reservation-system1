@@ -528,6 +528,42 @@ function frs_can_resend_login_otp(PDO $pdo, int $userId): bool
 }
 
 /**
+ * Whether email OTP is enabled for this user (profile toggle).
+ */
+function frs_user_email_otp_enabled(array $user): bool
+{
+    return (bool) ($user['enable_otp'] ?? 1);
+}
+
+/**
+ * Whether Google Authenticator (TOTP) is active for this user.
+ */
+function frs_user_totp_active(array $user): bool
+{
+    return !empty($user['totp_enabled']) && !empty($user['totp_secret']);
+}
+
+/**
+ * Whether login must continue to a second-factor step after password.
+ */
+function frs_login_requires_second_factor(array $user): bool
+{
+    return frs_user_email_otp_enabled($user) || frs_user_totp_active($user);
+}
+
+/**
+ * Admin/Staff must keep at least one second-factor method enabled.
+ */
+function frs_user_has_required_second_factor(array $user): bool
+{
+    if (!frs_role_requires_two_factor((string) ($user['role'] ?? ''))) {
+        return true;
+    }
+
+    return frs_user_email_otp_enabled($user) || frs_user_totp_active($user);
+}
+
+/**
  * Admin/Staff must always complete a second factor at login.
  */
 function frs_role_requires_two_factor(string $role): bool

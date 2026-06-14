@@ -93,25 +93,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         exit;
                                     }
                                 } else {
-                                // Successful password check -> check OTP preference
-                                $enableOtp = (bool)($user['enable_otp'] ?? true);
-                                $totpEnabled = (bool)($user['totp_enabled'] ?? false);
-                                $requiresOtp = $enableOtp || $totpEnabled;
-                                if (frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
-                                    $requiresOtp = true;
-                                    $enableOtp = true;
-                                }
-                                
-                                if ($requiresOtp) {
-                                    // OTP is enabled -> proceed to OTP
-                                    $otp = frs_issue_login_otp_code($pdo, (int) $user['id'], getClientIP());
+                                // Successful password check -> second factor (email OTP and/or authenticator)
+                                $enableOtp = frs_user_email_otp_enabled($user);
+                                $totpActive = frs_user_totp_active($user);
 
-                                    // Log successful password stage
-                                    $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
-                                    $logStmt->execute([$email, getClientIP()]);
+                                if (!frs_user_has_required_second_factor($user)) {
+                                    $error = 'Two-factor authentication is required for your account. Enable email OTP or Google Authenticator in Profile → Account Security.';
+                                    logSecurityEvent('login_missing_2fa', "Login blocked — no 2FA method enabled: $email", 'warning');
+                                } elseif (frs_login_requires_second_factor($user)) {
+                                    $_SESSION['login_otp_email_sent'] = false;
 
-                                    // Send OTP email only if email OTP is enabled
                                     if ($enableOtp) {
+                                        $otp = frs_issue_login_otp_code($pdo, (int) $user['id'], getClientIP());
+
                                         require_once __DIR__ . '/../../../../config/email_templates.php';
                                         $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
                                         sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
@@ -119,7 +113,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             require_once __DIR__ . '/../../../../config/sms_helper.php';
                                             sendLoginOtpSms((string)$user['mobile'], (string)$otp, 1);
                                         }
+                                        $_SESSION['login_otp_email_sent'] = true;
+                                    } else {
+                                        // Authenticator-only: never send or keep email OTP codes
+                                        $pdo->prepare('UPDATE users SET otp_code_hash = NULL, otp_expires_at = NULL, otp_attempts = 0 WHERE id = ?')
+                                            ->execute([(int) $user['id']]);
                                     }
+
+                                    // Log successful password stage
+                                    $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
+                                    $logStmt->execute([$email, getClientIP()]);
 
                                     // Save pending OTP session
                                     session_regenerate_id(true);

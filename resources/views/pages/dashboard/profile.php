@@ -117,11 +117,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account'])
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId && in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
     if (isset($_POST['totp_disable'])) {
         if (isset($_POST[CSRF_TOKEN_NAME]) && verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            if (frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_email_otp_enabled($user)) {
+                $error = 'Enable email OTP before disabling Google Authenticator. Admin and Staff must keep at least one second-factor method.';
+            } else {
             try {
                 $pdo->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')->execute([$userId]);
-                $success = 'Authenticator app has been disabled. You will use email OTP only.';
+                $success = frs_user_email_otp_enabled($user)
+                    ? 'Authenticator app has been disabled. You will use email OTP only.'
+                    : 'Authenticator app has been disabled.';
             } catch (Throwable $e) {
                 $error = 'Failed to disable authenticator.';
+            }
             }
         }
     } elseif (isset($_POST['totp_enable_request'])) {
@@ -278,8 +284,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
         } else {
         // This is an OTP preference-only update
         $enableOtp = (int)$_POST['enable_otp'];
-        if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
-            $error = 'Two-factor authentication is required for Admin and Staff accounts and cannot be disabled.';
+        if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user)) {
+            $otpJsonError = 'Two-factor authentication is required. Enable Google Authenticator before turning off email OTP.';
+        } elseif ($enableOtp === 0 && frs_user_totp_active($user)) {
+            // Allowed: authenticator-only for Admin/Staff
+            $otpJsonOk = null; // set below
+        } elseif ($enableOtp === 0 && !frs_role_requires_two_factor((string)($user['role'] ?? '')) && frs_user_totp_active($user)) {
+            $otpJsonError = 'Disable Google Authenticator first if you want password-only login.';
+        } else {
+            $otpJsonOk = null;
+        }
+
+        if (isset($otpJsonError)) {
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => $otpJsonError]);
+                exit;
+            }
+            $error = $otpJsonError;
         } else {
         try {
             $updateStmt = $pdo->prepare('UPDATE users SET enable_otp = :enable_otp, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
@@ -295,10 +317,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
             $stmt = $pdo->prepare("SELECT $refreshFields FROM users WHERE id = :id LIMIT 1");
             $stmt->execute(['id' => $userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            $success = $enableOtp ? 'OTP has been enabled. You will receive a code via email on each login.' : 'OTP has been disabled. You can now log in with just your password.';
+
+            $success = $enableOtp
+                ? 'OTP has been enabled. You will receive a code via email on each login.'
+                : (frs_user_totp_active($user)
+                    ? 'Email OTP disabled. Use your authenticator app at login.'
+                    : 'OTP has been disabled. You can now log in with just your password.');
+
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => true, 'message' => $success, 'enable_otp' => (bool) $enableOtp, 'totp_active' => frs_user_totp_active($user)]);
+                exit;
+            }
         } catch (Exception $e) {
-            $error = 'Unable to update OTP preference. Please try again.';
+            $msg = 'Unable to update OTP preference. Please try again.';
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => $msg]);
+                exit;
+            }
+            $error = $msg;
         }
         }
         }
@@ -917,9 +955,11 @@ ob_start();
                                     </label>
                                     <p id="otp-status-text" style="color:#5b6888; font-size:0.85rem; margin:0; line-height:1.5;">
                                         <?php if ($user['enable_otp'] ?? true): ?>
-                                            OTP is currently <strong>enabled</strong>. You'll receive a code via email each time you log in.
+                                            Email OTP is <strong>enabled</strong>. You'll receive a code via email each time you log in.
+                                        <?php elseif (frs_user_totp_active($user)): ?>
+                                            Email OTP is <strong>disabled</strong>. Use your authenticator app at login<?= frs_role_requires_two_factor((string)($user['role'] ?? '')) ? '' : ', or enable email OTP again'; ?>.
                                         <?php else: ?>
-                                            OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.
+                                            Email OTP is <strong>disabled</strong>. Your account will log in with just your password.
                                         <?php endif; ?>
                                     </p>
                                     <div id="otp-status-message" style="margin-top:0.5rem; font-size:0.85rem; display:none;"></div>
@@ -944,7 +984,7 @@ ob_start();
                         <div class="totp-section" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
                             <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem;">Google Authenticator</label>
                             <?php if ($user['totp_enabled'] ?? 0): ?>
-                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">You can enter the 6-digit code from your authenticator app at login instead of the email OTP.</p>
+                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">Enter the 6-digit code from your authenticator app at login<?= ($user['enable_otp'] ?? true) ? ', or use the email OTP if enabled' : '' ?>.</p>
                                 <form method="POST" style="margin:0;">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="totp_disable" value="1">
@@ -1170,6 +1210,19 @@ ob_start();
 <?php endif; ?>
 
 <script>
+const otpTotpActive = <?= frs_user_totp_active($user) ? 'true' : 'false'; ?>;
+const otpRoleRequires2fa = <?= frs_role_requires_two_factor((string)($user['role'] ?? '')) ? 'true' : 'false'; ?>;
+
+function otpStatusText(enabled, totpActive) {
+    if (enabled) {
+        return 'Email OTP is <strong>enabled</strong>. You\'ll receive a code via email each time you log in.';
+    }
+    if (totpActive) {
+        return 'Email OTP is <strong>disabled</strong>. Use your authenticator app at login' + (otpRoleRequires2fa ? '' : ', or enable email OTP again') + '.';
+    }
+    return 'Email OTP is <strong>disabled</strong>. Your account will log in with just your password.';
+}
+
 // OTP Toggle Handler - AJAX update without page refresh
 function toggleOTPPreference(checkbox) {
     const isEnabled = checkbox.checked;
@@ -1177,78 +1230,65 @@ function toggleOTPPreference(checkbox) {
     const toggleKnob = document.getElementById('otp-toggle-knob');
     const statusText = document.getElementById('otp-status-text');
     const statusMessage = document.getElementById('otp-status-message');
-    
-    // Immediately update UI for instant feedback
-    if (isEnabled) {
-        toggleSwitch.style.backgroundColor = '#2563eb';
-        toggleKnob.style.transform = 'translateX(22px)';
-        statusText.innerHTML = 'OTP is currently <strong>enabled</strong>. You\'ll receive a code via email each time you log in.';
-    } else {
-        toggleSwitch.style.backgroundColor = '#ccc';
-        toggleKnob.style.transform = 'translateX(0)';
-        statusText.innerHTML = 'OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.';
-    }
-    
-    // Disable checkbox during request
+    const previousChecked = !isEnabled;
+
+    toggleSwitch.style.backgroundColor = isEnabled ? '#2563eb' : '#ccc';
+    toggleKnob.style.transform = isEnabled ? 'translateX(22px)' : 'translateX(0)';
+    statusText.innerHTML = otpStatusText(isEnabled, otpTotpActive);
+
     checkbox.disabled = true;
     statusMessage.style.display = 'none';
-    
-    // Prepare form data
+
     const formData = new FormData();
     formData.append('enable_otp', isEnabled ? '1' : '0');
+    formData.append('ajax', '1');
     formData.append('<?= CSRF_TOKEN_NAME; ?>', '<?= csrf_token(); ?>');
-    
-    // Send AJAX request
+
     fetch(window.location.href, {
         method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
         body: formData
     })
-    .then(response => response.text())
-    .then(html => {
-        // Re-enable checkbox
+    .then(response => response.json())
+    .then(data => {
         checkbox.disabled = false;
-        
-        // Show success message
+        if (!data.ok) {
+            checkbox.checked = previousChecked;
+            toggleSwitch.style.backgroundColor = previousChecked ? '#2563eb' : '#ccc';
+            toggleKnob.style.transform = previousChecked ? 'translateX(22px)' : 'translateX(0)';
+            statusText.innerHTML = otpStatusText(previousChecked, otpTotpActive);
+            statusMessage.style.display = 'block';
+            statusMessage.style.color = '#b23030';
+            statusMessage.style.padding = '0.5rem';
+            statusMessage.style.backgroundColor = '#fdecee';
+            statusMessage.style.borderRadius = '4px';
+            statusMessage.textContent = data.message || 'Failed to update OTP preference.';
+            setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
+            return;
+        }
+
+        statusText.innerHTML = otpStatusText(!!data.enable_otp, !!data.totp_active);
         statusMessage.style.display = 'block';
         statusMessage.style.color = '#0d7a43';
         statusMessage.style.padding = '0.5rem';
         statusMessage.style.backgroundColor = '#e3f8ef';
         statusMessage.style.borderRadius = '4px';
-        statusMessage.textContent = isEnabled 
-            ? '✓ OTP has been enabled. You will receive a code via email on each login.' 
-            : '✓ OTP has been disabled. You can now log in with just your password.';
-        
-        // Hide message after 3 seconds
-        setTimeout(() => {
-            statusMessage.style.display = 'none';
-        }, 3000);
+        statusMessage.textContent = '✓ ' + (data.message || 'OTP preference updated.');
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 3000);
     })
-    .catch(error => {
-        // Revert UI on error
-        checkbox.checked = !isEnabled;
-        if (isEnabled) {
-            toggleSwitch.style.backgroundColor = '#ccc';
-            toggleKnob.style.transform = 'translateX(0)';
-            statusText.innerHTML = 'OTP is currently <strong>disabled</strong>. Your account will log in directly with just your password.';
-        } else {
-            toggleSwitch.style.backgroundColor = '#2563eb';
-            toggleKnob.style.transform = 'translateX(22px)';
-            statusText.innerHTML = 'OTP is currently <strong>enabled</strong>. You\'ll receive a code via email each time you log in.';
-        }
+    .catch(() => {
+        checkbox.checked = previousChecked;
+        toggleSwitch.style.backgroundColor = previousChecked ? '#2563eb' : '#ccc';
+        toggleKnob.style.transform = previousChecked ? 'translateX(22px)' : 'translateX(0)';
+        statusText.innerHTML = otpStatusText(previousChecked, otpTotpActive);
         checkbox.disabled = false;
-        
-        // Show error message
         statusMessage.style.display = 'block';
         statusMessage.style.color = '#b23030';
         statusMessage.style.padding = '0.5rem';
         statusMessage.style.backgroundColor = '#fdecee';
         statusMessage.style.borderRadius = '4px';
         statusMessage.textContent = '✗ Failed to update OTP preference. Please try again.';
-        
-        // Hide error message after 5 seconds
-        setTimeout(() => {
-            statusMessage.style.display = 'none';
-        }, 5000);
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
     });
 }
 
