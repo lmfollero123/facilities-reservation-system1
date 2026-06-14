@@ -26,6 +26,13 @@ if (!empty($_SESSION['pending_email_verify_email'])) {
     $email = sanitizeInput($_SESSION['pending_email_verify_email'], 'email');
 }
 
+if ($info === '' && !empty($_SESSION['email_verify_login_message'])) {
+    $info = (string) $_SESSION['email_verify_login_message'];
+    unset($_SESSION['email_verify_login_message']);
+}
+
+$emailVerifyTtlMinutes = max(1, (int) ceil(((int) EMAIL_VERIFICATION_CODE_TTL_SECONDS) / 60));
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $error = 'Invalid security token. Please refresh the page and try again.';
@@ -170,7 +177,7 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 64px; width: auto; display: block; margin: 0 auto 1.25rem; object-fit: contain;">
-            <?= frs_heading_with_tip('Email Verification', 'Enter the code from your email to verify your address before registration or login continues.', 'h1'); ?>
+            <?= frs_heading_with_tip('Email Verification', 'Enter the 6-digit code sent to your email to complete registration. Codes are valid for ' . $emailVerifyTtlMinutes . ' minutes.', 'h1'); ?>
         </div>
 
         <?php if ($error): ?>
@@ -186,9 +193,13 @@ ob_start();
         <div style="margin-bottom: 1rem; font-size: 0.9rem; color: #4c5b7c;">
             We sent a 6-digit verification code to:
             <strong><?= htmlspecialchars($email); ?></strong>
-            <?php if ($verificationRemainingSeconds > 0): ?>
-                <div id="emailVerifyCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">Code expires in 01:00</div>
-            <?php endif; ?>
+            <div id="emailVerifyCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">
+                <?php if ($verificationRemainingSeconds > 0): ?>
+                    Code expires in <?= sprintf('%02d:%02d', intdiv($verificationRemainingSeconds, 60), $verificationRemainingSeconds % 60); ?>
+                <?php else: ?>
+                    Code expired. Click "Resend Code" below to get a new one.
+                <?php endif; ?>
+            </div>
         </div>
 
         <form method="POST" class="auth-form">
@@ -212,9 +223,9 @@ ob_start();
             <button class="btn-primary" type="submit" style="margin-top: 1.5rem;">Verify Email</button>
         </form>
 
-        <form method="POST" style="margin-top:0.75rem; text-align:center;">
+        <form method="POST" id="emailVerifyResendForm" style="margin-top:0.75rem; text-align:center;">
             <?= csrf_field(); ?>
-            <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Resend Code</button>
+            <button class="<?= $verificationRemainingSeconds > 0 ? 'btn-outline' : 'btn-primary'; ?>" type="submit" name="resend" value="1" id="emailVerifyResendBtn" style="padding:0.45rem 0.75rem;">Resend Code</button>
         </form>
 
         <div class="auth-footer">
@@ -301,25 +312,38 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const countdownEl = document.getElementById('emailVerifyCountdown');
+    const resendBtn = document.getElementById('emailVerifyResendBtn');
     if (countdownEl) {
         let remaining = <?= (int)$verificationRemainingSeconds; ?>;
         const renderCountdown = () => {
             const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
             const ss = String(remaining % 60).padStart(2, '0');
-            countdownEl.textContent = remaining > 0
-                ? `Code expires in ${mm}:${ss}`
-                : 'Code expired. Click "Resend Code" below to get a new one.';
-            countdownEl.style.color = remaining > 0 ? '#b45309' : '#b23030';
+            if (remaining > 0) {
+                countdownEl.textContent = `Code expires in ${mm}:${ss}`;
+                countdownEl.style.color = '#b45309';
+                if (resendBtn) {
+                    resendBtn.classList.remove('btn-primary');
+                    resendBtn.classList.add('btn-outline');
+                }
+            } else {
+                countdownEl.textContent = 'Code expired. Click "Resend Code" below to get a new one.';
+                countdownEl.style.color = '#b23030';
+                if (resendBtn) {
+                    resendBtn.classList.remove('btn-outline');
+                    resendBtn.classList.add('btn-primary');
+                }
+            }
         };
         renderCountdown();
-        const timer = setInterval(() => {
-            if (remaining <= 0) {
-                clearInterval(timer);
-                return;
-            }
-            remaining--;
-            renderCountdown();
-        }, 1000);
+        if (remaining > 0) {
+            const timer = setInterval(() => {
+                remaining--;
+                renderCountdown();
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                }
+            }, 1000);
+        }
     }
 });
 </script>

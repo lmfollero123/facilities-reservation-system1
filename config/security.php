@@ -12,8 +12,8 @@ define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max failed login attempts per email
 define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
 define('RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS', 10); // Max wrong codes per pending user
 define('RATE_LIMIT_EMAIL_VERIFY_WINDOW', 900); // 15 minutes
-define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 60); // Registration email code lifetime
-define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before resend
+define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 900); // 15 minutes — first-time registration email verification
+define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before manual resend
 define('LOGIN_OTP_CODE_TTL_SECONDS', 60); // Login email OTP lifetime
 define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', 60); // Min wait before login OTP resend
 /** Hours to retain registrations that never completed email verification (industry norm: 24–72h). */
@@ -303,6 +303,118 @@ function frs_send_email_verification(PDO $pdo, int $userId, string $email, strin
     $body = getEmailVerificationEmailTemplate($name, $code, $expiryMinutes);
     sendEmail($email, $name, 'Verify Your Email Address', $body);
     frs_mark_email_verification_sent();
+}
+
+/**
+ * Whether an unverified account exceeded the registration retention window.
+ */
+function frs_unverified_account_past_retention(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $hours = max(1, (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24));
+    $stmt = $pdo->prepare(
+        "SELECT 1
+         FROM users
+         WHERE id = ?
+           AND (email_verified = 0 OR email_verified IS NULL)
+           AND created_at < DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+         LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Delete an unverified account that exceeded the retention window.
+ */
+function frs_delete_unverified_user(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    if (!frs_unverified_account_past_retention($pdo, $userId)) {
+        return false;
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $pdo->prepare('UPDATE reservation_history SET created_by = NULL WHERE created_by = ?')->execute([$userId]);
+        $pdo->prepare('UPDATE users SET verified_by = NULL WHERE verified_by = ?')->execute([$userId]);
+        $pdo->prepare('UPDATE facility_blackout_dates SET created_by = NULL WHERE created_by = ?')->execute([$userId]);
+        $pdo->prepare('UPDATE contact_inquiries SET responded_by = NULL WHERE responded_by = ?')->execute([$userId]);
+        $del = $pdo->prepare(
+            'DELETE FROM users
+             WHERE id = ?
+               AND (email_verified = 0 OR email_verified IS NULL)'
+        );
+        $del->execute([$userId]);
+        $deleted = $del->rowCount() > 0;
+        $pdo->commit();
+        return $deleted;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
+ * After a successful password check on login, start or resume first-time email verification.
+ *
+ * Reuses the existing code when still within the 15-minute window; otherwise sends a new code
+ * (while the account remains within the 24-hour unverified retention window).
+ *
+ * @return array{ok: bool, error?: string, info?: string}
+ */
+function frs_begin_login_email_verification(PDO $pdo, array $user): array
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $userId = (int) ($user['id'] ?? 0);
+    $email = (string) ($user['email'] ?? '');
+    $name = (string) ($user['name'] ?? '');
+
+    if ($userId <= 0 || $email === '') {
+        return ['ok' => false, 'error' => 'Unable to continue email verification. Please try again.'];
+    }
+
+    if (frs_unverified_account_past_retention($pdo, $userId)) {
+        frs_delete_unverified_user($pdo, $userId);
+        unset($_SESSION['pending_email_verify_user_id'], $_SESSION['pending_email_verify_email'], $_SESSION['email_verify_login_message']);
+        logSecurityEvent('unverified_account_expired', "Removed unverified account on login: {$email}", 'info');
+        return [
+            'ok' => false,
+            'error' => 'Your registration expired because email was not verified within '
+                . (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24)
+                . ' hours. Please register again.',
+        ];
+    }
+
+    $_SESSION['pending_email_verify_user_id'] = $userId;
+    $_SESSION['pending_email_verify_email'] = $email;
+
+    if (frs_email_verification_code_is_valid($pdo, $userId)) {
+        $_SESSION['email_verify_login_message'] = 'Your verification code is still valid. Enter the code from your email.';
+        return ['ok' => true, 'info' => 'existing_code'];
+    }
+
+    try {
+        frs_send_email_verification($pdo, $userId, $email, $name);
+        $_SESSION['email_verify_login_message'] = 'Your previous code expired. A new verification code has been sent to your email.';
+    } catch (Throwable $e) {
+        logSecurityEvent('email_verification_email_error', 'Failed to send email verification on login: ' . $e->getMessage(), 'error');
+        return ['ok' => false, 'error' => 'Unable to send a verification email right now. Please try again later.'];
+    }
+
+    return ['ok' => true, 'info' => 'new_code'];
 }
 
 /**

@@ -164,8 +164,14 @@ ob_start();
             }
             echo frs_heading_with_tip('Enter One-Time Passcode', $otpTip, 'h1');
             ?>
-            <?php if ($emailOtpValid): ?>
-                <p id="otpCountdown" style="font-weight:600; color:#b45309; margin-top:0.5rem;">Code expires in 01:00</p>
+            <?php if ($emailOtpEnabled): ?>
+                <p id="otpCountdown" style="font-weight:600; margin-top:0.5rem; color:<?= $emailOtpValid ? '#b45309' : '#b23030'; ?>;">
+                    <?php if ($emailOtpValid): ?>
+                        Code expires in <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
+                    <?php else: ?>
+                        Code expired. Click "Resend Code" below to get a new one.
+                    <?php endif; ?>
+                </p>
             <?php endif; ?>
         </div>
 
@@ -193,12 +199,12 @@ ob_start();
             <button class="btn-primary" type="submit">Verify &amp; Sign In</button>
         </form>
 
-        <form method="POST" style="margin-top:0.75rem; text-align:center;">
+        <form method="POST" id="loginOtpResendForm" style="margin-top:0.75rem; text-align:center;">
             <?= csrf_field(); ?>
             <?php if ($hasTotp && !$emailOtpEnabled): ?>
-                <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Send code to email instead</button>
+                <button class="btn-outline" type="submit" name="resend" value="1" id="loginOtpResendBtn" style="padding:0.45rem 0.75rem;">Send code to email instead</button>
             <?php else: ?>
-                <button class="btn-outline" type="submit" name="resend" value="1" style="padding:0.45rem 0.75rem;">Resend Code</button>
+                <button class="<?= $emailOtpValid ? 'btn-outline' : 'btn-primary'; ?>" type="submit" name="resend" value="1" id="loginOtpResendBtn" style="padding:0.45rem 0.75rem;">Resend Code</button>
             <?php endif; ?>
         </form>
 
@@ -211,32 +217,46 @@ ob_start();
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
 
-if ($emailOtpValid):
+if ($emailOtpEnabled):
 ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const countdownEl = document.getElementById('otpCountdown');
+    const resendBtn = document.getElementById('loginOtpResendBtn');
     if (!countdownEl) return;
+
     let remaining = <?= (int)$otpRemainingSeconds; ?>;
 
     function renderCountdown() {
         const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
         const ss = String(remaining % 60).padStart(2, '0');
-        countdownEl.textContent = remaining > 0
-            ? `Code expires in ${mm}:${ss}`
-            : 'Code expired. Please request a new code.';
-        countdownEl.style.color = remaining > 0 ? '#b45309' : '#b23030';
+        if (remaining > 0) {
+            countdownEl.textContent = `Code expires in ${mm}:${ss}`;
+            countdownEl.style.color = '#b45309';
+            if (resendBtn && resendBtn.textContent.trim() === 'Resend Code') {
+                resendBtn.classList.remove('btn-primary');
+                resendBtn.classList.add('btn-outline');
+            }
+        } else {
+            countdownEl.textContent = 'Code expired. Click "Resend Code" below to get a new one.';
+            countdownEl.style.color = '#b23030';
+            if (resendBtn && resendBtn.textContent.trim() === 'Resend Code') {
+                resendBtn.classList.remove('btn-outline');
+                resendBtn.classList.add('btn-primary');
+            }
+        }
     }
 
     renderCountdown();
-    const timer = setInterval(function () {
-        if (remaining <= 0) {
-            clearInterval(timer);
-            return;
-        }
-        remaining--;
-        renderCountdown();
-    }, 1000);
+    if (remaining > 0) {
+        const timer = setInterval(function () {
+            remaining--;
+            renderCountdown();
+            if (remaining <= 0) {
+                clearInterval(timer);
+            }
+        }, 1000);
+    }
 });
 </script>
 <?php

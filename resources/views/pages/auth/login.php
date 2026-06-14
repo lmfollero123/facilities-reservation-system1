@@ -83,26 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $error = 'Your account is not active. Please contact an administrator.';
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
-                                // Require email verification before proceeding with OTP/login
                                 $emailVerified = isset($user['email_verified']) ? (bool)$user['email_verified'] : true;
                                 if (!$emailVerified) {
-                                    try {
-                                        frs_send_email_verification($pdo, (int) $user['id'], (string) $user['email'], (string) $user['name']);
-                                    } catch (Exception $e) {
-                                        logSecurityEvent('email_verification_email_error', 'Failed to send email verification on login: ' . $e->getMessage(), 'error');
+                                    $verifyResult = frs_begin_login_email_verification($pdo, $user);
+                                    if (!$verifyResult['ok']) {
+                                        $error = $verifyResult['error'] ?? 'Email verification is required before you can sign in.';
+                                    } else {
+                                        header('Location: ' . base_path() . '/verify-email');
+                                        exit;
                                     }
-
-                                    if (session_status() === PHP_SESSION_NONE) {
-                                        session_start();
-                                    }
-                                    $_SESSION['pending_email_verify_user_id'] = $user['id'];
-                                    $_SESSION['pending_email_verify_email'] = $user['email'];
-
-                                    $error = '';
-                                    header('Location: ' . base_path() . '/verify-email?email=' . urlencode($user['email']));
-                                    exit;
-                                }
-
+                                } else {
                                 // Successful password check -> check OTP preference
                                 $enableOtp = (bool)($user['enable_otp'] ?? true);
                                 $totpEnabled = (bool)($user['totp_enabled'] ?? false);
@@ -174,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         header('Location: ' . base_path() . '/dashboard');
                                     }
                                     exit;
+                                }
                                 }
                                 }
                             } else {

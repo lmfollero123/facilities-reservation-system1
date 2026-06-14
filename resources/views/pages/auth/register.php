@@ -221,8 +221,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                                 $_SESSION['pending_email_verify_user_id'] = $userId;
                                 $_SESSION['pending_email_verify_email'] = $email;
+                                $_SESSION['email_verify_login_message'] = 'Enter the code sent to your email. It is valid for '
+                                    . max(1, (int) ceil(((int) EMAIL_VERIFICATION_CODE_TTL_SECONDS) / 60))
+                                    . ' minutes.';
 
-                                header('Location: ' . base_path() . '/verify-email?email=' . urlencode($email));
+                                header('Location: ' . base_path() . '/verify-email');
                                 exit;
                             }
                         }
