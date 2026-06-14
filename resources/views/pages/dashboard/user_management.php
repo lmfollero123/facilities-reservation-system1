@@ -376,8 +376,9 @@ if ($filterStatus && $filterStatus !== 'all') {
 }
 
 if ($searchQuery !== '') {
-    $whereConditions[] = '(name LIKE :search OR email LIKE :search)';
-    $params['search'] = '%' . $searchQuery . '%';
+    $whereConditions[] = '(name LIKE :search_name OR email LIKE :search_email)';
+    $params['search_name'] = '%' . $searchQuery . '%';
+    $params['search_email'] = '%' . $searchQuery . '%';
 }
 
 $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
