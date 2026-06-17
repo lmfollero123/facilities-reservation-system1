@@ -64,27 +64,31 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $amountCentavos = (int)round($amountPhp * 100);
 
-        $successUrl = base_url() . '/dashboard/pay-now?reservation_id=' . (int)$reservation['id'] . '&payment=success';
-        $cancelUrl = base_url() . '/dashboard/pay-now?reservation_id=' . (int)$reservation['id'] . '&payment=cancelled';
+        $successUrl = frs_paymongo_return_url((int)$reservation['id'], 'success');
+        $cancelUrl = frs_paymongo_return_url((int)$reservation['id'], 'cancelled');
 
         $lineName = 'Facility Reservation #' . (int)$reservation['id'];
         $desc = $reservation['facility_name'] . ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ')';
 
+        $billingEmail = trim((string)($_SESSION['user_email'] ?? $_SESSION['email'] ?? ''));
+        $billingName = trim((string)($_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Resident'));
+
         $checkoutPayload = [
             'billing' => [
-                'name' => $_SESSION['name'] ?? 'Resident',
-                'email' => $_SESSION['email'] ?? '',
+                'name' => $billingName !== '' ? $billingName : 'Resident',
+                'email' => $billingEmail,
             ],
             'line_items' => [[
-                'currency' => 'PHP',
+                'currency' => strtoupper((string)($cfg['currency'] ?? 'PHP')),
                 'amount' => $amountCentavos,
                 'name' => $lineName,
                 'quantity' => 1,
                 'description' => $desc,
             ]],
-            'payment_method_types' => ['gcash', 'paymaya', 'card'],
+            'payment_method_types' => ['gcash', 'card', 'qrph'],
             'success_url' => $successUrl,
             'cancel_url' => $cancelUrl,
+            'reference_number' => 'RES-' . (int)$reservation['id'],
             'description' => 'Reservation payment for LGU Facilities',
             'metadata' => [
                 'reservation_id' => (string)$reservation['id'],
@@ -151,60 +155,16 @@ if (!$error && $reservation && isset($_GET['payment']) && $_GET['payment'] === '
         $latestPayment = $latestPayStmt->fetch(PDO::FETCH_ASSOC);
 
         if ($latestPayment && !empty($latestPayment['provider_checkout_id'])) {
-            $checkoutId = (string)$latestPayment['provider_checkout_id'];
-            $checkoutResp = paymongoRetrieveCheckoutSession($checkoutId);
-            $attrs = $checkoutResp['data']['data']['attributes'] ?? [];
-            $paymentStatus = strtolower((string)($attrs['payment_intent']['attributes']['status'] ?? ''));
-            $isPaid = in_array($paymentStatus, ['succeeded', 'paid'], true);
-
-            if ($isPaid) {
-                $pdo->beginTransaction();
-
-                $updatePay = $pdo->prepare(
-                    'UPDATE payments
-                     SET status = "paid",
-                         paid_at = COALESCE(paid_at, NOW()),
-                         payload_json = :payload_json
-                     WHERE id = :id'
-                );
-                $updatePay->execute([
-                    'payload_json' => json_encode($checkoutResp['data'] ?? []),
-                    'id' => (int)$latestPayment['id'],
-                ]);
-
-                $updateReservation = $pdo->prepare(
-                    'UPDATE reservations
-                     SET status = "approved", auto_approved = 1, updated_at = CURRENT_TIMESTAMP
-                     WHERE id = :id AND status = "pending_payment"'
-                );
-                $updateReservation->execute(['id' => (int)$reservation['id']]);
-
-                $hist = $pdo->prepare(
-                    'INSERT INTO reservation_history (reservation_id, status, note, created_by)
-                     VALUES (:reservation_id, "approved", :note, NULL)'
-                );
-                $hist->execute([
-                    'reservation_id' => (int)$reservation['id'],
-                    'note' => 'Payment confirmed via return callback. Reservation secured.',
-                ]);
-
-                createNotification(
-                    $userId,
-                    'booking',
-                    'Payment Confirmed',
-                    'Your payment was successful. Reservation #' . (int)$reservation['id'] . ' is now approved.',
-                    base_path() . '/dashboard/book-facility?module=mine'
-                );
-
-                $pdo->commit();
-                header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
-                exit;
+            $checkoutResp = paymongoRetrieveCheckoutSession((string)$latestPayment['provider_checkout_id']);
+            if (!empty($checkoutResp['ok'])) {
+                $result = frs_finalize_reservation_payment($pdo, (int)$reservation['id'], $userId, $checkoutResp['data'] ?? []);
+                if (!empty($result['ok'])) {
+                    header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
+                    exit;
+                }
             }
         }
     } catch (Throwable $e) {
-        if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
         error_log('Payment return sync error: ' . $e->getMessage());
     }
 }

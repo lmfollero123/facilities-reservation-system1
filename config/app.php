@@ -180,12 +180,27 @@ if (!function_exists('base_url')) {
      */
     function base_url(): string
     {
+        $configured = trim((string)env_value('APP_URL', ''));
+        if ($configured !== '') {
+            return rtrim($configured, '/');
+        }
+
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
-        $isLocal = (strpos($host, 'localhost') !== false || 
-                   strpos($host, '127.0.0.1') !== false || 
+        $isLocal = (strpos($host, 'localhost') !== false ||
+                   strpos($host, '127.0.0.1') !== false ||
                    strpos($host, 'lgu.test') !== false);
-        $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $protocol = strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https' ? 'https' : 'http';
+        } elseif (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+            $protocol = 'https';
+        } elseif ($isLocal) {
+            $protocol = 'http';
+        } else {
+            // Production default: HTTPS (required for PayMongo redirect URL validation).
+            $protocol = 'https';
+        }
+
         $base = base_path();
         return $protocol . '://' . $host . $base;
     }

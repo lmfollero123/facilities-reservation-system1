@@ -12,10 +12,12 @@ return [
     // Currency expected by PayMongo.
     'currency' => (string)(function_exists('env_value') ? env_value('PAYMENT_CURRENCY', 'PHP') : (getenv('PAYMENT_CURRENCY') ?: 'PHP')),
 
-    // PayMongo links endpoint configuration.
+    // PayMongo API configuration.
     'paymongo' => [
         'secret_key' => (string)(function_exists('env_value') ? env_value('PAYMONGO_SECRET_KEY', '') : (getenv('PAYMONGO_SECRET_KEY') ?: '')),
         'webhook_secret' => (string)(function_exists('env_value') ? env_value('PAYMONGO_WEBHOOK_SECRET', '') : (getenv('PAYMONGO_WEBHOOK_SECRET') ?: '')),
+        // v2 is recommended by PayMongo for new Hosted Checkout integrations.
+        'api_version' => (string)(function_exists('env_value') ? env_value('PAYMONGO_API_VERSION', 'v2') : (getenv('PAYMONGO_API_VERSION') ?: 'v2')),
         'links_endpoint' => (string)(function_exists('env_value') ? env_value('PAYMONGO_LINKS_ENDPOINT', 'https://api.paymongo.com/v1/links') : (getenv('PAYMONGO_LINKS_ENDPOINT') ?: 'https://api.paymongo.com/v1/links')),
         'description_prefix' => (string)(function_exists('env_value') ? env_value('PAYMONGO_DESCRIPTION_PREFIX', 'LGU Culiat Reservation') : (getenv('PAYMONGO_DESCRIPTION_PREFIX') ?: 'LGU Culiat Reservation')),
     ],
