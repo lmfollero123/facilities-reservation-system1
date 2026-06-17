@@ -150,6 +150,9 @@ $canViewOtherReservationDetails = in_array($viewerRole, ['Admin', 'Staff'], true
 $GLOBALS['frsMineNotifyPath'] = base_path() . '/dashboard/book-facility?module=mine';
 $GLOBALS['frsMineNotifyAbsUrl'] = base_url() . '/dashboard/book-facility?module=mine';
 autoDeclineExpiredReservations();
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' && !empty($userId)) {
+    frs_sync_user_pending_payments($pdo, (int)$userId);
+}
 $frsCsrfOk = frs_csrf_ok();
 $frsCsrfError = 'Your session expired or the form is invalid. Please refresh and try again.';
 require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';

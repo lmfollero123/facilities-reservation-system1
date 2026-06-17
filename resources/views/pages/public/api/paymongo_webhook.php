@@ -32,19 +32,11 @@ if (!is_array($event)) {
     exit;
 }
 
-$eventId = (string)($event['data']['id'] ?? '');
-$eventType = (string)($event['data']['attributes']['type'] ?? '');
-$resource = $event['data']['attributes']['data'] ?? [];
-$checkoutId = (string)($resource['id'] ?? '');
-if ($checkoutId === '') {
-    $checkoutId = (string)($resource['attributes']['checkout_session_id'] ?? '');
-}
-if ($checkoutId === '') {
-    $checkoutId = (string)($resource['attributes']['checkout_session']['id'] ?? '');
-}
-$reservationIdFromMeta = (int)($resource['attributes']['metadata']['reservation_id']
-    ?? $resource['attributes']['checkout_session']['attributes']['metadata']['reservation_id']
-    ?? 0);
+$parsed = paymongoParseWebhookPayload($event);
+$eventId = $parsed['event_id'];
+$eventType = $parsed['event_type'];
+$checkoutId = $parsed['checkout_id'];
+$reservationIdFromMeta = $parsed['reservation_id'];
 
 if ($checkoutId === '' && $reservationIdFromMeta <= 0) {
     http_response_code(400);
@@ -126,7 +118,7 @@ try {
         $hist->execute([
             'reservation_id' => $reservationId,
             'status' => 'approved',
-            'note' => 'Payment confirmed via PayMongo. Reservation secured.',
+            'note' => 'Payment confirmed via PayMongo webhook (' . ($eventType ?: 'payment.paid') . ').',
         ]);
 
         createNotification(
@@ -151,7 +143,6 @@ try {
             'id' => $paymentId,
         ]);
     } else {
-        // Unknown event for this flow; record payload but keep status unchanged.
         $updatePay = $pdo->prepare(
             'UPDATE payments
              SET provider_event_id = :event_id,
@@ -170,7 +161,7 @@ try {
     logAudit(
         'Processed PayMongo webhook',
         'Payments',
-        'Event ' . ($eventId ?: 'unknown') . ' for checkout ' . $checkoutId
+        'Event ' . ($eventId ?: 'unknown') . ' type ' . ($eventType ?: 'unknown') . ' checkout ' . $checkoutId
     );
 
     echo json_encode(['success' => true]);

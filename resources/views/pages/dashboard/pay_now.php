@@ -141,31 +141,16 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fallback sync: after returning from PayMongo success URL, verify checkout status and finalize if paid.
-if (!$error && $reservation && isset($_GET['payment']) && $_GET['payment'] === 'success' && ($reservation['status'] ?? '') === 'pending_payment') {
+// Auto-sync PayMongo payments when user returns (PayMongo opens in a new tab).
+if (!$error && $reservation && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($reservation['status'] ?? '') === 'pending_payment') {
     try {
-        $latestPayStmt = $pdo->prepare(
-            'SELECT id, provider_checkout_id, status
-             FROM payments
-             WHERE reservation_id = :reservation_id
-             ORDER BY id DESC
-             LIMIT 1'
-        );
-        $latestPayStmt->execute(['reservation_id' => (int)$reservation['id']]);
-        $latestPayment = $latestPayStmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($latestPayment && !empty($latestPayment['provider_checkout_id'])) {
-            $checkoutResp = paymongoRetrieveCheckoutSession((string)$latestPayment['provider_checkout_id']);
-            if (!empty($checkoutResp['ok'])) {
-                $result = frs_finalize_reservation_payment($pdo, (int)$reservation['id'], $userId, $checkoutResp['data'] ?? []);
-                if (!empty($result['ok'])) {
-                    header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
-                    exit;
-                }
-            }
+        $syncResult = frs_try_sync_reservation_payment($pdo, (int)$reservation['id'], $userId);
+        if (!empty($syncResult['changed'])) {
+            header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
+            exit;
         }
     } catch (Throwable $e) {
-        error_log('Payment return sync error: ' . $e->getMessage());
+        error_log('Payment sync on pay-now load: ' . $e->getMessage());
     }
 }
 

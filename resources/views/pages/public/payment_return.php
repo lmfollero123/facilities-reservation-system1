@@ -25,6 +25,12 @@ if ($paymentOutcome === 'cancelled') {
         $userId = (int)($_SESSION['user_id'] ?? 0);
         try {
             $pdo = db();
+            $syncResult = frs_try_sync_reservation_payment($pdo, $reservationId, $userId);
+            if (!empty($syncResult['changed'])) {
+                header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
+                exit;
+            }
+
             $stmt = $pdo->prepare(
                 'SELECT id, user_id, status
                  FROM reservations
@@ -34,28 +40,7 @@ if ($paymentOutcome === 'cancelled') {
             $stmt->execute(['id' => $reservationId, 'uid' => $userId]);
             $reservation = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($reservation && ($reservation['status'] ?? '') === 'pending_payment') {
-                $latestPayStmt = $pdo->prepare(
-                    'SELECT provider_checkout_id
-                     FROM payments
-                     WHERE reservation_id = :reservation_id AND user_id = :user_id
-                     ORDER BY id DESC
-                     LIMIT 1'
-                );
-                $latestPayStmt->execute(['reservation_id' => $reservationId, 'user_id' => $userId]);
-                $checkoutId = (string)$latestPayStmt->fetchColumn();
-
-                if ($checkoutId !== '') {
-                    $checkoutResp = paymongoRetrieveCheckoutSession($checkoutId);
-                    if (!empty($checkoutResp['ok'])) {
-                        $result = frs_finalize_reservation_payment($pdo, $reservationId, $userId, $checkoutResp['data'] ?? []);
-                        if (!empty($result['ok'])) {
-                            header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
-                            exit;
-                        }
-                    }
-                }
-            } elseif ($reservation && ($reservation['status'] ?? '') === 'approved') {
+            if ($reservation && ($reservation['status'] ?? '') === 'approved') {
                 header('Location: ' . base_path() . '/dashboard/book-facility?module=mine&payment=success');
                 exit;
             }
