@@ -52,7 +52,7 @@ function frs_paymongo_return_url(int $reservationId, string $outcome): string
     return base_url() . '/payment-return?reservation_id=' . $reservationId . '&payment=' . rawurlencode($outcome);
 }
 
-function paymongoRequest(string $method, string $endpoint, array $payload = []): array
+function paymongoRequest(string $method, string $endpoint, array $payload = [], ?string $apiVersion = null): array
 {
     $cfg = paymongoConfig();
     $secretKey = trim((string)($cfg['secret_key'] ?? ''));
@@ -60,7 +60,12 @@ function paymongoRequest(string $method, string $endpoint, array $payload = []):
         return ['ok' => false, 'error' => 'PayMongo secret key is not configured.'];
     }
 
-    $url = paymongoApiBaseUrl() . ltrim($endpoint, '/');
+    $version = $apiVersion ?? paymongoApiVersion();
+    if (!in_array($version, ['v1', 'v2'], true)) {
+        $version = paymongoApiVersion();
+    }
+
+    $url = 'https://api.paymongo.com/' . $version . '/' . ltrim($endpoint, '/');
     $headers = [
         'Accept: application/json',
         'Content-Type: application/json',
@@ -121,7 +126,23 @@ function paymongoRetrieveEvent(string $eventId): array
 
 function paymongoRetrieveCheckoutSession(string $checkoutId): array
 {
-    return paymongoRequest('GET', 'checkout_sessions/' . rawurlencode($checkoutId));
+    $primary = paymongoApiVersion();
+    $versions = array_values(array_unique([$primary, $primary === 'v2' ? 'v1' : 'v2']));
+
+    $last = ['ok' => false, 'error' => 'Unable to retrieve checkout session.'];
+    foreach ($versions as $version) {
+        $resp = paymongoRequest('GET', 'checkout_sessions/' . rawurlencode($checkoutId), [], $version);
+        if (!empty($resp['ok'])) {
+            $resp['api_version'] = $version;
+            return $resp;
+        }
+        $last = $resp;
+        if ((int)($resp['http'] ?? 0) !== 404) {
+            break;
+        }
+    }
+
+    return $last;
 }
 
 /**
@@ -148,25 +169,7 @@ function paymongoCheckoutSessionIsPaid(array $apiJson): bool
 {
     $attrs = paymongoCheckoutSessionResource($apiJson)['attributes'] ?? [];
 
-    $sessionStatus = strtolower((string)($attrs['status'] ?? ''));
-    if (in_array($sessionStatus, ['paid', 'completed', 'succeeded'], true)) {
-        return true;
-    }
-
-    $paymentStatus = strtolower((string)($attrs['payment_status'] ?? ''));
-    if (in_array($paymentStatus, ['paid', 'succeeded'], true)) {
-        return true;
-    }
-
-    $piStatus = strtolower((string)(
-        $attrs['payment_intent']['attributes']['status']
-        ?? $attrs['payment_intent']['status']
-        ?? ''
-    ));
-    if (in_array($piStatus, ['succeeded', 'paid'], true)) {
-        return true;
-    }
-
+    // PayMongo v2 sessions stay "active" until expired; payment is in payments[].
     foreach ($attrs['payments'] ?? [] as $payment) {
         if (!is_array($payment)) {
             continue;
@@ -181,7 +184,24 @@ function paymongoCheckoutSessionIsPaid(array $apiJson): bool
         }
     }
 
-    return false;
+    $pi = $attrs['payment_intent'] ?? null;
+    if (is_array($pi)) {
+        $piStatus = strtolower((string)(
+            $pi['attributes']['status']
+            ?? $pi['status']
+            ?? ''
+        ));
+        if (in_array($piStatus, ['succeeded', 'paid'], true)) {
+            return true;
+        }
+    }
+
+    if (!empty($attrs['paid_at']) || !empty($attrs['completed_at'])) {
+        return true;
+    }
+
+    $sessionStatus = strtolower((string)($attrs['status'] ?? ''));
+    return in_array($sessionStatus, ['paid', 'completed', 'succeeded'], true);
 }
 
 /**
@@ -202,7 +222,10 @@ function paymongoParseWebhookPayload(array $payload): array
     );
 
     $resource = $root['attributes']['data'] ?? $root['data'] ?? [];
-    if (isset($resource['data']) && is_array($resource['data'])) {
+    if (isset($resource['type'], $resource['data']) && is_array($resource['data'])) {
+        // v2 send.webhook envelope: data.type + data.data (checkout session)
+        $resource = $resource['data'];
+    } elseif (isset($resource['data']) && is_array($resource['data']) && isset($resource['data']['id'])) {
         $resource = $resource['data'];
     }
 
@@ -223,6 +246,10 @@ function paymongoParseWebhookPayload(array $payload): array
         ?? $resource['attributes']['checkout_session']['attributes']['metadata']
         ?? [];
 
+    if ($eventType === '' && paymongoCheckoutSessionIsPaid(['data' => $resource])) {
+        $eventType = 'checkout_session.payment.paid';
+    }
+
     return [
         'event_type' => $eventType,
         'checkout_id' => $checkoutId,
@@ -236,16 +263,24 @@ function paymongoParseWebhookPayload(array $payload): array
  *
  * @return array{ok: bool, message: string, changed: bool}
  */
-function frs_try_sync_reservation_payment(PDO $pdo, int $reservationId, int $userId): array
+function frs_try_sync_reservation_payment(PDO $pdo, int $reservationId, ?int $actingUserId = null): array
 {
     $resStmt = $pdo->prepare(
-        'SELECT id, status FROM reservations WHERE id = :id AND user_id = :uid LIMIT 1'
+        'SELECT id, user_id, status FROM reservations WHERE id = :id LIMIT 1'
     );
-    $resStmt->execute(['id' => $reservationId, 'uid' => $userId]);
+    $resStmt->execute(['id' => $reservationId]);
     $reservation = $resStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$reservation) {
         return ['ok' => false, 'message' => 'Reservation not found.', 'changed' => false];
+    }
+
+    $ownerId = (int)($reservation['user_id'] ?? 0);
+    if ($actingUserId !== null && $actingUserId !== $ownerId) {
+        $role = (string)($_SESSION['role'] ?? '');
+        if (!in_array($role, ['Admin', 'Staff'], true)) {
+            return ['ok' => false, 'message' => 'Reservation not found.', 'changed' => false];
+        }
     }
 
     if (($reservation['status'] ?? '') === 'approved') {
@@ -261,39 +296,64 @@ function frs_try_sync_reservation_payment(PDO $pdo, int $reservationId, int $use
     }
 
     $payStmt = $pdo->prepare(
-        'SELECT provider_checkout_id
+        'SELECT id, provider_checkout_id, status
          FROM payments
-         WHERE reservation_id = :reservation_id AND user_id = :user_id
-         ORDER BY id DESC
-         LIMIT 1'
+         WHERE reservation_id = :reservation_id
+           AND provider_checkout_id IS NOT NULL
+           AND provider_checkout_id != ""
+         ORDER BY id DESC'
     );
-    $payStmt->execute(['reservation_id' => $reservationId, 'user_id' => $userId]);
-    $checkoutId = (string)$payStmt->fetchColumn();
+    $payStmt->execute(['reservation_id' => $reservationId]);
+    $paymentRows = $payStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if ($checkoutId === '') {
+    if (!$paymentRows) {
         return ['ok' => false, 'message' => 'No checkout session found for this reservation.', 'changed' => false];
     }
 
-    $checkoutResp = paymongoRetrieveCheckoutSession($checkoutId);
-    if (empty($checkoutResp['ok'])) {
+    $lastError = 'Payment has not been completed yet.';
+
+    foreach ($paymentRows as $paymentRow) {
+        if (($paymentRow['status'] ?? '') === 'paid') {
+            $result = frs_finalize_reservation_payment($pdo, $reservationId, $ownerId, [], (int)$paymentRow['id']);
+            if (!empty($result['ok'])) {
+                return ['ok' => true, 'message' => $result['message'], 'changed' => true];
+            }
+        }
+    }
+
+    foreach ($paymentRows as $paymentRow) {
+        $checkoutId = (string)($paymentRow['provider_checkout_id'] ?? '');
+        if ($checkoutId === '') {
+            continue;
+        }
+
+        $checkoutResp = paymongoRetrieveCheckoutSession($checkoutId);
+        if (empty($checkoutResp['ok'])) {
+            $lastError = 'Unable to verify payment status: ' . ($checkoutResp['error'] ?? 'Unknown error');
+            continue;
+        }
+
+        if (!paymongoCheckoutSessionIsPaid($checkoutResp['data'] ?? [])) {
+            $lastError = 'Payment has not been completed yet for checkout ' . $checkoutId . '.';
+            continue;
+        }
+
+        $result = frs_finalize_reservation_payment(
+            $pdo,
+            $reservationId,
+            $ownerId,
+            $checkoutResp['data'] ?? [],
+            (int)$paymentRow['id']
+        );
+
         return [
-            'ok' => false,
-            'message' => 'Unable to verify payment status: ' . ($checkoutResp['error'] ?? 'Unknown error'),
-            'changed' => false,
+            'ok' => !empty($result['ok']),
+            'message' => (string)($result['message'] ?? ''),
+            'changed' => !empty($result['ok']),
         ];
     }
 
-    if (!paymongoCheckoutSessionIsPaid($checkoutResp['data'] ?? [])) {
-        return ['ok' => true, 'message' => 'Payment has not been completed yet.', 'changed' => false];
-    }
-
-    $result = frs_finalize_reservation_payment($pdo, $reservationId, $userId, $checkoutResp['data'] ?? []);
-
-    return [
-        'ok' => !empty($result['ok']),
-        'message' => (string)($result['message'] ?? ''),
-        'changed' => !empty($result['ok']),
-    ];
+    return ['ok' => false, 'message' => $lastError, 'changed' => false];
 }
 
 /**
@@ -336,28 +396,42 @@ function frs_sync_user_pending_payments(PDO $pdo, int $userId): int
  *
  * @return array{ok: bool, message: string}
  */
-function frs_finalize_reservation_payment(PDO $pdo, int $reservationId, int $userId, array $checkoutResponse): array
-{
-    if (!paymongoCheckoutSessionIsPaid($checkoutResponse)) {
-        return ['ok' => false, 'message' => 'Payment has not been completed yet.'];
+function frs_finalize_reservation_payment(
+    PDO $pdo,
+    int $reservationId,
+    int $ownerUserId,
+    array $checkoutResponse,
+    ?int $paymentRowId = null
+): array {
+    $payQuery = 'SELECT id, status FROM payments WHERE reservation_id = :reservation_id';
+    $payParams = ['reservation_id' => $reservationId];
+    if ($paymentRowId !== null && $paymentRowId > 0) {
+        $payQuery .= ' AND id = :payment_id';
+        $payParams['payment_id'] = $paymentRowId;
     }
+    $payQuery .= ' ORDER BY id DESC LIMIT 1';
 
-    $latestPayStmt = $pdo->prepare(
-        'SELECT id, provider_checkout_id, status
-         FROM payments
-         WHERE reservation_id = :reservation_id AND user_id = :user_id
-         ORDER BY id DESC
-         LIMIT 1'
-    );
-    $latestPayStmt->execute(['reservation_id' => $reservationId, 'user_id' => $userId]);
+    $latestPayStmt = $pdo->prepare($payQuery);
+    $latestPayStmt->execute($payParams);
     $latestPayment = $latestPayStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$latestPayment) {
         return ['ok' => false, 'message' => 'Payment record not found.'];
     }
 
-    if (($latestPayment['status'] ?? '') === 'paid') {
-        return ['ok' => true, 'message' => 'Payment already confirmed.'];
+    $alreadyPaidInDb = ($latestPayment['status'] ?? '') === 'paid';
+    $paidInPaymongo = $checkoutResponse !== [] && paymongoCheckoutSessionIsPaid($checkoutResponse);
+
+    if (!$alreadyPaidInDb && !$paidInPaymongo) {
+        return ['ok' => false, 'message' => 'Payment has not been completed yet.'];
+    }
+
+    if ($alreadyPaidInDb) {
+        $resCheck = $pdo->prepare('SELECT status FROM reservations WHERE id = :id LIMIT 1');
+        $resCheck->execute(['id' => $reservationId]);
+        if (($resCheck->fetchColumn() ?: '') === 'approved') {
+            return ['ok' => true, 'message' => 'Payment already confirmed.'];
+        }
     }
 
     $pdo->beginTransaction();
@@ -371,7 +445,7 @@ function frs_finalize_reservation_payment(PDO $pdo, int $reservationId, int $use
              WHERE id = :id'
         );
         $updatePay->execute([
-            'payload_json' => json_encode($checkoutResponse),
+            'payload_json' => $checkoutResponse !== [] ? json_encode($checkoutResponse) : null,
             'id' => (int)$latestPayment['id'],
         ]);
 
@@ -393,7 +467,7 @@ function frs_finalize_reservation_payment(PDO $pdo, int $reservationId, int $use
 
         require_once __DIR__ . '/notifications.php';
         createNotification(
-            $userId,
+            $ownerUserId,
             'booking',
             'Payment Confirmed',
             'Your payment was successful. Reservation #' . $reservationId . ' is now approved.',

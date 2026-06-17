@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/violations.php';
 require_once __DIR__ . '/../../../../config/reservation_documents.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+require_once __DIR__ . '/../../../../config/paymongo_helper.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -107,6 +108,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
         }
     } else {
         $message = 'Missing required information to record violation.';
+        $messageType = 'error';
+    }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sync_payment') {
+    try {
+        $syncResult = frs_try_sync_reservation_payment($pdo, $reservationId, (int)($_SESSION['user_id'] ?? 0));
+        if (!empty($syncResult['changed'])) {
+            header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId . '&payment_synced=1');
+            exit;
+        }
+        $message = $syncResult['message'] ?? 'Payment could not be verified.';
+        $messageType = !empty($syncResult['ok']) ? 'success' : 'error';
+    } catch (Throwable $e) {
+        $message = 'Unable to verify payment: ' . $e->getMessage();
         $messageType = 'error';
     }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] !== 'record_violation') {
@@ -436,6 +450,25 @@ if (!$reservation) {
     exit;
 }
 
+if (($reservation['status'] ?? '') === 'pending_payment' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    try {
+        $autoSync = frs_try_sync_reservation_payment($pdo, $reservationId, (int)($_SESSION['user_id'] ?? 0));
+        if (!empty($autoSync['changed'])) {
+            header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId . '&payment_synced=1');
+            exit;
+        }
+    } catch (Throwable $e) {
+        error_log('Reservation detail payment auto-sync RES-' . $reservationId . ': ' . $e->getMessage());
+    }
+}
+
+if (isset($_GET['payment_synced'])) {
+    $message = 'Payment verified. Reservation is now approved.';
+    $messageType = 'success';
+    $stmt->execute(['id' => $reservationId]);
+    $reservation = $stmt->fetch(PDO::FETCH_ASSOC) ?: $reservation;
+}
+
 // Fetch status history
 $historyStmt = $pdo->prepare(
     'SELECT rh.status, rh.note, rh.created_at, u.name AS created_by_name
@@ -692,9 +725,19 @@ ob_start();
 <?php elseif ($reservation['status'] === 'pending_payment'): ?>
     <div class="booking-card" style="margin-top:0.85rem; border:1px solid #fdba74; background:#fff7ed;">
         <h2 style="margin:0 0 0.65rem; color:#9a3412;">Awaiting Payment</h2>
-        <p style="margin:0; color:#7c2d12;">
-            This reservation has been approved and is waiting for user payment confirmation.
+        <p style="margin:0 0 1rem; color:#7c2d12;">
+            This reservation has been approved and is waiting for payment confirmation.
             The resident can complete payment from their reservations page.
+        </p>
+        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservation-detail?id=' . (int)$reservationId, ENT_QUOTES, 'UTF-8'); ?>" style="margin:0;">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="sync_payment">
+            <button type="submit" class="btn-primary confirm-action" data-message="Check PayMongo and mark this reservation paid if payment succeeded?">
+                Verify Payment from PayMongo
+            </button>
+        </form>
+        <p style="margin:0.75rem 0 0; color:#9a3412; font-size:0.85rem;">
+            Use this after the resident completes checkout if the status did not update automatically.
         </p>
     </div>
 <?php elseif ($reservation['status'] === 'approved'):
