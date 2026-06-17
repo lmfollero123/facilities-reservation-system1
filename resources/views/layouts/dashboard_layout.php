@@ -388,7 +388,24 @@ $chartFiltersJsVer = is_file($chartFiltersJsPath) ? (string)filemtime($chartFilt
         }
 
         if (actionEl.form) {
-            actionEl.form.submit();
+            if (typeof actionEl.form.requestSubmit === 'function') {
+                actionEl.form.requestSubmit(actionEl);
+            } else {
+                // Legacy browsers: programmatic submit() omits the clicked button's fields
+                const prior = actionEl.form.querySelector('input[data-frs-confirm-submit]');
+                if (prior) {
+                    prior.remove();
+                }
+                if (actionEl.name) {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = actionEl.name;
+                    hidden.value = actionEl.value ?? '';
+                    hidden.setAttribute('data-frs-confirm-submit', '1');
+                    actionEl.form.appendChild(hidden);
+                }
+                actionEl.form.submit();
+            }
             return;
         }
 

@@ -306,8 +306,10 @@ $pendingWhere = ['r.status IN ("pending", "postponed", "pending_payment")'];
 $pendingParams = [];
 
 if (!empty($pendingSearch)) {
-    $pendingWhere[] = '(u.name LIKE :pending_search OR f.name LIKE :pending_search OR r.purpose LIKE :pending_search)';
-    $pendingParams['pending_search'] = '%' . $pendingSearch . '%';
+    $pendingWhere[] = '(u.name LIKE :pending_search_name OR f.name LIKE :pending_search_facility OR r.purpose LIKE :pending_search_purpose)';
+    $pendingParams['pending_search_name'] = '%' . $pendingSearch . '%';
+    $pendingParams['pending_search_facility'] = '%' . $pendingSearch . '%';
+    $pendingParams['pending_search_purpose'] = '%' . $pendingSearch . '%';
 }
 
 $pendingWhereClause = 'WHERE ' . implode(' AND ', $pendingWhere);
