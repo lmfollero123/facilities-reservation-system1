@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($facilities)) {
                     $reply = "Here are the available facilities:\n\n";
                     foreach ($facilities as $facility) {
-                        $reply .= "• " . htmlspecialchars($facility['name']);
+                        $reply .= "â€¢ " . htmlspecialchars($facility['name']);
                         if ($facility['location']) {
                             $reply .= " (" . htmlspecialchars($facility['location']) . ")";
                         }
@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!empty($reservations)) {
                         $reply = "Here are your recent reservations:\n\n";
                         foreach ($reservations as $res) {
-                            $statusIcon = $res['status'] === 'approved' ? '✅' : ($res['status'] === 'pending' ? '⏳' : ($res['status'] === 'denied' ? '❌' : '🚫'));
+                            $statusIcon = $res['status'] === 'approved' ? 'âœ…' : ($res['status'] === 'pending' ? 'â³' : ($res['status'] === 'denied' ? 'âŒ' : 'ðŸš«'));
                             $reply .= "{$statusIcon} " . htmlspecialchars($res['name']) . " - " . $res['reservation_date'] . 
                                      " (" . htmlspecialchars($res['time_slot']) . ") - " . ucfirst($res['status']) . "\n";
                         }
@@ -250,11 +250,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          |------------------------------*/
         if (str_contains($msg, 'policy') || str_contains($msg, 'rule')) {
             $reply = "Booking Policies:\n\n" .
-                    "• All facilities are FREE for residents\n" .
-                    "• Maximum of 3 active reservations per user\n" .
-                    "• Bookings require administrator approval\n" .
-                    "• Only one booking per day is allowed\n" .
-                    "• Rescheduling is allowed up to 3 days before the event";
+                    "â€¢ All facilities are FREE for residents\n" .
+                    "â€¢ Maximum of 3 active reservations per user\n" .
+                    "â€¢ Bookings require administrator approval\n" .
+                    "â€¢ Only one booking per day is allowed\n" .
+                    "â€¢ Rescheduling is allowed up to 3 days before the event";
         }
 
         /* ------------------------------
@@ -280,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $reply = "Here are your recent reservations:\n\n";
                     foreach ($rows as $r) {
-                        $statusIcon = $r['status'] === 'approved' ? '✅' : ($r['status'] === 'pending' ? '⏳' : ($r['status'] === 'denied' ? '❌' : '🚫'));
+                        $statusIcon = $r['status'] === 'approved' ? 'âœ…' : ($r['status'] === 'pending' ? 'â³' : ($r['status'] === 'denied' ? 'âŒ' : 'ðŸš«'));
                         $reply .= "{$statusIcon} {$r['name']} - {$r['reservation_date']} ({$r['time_slot']}) - " . ucfirst($r['status']) . "\n";
                     }
                     $reply .= getRandomResponse(getBookingsFoundResponses());
@@ -350,7 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 /*
 |--------------------------------------------------------------------------
-| CHATBOT UI (GET REQUEST)
+| CHATBOT UI (GET REQUEST) â€” page removed; widget handles chat in-dashboard
 |--------------------------------------------------------------------------
 */
 if (!($_SESSION['user_authenticated'] ?? false)) {
@@ -358,182 +358,5 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
-$pageTitle = 'AI Assistant | LGU Facilities Reservation';
-$userName  = $_SESSION['name'] ?? 'User';
-
-ob_start();
-?>
-
-<div class="page-header">
-    <div class="breadcrumb">
-        <span>Tools</span><span class="sep">/</span><span>AI Assistant</span>
-    </div>
-    <?= frs_page_title('AI Assistant', 'Ask about facility availability, booking policies, and your reservations. The floating assistant on other pages uses the same backend.'); ?>
-</div>
-
-<style>
-.gov-chat-container {
-    max-width: 720px;
-    margin: 0 auto;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-family: Arial, sans-serif;
-    background: #ffffff;
-}
-.gov-chat-header {
-    padding: 12px 16px;
-    background: #1f3a5f;
-    color: #ffffff;
-    font-weight: bold;
-}
-.gov-chat-messages {
-    padding: 16px;
-    height: 420px;
-    overflow-y: auto;
-    background: #f9fafb;
-}
-.gov-message {
-    margin-bottom: 12px;
-    display: flex;
-}
-.gov-message.user {
-    justify-content: flex-end;
-}
-.gov-message.bot {
-    justify-content: flex-start;
-}
-.bubble {
-    max-width: 75%;
-    padding: 10px 12px;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.6;
-}
-.gov-message.bot .bubble {
-    background: #ffffff;
-    border: 1px solid #d1d5db;
-}
-.gov-message.user .bubble {
-    background: #1f3a5f;
-    color: #ffffff;
-}
-.gov-chat-input {
-    display: flex;
-    border-top: 1px solid #d1d5db;
-}
-.gov-chat-input input {
-    flex: 1;
-    padding: 12px;
-    border: none;
-}
-.gov-chat-input button {
-    padding: 0 20px;
-    border: none;
-    background: #1f3a5f;
-    color: white;
-    cursor: pointer;
-}
-</style>
-
-<div class="gov-chat-container">
-    <div class="gov-chat-header">
-        LGU Virtual Assistant
-    </div>
-
-    <div class="gov-chat-messages" id="chatbot-messages">
-        <div class="gov-message bot">
-            <div class="bubble">
-                Hello <?= htmlspecialchars($userName); ?>.<br><br>
-                I can assist you with:
-                <ul>
-                    <li>Facility availability</li>
-                    <li>Booking policies</li>
-                    <li>Your reservations</li>
-                </ul>
-                Please type your question below.
-            </div>
-        </div>
-    </div>
-
-    <form id="chatbot-form" class="gov-chat-input">
-        <input type="text" id="chatbot-input" placeholder="Type your message here..." required>
-        <button type="submit">Send</button>
-    </form>
-</div>
-
-<script>
-const form = document.getElementById('chatbot-form');
-const input = document.getElementById('chatbot-input');
-const messages = document.getElementById('chatbot-messages');
-
-form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const message = input.value.trim();
-    if (!message) return;
-
-    addMessage(message, 'user');
-    input.value = '';
-
-    const formData = new URLSearchParams();
-    formData.append('message', message);
-
-    fetch('<?= base_path(); ?>/dashboard/ai-chatbot', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json'
-        },
-        body: formData
-    })
-    .then(function (response) {
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-            throw new Error('non_json');
-        }
-        return response.json().then(function (data) {
-            if (!response.ok && data && data.reply) {
-                return data;
-            }
-            if (!response.ok) {
-                throw new Error('request_failed');
-            }
-            return data;
-        });
-    })
-    .then(function (data) {
-        addMessage(data.reply || 'I could not process that request. Please try again.', 'bot');
-        if (data.action === 'prefill_booking' && data.data && typeof data.data === 'object') {
-            const d = data.data;
-            const params = new URLSearchParams();
-            if (d.facility_id) params.set('facility_id', d.facility_id);
-            if (d.reservation_date) params.set('reservation_date', d.reservation_date);
-            if (d.time_slot) params.set('time_slot', d.time_slot);
-            if (params.toString()) {
-                window.location.href = '<?= base_path(); ?>/dashboard/book-facility?' + params.toString();
-            }
-        }
-    })
-    .catch(function () {
-        addMessage('Service unavailable. Please try again.', 'bot');
-    });
-});
-
-function addMessage(text, type) {
-    const msg = document.createElement('div');
-    msg.className = 'gov-message ' + type;
-    msg.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
-    messages.appendChild(msg);
-    messages.scrollTop = messages.scrollHeight;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML.replace(/\n/g, '<br>');
-}
-</script>
-
-<?php
-$content = ob_get_clean();
-include __DIR__ . '/../../layouts/dashboard_layout.php';
+header('Location: ' . base_path() . '/dashboard');
+exit;

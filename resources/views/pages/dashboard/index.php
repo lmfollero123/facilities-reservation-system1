@@ -975,9 +975,9 @@ ob_start();
             <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">📋 My Reservations</h3>
             <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View your booking history</p>
         </a>
-        <a href="<?= base_path(); ?>/dashboard/calendar" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
-            <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">🗓️ Calendar</h3>
-            <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View availability calendar</p>
+        <a href="<?= base_path(); ?>/dashboard/book-facility?module=mine" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
+            <h3 style="margin: 0 0 0.5rem; color: var(--gov-blue);">🗓️ My Calendar</h3>
+            <p style="margin: 0; color: #8b95b5; font-size: 0.9rem;">View bookings on your calendar</p>
         </a>
         <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
         <a href="<?= base_path(); ?>/dashboard/reports" class="stat-card" style="text-decoration: none; color: inherit; text-align: center; transition: transform 0.2s ease;">
@@ -1052,7 +1052,8 @@ document.addEventListener('DOMContentLoaded', function() {
             statusColors: <?= json_encode($statusColors); ?>,
             facilityLabels: <?= json_encode($facilityLabels); ?>,
             facilityCounts: <?= json_encode($facilityCounts); ?>,
-            rotateFacilityLabels: true
+            rotateFacilityLabels: true,
+            showValueLabels: true
         });
     }
 });

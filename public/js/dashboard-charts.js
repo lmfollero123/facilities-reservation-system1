@@ -8,7 +8,7 @@
         id: 'alwaysValueLabels',
         afterDatasetsDraw(chart, args, pluginOptions) {
             const opts = pluginOptions || {};
-            const color = opts.color || '#111827';
+            const defaultColor = opts.color || '#111827';
             const fontSize = opts.fontSize || 12;
             const weight = opts.fontWeight || '700';
             const formatter = typeof opts.formatter === 'function'
@@ -16,11 +16,10 @@
                 : (v) => String(v);
 
             const ctx = chart.ctx;
+            const chartType = chart.config.type;
+
             ctx.save();
-            ctx.fillStyle = color;
-            ctx.font = `${weight} ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.font = `${weight} ${fontSize}px Arial, sans-serif`;
 
             chart.data.datasets.forEach((dataset, datasetIndex) => {
                 const meta = chart.getDatasetMeta(datasetIndex);
@@ -29,13 +28,75 @@
                     const raw = dataset.data[dataIndex];
                     if (raw === null || raw === undefined || Number(raw) === 0) return;
                     const label = formatter(raw, dataIndex, dataset, chart);
-                    const pos = element.tooltipPosition();
-                    ctx.fillText(label, pos.x, pos.y);
+
+                    let x;
+                    let y;
+                    let textAlign = 'center';
+                    let textBaseline = 'middle';
+                    let fillStyle = defaultColor;
+
+                    if (chartType === 'bar') {
+                        x = element.x;
+                        y = element.y - 8;
+                        textBaseline = 'bottom';
+                        fillStyle = opts.barColor || '#1e293b';
+                        ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                        ctx.shadowBlur = 4;
+                    } else if (chartType === 'doughnut' || chartType === 'pie') {
+                        const pos = element.tooltipPosition();
+                        x = pos.x;
+                        y = pos.y;
+                        const bg = Array.isArray(dataset.backgroundColor)
+                            ? dataset.backgroundColor[dataIndex]
+                            : dataset.backgroundColor;
+                        fillStyle = contrastLabelColor(bg, opts);
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+                        ctx.shadowBlur = 3;
+                    } else {
+                        const pos = element.tooltipPosition();
+                        x = pos.x;
+                        y = pos.y - 10;
+                        textBaseline = 'bottom';
+                        fillStyle = opts.lineColor || defaultColor;
+                    }
+
+                    ctx.fillStyle = fillStyle;
+                    ctx.textAlign = textAlign;
+                    ctx.textBaseline = textBaseline;
+                    ctx.fillText(label, x, y);
+                    ctx.shadowBlur = 0;
                 });
             });
             ctx.restore();
         }
     };
+
+    function parseColorToRgb(color) {
+        if (!color || typeof color !== 'string') return null;
+        const hex = color.trim();
+        if (hex.startsWith('#')) {
+            const h = hex.slice(1);
+            const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+            if (full.length !== 6) return null;
+            return {
+                r: parseInt(full.slice(0, 2), 16),
+                g: parseInt(full.slice(2, 4), 16),
+                b: parseInt(full.slice(4, 6), 16),
+            };
+        }
+        const rgba = hex.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+        if (rgba) {
+            return { r: +rgba[1], g: +rgba[2], b: +rgba[3] };
+        }
+        return null;
+    }
+
+    function contrastLabelColor(background, opts) {
+        const rgb = parseColorToRgb(background);
+        if (!rgb) return opts.color || '#ffffff';
+        const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+        return luminance > 0.62 ? (opts.darkColor || '#1e293b') : (opts.lightColor || '#ffffff');
+    }
 
     function gridColor() {
         return document.documentElement.getAttribute('data-theme') === 'dark'
@@ -48,7 +109,12 @@
 
         const plugins = cfg.showValueLabels ? [alwaysValueLabelsPlugin] : [];
         const valueLabelOpts = cfg.showValueLabels ? {
-            alwaysValueLabels: cfg.valueLabelOptions || { color: '#1f2937', fontSize: 11 }
+            alwaysValueLabels: Object.assign({
+                color: '#1e293b',
+                barColor: '#1e293b',
+                fontSize: 12,
+                fontWeight: '700',
+            }, cfg.valueLabelOptions || {}),
         } : {};
 
         const monthlyCtx = document.getElementById('monthlyChart');
@@ -102,8 +168,32 @@
                 }
             };
             if (cfg.showValueLabels) {
-                statusOptions.plugins.alwaysValueLabels = { color: '#ffffff', fontSize: 12 };
-                statusOptions.cutout = '60%';
+                statusOptions.plugins.alwaysValueLabels = { fontSize: 13, fontWeight: '700' };
+                statusOptions.plugins.legend = {
+                    position: 'bottom',
+                    labels: {
+                        padding: 12,
+                        font: { size: 12, weight: '600' },
+                        generateLabels(chart) {
+                            const dataset = chart.data.datasets[0];
+                            return chart.data.labels.map((label, i) => {
+                                const value = dataset.data[i];
+                                const fill = Array.isArray(dataset.backgroundColor)
+                                    ? dataset.backgroundColor[i]
+                                    : dataset.backgroundColor;
+                                return {
+                                    text: `${label} (${value})`,
+                                    fillStyle: fill,
+                                    strokeStyle: '#fff',
+                                    lineWidth: 2,
+                                    hidden: isNaN(value) || chart.getDatasetMeta(0).data[i].hidden,
+                                    index: i,
+                                };
+                            });
+                        },
+                    },
+                };
+                statusOptions.cutout = '55%';
             }
             new Chart(statusCtx, {
                 type: 'doughnut',

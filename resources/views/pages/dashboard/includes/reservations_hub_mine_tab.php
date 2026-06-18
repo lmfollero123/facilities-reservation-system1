@@ -342,7 +342,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
 <?php endif; ?>
 
 <!-- Day Reservations Modal (opens when you click a date) -->
-<div id="dayReservationsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index: 99999; align-items:center; justify-content:center; padding:1.25rem;">
+<div id="dayReservationsModal" class="mine-day-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100000; align-items:center; justify-content:center; padding:1.25rem;">
     <div style="background: var(--bg-primary, #ffffff); border-radius: 14px; width:100%; max-width: 900px; max-height: 90vh; overflow:auto; padding: 1.25rem;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border-color,#e5e7eb); padding-bottom:0.85rem; margin-bottom:1rem;">
             <div>
@@ -559,11 +559,23 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
     const closeBtn = document.getElementById('closeDayReservationsModal');
     if (!modal) return;
 
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    function isNestedMineModalOpen() {
+        return ['cancelReservationModal', 'editDetailsModal', 'rescheduleModal'].some(function(id) {
+            const el = document.getElementById(id);
+            return el && el.style.display === 'flex';
+        });
+    }
+
     function openModal(){
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
     }
     function closeModal(){
+        if (isNestedMineModalOpen()) return;
         modal.style.display = 'none';
         document.body.style.overflow = '';
         const url = new URL(window.location.href);
@@ -573,8 +585,12 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
     }
 
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.style.display === 'flex') closeModal(); });
+    modal.addEventListener('click', (e) => { if (e.target === modal && !isNestedMineModalOpen()) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || modal.style.display !== 'flex') return;
+        if (isNestedMineModalOpen()) return;
+        closeModal();
+    });
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('open_day_modal') === '1' && params.get('selected_date')) {
@@ -584,7 +600,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
 </script>
 
 <!-- Cancel Reservation Confirmation Modal -->
-<div id="cancelReservationModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+<div id="cancelReservationModal" class="modal mine-action-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 100010; align-items: center; justify-content: center;">
     <div class="modal-dialog" style="background: var(--bg-primary); border-radius: 8px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: var(--text-primary); margin: 0;">Cancel Reservation</h3>
@@ -612,7 +628,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
 </div>
 
 <!-- Edit Purpose / Attendees Modal -->
-<div id="editDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+<div id="editDetailsModal" class="modal mine-action-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 100010; align-items: center; justify-content: center;">
     <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h3>Edit Purpose / Attendees</h3>
@@ -639,7 +655,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
 </div>
 
 <!-- Request Reschedule Modal -->
-<div id="rescheduleModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+<div id="rescheduleModal" class="modal mine-action-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 100010; align-items: center; justify-content: center;">
     <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h3>Request Reschedule</h3>
@@ -727,8 +743,21 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
 </div>
 
 <script>
+(function mountMineActionModals() {
+    ['cancelReservationModal', 'editDetailsModal', 'rescheduleModal'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el && el.parentNode !== document.body) {
+            document.body.appendChild(el);
+        }
+    });
+})();
+
 // Edit Details Modal
 function openEditDetailsModal(btn) {
+    const modal = document.getElementById('editDetailsModal');
+    if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
     const id = btn.getAttribute('data-id');
     const purpose = btn.getAttribute('data-purpose') || '';
     const attendees = btn.getAttribute('data-attendees') || '';
@@ -834,6 +863,10 @@ function updateRescheduleEndTimeOptions() {
 let rescheduleConflictCheckTimeout = null;
 
 function openRescheduleModal(btn) {
+    const modal = document.getElementById('rescheduleModal');
+    if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
     const id = btn.getAttribute('data-id');
     const facilityId = btn.getAttribute('data-facility-id') || '';
     const date = btn.getAttribute('data-date');
@@ -872,15 +905,38 @@ function closeRescheduleModal() {
 }
 
 function openCancelReservationModal(reservationId, facilityName, dateStr, timeSlot) {
+    const modal = document.getElementById('cancelReservationModal');
+    if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
     document.getElementById('cancel_reservation_id').value = reservationId;
     document.getElementById('cancelReservationSummary').textContent =
         'You are about to cancel: ' + facilityName + ' on ' + dateStr + ' (' + timeSlot + ').';
-    document.getElementById('cancelReservationModal').style.display = 'flex';
+    modal.style.display = 'flex';
 }
 
 function closeCancelReservationModal() {
     document.getElementById('cancelReservationModal').style.display = 'none';
 }
+
+document.getElementById('cancelReservationModal')?.addEventListener('click', function (e) {
+    if (e.target === this) closeCancelReservationModal();
+});
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const openActionModal = [
+        ['cancelReservationModal', closeCancelReservationModal],
+        ['editDetailsModal', closeEditDetailsModal],
+        ['rescheduleModal', closeRescheduleModal],
+    ].find(function(entry) {
+        const el = document.getElementById(entry[0]);
+        return el && el.style.display === 'flex';
+    });
+    if (openActionModal) {
+        e.preventDefault();
+        openActionModal[1]();
+    }
+});
 
 function debounceRescheduleConflict() {
     if (rescheduleConflictCheckTimeout) clearTimeout(rescheduleConflictCheckTimeout);

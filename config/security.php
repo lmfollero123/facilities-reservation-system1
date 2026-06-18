@@ -564,6 +564,73 @@ function frs_user_has_required_second_factor(array $user): bool
 }
 
 /**
+ * Start a post-password session for Admin/Staff who must re-enroll in 2FA before login completes.
+ */
+function frs_begin_pending_2fa_setup(array $user, ?string $postLoginRedirect = null): void
+{
+    session_regenerate_id(true);
+    $_SESSION['pending_2fa_setup_user_id'] = (int) ($user['id'] ?? 0);
+    $_SESSION['pending_2fa_setup_email'] = (string) ($user['email'] ?? '');
+    $_SESSION['pending_2fa_setup_name'] = (string) ($user['name'] ?? '');
+    if ($postLoginRedirect !== null && $postLoginRedirect !== '') {
+        $_SESSION['post_login_redirect'] = $postLoginRedirect;
+    }
+}
+
+/**
+ * Clear pending 2FA setup session keys.
+ */
+function frs_clear_pending_2fa_setup(): void
+{
+    unset(
+        $_SESSION['pending_2fa_setup_user_id'],
+        $_SESSION['pending_2fa_setup_email'],
+        $_SESSION['pending_2fa_setup_name'],
+        $_SESSION['pending_2fa_setup_totp_secret'],
+        $_SESSION['pending_2fa_setup_email_sent']
+    );
+}
+
+/**
+ * Finalize an authenticated dashboard session after password + second factor (or 2FA setup).
+ */
+function frs_complete_authenticated_login(array $user): void
+{
+    session_regenerate_id(true);
+    $_SESSION['user_authenticated'] = true;
+    $_SESSION['user_id'] = (int) $user['id'];
+    $_SESSION['user_name'] = $user['name'];
+    $_SESSION['name'] = $user['name'];
+    $_SESSION['user_email'] = $user['email'];
+    $_SESSION['role'] = $user['role'];
+    $_SESSION['user_org'] = $user['role'];
+    $_SESSION['last_activity'] = time();
+
+    unset(
+        $_SESSION['pending_otp_user_id'],
+        $_SESSION['pending_otp_email'],
+        $_SESSION['pending_otp_name'],
+        $_SESSION['login_otp_email_sent']
+    );
+    frs_clear_pending_2fa_setup();
+}
+
+/**
+ * Redirect to post-login destination or dashboard.
+ */
+function frs_redirect_after_login(): void
+{
+    $redirect = frs_safe_redirect_path($_SESSION['post_login_redirect'] ?? null);
+    unset($_SESSION['post_login_redirect']);
+    if ($redirect !== null) {
+        header('Location: ' . $redirect);
+    } else {
+        header('Location: ' . base_path() . '/dashboard');
+    }
+    exit;
+}
+
+/**
  * Admin/Staff must always complete a second factor at login.
  */
 function frs_role_requires_two_factor(string $role): bool

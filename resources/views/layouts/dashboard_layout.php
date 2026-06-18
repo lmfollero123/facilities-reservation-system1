@@ -31,7 +31,7 @@ if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
         'contact_info_manage.php' => '/dashboard/contact-info',
         'audit_trail.php' => '/dashboard/audit-trail',
         'profile.php' => '/dashboard/profile',
-        'calendar.php' => '/dashboard/calendar',
+        'calendar.php' => '/dashboard/book-facility?module=mine',
         'notifications.php' => '/dashboard/notifications',
     ];
     

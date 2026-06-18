@@ -474,8 +474,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     
                     // Only update fields that were actually changed
                     $enableOtp = isset($_POST['enable_otp']) ? (int)$_POST['enable_otp'] : ($user['enable_otp'] ?? 1);
-                    if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? ''))) {
-                        throw new Exception('Two-factor authentication is required for Admin and Staff accounts and cannot be disabled.');
+                    if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user)) {
+                        throw new Exception('Two-factor authentication is required. Enable Google Authenticator before turning off email OTP.');
                     }
                     $updateStmt = $pdo->prepare(
                         'UPDATE users 

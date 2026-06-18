@@ -44,6 +44,10 @@ $reservationsHubMine = (($_SERVER['_RESERVATIONS_HUB_ROUTE'] ?? '') === 'mine') 
 $pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservation' : 'Book a Facility | LGU Facilities Reservation';
 $success = '';
 $error = '';
+if (!empty($_SESSION['booking_flash']) && is_array($_SESSION['booking_flash'])) {
+    $success = (string)($_SESSION['booking_flash']['msg'] ?? '');
+    unset($_SESSION['booking_flash']);
+}
 $bcfOpenBookingModal = false;
 $conflictWarning = null;
 $recommendations = [];
@@ -661,6 +665,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
                 $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
             }
+            $_SESSION['booking_flash'] = ['msg' => $success, 'type' => 'success'];
+            header('Location: ' . base_path() . '/dashboard/book-facility?module=mine');
+            exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -862,6 +869,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             ];
             $smsStatusKey = $initialStatus === 'pending_payment' ? 'pending_payment' : ($initialStatus === 'approved' ? 'approved' : 'pending');
             sendReservationStatusSms($bookingSmsPayload, $smsStatusKey);
+            $_SESSION['booking_flash'] = ['msg' => $success, 'type' => 'success'];
+            header('Location: ' . base_path() . '/dashboard/book-facility?module=mine');
+            exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -1594,10 +1604,6 @@ ul.bcf-scroll-select-menu {
                             </div>
                         <?php endfor; ?>
                     </div>
-                </div>
-                <div class="bcf-label-row" style="margin-top:1rem; gap:0.5rem;">
-                    <button type="button" class="btn-primary" id="bcf-open-booking-explicit">Open booking form</button>
-                    <?= frs_field_tip('Tap a coloured future day on the calendar, or use this button if you already know your date.'); ?>
                 </div>
             </div>
 
@@ -3604,14 +3610,6 @@ document.addEventListener('DOMContentLoaded', function() {
         debouncedRefillAvail();
     });
 
-    document.getElementById('bcf-open-booking-explicit')?.addEventListener('click', function () {
-        if (!dateInput || !dateInput.value) {
-            alert('Please select a date on the calendar first.');
-            return;
-        }
-        openBookingFlowModal();
-        debouncedRefillAvail();
-    });
     document.getElementById('bcf-close-booking-modal')?.addEventListener('click', closeBookingFlowModal);
     bookingFlowModal?.addEventListener('click', function (e) {
         if (e.target === bookingFlowModal) {

@@ -30,6 +30,8 @@ $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/login') !== false ||
                 strpos($phpSelf, 'login_otp.php') !== false ||
                 strpos($requestPath, '/login-otp') !== false ||
+                strpos($requestPath, '/login-setup-2fa') !== false ||
+                strpos($phpSelf, 'login_setup_2fa.php') !== false ||
                 strpos($phpSelf, 'register.php') !== false ||
                 strpos($requestPath, '/register') !== false ||
                 strpos($phpSelf, 'verify_email.php') !== false ||

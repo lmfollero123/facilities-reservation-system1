@@ -438,7 +438,8 @@ ob_start();
 #aiForecastModal.modal-overlay {
     position: fixed !important;
     inset: 0 !important;
-    background: rgba(0, 0, 0, 0.5);
+    z-index: 100000 !important;
+    background: rgba(15, 23, 42, 0.55) !important;
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -448,6 +449,27 @@ ob_start();
 
 #aiForecastModal.modal-overlay.show {
     display: flex !important;
+}
+
+#aiForecastModal .ai-forecast-dialog,
+#aiForecastModal .modal-content.ai-forecast-dialog {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    opacity: 1 !important;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+#aiForecastModal .ai-forecast-body,
+#aiForecastModal .ai-forecast-header,
+#aiForecastModal .ai-forecast-footer,
+#aiForecastModal .modal-body {
+    background: #ffffff !important;
+    color: #334155 !important;
+}
+
+#aiForecastModal .ai-forecast-body strong {
+    color: #1e3a5f !important;
 }
 
 .ai-chip {

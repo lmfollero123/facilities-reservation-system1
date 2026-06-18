@@ -92,13 +92,11 @@ function renderCollapsibleGroup($title, $targetId, $links, $current, $iconPaths,
 $bookingGroup = [
     ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'],
     ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'],
-    ['label' => 'Calendar', 'href' => $base . '/dashboard/calendar', 'icon' => 'calendar-days', 'page' => 'calendar'],
     ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'],
 ];
 
 $aiToolsGroup = [
     ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'],
-    ['label' => 'AI Assistant', 'href' => $base . '/dashboard/ai-chatbot', 'icon' => 'robot', 'page' => 'ai_chatbot'],
 ];
 
 $reservationsFacilitiesGroup = [];

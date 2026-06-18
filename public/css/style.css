@@ -10669,13 +10669,23 @@ html[data-theme="dark"] .frs-tip-float {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
-    background: var(--card-bg, #fff);
-    color: var(--text-primary, #1e293b);
+    background: #ffffff !important;
+    color: #1e293b !important;
     border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
     padding: 2rem;
     width: 100%;
     animation: modalSlideIn 0.3s ease-out;
+    border: 1px solid #e5e7eb;
+    opacity: 1 !important;
+}
+
+#aiForecastModal .ai-forecast-header,
+#aiForecastModal .ai-forecast-body,
+#aiForecastModal .ai-forecast-footer,
+#aiForecastModal .modal-body {
+    background: #ffffff !important;
+    color: #1e293b !important;
 }
 
 #aiForecastModal .ai-forecast-header {

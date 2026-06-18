@@ -275,7 +275,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     }
                     $note = 'Cancelled by admin/staff. Reason: ' . $reason;
                 } else {
-                    $note = $_POST['note'] ?? null;
+                    $note = trim($_POST['note'] ?? '');
+                    if ($action === 'denied' && $note === '') {
+                        throw new Exception('A reason is required when denying a reservation.');
+                    }
+                    $note = $note !== '' ? $note : null;
                 }
 
                 $statusResult = frs_staff_apply_status_decision(
@@ -322,7 +326,10 @@ $pendingTotal = (int)$pendingCountStmt->fetchColumn();
 $pendingTotalPages = max(1, (int)ceil($pendingTotal / $pendingPerPage));
 
 // Get pending reservations
-$pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, f.name AS facility, u.name AS requester
+$pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, r.postponed_at,
+       r.expected_attendees, r.is_commercial, r.created_at,
+       f.id AS facility_id, f.name AS facility, f.capacity_threshold, f.base_rate,
+       u.id AS requester_id, u.name AS requester, u.email AS requester_email, u.mobile AS requester_mobile
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -488,8 +495,22 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
-    <section class="booking-card">
+<div class="booking-wrapper ra-approvals-layout">
+    <section class="booking-card ra-approvals-main">
+        <details class="ra-legend-details">
+            <summary class="ra-legend-summary">Status guide</summary>
+            <div class="ra-legend-grid">
+                <span class="ra-legend-item"><span class="status-badge pending">Pending</span> Staff review</span>
+                <span class="ra-legend-item"><span class="status-badge approved">Approved</span> Reserved</span>
+                <span class="ra-legend-item"><span class="status-badge pending_payment">Awaiting Payment</span> Pay to finalize</span>
+                <span class="ra-legend-item"><span class="status-badge denied">Denied</span> Declined</span>
+                <span class="ra-legend-item"><span class="status-badge cancelled">Cancelled</span> Slot released</span>
+                <span class="ra-legend-item"><span class="status-badge postponed">Postponed</span> Re-approval</span>
+                <span class="ra-legend-item"><span class="status-badge on_hold">On Hold</span> Temporarily paused</span>
+            </div>
+            <p class="ra-legend-note">Approve and Deny open a review step first. Postponed + priority items are reviewed first.</p>
+        </details>
+
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
             <h2 style="margin: 0;">Pending Requests</h2>
             <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 250px; max-width: 400px;">
@@ -504,57 +525,107 @@ ob_start();
             </form>
         </div>
         <?php if (empty($pendingReservations)): ?>
-            <p>No reservations awaiting approval<?= !empty($pendingSearch) ? ' matching your search.' : '.'; ?></p>
+            <p class="ra-empty-state">No reservations awaiting approval<?= !empty($pendingSearch) ? ' matching your search.' : '.'; ?></p>
         <?php else: ?>
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                    <tr>
-                        <th>Requester</th>
-                        <th>Facility</th>
-                        <th>Schedule</th>
-                        <th>Purpose</th>
-                        <th>Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($pendingReservations as $reservation): ?>
-                        <tr>
-                            <td>
-                                <?= htmlspecialchars($reservation['requester']); ?>
-                                <?php if ($reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])): ?>
-                                    <span style="display:inline-block; margin-left:0.5rem; background:#1e3a8a; color:white; padding:0.15rem 0.4rem; border-radius:4px; font-size:0.75rem; font-weight:600;">PRIORITY</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars($reservation['facility']); ?></td>
-                            <td><?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?></td>
-                            <td><?= htmlspecialchars($reservation['purpose']); ?></td>
-                            <td>
-                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <span class="status-badge <?= $reservation['status']; ?>">
-                                        <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
-                                    </span>
-                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
-                                    <?php if ($reservation['status'] === 'pending' || $reservation['status'] === 'postponed'): ?>
-                                        <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>" style="display:flex; gap:0.5rem; flex:1; min-width:300px;">
-                                            <?= csrf_field(); ?>
-                                            <input type="hidden" name="reservation_id" value="<?= $reservation['id']; ?>">
-                                            <input type="text" name="note" placeholder="Remarks" style="flex:1; border:1px solid #dfe3ef; border-radius:6px; padding:0.35rem 0.5rem;">
-                                            <button class="btn-primary confirm-action" data-message="Approve this reservation?<?= !empty($reservation['postponed_priority']) ? ' (This reservation has priority due to previous postponement.)' : ''; ?>" name="action" value="approved" type="submit">Approve</button>
-                                            <button class="btn-outline confirm-action" data-message="Deny this reservation?" name="action" value="denied" type="submit">Deny</button>
-                                        </form>
-                                    <?php elseif ($reservation['status'] === 'pending_payment'): ?>
-                                        <span style="font-size:0.85rem; color:#9a3412; background:#ffedd5; border:1px solid #fdba74; padding:0.3rem 0.55rem; border-radius:6px;">
-                                            User must complete payment
-                                        </span>
+            <?php
+            $pendingReviewData = [];
+            foreach ($pendingReservations as $reservation) {
+                if (!in_array($reservation['status'], ['pending', 'postponed'], true)) {
+                    continue;
+                }
+                $submittedAt = !empty($reservation['created_at'])
+                    ? date('M j, Y g:i A', strtotime((string)$reservation['created_at']))
+                    : '—';
+                $scheduleDate = !empty($reservation['reservation_date'])
+                    ? date('l, F j, Y', strtotime((string)$reservation['reservation_date']))
+                    : '—';
+                $attendees = isset($reservation['expected_attendees']) && $reservation['expected_attendees'] !== null && $reservation['expected_attendees'] !== ''
+                    ? (int)$reservation['expected_attendees']
+                    : null;
+                $capacityThreshold = isset($reservation['capacity_threshold']) ? (int)$reservation['capacity_threshold'] : null;
+                $pendingReviewData[(int)$reservation['id']] = [
+                    'id' => (int)$reservation['id'],
+                    'requester' => (string)$reservation['requester'],
+                    'requester_email' => (string)($reservation['requester_email'] ?? ''),
+                    'requester_mobile' => (string)($reservation['requester_mobile'] ?? ''),
+                    'facility' => (string)$reservation['facility'],
+                    'schedule_date' => $scheduleDate,
+                    'time_slot' => (string)$reservation['time_slot'],
+                    'purpose' => (string)$reservation['purpose'],
+                    'expected_attendees' => $attendees,
+                    'capacity_threshold' => $capacityThreshold,
+                    'is_commercial' => !empty($reservation['is_commercial']),
+                    'status' => (string)$reservation['status'],
+                    'postponed_priority' => !empty($reservation['postponed_priority']),
+                    'submitted_at' => $submittedAt,
+                    'detail_url' => base_path() . '/dashboard/reservation-detail?id=' . (int)$reservation['id'],
+                ];
+            }
+            ?>
+            <p class="ra-section-hint">Review each request before approving or denying. Approve and Deny open a details review step so nothing is missed.</p>
+            <div class="ra-pending-list">
+                <?php foreach ($pendingReservations as $reservation): ?>
+                    <?php
+                    $canReview = in_array($reservation['status'], ['pending', 'postponed'], true);
+                    $scheduleLabel = !empty($reservation['reservation_date'])
+                        ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
+                        : '—';
+                    $attendeesLabel = isset($reservation['expected_attendees']) && $reservation['expected_attendees'] !== null && $reservation['expected_attendees'] !== ''
+                        ? (int)$reservation['expected_attendees']
+                        : null;
+                    ?>
+                    <article class="ra-pending-card">
+                        <div class="ra-pending-card__header">
+                            <div>
+                                <h3 class="ra-pending-card__title"><?= htmlspecialchars($reservation['facility']); ?></h3>
+                                <p class="ra-pending-card__requester">
+                                    Requested by <?= htmlspecialchars($reservation['requester']); ?>
+                                    <?php if ($reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])): ?>
+                                        <span class="ra-priority-badge">Priority</span>
                                     <?php endif; ?>
+                                </p>
+                            </div>
+                            <span class="status-badge <?= htmlspecialchars($reservation['status']); ?>">
+                                <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                            </span>
+                        </div>
+
+                        <div class="ra-pending-card__grid">
+                            <div class="ra-detail-item">
+                                <span class="ra-detail-label">Date</span>
+                                <span class="ra-detail-value"><?= htmlspecialchars($scheduleLabel); ?></span>
+                            </div>
+                            <div class="ra-detail-item">
+                                <span class="ra-detail-label">Time</span>
+                                <span class="ra-detail-value"><?= htmlspecialchars($reservation['time_slot']); ?></span>
+                            </div>
+                            <div class="ra-detail-item ra-detail-item--wide">
+                                <span class="ra-detail-label">Purpose</span>
+                                <span class="ra-detail-value"><?= htmlspecialchars($reservation['purpose']); ?></span>
+                            </div>
+                            <?php if ($attendeesLabel !== null): ?>
+                                <div class="ra-detail-item">
+                                    <span class="ra-detail-label">Attendees</span>
+                                    <span class="ra-detail-value"><?= $attendeesLabel; ?></span>
                                 </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="ra-pending-card__actions">
+                            <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-btn-sm">Open full details</a>
+                            <?php if ($canReview): ?>
+                                <button type="button" class="btn-primary ra-btn-sm" data-review-action="approved" data-review-id="<?= (int)$reservation['id']; ?>">Approve</button>
+                                <button type="button" class="btn-outline ra-btn-sm ra-btn-danger" data-review-action="denied" data-review-id="<?= (int)$reservation['id']; ?>">Deny</button>
+                            <?php elseif ($reservation['status'] === 'pending_payment'): ?>
+                                <span class="ra-payment-note">User must complete payment before this reservation is finalized.</span>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
             </div>
+            <?php if (!empty($pendingReviewData)): ?>
+                <script type="application/json" id="pendingReviewData"><?= json_encode($pendingReviewData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
+            <?php endif; ?>
             <?php if ($pendingTotalPages > 1): ?>
                 <div class="pagination" style="margin-top: 1rem;">
                     <?php if ($pendingPage > 1): ?>
@@ -568,43 +639,6 @@ ob_start();
             <?php endif; ?>
         <?php endif; ?>
     </section>
-
-    <aside class="booking-card">
-        <h2>Status Legend</h2>
-        <ul class="audit-list">
-            <li>
-                <span class="status-badge pending">Pending</span>
-                <span style="margin-left: 0.5rem;">Waiting for staff review.</span>
-            </li>
-            <li>
-                <span class="status-badge approved">Approved</span>
-                <span style="margin-left: 0.5rem;">Facility is reserved for the requester.</span>
-            </li>
-            <li>
-                <span class="status-badge pending_payment">Awaiting Payment</span>
-                <span style="margin-left: 0.5rem;">Already approved; waiting for user payment to finalize.</span>
-            </li>
-            <li>
-                <span class="status-badge denied">Denied</span>
-                <span style="margin-left: 0.5rem;">Request was declined; requester is notified.</span>
-            </li>
-            <li>
-                <span class="status-badge cancelled">Cancelled</span>
-                <span style="margin-left: 0.5rem;">Reservation cancelled by staff or requester.</span>
-            </li>
-            <li>
-                <span class="status-badge postponed">Postponed</span>
-                <span style="margin-left: 0.5rem;">Reservation postponed (e.g., due to facility maintenance). May have priority status.</span>
-            </li>
-            <li>
-                <span class="status-badge on_hold">On Hold</span>
-                <span style="margin-left: 0.5rem;">Reservation temporarily on hold.</span>
-            </li>
-        </ul>
-        <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; font-size: 0.85rem; color: #6b7280;">
-            <strong>Note:</strong> Postponed reservations with priority status (marked with PRIORITY badge) will be given preference during review.
-        </p>
-    </aside>
 </div>
 
 <!-- Approved Reservations Management Section -->
@@ -679,6 +713,43 @@ ob_start();
             </div>
         <?php endif; ?>
     <?php endif; ?>
+</div>
+
+<!-- Review & Decide Modal (mandatory before approve/deny) -->
+<div id="reviewDecisionModal" class="ra-review-modal" aria-hidden="true">
+    <div class="ra-review-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reviewDecisionTitle">
+        <div class="ra-review-modal__header">
+            <div>
+                <p class="ra-review-modal__eyebrow" id="reviewDecisionEyebrow">Review reservation</p>
+                <h3 id="reviewDecisionTitle">Reservation details</h3>
+            </div>
+            <button type="button" class="ra-review-modal__close" data-close-review-modal aria-label="Close">&times;</button>
+        </div>
+
+        <div class="ra-review-modal__body">
+            <div class="ra-review-banner" id="reviewDecisionBanner"></div>
+            <div class="ra-review-grid" id="reviewDecisionGrid"></div>
+
+            <div class="ra-review-purpose">
+                <span class="ra-detail-label">Purpose / event description</span>
+                <p id="reviewDecisionPurpose" class="ra-review-purpose__text"></p>
+            </div>
+
+            <form method="POST" id="reviewDecisionForm" action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="reservation_id" id="review_reservation_id" value="">
+                <input type="hidden" name="action" id="review_action" value="">
+                <label class="ra-review-note-label" for="review_note">Staff remarks <span id="reviewNoteRequiredMark" class="ra-required-mark" hidden>(required for denial)</span></label>
+                <textarea name="note" id="review_note" rows="3" placeholder="Optional notes for approval, or explain why the request is denied." class="ra-review-note-input"></textarea>
+            </form>
+        </div>
+
+        <div class="ra-review-modal__footer">
+            <button type="button" class="btn-outline" data-close-review-modal>Cancel</button>
+            <a href="#" id="reviewOpenFullDetails" class="btn-outline" target="_blank" rel="noopener">Open full page</a>
+            <button type="submit" form="reviewDecisionForm" id="reviewConfirmBtn" class="btn-primary">Confirm</button>
+        </div>
+    </div>
 </div>
 
 <!-- Modify Modal -->
@@ -1049,6 +1120,143 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 });
 </script>
 
+<script>
+(function() {
+    const modal = document.getElementById('reviewDecisionModal');
+    const dataEl = document.getElementById('pendingReviewData');
+    if (!modal || !dataEl) return;
+
+    let reviewData = {};
+    try {
+        reviewData = JSON.parse(dataEl.textContent || '{}');
+    } catch (e) {
+        reviewData = {};
+    }
+
+    const form = document.getElementById('reviewDecisionForm');
+    const titleEl = document.getElementById('reviewDecisionTitle');
+    const eyebrowEl = document.getElementById('reviewDecisionEyebrow');
+    const bannerEl = document.getElementById('reviewDecisionBanner');
+    const gridEl = document.getElementById('reviewDecisionGrid');
+    const purposeEl = document.getElementById('reviewDecisionPurpose');
+    const confirmBtn = document.getElementById('reviewConfirmBtn');
+    const noteInput = document.getElementById('review_note');
+    const noteRequiredMark = document.getElementById('reviewNoteRequiredMark');
+    const fullDetailsLink = document.getElementById('reviewOpenFullDetails');
+    const reservationIdInput = document.getElementById('review_reservation_id');
+    const actionInput = document.getElementById('review_action');
+
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function detailItem(label, value) {
+        return '<div class="ra-detail-item"><span class="ra-detail-label">' + escapeHtml(label) + '</span><span class="ra-detail-value">' + escapeHtml(value || '—') + '</span></div>';
+    }
+
+    function closeReviewModal() {
+        modal.classList.remove('show');
+        modal.setAttribute('aria-hidden', 'true');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        if (form) form.reset();
+        if (bannerEl) bannerEl.innerHTML = '';
+        if (gridEl) gridEl.innerHTML = '';
+        if (purposeEl) purposeEl.textContent = '';
+    }
+
+    function openReviewModal(action, reservationId) {
+        const data = reviewData[String(reservationId)] || reviewData[reservationId];
+        if (!data) return;
+
+        reservationIdInput.value = String(data.id);
+        actionInput.value = action;
+
+        const isApprove = action === 'approved';
+        eyebrowEl.textContent = isApprove ? 'Review before approval' : 'Review before denial';
+        titleEl.textContent = 'Reservation #' + data.id + ' — ' + data.facility;
+        confirmBtn.textContent = isApprove ? 'Confirm approval' : 'Confirm denial';
+        confirmBtn.className = isApprove ? 'btn-primary' : 'btn-outline ra-btn-danger';
+        noteRequiredMark.hidden = isApprove;
+        noteInput.placeholder = isApprove
+            ? 'Optional remarks for the requester (e.g., setup instructions).'
+            : 'Explain why this request is being denied.';
+        noteInput.required = !isApprove;
+        fullDetailsLink.href = data.detail_url || '#';
+
+        let bannerHtml = '';
+        if (data.postponed_priority) {
+            bannerHtml += '<div class="ra-review-alert ra-review-alert--info">This reservation has <strong>priority</strong> due to a previous postponement.</div>';
+        }
+        if (data.expected_attendees !== null && data.capacity_threshold && data.expected_attendees > data.capacity_threshold) {
+            bannerHtml += '<div class="ra-review-alert ra-review-alert--warn">Expected attendees (' + data.expected_attendees + ') exceed the facility threshold (' + data.capacity_threshold + ').</div>';
+        }
+        bannerEl.innerHTML = bannerHtml;
+
+        gridEl.innerHTML = [
+            detailItem('Requester', data.requester),
+            detailItem('Email', data.requester_email || '—'),
+            detailItem('Mobile', data.requester_mobile || '—'),
+            detailItem('Facility', data.facility),
+            detailItem('Date', data.schedule_date),
+            detailItem('Time', data.time_slot),
+            detailItem('Attendees', data.expected_attendees !== null ? String(data.expected_attendees) : 'Not specified'),
+            detailItem('Commercial use', data.is_commercial ? 'Yes' : 'No'),
+            detailItem('Status', data.status.charAt(0).toUpperCase() + data.status.slice(1)),
+            detailItem('Submitted', data.submitted_at),
+        ].join('');
+
+        purposeEl.textContent = data.purpose || '—';
+
+        modal.classList.add('show');
+        modal.setAttribute('aria-hidden', 'false');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        noteInput.focus();
+    }
+
+    document.addEventListener('click', function(e) {
+        const trigger = e.target.closest('[data-review-action][data-review-id]');
+        if (trigger) {
+            e.preventDefault();
+            openReviewModal(trigger.getAttribute('data-review-action'), trigger.getAttribute('data-review-id'));
+            return;
+        }
+        if (e.target.closest('[data-close-review-modal]') || e.target === modal) {
+            e.preventDefault();
+            closeReviewModal();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('show')) {
+            closeReviewModal();
+        }
+    });
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const action = actionInput.value;
+            if (action === 'denied' && !noteInput.value.trim()) {
+                e.preventDefault();
+                noteInput.focus();
+                noteInput.classList.add('ra-input-error');
+                return;
+            }
+            noteInput.classList.remove('ra-input-error');
+        });
+    }
+})();
+</script>
+
 <!-- All Reservations Modal (only opens when user clicks "All Reservations" button) -->
 <div id="allReservationsModal" class="modal-overlay frs-all-reservations-modal" data-all-reservations-modal style="display: none;">
     <div class="modal-content frs-all-reservations-modal__panel">
@@ -1148,6 +1356,287 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 </div>
 
 <style>
+/* Reservation Approvals — pending cards & review modal */
+.ra-approvals-layout {
+    display: block;
+}
+.ra-approvals-main {
+    width: 100%;
+}
+.ra-legend-details {
+    margin-bottom: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 0.55rem 0.85rem;
+}
+.ra-legend-summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.9rem;
+    list-style: none;
+}
+.ra-legend-summary::-webkit-details-marker {
+    display: none;
+}
+.ra-legend-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.85rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e2e8f0;
+}
+.ra-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+.ra-legend-note {
+    margin: 0.65rem 0 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+.ra-section-hint {
+    margin: 0 0 1rem;
+    color: #64748b;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+.ra-empty-state {
+    margin: 0;
+    color: #64748b;
+}
+.ra-pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.ra-pending-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.15rem 1.25rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.ra-pending-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.ra-pending-card__title {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+    color: #1e3a5f;
+}
+.ra-pending-card__requester {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+.ra-priority-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    background: #1e3a8a;
+    color: #fff;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+.ra-pending-card__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.ra-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.ra-detail-item--wide {
+    grid-column: 1 / -1;
+}
+.ra-detail-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.ra-detail-value {
+    color: #1f2937;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+.ra-pending-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding-top: 0.85rem;
+    border-top: 1px solid #eef2f7;
+}
+.ra-btn-sm {
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.88rem !important;
+    text-decoration: none;
+}
+.ra-btn-danger {
+    color: #b91c1c !important;
+    border-color: #fecaca !important;
+}
+.ra-btn-danger:hover {
+    background: #fef2f2 !important;
+}
+.ra-payment-note {
+    font-size: 0.85rem;
+    color: #9a3412;
+    background: #ffedd5;
+    border: 1px solid #fdba74;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+}
+.ra-review-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+}
+.ra-review-modal.show {
+    display: flex;
+}
+.ra-review-modal__dialog {
+    width: min(720px, 100%);
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+.ra-review-modal__header,
+.ra-review-modal__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.15rem 1.35rem;
+    border-bottom: 1px solid #eef2f7;
+}
+.ra-review-modal__footer {
+    border-bottom: none;
+    border-top: 1px solid #eef2f7;
+    justify-content: flex-end;
+}
+.ra-review-modal__eyebrow {
+    margin: 0 0 0.2rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.ra-review-modal__header h3 {
+    margin: 0;
+    color: #1e3a5f;
+    font-size: 1.15rem;
+}
+.ra-review-modal__close {
+    background: none;
+    border: none;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: #94a3b8;
+    cursor: pointer;
+}
+.ra-review-modal__body {
+    padding: 1.15rem 1.35rem;
+    overflow-y: auto;
+}
+.ra-review-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.ra-review-purpose {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.ra-review-purpose__text {
+    margin: 0.35rem 0 0;
+    color: #1f2937;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+.ra-review-alert {
+    padding: 0.75rem 0.9rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+.ra-review-alert--info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+}
+.ra-review-alert--warn {
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    color: #9a3412;
+}
+.ra-review-note-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+    color: #334155;
+}
+.ra-required-mark {
+    color: #dc2626;
+    font-weight: 600;
+}
+.ra-review-note-input {
+    width: 100%;
+    min-height: 88px;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    font-family: inherit;
+    resize: vertical;
+}
+.ra-review-note-input.ra-input-error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+@media (max-width: 640px) {
+    .ra-review-grid {
+        grid-template-columns: 1fr;
+    }
+    .ra-review-modal__footer {
+        flex-wrap: wrap;
+    }
+}
+
 /* All Reservations Modal - hidden by default, only visible with .show class */
 #allReservationsModal.modal-overlay {
     position: fixed !important;

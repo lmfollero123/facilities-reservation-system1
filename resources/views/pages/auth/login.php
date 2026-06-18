@@ -98,8 +98,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $totpActive = frs_user_totp_active($user);
 
                                 if (!frs_user_has_required_second_factor($user)) {
-                                    $error = 'Two-factor authentication is required for your account. Enable email OTP or Google Authenticator in Profile → Account Security.';
-                                    logSecurityEvent('login_missing_2fa', "Login blocked — no 2FA method enabled: $email", 'warning');
+                                    frs_begin_pending_2fa_setup($user, $next !== '' ? $next : null);
+
+                                    $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
+                                    $logStmt->execute([$email, getClientIP()]);
+                                    logSecurityEvent('login_2fa_setup_required', "Admin/Staff redirected to 2FA setup: $email", 'warning');
+
+                                    header('Location: ' . base_path() . '/login-setup-2fa');
+                                    exit;
                                 } elseif (frs_login_requires_second_factor($user)) {
                                     $_SESSION['login_otp_email_sent'] = false;
 

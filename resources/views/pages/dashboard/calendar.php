@@ -9,6 +9,9 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
     exit;
 }
 
+header('Location: ' . base_path() . '/dashboard/book-facility?module=mine', true, 302);
+exit;
+
 require_once __DIR__ . '/../../../../config/database.php';
 $pdo = db();
 $pageTitle = 'Calendar & Schedule | LGU Facilities Reservation';
