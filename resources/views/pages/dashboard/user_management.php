@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
+require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'User Management | LGU Facilities Reservation';
 
@@ -417,6 +418,12 @@ if (!empty($users)) {
     foreach ($docs as $doc) {
         $docsByUser[$doc['user_id']][] = $doc;
     }
+
+    $violationCountsByUser = getViolationCountsForUserIds($ids);
+    $violationsByUser = getViolationsGroupedForUserIds($ids);
+} else {
+    $violationCountsByUser = [];
+    $violationsByUser = [];
 }
 
 // Summary stats
@@ -549,6 +556,51 @@ ob_start();
                                 <?php endif; ?>
                             </div>
                             <p class="um-meta">Registered <?= date('M j, Y', strtotime($user['created_at'])); ?></p>
+                            <?php
+                            $uid = (int)$user['id'];
+                            $vTotal = $violationCountsByUser[$uid]['total'] ?? 0;
+                            $vHigh = $violationCountsByUser[$uid]['high_critical'] ?? 0;
+                            $userViolations = $violationsByUser[$uid] ?? [];
+                            ?>
+                            <div class="um-violations">
+                                <div class="um-violations-head">
+                                    <?php if ($vTotal > 0): ?>
+                                        <span class="um-badge um-badge-violation<?= $vHigh > 0 ? ' um-badge-violation-high' : ''; ?>">
+                                            <?= $vTotal; ?> violation<?= $vTotal === 1 ? '' : 's'; ?>
+                                        </span>
+                                        <?php if ($vHigh > 0): ?>
+                                            <span class="um-badge um-badge-warn"><?= $vHigh; ?> high/critical</span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="um-badge um-badge-muted">No violations</span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($vTotal > 0): ?>
+                                    <details class="um-violations-details">
+                                        <summary>View violation history</summary>
+                                        <ul class="um-violations-list">
+                                            <?php foreach ($userViolations as $v): ?>
+                                                <li class="um-violation-item um-violation-sev-<?= htmlspecialchars($v['severity']); ?>">
+                                                    <div class="um-violation-top">
+                                                        <strong><?= htmlspecialchars(frs_violation_type_label($v['violation_type'])); ?></strong>
+                                                        <span class="um-violation-severity"><?= htmlspecialchars(ucfirst($v['severity'])); ?></span>
+                                                    </div>
+                                                    <p class="um-violation-desc"><?= htmlspecialchars($v['description'] ?: 'No description provided.'); ?></p>
+                                                    <p class="um-violation-meta">
+                                                        <?= date('M j, Y g:i A', strtotime($v['created_at'])); ?>
+                                                        <?php if (!empty($v['facility_name'])): ?>
+                                                            · <?= htmlspecialchars($v['facility_name']); ?>
+                                                            <?php if (!empty($v['reservation_date'])): ?>
+                                                                (<?= date('M j, Y', strtotime($v['reservation_date'])); ?>)
+                                                            <?php endif; ?>
+                                                        <?php endif; ?>
+                                                    </p>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
 
@@ -760,6 +812,20 @@ ob_start();
 .um-badge-muted { background: #f1f5f9; color: #64748b; }
 .um-badge-self { background: #dbeafe; color: #1d4ed8; }
 .um-meta { margin: 0; font-size: 0.8rem; color: #94a3b8; }
+.um-violations { margin-top: 0.65rem; padding-top: 0.65rem; border-top: 1px dashed #e2e8f0; }
+.um-violations-head { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.um-badge-violation { background: #fff7ed; color: #c2410c; }
+.um-badge-violation-high { background: #fee2e2; color: #991b1b; }
+.um-violations-details { margin-top: 0.45rem; font-size: 0.82rem; color: #475569; }
+.um-violations-details summary { cursor: pointer; color: #2563eb; font-weight: 600; user-select: none; }
+.um-violations-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.um-violation-item { padding: 0.55rem 0.65rem; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.um-violation-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; font-size: 0.82rem; }
+.um-violation-severity { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: #64748b; }
+.um-violation-sev-high, .um-violation-sev-critical { border-color: #fecaca; background: #fef2f2; }
+.um-violation-sev-high .um-violation-severity, .um-violation-sev-critical .um-violation-severity { color: #b91c1c; }
+.um-violation-desc { margin: 0.3rem 0 0; font-size: 0.8rem; color: #334155; line-height: 1.4; }
+.um-violation-meta { margin: 0.25rem 0 0; font-size: 0.75rem; color: #94a3b8; }
 .um-user-side { display: flex; flex-direction: column; gap: 0.65rem; border-left: 1px solid #eef2f7; padding-left: 1rem; }
 .um-role-label { font-size: 0.82rem; color: #475569; display: flex; flex-direction: column; gap: 0.35rem; }
 .um-role-form select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 8px; border: 1px solid #d7deed; }

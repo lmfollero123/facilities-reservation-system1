@@ -168,6 +168,8 @@ if ($path === 'announcements') {
         'occupancy-monitor' => 'occupancy_monitor.php',
         'occupancy-live' => 'occupancy_live_api.php',
         'check-in' => 'check_in_gate.php',
+        'facility-check-in' => 'facility_check_in_gate.php',
+        'facility-qr-print' => 'facility_qr_print.php',
         'blackout-dates' => 'blackout_dates.php',
         'ai-conflict-check' => 'ai_conflict_check.php',
         'ai-recommendations-api' => 'ai_recommendations_api.php',

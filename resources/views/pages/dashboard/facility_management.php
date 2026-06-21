@@ -14,16 +14,40 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/maintenance_helper.php';
 require_once __DIR__ . '/../../../../config/security.php';
+require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 $pdo = db();
 $pageTitle = 'Facility Management | LGU Facilities Reservation';
 
 $message = '';
 $messageType = '';
+$hasFacilityQr = frs_facility_qr_column_exists($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
+    } elseif (($_POST['action'] ?? '') === 'regenerate_facility_qr') {
+        $regenId = (int)($_POST['facility_id'] ?? 0);
+        if (!$hasFacilityQr) {
+            $message = 'Facility QR is not enabled yet. Run database/migration_add_facility_checkin_qr.sql first.';
+            $messageType = 'error';
+        } elseif ($regenId <= 0) {
+            $message = 'Invalid facility selected.';
+            $messageType = 'error';
+        } else {
+            $nameStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
+            $nameStmt->execute([$regenId]);
+            $facName = (string)($nameStmt->fetchColumn() ?: 'Facility');
+            $newToken = frs_regenerate_facility_checkin_token($pdo, $regenId);
+            if ($newToken) {
+                logAudit('Regenerated facility check-in QR', 'Facility Management', $facName . ' (ID ' . $regenId . ')');
+                $message = 'A new QR code was generated for ' . $facName . '. Reprint and replace the poster at the facility.';
+                $messageType = 'success';
+            } else {
+                $message = 'Unable to regenerate QR code. Please try again.';
+                $messageType = 'error';
+            }
+        }
     } else {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
@@ -182,6 +206,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
+
+                $newFacilityId = (int)$pdo->lastInsertId();
+                if ($newFacilityId > 0 && $hasFacilityQr) {
+                    frs_ensure_facility_checkin_token($pdo, $newFacilityId);
+                }
                 
                 $message = 'Facility added successfully.';
             }
@@ -206,6 +235,23 @@ $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
 $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$facilityQrById = [];
+if ($hasFacilityQr) {
+    foreach ($facilities as $facRow) {
+        $fid = (int)$facRow['id'];
+        $token = frs_ensure_facility_checkin_token($pdo, $fid);
+        if (!$token) {
+            continue;
+        }
+        $checkinUrl = frs_facility_checkin_url($token);
+        $facilityQrById[$fid] = [
+            'url' => $checkinUrl,
+            'qr' => frs_facility_qr_image_url($checkinUrl, 240),
+            'print_url' => base_path() . '/dashboard/facility-qr-print?id=' . $fid,
+        ];
+    }
+}
 
 // Get recent audit log entries for Facility Management module with pagination
 $auditPerPage = 5;
@@ -287,7 +333,24 @@ ob_start();
                             <span style="line-height:1.5;"><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
                         </div>
                         <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
-                        <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                        <div class="facility-card-actions">
+                            <?php if ($hasFacilityQr && !empty($facilityQrById[(int)$facility['id']])): ?>
+                                <?php $qr = $facilityQrById[(int)$facility['id']]; ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-primary js-open-qr-modal"
+                                    data-facility-id="<?= (int)$facility['id']; ?>"
+                                    data-facility-name="<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>"
+                                    data-facility-location="<?= htmlspecialchars($facility['location'] ?? '', ENT_QUOTES); ?>"
+                                    data-qr-url="<?= htmlspecialchars($qr['url'], ENT_QUOTES); ?>"
+                                    data-qr-image="<?= htmlspecialchars($qr['qr'], ENT_QUOTES); ?>"
+                                    data-print-url="<?= htmlspecialchars($qr['print_url'], ENT_QUOTES); ?>"
+                                >Check-In QR</button>
+                            <?php elseif (!$hasFacilityQr): ?>
+                                <span class="fm-qr-hint">Run <code>migration_add_facility_checkin_qr.sql</code> to enable facility QR posters.</span>
+                            <?php endif; ?>
+                            <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                        </div>
                     </article>
                 <?php endforeach; ?>
 
@@ -313,6 +376,42 @@ ob_start();
     position: fixed !important;
     top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
     width: 100vw !important; height: 100vh !important;
+}
+.facility-card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+.fm-qr-hint { font-size: 0.82rem; color: #64748b; }
+.fm-qr-modal {
+    position: fixed; inset: 0; z-index: 1300; display: none; align-items: center; justify-content: center; padding: 1rem;
+}
+.fm-qr-modal.open { display: flex; }
+.fm-qr-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.5); }
+.fm-qr-panel {
+    position: relative; width: min(100%, 760px); max-height: calc(100vh - 2rem); overflow: auto;
+    background: #fff; border-radius: 16px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+}
+.fm-qr-header {
+    display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start;
+    padding: 1.1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+}
+.fm-qr-header h3 { margin: 0; color: #0f172a; font-size: 1.15rem; }
+.fm-qr-sub { margin: 0.25rem 0 0; color: #64748b; font-size: 0.88rem; }
+.fm-qr-close { border: 0; background: transparent; font-size: 1.6rem; line-height: 1; color: #64748b; cursor: pointer; }
+.fm-qr-body { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.25rem; padding: 1.25rem; }
+.fm-qr-preview {
+    display: flex; align-items: center; justify-content: center; padding: 0.75rem;
+    border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;
+}
+.fm-qr-preview img { border-radius: 8px; }
+.fm-qr-lead { margin: 0 0 0.85rem; color: #475569; line-height: 1.5; font-size: 0.92rem; }
+.fm-qr-url-label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.82rem; color: #475569; margin-bottom: 0.85rem; }
+.fm-qr-url-label input {
+    width: 100%; padding: 0.55rem 0.65rem; border: 1px solid #d7deed; border-radius: 8px; font-size: 0.82rem; color: #334155;
+}
+.fm-qr-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.85rem; }
+.fm-qr-regen-form { margin: 0; }
+.fm-qr-regen-btn { border-color: #f87171 !important; color: #b91c1c !important; }
+.fm-qr-note { margin: 0.65rem 0 0; font-size: 0.78rem; color: #94a3b8; line-height: 1.45; }
+@media (max-width: 720px) {
+    .fm-qr-body { grid-template-columns: 1fr; }
 }
 </style>
 <!-- Facility Modal -->
@@ -505,6 +604,42 @@ ob_start();
                         <button class="btn-outline" type="button" onclick="cancelFacilityForm()">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="facilityQrModal" class="fm-qr-modal" aria-hidden="true">
+    <div class="fm-qr-backdrop js-close-qr-modal"></div>
+    <div class="fm-qr-panel" role="dialog" aria-labelledby="facilityQrTitle" aria-modal="true">
+        <div class="fm-qr-header">
+            <div>
+                <h3 id="facilityQrTitle">Facility Check-In QR</h3>
+                <p id="facilityQrSubtitle" class="fm-qr-sub"></p>
+            </div>
+            <button type="button" class="fm-qr-close js-close-qr-modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="fm-qr-body">
+            <div class="fm-qr-preview">
+                <img id="facilityQrImage" src="" alt="Facility Check-In QR code" width="220" height="220">
+            </div>
+            <div class="fm-qr-info">
+                <p class="fm-qr-lead">Post this QR at the facility entrance. Residents scan it to Check In when they arrive and Check Out when their slot ends.</p>
+                <label class="fm-qr-url-label">
+                    Scan URL
+                    <input id="facilityQrUrl" type="text" readonly onclick="this.select()">
+                </label>
+                <div class="fm-qr-actions">
+                    <a id="facilityQrPrintLink" href="#" target="_blank" rel="noopener" class="btn-primary">Open print poster</a>
+                    <button type="button" class="btn-outline" id="facilityQrCopyBtn">Copy URL</button>
+                </div>
+                <form method="POST" class="fm-qr-regen-form" id="facilityQrRegenForm">
+                    <?= csrf_field(); ?>
+                    <input type="hidden" name="action" value="regenerate_facility_qr">
+                    <input type="hidden" name="facility_id" id="facilityQrRegenId" value="">
+                    <button type="submit" class="btn-outline fm-qr-regen-btn confirm-action" data-message="Generate a new QR code? Old printed posters will stop working.">Regenerate QR</button>
+                </form>
+                <p class="fm-qr-note">Regenerate only if a poster is lost or compromised. Reprint using “Open print poster”.</p>
             </div>
         </div>
     </div>
@@ -835,6 +970,73 @@ function resetFacilityForm() {
         if (geocodeTimer) clearTimeout(geocodeTimer);
         geocodeTimer = setTimeout(fetchGeocode, 800);
     });
+})();
+
+(function() {
+    const modal = document.getElementById('facilityQrModal');
+    if (!modal) return;
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    const titleEl = document.getElementById('facilityQrTitle');
+    const subtitleEl = document.getElementById('facilityQrSubtitle');
+    const imageEl = document.getElementById('facilityQrImage');
+    const urlEl = document.getElementById('facilityQrUrl');
+    const printEl = document.getElementById('facilityQrPrintLink');
+    const regenIdEl = document.getElementById('facilityQrRegenId');
+    const copyBtn = document.getElementById('facilityQrCopyBtn');
+
+    function closeQrModal() {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    function openQrModal(btn) {
+        const name = btn.getAttribute('data-facility-name') || 'Facility';
+        const location = btn.getAttribute('data-facility-location') || '';
+        const url = btn.getAttribute('data-qr-url') || '';
+        const image = btn.getAttribute('data-qr-image') || '';
+        const printUrl = btn.getAttribute('data-print-url') || '#';
+        const facilityId = btn.getAttribute('data-facility-id') || '';
+
+        if (titleEl) titleEl.textContent = name + ' — Check-In QR';
+        if (subtitleEl) subtitleEl.textContent = location;
+        if (imageEl) imageEl.src = image;
+        if (urlEl) urlEl.value = url;
+        if (printEl) printEl.href = printUrl;
+        if (regenIdEl) regenIdEl.value = facilityId;
+
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    document.querySelectorAll('.js-open-qr-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openQrModal(btn);
+        });
+    });
+
+    modal.querySelectorAll('.js-close-qr-modal').forEach(function(el) {
+        el.addEventListener('click', closeQrModal);
+    });
+
+    if (copyBtn && urlEl) {
+        copyBtn.addEventListener('click', function() {
+            urlEl.select();
+            urlEl.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(urlEl.value).then(function() {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function() { copyBtn.textContent = 'Copy URL'; }, 1800);
+            }).catch(function() {
+                document.execCommand('copy');
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function() { copyBtn.textContent = 'Copy URL'; }, 1800);
+            });
+        });
+    }
 })();
 </script>
 <?php

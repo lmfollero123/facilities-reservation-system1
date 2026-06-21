@@ -1311,6 +1311,9 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
                         );
                         $historyItems->execute(['id' => $record['id']]);
                         $timeline = $historyItems->fetchAll(PDO::FETCH_ASSOC);
+                        $recordIsPast = frs_reservation_slot_has_passed((string)$record['reservation_date'], (string)$record['time_slot'])
+                            && !in_array($record['status'], ['denied', 'cancelled'], true);
+                        $recordBadgeClass = $recordIsPast ? 'past' : $record['status'];
                         ?>
                         <article class="facility-card-admin" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px;">
                             <header style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -1319,7 +1322,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
                                     <small style="color: #6b7280;"><?= htmlspecialchars($record['reservation_date']); ?> • <?= htmlspecialchars($record['time_slot']); ?></small>
                                 </div>
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap: wrap;">
-                                    <span class="status-badge <?= $record['status']; ?>"><?= ucfirst($record['status']); ?></span>
+                                    <span class="status-badge <?= htmlspecialchars($recordBadgeClass); ?>"><?= $recordIsPast ? 'Past · ' : ''; ?><?= ucfirst($record['status']); ?></span>
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $record['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                 </div>
                             </header>

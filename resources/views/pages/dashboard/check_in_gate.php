@@ -1,6 +1,6 @@
 <?php
 /**
- * QR / link check-in gate: validates token and sends user to Time Tracking.
+ * Legacy reservation QR link — redirects to Check In/Out page.
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

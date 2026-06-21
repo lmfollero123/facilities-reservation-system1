@@ -480,6 +480,14 @@ $historyStmt = $pdo->prepare(
 $historyStmt->execute(['id' => $reservationId]);
 $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
+$reservationIsPast = frs_reservation_slot_has_passed(
+    (string)$reservation['reservation_date'],
+    (string)$reservation['time_slot']
+);
+$reservationStatusBadgeClass = ($reservationIsPast && !in_array($reservation['status'], ['denied', 'cancelled'], true))
+    ? 'past'
+    : $reservation['status'];
+
 $reservationDocuments = frs_list_reservation_documents($reservationId);
 
 ob_start();
@@ -537,8 +545,12 @@ ob_start();
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Status</strong>
-                <span class="status-badge <?= $reservation['status']; ?>">
-                    <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                <span class="status-badge <?= htmlspecialchars($reservationStatusBadgeClass); ?>">
+                    <?php if ($reservationStatusBadgeClass === 'past'): ?>
+                        Past · <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                    <?php else: ?>
+                        <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
+                    <?php endif; ?>
                 </span>
             </div>
             <div>

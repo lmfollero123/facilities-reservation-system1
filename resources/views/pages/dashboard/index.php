@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
+require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 
 $pdo = db();
 
@@ -69,6 +70,19 @@ if (!empty($_GET['end_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end_
 
 $today = date('Y-m-d');
 $weekFromNow = date('Y-m-d', strtotime('+7 days'));
+
+// Live occupancy strip (today's operational snapshot)
+$occDashSnapshot = ['facilities' => [], 'summary' => ['occupied' => 0, 'total_facilities' => 0]];
+try {
+    $occDashSnapshot = frs_build_operational_occupancy_snapshot($pdo);
+    if (!in_array($userRole, ['Admin', 'Staff'], true)) {
+        $occDashSnapshot = frs_sanitize_occupancy_snapshot_for_public($occDashSnapshot);
+    }
+} catch (Throwable $e) {
+    error_log('Dashboard occupancy strip: ' . $e->getMessage());
+}
+$occDashLiveUrl = base_path() . '/dashboard/occupancy-live';
+$occDashStaffLink = in_array($userRole, ['Admin', 'Staff'], true);
 
 // ===== Prompt: Reservation today (Check In/Out) =====
 $todayPrompt = null;
@@ -641,7 +655,7 @@ ob_start();
         $nowDt = new DateTime();
         $canTimeIn = $startDt && $endDt && $nowDt >= $startDt && $nowDt <= $endDt && empty($todayPrompt['time_in_at']);
         $canTimeOut = $endDt && $nowDt >= $endDt && !empty($todayPrompt['time_in_at']) && empty($todayPrompt['time_out_at']);
-        $statusText = $canTimeIn ? 'Time In is available now.' : ($canTimeOut ? 'Time Out is available now.' : 'Your reservation is scheduled today.');
+        $statusText = $canTimeIn ? 'Check In is available now.' : ($canTimeOut ? 'Check Out is available now.' : 'Your reservation is scheduled today.');
     ?>
     <div class="booking-card" style="margin-bottom: 1rem; padding: 0.85rem; border: 1px solid #bfdbfe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);">
         <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
@@ -810,6 +824,8 @@ ob_start();
         </a>
     <?php endif; ?>
 </div>
+
+<?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
 
 <div class="booking-wrapper" style="margin-top: 1rem;">
     <section class="booking-card collapsible-card">

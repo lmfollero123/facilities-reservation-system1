@@ -8,10 +8,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
 
-/** Minutes before slot start when Time In is allowed */
+/** Minutes before slot start when Check In is allowed */
 const FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE = 15;
 
-/** Minutes after slot start with no Time In → no_show_risk */
+/** Minutes after slot start with no Check In → no_show_risk */
 const FRS_OCCUPANCY_NO_SHOW_GRACE_AFTER = 30;
 
 const FRS_FACILITY_LIVE_AUTO = 'auto';
@@ -149,7 +149,7 @@ function frs_facility_aggregate_state_display(string $key): array
         'checked_in' => ['key' => 'checked_in', 'label' => 'On-site (reported)', 'color' => '#14532d', 'bg' => '#dcfce7'],
         'booked' => ['key' => 'booked', 'label' => 'Booked (in slot)', 'color' => '#1d4ed8', 'bg' => '#eff6ff'],
         'no_show_risk' => ['key' => 'no_show_risk', 'label' => 'No-show risk', 'color' => '#92400e', 'bg' => '#fef3c7'],
-        default => ['key' => 'available', 'label' => 'Available', 'color' => '#64748b', 'bg' => '#f8fafc'],
+        default => ['key' => 'available', 'label' => 'Available', 'color' => '#047857', 'bg' => '#ecfdf5'],
     };
 }
 
@@ -169,7 +169,7 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
     $hasLiveStatus = frs_occupancy_table_exists($pdo, 'facility_live_status');
 
     $facilitiesStmt = $pdo->query(
-        'SELECT id, name, status FROM facilities WHERE status != "deleted" ORDER BY name'
+        'SELECT id, name, status, image_path FROM facilities WHERE status != "deleted" ORDER BY name'
     );
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -206,12 +206,14 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
     }
 
     $byFacility = [];
+    $facilityIndex = 0;
     foreach ($facilities as $f) {
         $fid = (int)$f['id'];
         $byFacility[$fid] = [
             'facility_id' => $fid,
             'facility_name' => (string)$f['name'],
             'facility_status' => (string)$f['status'],
+            'image_url' => frs_facility_display_image_url($f['image_path'] ?? null, $facilityIndex),
             'staff_live' => $liveMap[$fid] ?? null,
             'aggregate_state' => 'available',
             'aggregate_display' => frs_facility_aggregate_state_display('available'),
@@ -222,6 +224,7 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
                 'no_show_risk' => 0,
             ],
         ];
+        $facilityIndex++;
     }
 
     foreach ($reservations as $res) {
@@ -460,6 +463,24 @@ function frs_occupancy_aggregate_is_busy(string $aggregateState): bool
 }
 
 /**
+ * Public URL for a facility thumbnail (with rotating fallbacks when no upload).
+ */
+function frs_facility_display_image_url(?string $imagePath, int $index = 0): string
+{
+    $base = base_path();
+    if ($imagePath !== null && trim($imagePath) !== '') {
+        $path = trim($imagePath);
+        return $base . (str_starts_with($path, '/') ? $path : '/' . $path);
+    }
+    $fallbacks = [
+        $base . '/public/img/convention-hall.jpg',
+        $base . '/public/img/sports-complex.jpg',
+        $base . '/public/img/amphitheater.jpg',
+    ];
+    return $fallbacks[abs($index) % count($fallbacks)];
+}
+
+/**
  * Hide requester names on public/resident views.
  *
  * @param array<string, mixed> $snapshot
@@ -499,4 +520,90 @@ function frs_reservation_id_from_checkin_token(PDO $pdo, string $token, int $use
     $st->execute([$token, $userId]);
     $id = $st->fetchColumn();
     return $id ? (int)$id : null;
+}
+
+function frs_facility_qr_column_exists(PDO $pdo): bool
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    try {
+        $st = $pdo->query("SHOW COLUMNS FROM facilities LIKE 'checkin_qr_token'");
+        $cache = (bool)$st->fetch();
+    } catch (Throwable $e) {
+        $cache = false;
+    }
+    return $cache;
+}
+
+/**
+ * Ensure a persistent facility QR token exists (for on-site posters).
+ */
+function frs_ensure_facility_checkin_token(PDO $pdo, int $facilityId): ?string
+{
+    if (!frs_facility_qr_column_exists($pdo)) {
+        return null;
+    }
+    $sel = $pdo->prepare('SELECT checkin_qr_token FROM facilities WHERE id = ? LIMIT 1');
+    $sel->execute([$facilityId]);
+    $existing = $sel->fetchColumn();
+    if (is_string($existing) && $existing !== '') {
+        return $existing;
+    }
+    $token = bin2hex(random_bytes(24));
+    $upd = $pdo->prepare(
+        'UPDATE facilities SET checkin_qr_token = ? WHERE id = ? AND (checkin_qr_token IS NULL OR checkin_qr_token = "")'
+    );
+    $upd->execute([$token, $facilityId]);
+    if ($upd->rowCount() > 0) {
+        return $token;
+    }
+    $sel->execute([$facilityId]);
+    $again = $sel->fetchColumn();
+    return is_string($again) && $again !== '' ? $again : null;
+}
+
+/**
+ * Replace facility QR token (invalidates old printed posters).
+ */
+function frs_regenerate_facility_checkin_token(PDO $pdo, int $facilityId): ?string
+{
+    if (!frs_facility_qr_column_exists($pdo)) {
+        return null;
+    }
+    $token = bin2hex(random_bytes(24));
+    $upd = $pdo->prepare('UPDATE facilities SET checkin_qr_token = ? WHERE id = ?');
+    $upd->execute([$token, $facilityId]);
+    return $upd->rowCount() > 0 ? $token : frs_ensure_facility_checkin_token($pdo, $facilityId);
+}
+
+/**
+ * @return array<string, mixed>|null
+ */
+function frs_facility_from_checkin_token(PDO $pdo, string $token): ?array
+{
+    if ($token === '' || !frs_facility_qr_column_exists($pdo)) {
+        return null;
+    }
+    $st = $pdo->prepare(
+        'SELECT id, name, location, status, checkin_qr_token
+         FROM facilities
+         WHERE checkin_qr_token = ?
+         LIMIT 1'
+    );
+    $st->execute([$token]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function frs_facility_checkin_url(string $token): string
+{
+    return base_url() . base_path() . '/dashboard/facility-check-in?token=' . urlencode($token);
+}
+
+function frs_facility_qr_image_url(string $checkinUrl, int $size = 320): string
+{
+    return 'https://api.qrserver.com/v1/create-qr-code/?size=' . $size . 'x' . $size
+        . '&margin=12&data=' . rawurlencode($checkinUrl);
 }

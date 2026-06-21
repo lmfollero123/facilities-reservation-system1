@@ -5174,6 +5174,11 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     color: #fff;
 }
 
+.status-badge.past {
+    background: #94a3b8;
+    color: #fff;
+}
+
 /* Status badge in tables: prevent overflow */
 .status-badge.status-badge--cell {
     max-width: 10em;
@@ -5371,6 +5376,11 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
 .pill-event.request {
     background: #fff4e5;
     color: #8a4f00;
+}
+
+.pill-event.past {
+    background: #e2e8f0;
+    color: #475569;
 }
 
 .calendar-legend {
@@ -6919,6 +6929,7 @@ select:focus {
 .btn-primary:hover {
     background: var(--primary-hover);
     border-color: var(--primary-hover);
+    color: #ffffff;
 }
 
 .btn-outline {
@@ -6927,8 +6938,12 @@ select:focus {
     color: var(--text-primary);
 }
 
-.btn-outline:hover {
-    background: var(--bg-tertiary);
+.btn-outline:hover,
+a.btn-outline:hover,
+button.btn-outline:hover {
+    background: var(--primary-color);
+    color: #ffffff;
+    border-color: var(--primary-color);
 }
 
 /* Status Badges */

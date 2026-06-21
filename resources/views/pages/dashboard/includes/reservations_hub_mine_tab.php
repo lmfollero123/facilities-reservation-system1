@@ -110,6 +110,18 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     background: #fee2e2;
     border-color: #fecaca;
 }
+.my-reservations-calendar-cell.status-past {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    opacity: 0.92;
+}
+.my-reservations-calendar-cell.status-past .date-label {
+    color: #64748b;
+}
+.my-reservations-calendar-cell.status-past .status-chip {
+    background: #e2e8f0;
+    color: #475569;
+}
 [data-theme="dark"] .my-reservations-calendar-cell.status-approved {
     background: rgba(22,163,74,0.25);
     border-color: rgba(34,197,94,0.8);
@@ -121,6 +133,19 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
 [data-theme="dark"] .my-reservations-calendar-cell.status-denied {
     background: rgba(220,38,38,0.2);
     border-color: rgba(248,113,113,0.9);
+}
+[data-theme="dark"] .my-reservations-calendar-cell.status-past {
+    background: rgba(100,116,139,0.2);
+    border-color: rgba(148,163,184,0.5);
+}
+.my-reservations-res-card.is-past {
+    border-color: #e2e8f0 !important;
+    background: #f8fafc;
+    opacity: 0.95;
+}
+.my-reservations-res-card.is-past .res-past-badge {
+    background: #e2e8f0;
+    color: #475569;
 }
 .my-reservations-legend {
     display:flex;
@@ -265,6 +290,9 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
             <div class="my-reservations-legend-item">
                 <span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Denied / Cancelled
             </div>
+            <div class="my-reservations-legend-item">
+                <span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Past
+            </div>
         </div>
     </div>
     <div class="my-reservations-calendar-grid">
@@ -286,11 +314,21 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
             $isToday = ($dateStr === $todayDate);
             // Determine dominant status for the day (for background color)
             $dayStatusClass = '';
-            if (!empty($cellReservations)) {
+            $chipLabel = '';
+            $activeCellReservations = [];
+            foreach ($cellReservations as $r) {
+                if (!frs_reservation_slot_has_passed((string)$r['reservation_date'], (string)$r['time_slot'])) {
+                    $activeCellReservations[] = $r;
+                }
+            }
+            if (!empty($cellReservations) && empty($activeCellReservations)) {
+                $dayStatusClass = ' status-past';
+                $chipLabel = 'Past';
+            } elseif (!empty($activeCellReservations)) {
                 $hasApproved = false;
                 $hasPending = false;
                 $hasDenied = false;
-                foreach ($cellReservations as $r) {
+                foreach ($activeCellReservations as $r) {
                     $s = strtolower($r['status']);
                     if ($s === 'approved') $hasApproved = true;
                     elseif (in_array($s, ['pending_payment', 'pending', 'postponed', 'on_hold'], true)) $hasPending = true;
@@ -299,6 +337,10 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                 if ($hasApproved) $dayStatusClass = ' status-approved';
                 elseif ($hasPending) $dayStatusClass = ' status-pending';
                 elseif ($hasDenied) $dayStatusClass = ' status-denied';
+                if ($dayStatusClass === ' status-approved') $chipLabel = 'Approved';
+                elseif ($dayStatusClass === ' status-pending') $chipLabel = 'Pending';
+                elseif ($dayStatusClass === ' status-denied') $chipLabel = 'Denied / Cancelled';
+                else $chipLabel = 'Mixed';
             }
             $cellHref = '';
             if (!empty($cellReservations)) {
@@ -313,13 +355,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
         ?>
             <div class="my-reservations-calendar-cell<?= $isToday ? ' today' : ''; ?><?= empty($cellHref) ? ' empty' : ''; ?><?= $dayStatusClass; ?>" onclick="if(this.dataset.href){ window.location.href=this.dataset.href; }" data-href="<?= htmlspecialchars($cellHref); ?>">
                 <div class="date-label"><?= $day; ?></div>
-                <?php if (!empty($cellReservations)):
-                    // Show a single chip summarizing the dominant status
-                    $chipLabel = 'Mixed';
-                    if ($dayStatusClass === ' status-approved') $chipLabel = 'Approved';
-                    elseif ($dayStatusClass === ' status-pending') $chipLabel = 'Pending';
-                    elseif ($dayStatusClass === ' status-denied') $chipLabel = 'Denied / Cancelled';
-                ?>
+                <?php if (!empty($cellReservations) && $chipLabel !== ''): ?>
                     <div class="status-chip"><?= htmlspecialchars($chipLabel); ?></div>
                 <?php endif; ?>
             </div>
@@ -364,21 +400,25 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                     <?php
                         $isOwnReservation = ((int)($reservation['user_id'] ?? 0) === (int)$userId);
                         $status = strtolower($reservation['status'] ?? 'pending');
+                        $slotHasPassed = frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
+                        $isOngoing = frs_reservation_slot_is_ongoing((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
+                        $slotStartedOrPassed = $slotHasPassed || $isOngoing;
+                        $isPastDisplay = $slotHasPassed && !in_array($status, ['denied', 'cancelled'], true);
+
                         $statusBg = '#fef9c3'; $statusColor = '#854d0e';
                         if ($status === 'approved') { $statusBg = '#dcfce7'; $statusColor = '#166534'; }
                         elseif (in_array($status, ['denied','cancelled'], true)) { $statusBg = '#fee2e2'; $statusColor = '#991b1b'; }
                         elseif ($status === 'postponed') { $statusBg = '#e0f2fe'; $statusColor = '#075985'; }
                         elseif ($status === 'pending_payment') { $statusBg = '#ffedd5'; $statusColor = '#9a3412'; }
+                        if ($isPastDisplay) {
+                            $statusBg = '#e2e8f0';
+                            $statusColor = '#475569';
+                        }
 
-                        // Re-apply business rules for actions (same as pre-refactor)
                         $reservationDate = new DateTime($reservation['reservation_date']);
                         $today = new DateTime('today');
                         $daysUntil = $today->diff($reservationDate)->days;
                         $rescheduleCount = (int)($reservation['reschedule_count'] ?? 0);
-
-                        $slotHasPassed = frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
-                        $isOngoing = frs_reservation_slot_is_ongoing((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
-                        $slotStartedOrPassed = $slotHasPassed || $isOngoing;
 
                         $canReschedule = $isOwnReservation && ($daysUntil >= 3)
                             && $rescheduleCount < 1
@@ -392,7 +432,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                         $canEditDetails = $isOwnReservation && in_array($reservation['status'], ['pending', 'approved', 'postponed'], true) && !$slotHasPassed;
                         $canPayNow = $isOwnReservation && (($reservation['status'] ?? '') === 'pending_payment');
                     ?>
-                    <div style="border:1px solid var(--border-color,#e5e7eb); border-radius:12px; padding:1rem;">
+                    <div class="my-reservations-res-card<?= $isPastDisplay ? ' is-past' : ''; ?>" style="border:1px solid var(--border-color,#e5e7eb); border-radius:12px; padding:1rem;">
                         <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
                             <div style="min-width:220px;">
                                 <div style="font-weight:800; color: var(--text-primary,#0f172a);"><?= htmlspecialchars($reservation['facility_name'] ?? 'Facility'); ?></div>
@@ -406,9 +446,11 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                                 <?php endif; ?>
                             </div>
                             <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                <span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.65rem; border-radius:999px; background:<?= $statusBg; ?>; color:<?= $statusColor; ?>; font-weight:800; font-size:0.85rem;">
+                                <span class="<?= $isPastDisplay ? 'res-past-badge' : ''; ?>" style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.65rem; border-radius:999px; background:<?= $statusBg; ?>; color:<?= $statusColor; ?>; font-weight:800; font-size:0.85rem;">
                                     <?php if ($calendarScope === 'all' && !$isOwnReservation && !$canViewOtherReservationDetails): ?>
                                         Reserved
+                                    <?php elseif ($isPastDisplay): ?>
+                                        Past · <?= ucfirst(str_replace('_', ' ', $status)); ?>
                                     <?php else: ?>
                                         <?= ucfirst(str_replace('_', ' ', $status)); ?>
                                     <?php endif; ?>

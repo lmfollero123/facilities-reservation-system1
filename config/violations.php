@@ -255,6 +255,91 @@ function recordNoShowViolation(int $reservationId, string $severity = 'medium'):
     ) !== false;
 }
 
+/**
+ * Human-readable label for a violation type code.
+ */
+function frs_violation_type_label(string $type): string {
+    return match ($type) {
+        'no_show' => 'No-show',
+        'late_cancellation' => 'Late cancellation',
+        'policy_violation' => 'Policy violation',
+        'damage' => 'Damage',
+        'other' => 'Other',
+        default => ucfirst(str_replace('_', ' ', $type)),
+    };
+}
+
+/**
+ * Violation counts keyed by user ID (for list views).
+ *
+ * @param int[] $userIds
+ * @return array<int, array{total: int, high_critical: int}>
+ */
+function getViolationCountsForUserIds(array $userIds): array {
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
+    if ($userIds === []) {
+        return [];
+    }
+
+    $pdo = db();
+    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT user_id,
+                COUNT(*) AS total,
+                SUM(CASE WHEN severity IN ('high', 'critical') THEN 1 ELSE 0 END) AS high_critical
+         FROM user_violations
+         WHERE user_id IN ($placeholders)
+         GROUP BY user_id"
+    );
+    $stmt->execute($userIds);
+
+    $map = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $map[(int)$row['user_id']] = [
+            'total' => (int)$row['total'],
+            'high_critical' => (int)$row['high_critical'],
+        ];
+    }
+
+    return $map;
+}
+
+/**
+ * All violations for the given users, grouped by user ID (newest first per user).
+ *
+ * @param int[] $userIds
+ * @return array<int, array<int, array<string, mixed>>>
+ */
+function getViolationsGroupedForUserIds(array $userIds): array {
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
+    if ($userIds === []) {
+        return [];
+    }
+
+    $pdo = db();
+    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+    $stmt = $pdo->prepare(
+        'SELECT uv.*,
+                r.reservation_date,
+                r.time_slot,
+                f.name AS facility_name
+         FROM user_violations uv
+         LEFT JOIN reservations r ON uv.reservation_id = r.id
+         LEFT JOIN facilities f ON r.facility_id = f.id
+         WHERE uv.user_id IN (' . $placeholders . ')
+         ORDER BY uv.user_id ASC, uv.created_at DESC'
+    );
+    $stmt->execute($userIds);
+
+    $grouped = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $uid = (int)$row['user_id'];
+        $grouped[$uid][] = $row;
+    }
+
+    return $grouped;
+}
+
 
 
 

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/attendance.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     header('Location: ' . base_path() . '/login');
@@ -39,11 +40,8 @@ try {
 
 function buildReservationDateTime(string $reservationDate, string $timeSlot, string $which): ?DateTime
 {
-    $parsed = parseTimeSlot($timeSlot);
-    if (!$parsed) return null;
-    $time = $which === 'end' ? $parsed['end']->format('H:i') : $parsed['start']->format('H:i');
-    $dt = DateTime::createFromFormat('Y-m-d H:i', $reservationDate . ' ' . $time);
-    return $dt ?: null;
+    $window = frs_reservation_window($reservationDate, $timeSlot);
+    return $which === 'end' ? $window['end'] : $window['start'];
 }
 
 function saveAttendanceProof(array $file, int $reservationId, string $type): array
@@ -90,79 +88,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasAttendanceTable) {
         } elseif (empty($_FILES['proof'])) {
             $error = 'Please upload a photo proof.';
         } else {
-            // Load reservation (must belong to user, approved, today)
-            $stmt = $pdo->prepare(
-                "SELECT r.id, r.user_id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
-                 FROM reservations r
-                 JOIN facilities f ON f.id = r.facility_id
-                 WHERE r.id = ? AND r.user_id = ? LIMIT 1"
-            );
-            $stmt->execute([$reservationId, $userId]);
-            $res = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$res) {
-                $error = 'Reservation not found.';
-            } elseif (strtolower($res['status']) !== 'approved') {
-                $error = 'Only approved reservations can be timed in/out.';
-            } else {
-                $today = date('Y-m-d');
-                if ($res['reservation_date'] !== $today) {
-                    $error = 'Check In/Out is only available on the reservation date.';
+            $save = saveAttendanceProof($_FILES['proof'], $reservationId, $action === 'time_in' ? 'time_in' : 'time_out');
+            if (!$save['ok']) {
+                $error = $save['error'];
+            } elseif ($action === 'time_in') {
+                $result = frs_record_check_in($pdo, $reservationId, $userId, $save['path']);
+                if ($result['ok']) {
+                    $success = $result['message'];
                 } else {
-                    $startDt = buildReservationDateTime($res['reservation_date'], $res['time_slot'], 'start');
-                    $endDt = buildReservationDateTime($res['reservation_date'], $res['time_slot'], 'end');
-                    $now = new DateTime();
-
-                    if (!$startDt || !$endDt) {
-                        $error = 'Unable to read reservation time window.';
-                    } else {
-                        // Load attendance row (if any)
-                        $attStmt = $pdo->prepare("SELECT * FROM reservation_attendance WHERE reservation_id = ? LIMIT 1");
-                        $attStmt->execute([$reservationId]);
-                        $att = $attStmt->fetch(PDO::FETCH_ASSOC);
-
-                        if ($action === 'time_in') {
-                            $checkinOpen = (clone $startDt)->modify('-' . FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE . ' minutes');
-                            if ($now < $checkinOpen) {
-                                $error = 'Time In opens ' . FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE . ' minutes before your slot starts.';
-                            } elseif ($now > $endDt) {
-                                $error = 'This reservation time has already ended. Time In is no longer available.';
-                            } elseif ($att && !empty($att['time_in_at'])) {
-                                $error = 'You have already timed in for this reservation.';
-                            } else {
-                                $save = saveAttendanceProof($_FILES['proof'], $reservationId, 'time_in');
-                                if (!$save['ok']) {
-                                    $error = $save['error'];
-                                } else {
-                                    if ($att) {
-                                        $upd = $pdo->prepare("UPDATE reservation_attendance SET time_in_at = NOW(), time_in_proof_path = ?, user_id = ? WHERE reservation_id = ?");
-                                        $upd->execute([$save['path'], $userId, $reservationId]);
-                                    } else {
-                                        $ins = $pdo->prepare("INSERT INTO reservation_attendance (reservation_id, user_id, time_in_at, time_in_proof_path) VALUES (?, ?, NOW(), ?)");
-                                        $ins->execute([$reservationId, $userId, $save['path']]);
-                                    }
-                                    $success = 'Time In recorded successfully.';
-                                }
-                            }
-                        } else { // time_out
-                            if (!$att || empty($att['time_in_at'])) {
-                                $error = 'You must Time In before you can Time Out.';
-                            } elseif (!empty($att['time_out_at'])) {
-                                $error = 'You have already timed out for this reservation.';
-                            } elseif ($now < $endDt) {
-                                $error = 'Time Out will be available once your reservation time is over.';
-                            } else {
-                                $save = saveAttendanceProof($_FILES['proof'], $reservationId, 'time_out');
-                                if (!$save['ok']) {
-                                    $error = $save['error'];
-                                } else {
-                                    $upd = $pdo->prepare("UPDATE reservation_attendance SET time_out_at = NOW(), time_out_proof_path = ? WHERE reservation_id = ?");
-                                    $upd->execute([$save['path'], $reservationId]);
-                                    $success = 'Time Out recorded successfully.';
-                                }
-                            }
-                        }
-                    }
+                    $error = $result['message'];
+                }
+            } else {
+                $result = frs_record_check_out($pdo, $reservationId, $userId, $save['path']);
+                if ($result['ok']) {
+                    $success = $result['message'];
+                } else {
+                    $error = $result['message'];
                 }
             }
         }
@@ -202,7 +143,12 @@ ob_start();
 ?>
 <div class="dashboard-content dashboard-fade-in">
     <div class="page-header">
-        <?= frs_page_title('Time In / Time Out', 'Photo proof is required at arrival and departure for today’s approved reservation. Available only during your booked time window.'); ?>
+        <?= frs_page_title('Check In / Check Out', 'Scan the facility QR at the venue for quick Check In/Out, or upload photo proof here for today’s approved reservation.'); ?>
+    </div>
+
+    <div class="booking-card" style="padding:0.9rem 1rem;margin-bottom:1rem;background:#eff6ff;border:1px solid #bfdbfe;">
+        <strong style="color:#1e40af;">Quick tip:</strong>
+        <span style="color:#1e3a8a;"> Each facility has a posted QR code. Scan it on your phone while logged in to Check In or Check Out automatically.</span>
     </div>
 
     <?php if (!$hasAttendanceTable): ?>
@@ -243,19 +189,6 @@ ob_start();
                         ? (clone $startDt)->modify('-' . FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE . ' minutes')
                         : null;
                     $isHighlighted = $highlightResId > 0 && $highlightResId === $rid;
-                    $checkinUrl = '';
-                    $checkinQr = '';
-
-                    if ($isApproved && $hasAttendanceTable) {
-                        $token = frs_ensure_checkin_token($pdo, $rid);
-                        if ($token) {
-                            $checkinUrl = base_path() . '/dashboard/check-in?token=' . urlencode($token);
-                            $checkinQr = 'https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=' . rawurlencode(
-                                (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
-                                . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $checkinUrl
-                            );
-                        }
-                    }
 
                     // Buttons only enabled when approved; card may still show pending state
                     $canTimeIn = $hasAttendanceTable && $isApproved && $checkinOpen && ($now >= $checkinOpen)
@@ -278,9 +211,9 @@ ob_start();
                                     <?php elseif ($timedOut): ?>
                                         <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#e3f8ef;color:#0d7a43;font-weight:700;font-size:0.85rem;">Completed</span>
                                     <?php elseif ($timedIn): ?>
-                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:0.85rem;">Timed In</span>
+                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:0.85rem;">Checked In</span>
                                     <?php else: ?>
-                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#fff7ed;color:#9a3412;font-weight:700;font-size:0.85rem;">Not Timed In</span>
+                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#fff7ed;color:#9a3412;font-weight:700;font-size:0.85rem;">Not Checked In</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -290,7 +223,7 @@ ob_start();
                                     <input type="hidden" name="action" value="time_in">
                                     <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
                                     <input type="file" name="proof" accept="image/*" <?= $canTimeIn ? 'required' : 'disabled'; ?> style="max-width:220px;">
-                                    <button type="submit" class="btn btn-primary" <?= $canTimeIn ? '' : 'disabled'; ?>>Time In</button>
+                                    <button type="submit" class="btn btn-primary" <?= $canTimeIn ? '' : 'disabled'; ?>>Check In</button>
                                 </form>
 
                                 <form method="POST" enctype="multipart/form-data" style="display:flex;gap:0.5rem;align-items:center;">
@@ -298,7 +231,7 @@ ob_start();
                                     <input type="hidden" name="action" value="time_out">
                                     <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
                                     <input type="file" name="proof" accept="image/*" <?= $canTimeOut ? 'required' : 'disabled'; ?> style="max-width:220px;">
-                                    <button type="submit" class="btn btn-outline" <?= $canTimeOut ? '' : 'disabled'; ?>>Time Out</button>
+                                    <button type="submit" class="btn btn-outline" <?= $canTimeOut ? '' : 'disabled'; ?>>Check Out</button>
                                 </form>
                             </div>
                         </div>
@@ -306,40 +239,27 @@ ob_start();
                         <?php if ($att): ?>
                             <div style="margin-top:0.75rem; display:flex; gap:1rem; flex-wrap:wrap; color:#6b7280; font-size:0.9rem;">
                                 <?php if (!empty($att['time_in_at'])): ?>
-                                    <div><strong>Time In:</strong> <?= date('g:i A', strtotime($att['time_in_at'])); ?></div>
+                                    <div><strong>Check In:</strong> <?= date('g:i A', strtotime($att['time_in_at'])); ?></div>
                                 <?php endif; ?>
                                 <?php if (!empty($att['time_out_at'])): ?>
-                                    <div><strong>Time Out:</strong> <?= date('g:i A', strtotime($att['time_out_at'])); ?></div>
+                                    <div><strong>Check Out:</strong> <?= date('g:i A', strtotime($att['time_out_at'])); ?></div>
                                 <?php endif; ?>
                                 <?php if (!empty($att['time_in_proof_path'])): ?>
-                                    <div><a href="<?= base_path() . $att['time_in_proof_path']; ?>" target="_blank" style="color:#2563eb;text-decoration:none;">View Time In Proof</a></div>
+                                    <div><a href="<?= base_path() . $att['time_in_proof_path']; ?>" target="_blank" style="color:#2563eb;text-decoration:none;">View Check In Proof</a></div>
                                 <?php endif; ?>
                                 <?php if (!empty($att['time_out_proof_path'])): ?>
-                                    <div><a href="<?= base_path() . $att['time_out_proof_path']; ?>" target="_blank" style="color:#2563eb;text-decoration:none;">View Time Out Proof</a></div>
+                                    <div><a href="<?= base_path() . $att['time_out_proof_path']; ?>" target="_blank" style="color:#2563eb;text-decoration:none;">View Check Out Proof</a></div>
                                 <?php endif; ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if ($checkinUrl && !$timedIn): ?>
-                            <div style="margin-top:0.85rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;padding:0.75rem;background:#f8fafc;border-radius:8px;">
-                                <?php if ($checkinQr): ?>
-                                    <img src="<?= htmlspecialchars($checkinQr); ?>" width="100" height="100" alt="Check-in QR code" style="border-radius:6px;">
-                                <?php endif; ?>
-                                <div style="font-size:0.88rem;color:#475569;">
-                                    <strong>Quick check-in</strong><br>
-                                    Scan or open this link on your phone to jump here:<br>
-                                    <a href="<?= htmlspecialchars($checkinUrl); ?>" style="color:#2563eb;word-break:break-all;"><?= htmlspecialchars($checkinUrl); ?></a>
-                                </div>
                             </div>
                         <?php endif; ?>
 
                         <?php if ($checkinOpen && $now < $checkinOpen): ?>
                             <div style="margin-top:0.75rem; color:#6b7280; font-size:0.9rem;">
-                                Time In will unlock at <strong><?= $checkinOpen->format('g:i A'); ?></strong> (<?= FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE; ?> min before start).
+                                Check In opens at <strong><?= $checkinOpen->format('g:i A'); ?></strong> (<?= FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE; ?> min before start).
                             </div>
                         <?php elseif ($endDt && $now < $endDt && $timedIn && !$timedOut): ?>
                             <div style="margin-top:0.75rem; color:#6b7280; font-size:0.9rem;">
-                                Time Out will unlock after <strong><?= $endDt->format('g:i A'); ?></strong>.
+                                Check Out opens after <strong><?= $endDt->format('g:i A'); ?></strong>, or scan the facility QR when your slot ends.
                             </div>
                         <?php endif; ?>
                     </div>
@@ -354,7 +274,7 @@ include __DIR__ . '/../../layouts/dashboard_layout.php';
 
 ?>
 <style>
-/* Visually gray-out disabled Check In/Out buttons on the Time Tracking page */
+/* Visually gray-out disabled Check In/Out buttons */
 .time-tracking-card .time-tracking-actions button[disabled],
 .time-tracking-card .time-tracking-actions button[disabled]:hover {
     background-color: #e5e7eb !important;
