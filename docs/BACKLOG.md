@@ -1,81 +1,154 @@
-# Product Backlog (Ordered, 50+ Items)
+# Product Backlog — Barangay Culiat Facilities Reservation System
 
-1. Enforce email OTP on login (live) – monitor deliverability and retries.
-2. Resident-only registration with Barangay Culiat address validation.
-3. Mandatory supporting document upload (Valid ID primary; other options removed from UI).
-4. Terms & Conditions (Data Privacy Act) modal auto-open + required acceptance checkbox.
-5. Admin review queue showing uploaded documents with download links.
-6. Approval email to users when account is approved.
-7. Denial/lock notification to users (email + in-app) with lock reason shown on login.
-8. Robust document storage under `public/uploads/documents/{userId}` with safe names.
-9. Input validation for document size/type (PDF/JPG/PNG/WebP).
-10. Admin ability to re-request documents or add remarks on missing docs.
-11. Registration rate limiting by IP.
-12. Login rate limiting and lockout tracking.
-13. OTP expiry (10 minutes) and attempt limits with clear UX.
-14. OTP resend throttling and messaging.
-15. Session security (regenerate ID, timeout, SameSite, HttpOnly).
-16. Password policy enforcement (length/complexity).
-17. Forgot password + reset token email flow (pages: forgot, reset).
-18. Profile page: address + lat/long inputs with geocoding fallback.
-19. Facility form: lat/long fields and validation.
-20. Public facility listing with glass-morphism landing background; hero CTAs side-by-side/equal width.
-21. Facility details page with image citation hover behavior (non-intrusive).
-22. Dashboard recent activities pagination. (Done)
-23. Audit trail pagination and filtering.
-24. Reports quick-export (CSV/HTML-to-PDF) from sidebar.
-25. Calendar: clickable events to open reservation detail; facility detail calendar dates redirect to login → dashboard calendar.
-26. AI recommendations factoring distance (Haversine) and purpose; holiday/event risk tagging (PH holidays + Brgy. Culiat). (Done)
-27. AI conflict detection on booking submit; persistent warning UI (no flicker). (Done)
-28. Collapsible dashboard sections with persisted state (re-enabled).
-29. Mobile sidebar overlay with backdrop and close button.
-30. Responsive tables via `.table-responsive` wrappers on key modules.
-31. Status badges for roles (resident/admin/staff) with contrast.
-32. Reservation detail page shows requester role badge.
-33. Auto-decline expired pending reservations.
-34. Notifications panel lazy-load + mark-as-read.
-35. Security headers/CSP aligned with external CDNs (fonts, Chart.js, jsdelivr SimpleLightbox/Bootstrap Icons).
-36. File upload hardening (`validateFileUpload`).
-37. Rate-limit table and security logs for auditability.
-38. Login attempts table for lockout visibility.
-39. Admin: view reservation history timeline.
-40. Admin: add optional notes on approve/deny.
-41. Resident: “My Reservations” status visibility.
-42. User management filters by role/status; lock reason capture.
-43. Facility management: recent activity pagination.
-44. Facility management: collapsible sections.
-45. Booking form conflict warning UI with alternatives; booking limits (≤3 active/30 days, ≤60-day advance, ≤1/day). (Done)
-46. Booking form AI recommendation display with distance labels; holiday/event pills on calendar modal. (Done)
-47. Public facilities: cityhall background and blur overlay; higher-contrast facility cards.
-48. Guest navbar mobile toggle and background transparency.
-49. Footer/guest layout layering over landing background.
-50. Contact inquiries: public form → DB table + admin email + dashboard view.
-51. Forgot password templates and reset UX polish.
-52. Dashboard filters (status/facility/date range) with charts responding to filters.
-53. Reports page charts (monthly/status/top facilities).
-54. Sidebar order: Reports & Analytics under Operations; calendar link via book page modal.
-55. Button modernization (larger, consistent radius/shadows, confirmation buttons).
-56. Hero CTA buttons equal width; dashboard buttons wrap labels cleanly.
-57. Migration: security tables (rate_limits, security_logs, login_attempts).
-58. Migration: user documents table and document enum.
-59. Migration: OTP columns on users.
-60. Migration: profile picture column.
-61. Migration: location fields on users/facilities.
-62. Migration: lock_reason on users; contact_inquiries table.
-63. Export reports: ensure HTML-for-PDF is print-friendly.
-64. OTP email templates: friendly copy and expiry note.
-65. Approval/lock email templates: include next steps, reason, and contact info.
-66. Documentation: FLOWCHART/DFD/WFD updated to latest flows (forgot/reset, contact inquiries, booking limits, AI holidays/events).
-67. Documentation: SECURITY and security implementation summary.
-68. Documentation: Free geocoding setup (OpenStreetMap).
-69. Documentation: Location-based recommendations behavior.
-70. Test page for location-based recommendations (debug).
+**Last updated:** June 2026  
+**Companion doc:** `MODULES_LIST.md` — full catalog of what is **currently in the system**.
 
-Notes:
-- Items 1–15 are security/auth/onboarding critical; address first for production readiness.
-- Items 16–45 are UX/feature completeness for booking and management flows.
-- Items 46–60 are polish, docs, and supporting infra.
+This backlog is organized into three sections:
+1. **Shipped** — major capabilities already implemented (reference for defense / stakeholder reviews)
+2. **Partial / optional** — exists in code but incomplete, disabled, or depends on external config
+3. **Planned / future** — not yet built; prioritized suggestions for next iterations
 
+---
 
+## 1. Shipped (Implemented)
 
+### Authentication & users
+- Resident-only registration with Barangay Culiat street dropdown + house number
+- Valid ID upload (optional at registration; required path for ID verification)
+- Terms & Data Privacy modal + required acceptance
+- Email verification, forgot/reset password
+- Login with email OTP and optional Google Authenticator (TOTP)
+- Session hardening, CSRF, rate limits, login lockout, password policy
+- Profile with geocoding, profile photo, notification preferences
+- User Management: approve/deny, verify ID, lock/unlock, reset password, violation history
+- Admin/staff **create user** (Resident or Staff) with emailed credentials
+- Role-based access (Resident, Staff, Admin)
+- Data Privacy Act user data export
 
+### Public portal
+- Landing, facilities list, facility details, announcements archive, FAQ, contact form
+- Privacy / Terms / Legal pages
+- Guest facility assistant (availability widget)
+
+### Facilities
+- Full facility CRUD, images, citations, operating hours, geocoding
+- Blackout dates, auto-approval settings, extension fees
+- Facility check-in QR (generate, regenerate, print poster)
+- CIMM maintenance integration (when API key configured)
+
+### Booking & reservations
+- Book a facility with purpose, attendees, commercial flag, event permits
+- AI conflict detection + alternative slots; AI recommendations + distance scoring
+- Booking limits, auto-approval, auto-decline expired pending
+- My Reservations (calendar + list, reschedule, cancel, past-event styling)
+- Staff reservation management (approve, deny, postpone, on hold, modify, violations)
+- Reservation detail + timeline; staff walk-in booking
+- Reservation extensions; 24h booking reminders (email/SMS/in-app)
+- Optional PayMongo payment flow (`PAYMENTS_ENABLED`)
+
+### Attendance & occupancy
+- Manual check-in/out (Time Tracking) with optional photo proof
+- Facility QR scan check-in/out at venue
+- Live Occupancy dashboard strip + full monitor page
+- Attendance reminders; no-show / late violation recording
+
+### AI & scheduling
+- Smart Scheduler page; Gemini chatbot + ML intent fallback + booking prefill
+- Python ML: conflict, recommendations, risk, purpose analysis
+- Holiday/event risk tagging; performance indexes for AI queries
+
+### Calendar & reports
+- Month/week/day calendar, iCal export, clickable events
+- Dashboard KPIs with filters; Reports charts + CSV/PDF export
+
+### Communications
+- In-app notifications; email templates; SMS (opt-in)
+- Announcements management; contact inquiries inbox; editable public contact info
+
+### Administration & security
+- Audit trail + export; document management & archival cron
+- Secure document storage; security logs; PHPUnit + CI workflow
+
+### UX / polish (selected)
+- Collapsible sidebar groups; mobile sidebar overlay
+- Dark mode surfaces (dashboard pages)
+- Responsive layouts; confirmation modals; status badges
+- User Management modals portaled to viewport center
+
+---
+
+## 2. Partial / Optional (In codebase, not fully productized)
+
+| Item | Current state | To complete |
+|------|---------------|-------------|
+| **Demand forecasting** | Python API + training scripts | Surface in Reports / Smart Scheduler UI |
+| **PayMongo payments** | Wired but off by default | Enable only if LGU charges fees; run payment migration |
+| **CIMM live sync** | Full PHP + cron | Deploy CIMM host + `CIMM_API_KEY` on production |
+| **Infrastructure Projects integration** | Preview UI + mock data | Connect to real LGU infrastructure API |
+| **Utilities integration** | Preview UI + mock data | Connect to real utilities/outage API |
+| **Integrations API gateway** | Stub returns 501 | Implement unified gateway if microservices multiply |
+| **Filipino/Tagalog UI** | English only | i18n layer (deferred Sprint C4/D7) |
+| **Brevo SMTP** | May still use prior mail config | Cutover + deliverability testing if required |
+
+---
+
+## 3. Planned / Future Backlog (Not built)
+
+Priority is suggestive — adjust with LGU stakeholders.
+
+### High value (operations)
+1. **Forgot check-in waiver flow** — resident self-report within window; staff approve waiver (reduce unfair no-shows)
+2. **Bulk user import** — CSV upload for barangay registry sync
+3. **Re-request documents** — admin action to ask user to re-upload expired/invalid ID
+4. **Staff notification digest** — daily email summary of pending approvals and occupancy alerts
+5. **Facility capacity vs. attendees validation** — hard block when over capacity
+
+### Medium value (UX & reach)
+6. **Filipino/Tagalog UI** — labels, emails, SMS templates
+7. **PWA / offline-friendly** — installable web app for mobile residents
+8. **SMS two-way confirm** — reply YES to confirm attendance
+9. **Public facility availability calendar embed** — iframe/widget for barangay website
+10. **Advanced reports** — demand heatmaps, peak hours, revenue (if payments on)
+
+### Integrations
+11. **Live Infrastructure Projects API** — replace mock data
+12. **Live Utilities / outage API** — replace mock data
+13. **Barangay ID / QR identity verify** — optional third-party identity check
+14. **Unified LGU API gateway** — auth, rate limit, audit for all microservices
+
+### AI / analytics
+15. **Demand forecasting dashboard** — visual forecast per facility
+16. **SHAP / explainability** — show why auto-approval was denied
+17. **Chatbot voice input** — accessibility for mobile users
+18. **Anomaly detection** — flag suspicious booking patterns
+
+### Security & compliance (production hardening)
+19. **Separate document storage bucket** — S3-compatible or isolated volume
+20. **WAF / bot protection** beyond Turnstile on login
+21. **Annual privacy impact assessment template** — LGU compliance artifact
+22. **Automated backup restore drill** — documented RTO/RPO test
+
+### DevOps
+23. **Staging environment parity checklist** — mirror production cron + `.env`
+24. **Health check endpoint** — DB, mail, SMS, Python ML, CIMM status
+25. **Structured application logging** — JSON logs for centralized monitoring
+
+---
+
+## 4. Historical numbered backlog (archived)
+
+The previous version of this file listed 70 numbered items (auth polish, AI holidays, responsive tables, etc.). **Those items are now shipped** and are summarized in Section 1 above. The old list is preserved in git history (`BACKLOG.md` prior to June 2026) if line-by-line traceability is needed for capstone documentation.
+
+---
+
+## How to keep this current
+
+| When you… | Update… |
+|-----------|---------|
+| Ship a major feature | `MODULES_LIST.md` + add to Section 1 here |
+| Add a stub or flag-gated feature | Section 2 here |
+| Defer or propose new work | Section 3 here |
+| Complete a sprint | `CAPSTONE_IMPLEMENTATION_PLAN.md` + `SPRINT_D_PLAN.md` |
+
+**Source of truth for routes:** `index.php`  
+**Source of truth for navigation:** `resources/views/components/sidebar_dashboard.php`

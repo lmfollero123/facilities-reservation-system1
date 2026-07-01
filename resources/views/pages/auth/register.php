@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../../config/secure_documents.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
+require_once __DIR__ . '/../../../../config/culiat_streets.php';
 
 $pageTitle = 'Register | LGU Facilities Reservation';
 $message = '';
@@ -57,11 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // Build full address from parts (for backward compatibility with 'address' column)
-        $addressParts = array_filter([$houseNumber, $street]);
-        $fullAddress = implode(' ', $addressParts);
-        if (!empty($fullAddress)) {
-            $fullAddress .= ', Barangay Culiat, Quezon City';
-        }
+        $fullAddress = frs_build_culiat_address($houseNumber, $street);
         
         // Validate inputs
         if (empty($firstName) || strlen($firstName) < 2) {
@@ -73,8 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = 'Please enter a valid email address.';
             $messageType = 'error';
-        } elseif (empty($street)) {
-            $message = 'Please select a street.';
+        } elseif (empty($street) || !frs_is_valid_culiat_street($street)) {
+            $message = 'Please select a valid street.';
             $messageType = 'error';
         } elseif (empty($houseNumber)) {
             $message = 'Please enter your house number.';
@@ -330,51 +327,17 @@ ob_start();
             </div>
 
             <div class="auth-form-row">
-                <label>
-                    Street *
-                    <div class="input-wrapper">
-                        <select name="street" required style="width: 100%; padding: 0.9rem 1rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.2); color: #1b1b1f; font-size: 1rem;">
-                            <option value="">-- Select Street --</option>
-                            <option value="A. Limqueco Street" <?= (isset($_POST['street']) && $_POST['street'] === 'A. Limqueco Street') ? 'selected' : ''; ?>>A. Limqueco Street</option>
-                            <option value="Adelfa Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Adelfa Street') ? 'selected' : ''; ?>>Adelfa Street</option>
-                            <option value="Admirable Lane" <?= (isset($_POST['street']) && $_POST['street'] === 'Admirable Lane') ? 'selected' : ''; ?>>Admirable Lane</option>
-                            <option value="Aldrin Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Aldrin Street') ? 'selected' : ''; ?>>Aldrin Street</option>
-                            <option value="Allan Bean Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Allan Bean Street') ? 'selected' : ''; ?>>Allan Bean Street</option>
-                            <option value="Anahaw Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Anahaw Street') ? 'selected' : ''; ?>>Anahaw Street</option>
-                            <option value="Andrew Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Andrew Street') ? 'selected' : ''; ?>>Andrew Street</option>
-                            <option value="Aquino Marquez Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Aquino Marquez Street') ? 'selected' : ''; ?>>Aquino Marquez Street</option>
-                            <option value="Arboretum Road" <?= (isset($_POST['street']) && $_POST['street'] === 'Arboretum Road') ? 'selected' : ''; ?>>Arboretum Road</option>
-                            <option value="Armstrong Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Armstrong Street') ? 'selected' : ''; ?>>Armstrong Street</option>
-                            <option value="Borman Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Borman Street') ? 'selected' : ''; ?>>Borman Street</option>
-                            <option value="Casanova Drive" <?= (isset($_POST['street']) && $_POST['street'] === 'Casanova Drive') ? 'selected' : ''; ?>>Casanova Drive</option>
-                            <option value="Casanova Drive Extension" <?= (isset($_POST['street']) && $_POST['street'] === 'Casanova Drive Extension') ? 'selected' : ''; ?>>Casanova Drive Extension</option>
-                            <option value="Cebu Street Extension" <?= (isset($_POST['street']) && $_POST['street'] === 'Cebu Street Extension') ? 'selected' : ''; ?>>Cebu Street Extension</option>
-                            <option value="Cenacle Drive" <?= (isset($_POST['street']) && $_POST['street'] === 'Cenacle Drive') ? 'selected' : ''; ?>>Cenacle Drive</option>
-                            <option value="Central Avenue" <?= (isset($_POST['street']) && $_POST['street'] === 'Central Avenue') ? 'selected' : ''; ?>>Central Avenue</option>
-                            <option value="Charity Lane" <?= (isset($_POST['street']) && $_POST['street'] === 'Charity Lane') ? 'selected' : ''; ?>>Charity Lane</option>
-                            <option value="Charles Conrad Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Charles Conrad Street') ? 'selected' : ''; ?>>Charles Conrad Street</option>
-                            <option value="Charlie Conrad Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Charlie Conrad Street') ? 'selected' : ''; ?>>Charlie Conrad Street</option>
-                            <option value="Collins Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Collins Street') ? 'selected' : ''; ?>>Collins Street</option>
-                            <option value="Commonwealth Avenue" <?= (isset($_POST['street']) && $_POST['street'] === 'Commonwealth Avenue') ? 'selected' : ''; ?>>Commonwealth Avenue</option>
-                            <option value="Demetria Reynaldo Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Demetria Reynaldo Street') ? 'selected' : ''; ?>>Demetria Reynaldo Street</option>
-                            <option value="Diamond Lane" <?= (isset($_POST['street']) && $_POST['street'] === 'Diamond Lane') ? 'selected' : ''; ?>>Diamond Lane</option>
-                            <option value="Emerald Lane" <?= (isset($_POST['street']) && $_POST['street'] === 'Emerald Lane') ? 'selected' : ''; ?>>Emerald Lane</option>
-                            <option value="Fisheries Street" <?= (isset($_POST['street']) && $_POST['street'] === 'Fisheries Street') ? 'selected' : ''; ?>>Fisheries Street</option>
-                            <option value="Forestry Street Extension" <?= (isset($_POST['street']) && $_POST['street'] === 'Forestry Street Extension') ? 'selected' : ''; ?>>Forestry Street Extension</option>
-                            <option value="Other" <?= (isset($_POST['street']) && $_POST['street'] === 'Other') ? 'selected' : ''; ?>>Other (please specify in house number)</option>
-                        </select>
-                    </div>
-                    <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;">
-                        Registration is limited to residents of Barangay Culiat, Quezon City.
-                    </small>
-                </label>
-                
-                <label>
-                    House Number *
-                    <div class="input-wrapper">
-                        <input name="house_number" type="text" placeholder="123" required value="<?= isset($_POST['house_number']) ? e($_POST['house_number']) : ''; ?>">
-                    </div>
-                </label>
+                <?php
+                $streetFieldName = 'street';
+                $houseFieldName = 'house_number';
+                $selectedStreet = $_POST['street'] ?? '';
+                $selectedHouseNumber = $_POST['house_number'] ?? '';
+                $required = true;
+                $showHint = true;
+                $hintStyle = 'color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;';
+                $selectExtraAttrs = 'style="width: 100%; padding: 0.9rem 1rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.2); color: #1b1b1f; font-size: 1rem;"';
+                include __DIR__ . '/../../components/culiat_street_fields.php';
+                ?>
             </div>
             
             <label>

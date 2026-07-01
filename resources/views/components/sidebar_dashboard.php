@@ -134,6 +134,10 @@ if ($role === 'Admin') {
         ['label' => 'SMS Test (IPROG)', 'href' => $base . '/dashboard/sms-test', 'icon' => 'telephone', 'page' => 'sms_test'],
         ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'],
     ];
+} elseif ($role === 'Staff') {
+    $administrationGroup = [
+        ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
+    ];
 }
 
 $accountLinks = [
@@ -176,7 +180,7 @@ $sidebarAvatarInitial = function_exists('mb_substr')
         <!-- Reports (Admin/Staff) -->
         <?= renderCollapsibleGroup('Reports', 'sidebar-reports', $reportsGroup, $current, $iconPaths, true); ?>
 
-        <!-- Administration (Admin only) -->
+        <!-- Administration (Admin; Staff: User Management) -->
         <?= renderCollapsibleGroup('Administration', 'sidebar-administration', $administrationGroup, $current, $iconPaths, false); ?>
 
         <!-- Account -->

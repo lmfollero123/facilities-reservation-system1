@@ -4,16 +4,20 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../../config/app.php';
 
-// RBAC: User Management is Admin-only (create/deactivate Admin/Staff, system governance)
-if (!($_SESSION['user_authenticated'] ?? false) || ($_SESSION['role'] ?? '') !== 'Admin') {
+// RBAC: User Management for Admin and Staff (Staff: resident accounts only)
+$actorRole = $_SESSION['role'] ?? '';
+if (!($_SESSION['user_authenticated'] ?? false) || !in_array($actorRole, ['Admin', 'Staff'], true)) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
+$isPageAdmin = $actorRole === 'Admin';
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
+require_once __DIR__ . '/../../../../config/user_admin.php';
+require_once __DIR__ . '/../../../../config/culiat_streets.php';
 require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'User Management | LGU Facilities Reservation';
@@ -25,6 +29,64 @@ $messageType = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $message = 'Your session expired or the form is invalid. Please refresh and try again.';
     $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_user') {
+    $createName = trim($_POST['create_name'] ?? '');
+    $createEmail = trim($_POST['create_email'] ?? '');
+    $createMobile = trim($_POST['create_mobile'] ?? '');
+    $createStreet = trim($_POST['create_street'] ?? '');
+    $createHouseNumber = trim($_POST['create_house_number'] ?? '');
+    $createAddress = frs_build_culiat_address($createHouseNumber, $createStreet);
+    $createRole = $_POST['create_role'] ?? 'Resident';
+    $createPassword = trim($_POST['create_password'] ?? '');
+    $markEmailVerified = isset($_POST['create_email_verified']);
+    $markIdVerified = isset($_POST['create_id_verified']);
+
+    if (!$isPageAdmin) {
+        $createRole = 'Resident';
+    }
+
+    $result = frs_admin_create_user(
+        $pdo,
+        $createName,
+        $createEmail,
+        $createRole,
+        $createMobile !== '' ? $createMobile : null,
+        $createAddress !== '' ? $createAddress : null,
+        $createPassword !== '' ? $createPassword : null,
+        $markEmailVerified,
+        $markIdVerified,
+        (int)($_SESSION['user_id'] ?? 0),
+        $createStreet !== '' ? $createStreet : null,
+        $createHouseNumber !== '' ? $createHouseNumber : null
+    );
+
+    if (!$result['ok']) {
+        $message = $result['message'];
+        $messageType = 'error';
+    } else {
+        $roleLabel = $createRole === 'Staff' ? 'Staff' : 'Resident';
+        logAudit(
+            'Created user account',
+            'User Management',
+            $createName . ' (' . $createEmail . ') — Role: ' . $roleLabel
+        );
+        $message = 'Account created for ' . $createEmail . '. Login credentials were sent by email.';
+
+        if (!empty($result['plain_password'])) {
+            try {
+                $body = getAdminCreatedAccountEmailTemplate(
+                    $createName,
+                    $createEmail,
+                    $result['plain_password'],
+                    $roleLabel
+                );
+                sendEmail($createEmail, $createName, 'Your Facilities Reservation Account', $body);
+            } catch (Throwable $e) {
+                error_log('Failed to send admin-created account email: ' . $e->getMessage());
+                $message .= ' However, the welcome email could not be sent — please share the temporary password manually.';
+            }
+        }
+    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
     $userId = (int)$_POST['user_id'];
     $action = $_POST['action'];
@@ -33,6 +95,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     // Prevent self-modification for certain actions
     if ($userId === $currentUserId && in_array($action, ['lock', 'unlock', 'delete'], true)) {
         $message = 'You cannot perform this action on your own account.';
+        $messageType = 'error';
+    } elseif (!$isPageAdmin && in_array($action, ['change_role', 'delete'], true)) {
+        $message = 'You do not have permission to perform this action.';
         $messageType = 'error';
     } else {
         try {
@@ -484,11 +549,12 @@ ob_start();
 
 <div class="um-layout">
     <section class="booking-card um-main">
-        <div class="um-section-head">
+        <div class="um-section-head um-section-head-row">
             <div>
                 <h2>Accounts Directory</h2>
                 <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
             </div>
+            <button type="button" class="btn-primary js-open-create-user-modal">Create account</button>
         </div>
 
         <form method="GET" class="um-toolbar">
@@ -605,6 +671,7 @@ ob_start();
                     </div>
 
                     <div class="um-user-side">
+                        <?php if ($isPageAdmin): ?>
                         <form method="POST" class="role-change-form um-role-form">
                             <?= csrf_field(); ?>
                             <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -618,6 +685,12 @@ ob_start();
                                 </select>
                             </label>
                         </form>
+                        <?php else: ?>
+                        <div class="um-role-readonly">
+                            <span class="um-role-label">Role</span>
+                            <span class="um-badge um-badge-role"><?= htmlspecialchars($user['role']); ?></span>
+                        </div>
+                        <?php endif; ?>
 
                         <?php if (!empty($docsByUser[$user['id']])): ?>
                             <div class="um-docs">
@@ -680,7 +753,7 @@ ob_start();
                                 </form>
                             <?php endif; ?>
 
-                            <?php if (!$isSelf): ?>
+                            <?php if ($isPageAdmin && !$isSelf): ?>
                                 <button type="button" class="btn-outline um-btn-sm um-btn-danger js-open-delete-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" data-user-email="<?= htmlspecialchars($user['email'], ENT_QUOTES); ?>">Delete account</button>
                             <?php endif; ?>
                         </div>
@@ -737,6 +810,71 @@ ob_start();
     </aside>
 </div>
 
+<div id="createUserModal" class="um-modal" aria-hidden="true">
+    <div class="um-modal-backdrop js-close-modal" data-target="createUserModal"></div>
+    <div class="um-modal-panel um-modal-panel-wide" role="dialog" aria-labelledby="createUserModalTitle" aria-modal="true">
+        <h3 id="createUserModalTitle">Create account</h3>
+        <p class="um-modal-sub">Add a resident<?= $isPageAdmin ? ' or staff member' : ''; ?> with login credentials sent by email.</p>
+        <form method="POST" class="um-create-form">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="create_user">
+            <div class="um-create-grid">
+                <label>
+                    Full name <span class="um-required">*</span>
+                    <input type="text" name="create_name" required minlength="2" maxlength="120" autocomplete="name" placeholder="Juan Dela Cruz">
+                </label>
+                <label>
+                    Email <span class="um-required">*</span>
+                    <input type="email" name="create_email" required maxlength="190" autocomplete="off" placeholder="name@example.com">
+                </label>
+                <label>
+                    Mobile
+                    <input type="tel" name="create_mobile" maxlength="20" autocomplete="off" placeholder="09XX XXX XXXX">
+                </label>
+                <?php if ($isPageAdmin): ?>
+                <label>
+                    Role <span class="um-required">*</span>
+                    <select name="create_role" required>
+                        <option value="Resident" selected>Resident</option>
+                        <option value="Staff">Staff</option>
+                    </select>
+                </label>
+                <?php else: ?>
+                <input type="hidden" name="create_role" value="Resident">
+                <?php endif; ?>
+                <?php
+                $streetFieldName = 'create_street';
+                $houseFieldName = 'create_house_number';
+                $selectedStreet = $_POST['create_street'] ?? '';
+                $selectedHouseNumber = $_POST['create_house_number'] ?? '';
+                $required = true;
+                $showHint = true;
+                $selectExtraAttrs = '';
+                include __DIR__ . '/../../components/culiat_street_fields.php';
+                ?>
+                <label class="um-create-full">
+                    Password <span class="um-hint">(leave blank to auto-generate)</span>
+                    <input type="password" name="create_password" minlength="8" autocomplete="new-password" placeholder="Optional temporary password">
+                </label>
+            </div>
+            <div class="um-create-options">
+                <label class="um-check-label">
+                    <input type="checkbox" name="create_email_verified" value="1" checked>
+                    Mark email as verified (user can sign in immediately)
+                </label>
+                <label class="um-check-label">
+                    <input type="checkbox" name="create_id_verified" value="1">
+                    Mark ID as verified (enables auto-approval for residents)
+                </label>
+            </div>
+            <div class="um-modal-actions">
+                <button type="button" class="btn-outline js-close-modal" data-target="createUserModal">Cancel</button>
+                <button type="submit" class="btn-primary">Create account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="lockUserModal" class="um-modal" aria-hidden="true">
     <div class="um-modal-backdrop js-close-modal" data-target="lockUserModal"></div>
     <div class="um-modal-panel" role="dialog" aria-labelledby="lockModalTitle" aria-modal="true">
@@ -789,6 +927,20 @@ ob_start();
 .um-stat-value { font-size: 1.75rem; color: #1e293b; line-height: 1; }
 .um-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1.25rem; align-items: start; }
 .um-section-head { margin-bottom: 1rem; }
+.um-section-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.um-role-readonly { display: flex; flex-direction: column; gap: 0.35rem; }
+.um-modal-panel-wide { width: min(100%, 560px); max-height: min(90vh, 720px); overflow-y: auto; }
+.um-create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem; }
+.um-create-full { grid-column: 1 / -1; }
+.um-create-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.85rem; }
+.um-check-label { flex-direction: row !important; align-items: flex-start; gap: 0.5rem !important; font-size: 0.85rem !important; cursor: pointer; }
+.um-check-label input { margin-top: 0.15rem; flex-shrink: 0; }
+.um-hint { font-weight: 400; color: #94a3b8; font-size: 0.8rem; }
+.um-modal-panel input[type="text"],
+.um-modal-panel input[type="email"],
+.um-modal-panel input[type="tel"],
+.um-modal-panel input[type="password"],
+.um-modal-panel select { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; font-family: inherit; font-size: 0.92rem; }
 .um-toolbar { display: grid; grid-template-columns: 1.4fr 0.8fr 0.9fr auto; gap: 0.75rem; align-items: end; margin-bottom: 1.25rem; }
 .um-toolbar label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: #475569; }
 .um-toolbar select, .um-search input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; background: #fff; }
@@ -842,10 +994,11 @@ ob_start();
 .um-aside-list { margin-top: 0.75rem; }
 .um-policy-note { margin-top: 1rem; padding: 0.85rem; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.85rem; color: #475569; }
 .um-policy-note p { margin: 0.35rem 0 0; }
-.um-modal { position: fixed; inset: 0; z-index: 1200; display: none; align-items: center; justify-content: center; padding: 1rem; }
+.um-field-hint { display: block; margin-top: 0.2rem; color: #94a3b8; font-size: 0.78rem; font-weight: 400; }
+.um-modal { position: fixed; inset: 0; z-index: 10050; display: none; align-items: center; justify-content: center; padding: 1rem; }
 .um-modal.open { display: flex; }
 .um-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
-.um-modal-panel { position: relative; width: min(100%, 480px); background: #fff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18); }
+.um-modal-panel { position: relative; width: min(100%, 480px); max-height: min(90vh, 720px); overflow-y: auto; background: #fff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18); }
 .um-modal-panel-danger { border-top: 4px solid #dc2626; }
 .um-modal-panel h3 { margin: 0 0 0.35rem; color: #0f172a; }
 .um-modal-sub { margin: 0 0 0.75rem; color: #64748b; font-size: 0.92rem; }
@@ -854,6 +1007,7 @@ ob_start();
 .um-modal-panel textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; resize: vertical; min-height: 90px; font-family: inherit; }
 .um-required { color: #dc2626; }
 .um-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+body.um-modal-open { overflow: hidden; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 @media (max-width: 1100px) {
     .um-layout { grid-template-columns: 1fr; }
@@ -864,11 +1018,18 @@ ob_start();
 @media (max-width: 720px) {
     .um-toolbar { grid-template-columns: 1fr; }
     .um-stats-grid { grid-template-columns: 1fr 1fr; }
+    .um-create-grid { grid-template-columns: 1fr; }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.um-modal').forEach(function(modalEl) {
+        if (modalEl.parentElement !== document.body) {
+            document.body.appendChild(modalEl);
+        }
+    });
+
     const modal = document.getElementById('confirmModal');
     if (modal) {
         const messageEl = modal.querySelector('.confirm-message');
@@ -910,11 +1071,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function portalModal(el) {
+        if (el && el.parentElement !== document.body) {
+            document.body.appendChild(el);
+        }
+    }
+
+    function syncBodyScrollLock() {
+        const hasOpen = document.querySelector('.um-modal.open');
+        document.body.classList.toggle('um-modal-open', !!hasOpen);
+    }
+
     function openModal(id) {
         const el = document.getElementById(id);
         if (el) {
+            portalModal(el);
             el.classList.add('open');
             el.setAttribute('aria-hidden', 'false');
+            syncBodyScrollLock();
         }
     }
     function closeModal(id) {
@@ -922,6 +1096,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (el) {
             el.classList.remove('open');
             el.setAttribute('aria-hidden', 'true');
+            syncBodyScrollLock();
         }
     }
 
@@ -930,6 +1105,26 @@ document.addEventListener('DOMContentLoaded', function() {
             closeModal(this.dataset.target);
         });
     });
+
+    document.querySelectorAll('.js-open-create-user-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openModal('createUserModal');
+        });
+    });
+
+    const createRoleSelect = document.querySelector('#createUserModal [name="create_role"]');
+    const createStreetSelect = document.querySelector('#createUserModal [name="create_street"]');
+    const createHouseInput = document.querySelector('#createUserModal [name="create_house_number"]');
+    function syncCreateAddressRequired() {
+        if (!createStreetSelect || !createHouseInput) return;
+        const isResident = !createRoleSelect || createRoleSelect.value === 'Resident';
+        createStreetSelect.required = isResident;
+        createHouseInput.required = isResident;
+    }
+    if (createRoleSelect) {
+        createRoleSelect.addEventListener('change', syncCreateAddressRequired);
+    }
+    syncCreateAddressRequired();
 
     document.querySelectorAll('.js-open-lock-modal').forEach(function(btn) {
         btn.addEventListener('click', function() {

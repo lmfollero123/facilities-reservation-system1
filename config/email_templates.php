@@ -488,6 +488,39 @@ function getPasswordResetEmailTemplate($userName, $resetUrl) {
 }
 
 /**
+ * Admin-created account welcome email with login credentials.
+ */
+function getAdminCreatedAccountEmailTemplate(string $userName, string $email, string $plainPassword, string $roleLabel): string
+{
+    $header = getEmailHeader('Your Account Has Been Created');
+    $footer = getEmailFooter();
+    $loginUrl = base_url() . '/login';
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">Welcome to Barangay Culiat Facilities Reservation</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            An administrator has created a <strong>' . htmlspecialchars($roleLabel) . '</strong> account for you. Use the credentials below to sign in.
+        </p>
+
+        ' . getEmailInfoBox('
+            <p style="margin: 0 0 8px; color: #334155;"><strong>Email:</strong> ' . htmlspecialchars($email) . '</p>
+            <p style="margin: 0; color: #334155;"><strong>Temporary password:</strong>
+                <code style="background: #fff; padding: 0.2rem 0.45rem; border-radius: 4px; font-family: monospace;">' . htmlspecialchars($plainPassword) . '</code>
+            </p>
+        ', '#f0f8ff', '#2196f3') . '
+
+        ' . getEmailButton('Sign In', $loginUrl, '#6384d2') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            For security, please change your password after your first login. If you did not expect this account, contact the barangay office immediately.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Reservation Denied Email Template
  */
 function getReservationDeniedEmailTemplate($userName, $facilityName, $date, $timeSlot, $note = '') {

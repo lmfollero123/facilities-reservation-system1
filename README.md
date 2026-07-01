@@ -105,7 +105,8 @@ CI: GitHub Actions workflow in `.github/workflows/ci.yml`
 Full capstone artifacts are under `docs/`:
 
 - `docs/DEFENSE_DOCUMENT.md` — panel narrative
-- `docs/MODULES_LIST.md` — feature modules
+- `docs/MODULES_LIST.md` — **current product catalog** (all modules & features in the system)
+- `docs/BACKLOG.md` — shipped vs. partial vs. planned backlog
 - `docs/CAPSTONE_IMPLEMENTATION_PLAN.md` — enhancement roadmap
 - `docs/DEPLOYMENT_CPANEL.md` — live server setup
 

@@ -24,6 +24,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $dashboardSearchItems = array_merge($dashboardSearchItems, [
         ['label' => 'Reservation Approvals', 'url' => $base . '/dashboard/reservations-manage', 'keywords' => 'reservations approvals manage pending approve'],
         ['label' => 'Facility Management', 'url' => $base . '/dashboard/facility-management', 'keywords' => 'facility management facilities admin'],
+        ['label' => 'User Management', 'url' => $base . '/dashboard/user-management', 'keywords' => 'users management residents create account'],
         ['label' => 'Announcements', 'url' => $base . '/dashboard/announcements-manage', 'keywords' => 'announcements news communications'],
         ['label' => 'Contact Information', 'url' => $base . '/dashboard/contact-info', 'keywords' => 'contact info communications'],
         ['label' => 'Maintenance', 'url' => $base . '/dashboard/maintenance-integration', 'keywords' => 'maintenance integration'],
@@ -34,7 +35,6 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
 }
 if ($role === 'Admin') {
     $dashboardSearchItems = array_merge($dashboardSearchItems, [
-        ['label' => 'User Management', 'url' => $base . '/dashboard/user-management', 'keywords' => 'users management admin'],
         ['label' => 'Document Management', 'url' => $base . '/dashboard/document-management', 'keywords' => 'documents files management'],
         ['label' => 'Audit Trail', 'url' => $base . '/dashboard/audit-trail', 'keywords' => 'audit trail logs'],
     ]);
