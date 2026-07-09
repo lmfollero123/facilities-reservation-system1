@@ -32,6 +32,12 @@ INSERT INTO role_permissions (role, permission_key, can_create, can_read, can_up
 ('Admin', 'announcements', 1, 1, 1, 1),
 ('Admin', 'blackout_dates', 1, 1, 1, 1),
 ('Admin', 'audit_trail', 1, 1, 1, 1),
+('Admin', 'communications', 1, 1, 1, 1),
+('Admin', 'maintenance', 1, 1, 1, 1),
+('Admin', 'infrastructure', 1, 1, 1, 1),
+('Admin', 'utilities', 1, 1, 1, 1),
+('Admin', 'ai_tools', 1, 1, 1, 1),
+('Admin', 'documents', 1, 1, 1, 1),
 
 -- Staff: Can manage facilities and reservations, read reports, limited user management
 ('Staff', 'users', 1, 1, 1, 0),
@@ -42,6 +48,12 @@ INSERT INTO role_permissions (role, permission_key, can_create, can_read, can_up
 ('Staff', 'announcements', 1, 1, 1, 0),
 ('Staff', 'blackout_dates', 1, 1, 1, 0),
 ('Staff', 'audit_trail', 0, 1, 0, 0),
+('Staff', 'communications', 1, 1, 1, 0),
+('Staff', 'maintenance', 0, 1, 1, 0),
+('Staff', 'infrastructure', 0, 1, 0, 0),
+('Staff', 'utilities', 0, 1, 0, 0),
+('Staff', 'ai_tools', 0, 1, 0, 0),
+('Staff', 'documents', 0, 0, 0, 0),
 
 -- Resident: Can only manage their own reservations
 ('Resident', 'users', 0, 0, 0, 0),
@@ -51,7 +63,13 @@ INSERT INTO role_permissions (role, permission_key, can_create, can_read, can_up
 ('Resident', 'settings', 0, 0, 0, 0),
 ('Resident', 'announcements', 0, 1, 0, 0),
 ('Resident', 'blackout_dates', 0, 1, 0, 0),
-('Resident', 'audit_trail', 0, 0, 0, 0)
+('Resident', 'audit_trail', 0, 0, 0, 0),
+('Resident', 'communications', 0, 0, 0, 0),
+('Resident', 'maintenance', 0, 0, 0, 0),
+('Resident', 'infrastructure', 0, 0, 0, 0),
+('Resident', 'utilities', 0, 0, 0, 0),
+('Resident', 'ai_tools', 0, 1, 0, 0),
+('Resident', 'documents', 0, 0, 0, 0)
 ON DUPLICATE KEY UPDATE
     can_create = VALUES(can_create),
     can_read = VALUES(can_read),

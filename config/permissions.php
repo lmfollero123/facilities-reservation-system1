@@ -101,6 +101,20 @@ function frs_load_permissions(): void
         }
         
         $GLOBALS['_frs_permissions_cache'] = $cache;
+
+        // Merge defaults for permission keys added after initial migration
+        $defaults = frs_get_default_permissions();
+        foreach ($defaults as $role => $rolePerms) {
+            if (!isset($GLOBALS['_frs_permissions_cache'][$role])) {
+                $GLOBALS['_frs_permissions_cache'][$role] = $rolePerms;
+                continue;
+            }
+            foreach ($rolePerms as $key => $perms) {
+                if (!isset($GLOBALS['_frs_permissions_cache'][$role][$key])) {
+                    $GLOBALS['_frs_permissions_cache'][$role][$key] = $perms;
+                }
+            }
+        }
     } catch (Throwable $e) {
         // If table doesn't exist yet, use default permissions
         $GLOBALS['_frs_permissions_cache'] = frs_get_default_permissions();
@@ -122,6 +136,12 @@ function frs_get_default_permissions(): array
             'announcements' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'blackout_dates' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'audit_trail' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'communications' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'maintenance' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'infrastructure' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'utilities' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'ai_tools' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
+            'documents' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
         ],
         'Staff' => [
             'users' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
@@ -132,6 +152,12 @@ function frs_get_default_permissions(): array
             'announcements' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'blackout_dates' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'audit_trail' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
+            'communications' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
+            'maintenance' => ['create' => false, 'read' => true, 'update' => true, 'delete' => false],
+            'infrastructure' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
+            'utilities' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
+            'ai_tools' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
+            'documents' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
         ],
         'Resident' => [
             'users' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
@@ -142,6 +168,12 @@ function frs_get_default_permissions(): array
             'announcements' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
             'blackout_dates' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
             'audit_trail' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
+            'communications' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
+            'maintenance' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
+            'infrastructure' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
+            'utilities' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
+            'ai_tools' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
+            'documents' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
         ],
     ];
 }
@@ -217,19 +249,15 @@ function frs_get_role_permissions(string $role): array
  */
 function frs_get_permission_keys(): array
 {
-    if ($GLOBALS['_frs_permissions_cache'] === null) {
-        frs_load_permissions();
-    }
-    
     $keys = [];
-    foreach ($GLOBALS['_frs_permissions_cache'] as $rolePermissions) {
+    foreach (frs_get_default_permissions() as $rolePermissions) {
         foreach (array_keys($rolePermissions) as $key) {
             if (!in_array($key, $keys, true)) {
                 $keys[] = $key;
             }
         }
     }
-    
+
     sort($keys);
     return $keys;
 }

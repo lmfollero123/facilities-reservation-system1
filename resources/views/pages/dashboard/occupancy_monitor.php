@@ -7,8 +7,10 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+$role = $_SESSION['role'] ?? '';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reports')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }

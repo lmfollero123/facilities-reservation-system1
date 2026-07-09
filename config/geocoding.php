@@ -121,7 +121,13 @@ function reverseGeocodeCoordinates($lat, $lng)
     
     // Nominatim reverse geocoding API (coordinates → address)
     // No API key needed, completely free
-    $url = OSM_NOMINATIM_URL . '?format=json&lat=' . $lat . '&lon=' . $lng . '&zoom=18&addressdetails=1';
+    $url = 'https://nominatim.openstreetmap.org/reverse?' . http_build_query([
+        'format' => 'json',
+        'lat' => $lat,
+        'lon' => $lng,
+        'zoom' => 18,
+        'addressdetails' => 1,
+    ]);
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -144,9 +150,8 @@ function reverseGeocodeCoordinates($lat, $lng)
     
     $data = json_decode($response, true);
     
-    // Nominatim response format: [ { "display_name": "Full address", ... } ]
-    if (isset($data[0]['display_name'])) {
-        return $data[0]['display_name'];
+    if (isset($data['display_name'])) {
+        return $data['display_name'];
     }
     
     error_log("Nominatim Reverse Geocoding failed: No address found for coordinates: $lat, $lng");

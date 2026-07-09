@@ -3,8 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+$role = $_SESSION['role'] ?? '';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reservations')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }

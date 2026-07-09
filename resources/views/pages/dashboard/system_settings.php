@@ -84,6 +84,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesReady && frs_csrf_ok()) {
 }
 
 $categories = frs_lookup_categories($pdo);
+$rolePermissionsTableReady = false;
+try {
+    $pdo->query('SELECT 1 FROM role_permissions LIMIT 1');
+    $rolePermissionsTableReady = true;
+} catch (Throwable $e) {
+    $rolePermissionsTableReady = false;
+}
+if ($rolePermissionsTableReady && !in_array('role_permissions', array_column($categories, 'slug'), true)) {
+    $categories[] = [
+        'id' => 0,
+        'slug' => 'role_permissions',
+        'name' => 'Role Permissions',
+        'description' => 'Configure CRUD permissions for Staff and Resident roles per module.',
+    ];
+}
 $categoryValues = $tablesReady ? frs_lookup_values($pdo, $activeCategory, false) : frs_lookup_fallback_values($activeCategory);
 
 // Load permissions data for role_permissions category
