@@ -641,6 +641,438 @@ ob_start();
 @media (max-width: 640px) {
     .profile-coords-grid { grid-template-columns: 1fr; }
 }
+
+/* Dark mode for main profile page elements */
+html[data-theme="dark"] .profile-collapsible {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .profile-collapsible > summary {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .profile-collapsible-hint {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .profile-collapsible-body {
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .profile-help-text {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .profile-help-text a {
+    color: #3b82f6;
+}
+
+html[data-theme="dark"] .profile-label-text {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .profile-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .profile-input:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+
+html[data-theme="dark"] .input-wrapper {
+    background: #0f172a;
+}
+
+html[data-theme="dark"] .input-icon {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .profile-collapsible-nested {
+    background: #1e293b;
+    border-color: #7c2d12;
+}
+
+html[data-theme="dark"] .profile-collapsible-nested > summary {
+    color: #fca5a5;
+}
+
+html[data-theme="dark"] .booking-card {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .booking-card h2 {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .booking-card h3 {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .booking-card p {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .booking-card label {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .booking-card small {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .booking-card strong {
+    color: #f1f5f9;
+}
+
+/* Facility Modal Styles */
+.facility-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    display: none;
+}
+
+.facility-modal.open {
+    display: block;
+}
+
+.facility-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.facility-modal-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 10000;
+}
+
+.facility-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.facility-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.facility-modal-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #1e293b;
+}
+
+.facility-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #64748b;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.facility-modal-close:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.facility-modal-body {
+    padding: 1.5rem;
+    color: #334155;
+}
+
+/* Dark mode for Facility Modals */
+html[data-theme="dark"] .facility-modal-content {
+    background: #1e293b;
+}
+
+html[data-theme="dark"] .facility-modal-header {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .facility-modal-header h2 {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-close {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .facility-modal-close:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .facility-modal-body p {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .facility-modal-body label {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body input,
+html[data-theme="dark"] .facility-modal-body select,
+html[data-theme="dark"] .facility-modal-body textarea {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body input:focus,
+html[data-theme="dark"] .facility-modal-body select:focus,
+html[data-theme="dark"] .facility-modal-body textarea:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+
+html[data-theme="dark"] .facility-modal-body .btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+html[data-theme="dark"] .facility-modal-body .btn-outline {
+    border-color: #334155;
+    color: #cbd5e1;
+    background: transparent;
+}
+
+html[data-theme="dark"] .facility-modal-body .btn-outline:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+/* Security tips and coordinates visibility fixes */
+html[data-theme="dark"] .facility-modal-body .security-tips-header {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body ul li {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .facility-modal-body ul li strong {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible > summary {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible-hint {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible-body {
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-help-text {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-help-text a {
+    color: #3b82f6;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-label-text {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-input:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+
+html[data-theme="dark"] .facility-modal-body .input-wrapper {
+    background: #0f172a;
+}
+
+html[data-theme="dark"] .facility-modal-body .input-icon {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] #otp-toggle-container {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] #otp-toggle-container label {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] #otp-status-text {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] #otp-status-text strong {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .totp-section {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .totp-section label {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .totp-section p {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .totp-section code {
+    background: #0f172a;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .facility-modal-body strong {
+    color: #f1f5f9;
+}
+
+/* Additional fixes for modal content visibility */
+html[data-theme="dark"] #otp-toggle-container {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] #otp-toggle-container label {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] #otp-status-text {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] #otp-status-text strong {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .totp-section {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .totp-section label {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .totp-section p {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .totp-section code {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .security-tips-header {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body ul li {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body ul li strong {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible > summary {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible-hint {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-collapsible-body {
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-help-text {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-help-text a {
+    color: #3b82f6 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-label-text {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-input {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .profile-input:focus {
+    border-color: #3b82f6 !important;
+    outline: none;
+}
+
+html[data-theme="dark"] .facility-modal-body .input-wrapper {
+    background: #0f172a !important;
+}
+
+html[data-theme="dark"] .facility-modal-body .input-icon {
+    color: #94a3b8 !important;
+}
 </style>
 <div class="page-header">
     <div class="breadcrumb">

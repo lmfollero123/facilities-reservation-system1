@@ -3,8 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+$role = $_SESSION['role'] ?? '';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reservations')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -17,6 +19,7 @@ require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+require_once __DIR__ . '/../../../../config/lookups.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -40,12 +43,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone'];
 
     if ($reservationId && in_array($action, $allowed, true)) {
+        // Check permissions for each action
+        $permissionError = false;
+        switch ($action) {
+            case 'approved':
+            case 'denied':
+            case 'modify':
+            case 'postpone':
+                if (!frs_can_update($role, 'reservations')) {
+                    $permissionError = true;
+                }
+                break;
+            case 'cancelled':
+                if (!frs_can_delete($role, 'reservations')) {
+                    $permissionError = true;
+                }
+                break;
+        }
+
+        if ($permissionError) {
+            $message = 'You do not have permission to perform this action.';
+            $messageType = 'error';
+        } else {
         try {
-            // Get reservation details for audit log (including facility status)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email, u.mobile AS requester_mobile
-                                      FROM reservations r 
-                                      JOIN facilities f ON r.facility_id = f.id 
-                                      JOIN users u ON r.user_id = u.id 
+            // Get reservation details for audit log (including facility status and is_free)
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, f.is_free, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email, u.mobile AS requester_mobile
+                                      FROM reservations r
+                                      JOIN facilities f ON r.facility_id = f.id
+                                      JOIN users u ON r.user_id = u.id
                                       WHERE r.id = :id');
             $resStmt->execute(['id' => $reservationId]);
             $reservation = $resStmt->fetch(PDO::FETCH_ASSOC);
@@ -296,6 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             $message = $e->getMessage();
             $messageType = 'error';
         }
+        }
     }
 }
 
@@ -305,8 +331,20 @@ $pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
 $pendingOffset = ($pendingPage - 1) * $pendingPerPage;
 $pendingSearch = trim($_GET['pending_search'] ?? '');
 
-// Build pending query with filters
-$pendingWhere = ['r.status IN ("pending", "postponed", "pending_payment")'];
+// Build pending query with filters - use lookup values for non-final statuses
+$pendingStatuses = [];
+if (frs_lookups_table_ready($pdo)) {
+    foreach (frs_lookup_values($pdo, 'reservation_status') as $status) {
+        // Exclude 'approved' from pending requests - it should only appear in "All Reservations"
+        if (!($status['metadata']['is_final'] ?? false) && $status['slug'] !== 'approved') {
+            $pendingStatuses[] = $status['slug'];
+        }
+    }
+} else {
+    // Fallback to hardcoded statuses
+    $pendingStatuses = ['pending', 'postponed', 'pending_payment'];
+}
+$pendingWhere = ['r.status IN ("' . implode('", "', $pendingStatuses) . '")'];
 $pendingParams = [];
 
 if (!empty($pendingSearch)) {
@@ -1312,7 +1350,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
                         $historyItems->execute(['id' => $record['id']]);
                         $timeline = $historyItems->fetchAll(PDO::FETCH_ASSOC);
                         $recordIsPast = frs_reservation_slot_has_passed((string)$record['reservation_date'], (string)$record['time_slot'])
-                            && !in_array($record['status'], ['denied', 'cancelled'], true);
+                            && strtolower($record['status']) === 'approved';
                         $recordBadgeClass = $recordIsPast ? 'past' : $record['status'];
                         ?>
                         <article class="facility-card-admin" style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px;">
@@ -1727,6 +1765,42 @@ html[data-theme="dark"] #allReservationsModal .facility-card-admin p,
 html[data-theme="dark"] #allReservationsModal .facility-card-admin small,
 html[data-theme="dark"] #allReservationsModal .facility-card-admin li {
     color: var(--text-secondary) !important;
+}
+
+/* Additional dark mode for modal components */
+html[data-theme="dark"] #allReservationsModal.frs-all-reservations-modal .frs-all-reservations-modal__panel {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__header {
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__header h2 {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__search {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__search label {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__search input,
+html[data-theme="dark"] .frs-all-reservations-modal__search select {
+    background: #1e293b;
+    color: #f1f5f9;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .frs-all-reservations-modal__search input:focus,
+html[data-theme="dark"] .frs-all-reservations-modal__search select:focus {
+    border-color: #3b82f6;
+    outline: none;
 }
 
 @keyframes allReservationsModalSlideIn {

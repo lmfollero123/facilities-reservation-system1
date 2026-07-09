@@ -480,13 +480,20 @@ $historyStmt = $pdo->prepare(
 $historyStmt->execute(['id' => $reservationId]);
 $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Get payment information for this reservation
+$paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, status, provider_event_id, created_at FROM payments WHERE reservation_id = :reservation_id ORDER BY created_at DESC LIMIT 1');
+$paymentStmt->execute(['reservation_id' => $reservationId]);
+$payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+
 $reservationIsPast = frs_reservation_slot_has_passed(
     (string)$reservation['reservation_date'],
     (string)$reservation['time_slot']
 );
-$reservationStatusBadgeClass = ($reservationIsPast && !in_array($reservation['status'], ['denied', 'cancelled'], true))
+// Only apply 'past' class to approved reservations that have passed
+// Denied/cancelled reservations keep their original badge class
+$reservationStatusBadgeClass = ($reservationIsPast && strtolower($reservation['status']) === 'approved')
     ? 'past'
-    : $reservation['status'];
+    : frs_reservation_status_badge_class($pdo, $reservation['status']);
 
 $reservationDocuments = frs_list_reservation_documents($reservationId);
 
@@ -775,6 +782,43 @@ ob_start();
         </p>
     </div>
     <?php endif; ?>
+<?php endif; ?>
+
+<?php if ($payment): ?>
+<div class="booking-card" style="margin-top:0.85rem;">
+    <h2>Payment Information</h2>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem;">
+        <div>
+            <strong style="color:#5b6888;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Amount</strong>
+            <span style="font-size:1rem; font-weight:600;">₱<?= number_format($payment['amount'], 2); ?></span>
+        </div>
+        <div>
+            <strong style="color:#5b6888;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Status</strong>
+            <span class="status-badge <?= $payment['status']; ?>"><?= ucfirst($payment['status']); ?></span>
+        </div>
+        <?php if (!empty($payment['reference_no'])): ?>
+        <div>
+            <strong style="color:#5b6888;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Reference</strong>
+            <span style="font-size:0.9rem;"><?= htmlspecialchars($payment['reference_no']); ?></span>
+        </div>
+        <?php endif; ?>
+        <div>
+            <strong style="color:#5b6888;font-size:0.85rem;display:block;margin-bottom:0.25rem;">Date</strong>
+            <span style="font-size:0.9rem;"><?= htmlspecialchars($payment['created_at']); ?></span>
+        </div>
+    </div>
+    <?php if ($payment['status'] === 'refunded'): ?>
+    <div style="margin-top:1rem; padding:0.75rem; background:#dcfce7; border:1px solid #86efac; border-radius:6px;">
+        <strong style="color:#166534; display:block; margin-bottom:0.25rem;">💰 Refund Processed</strong>
+        <span style="color:#15803d; font-size:0.9rem;">Payment has been refunded successfully.</span>
+    </div>
+    <?php elseif ($payment['status'] === 'paid' && $reservation['status'] === 'cancelled'): ?>
+    <div style="margin-top:1rem; padding:0.75rem; background:#fef9c3; border:1px solid #fde047; border-radius:6px;">
+        <strong style="color:#854d0e; display:block; margin-bottom:0.25rem;">⚠️ Refund Pending</strong>
+        <span style="color:#713f12; font-size:0.9rem;">Payment was made but refund may require manual processing.</span>
+    </div>
+    <?php endif; ?>
+</div>
 <?php endif; ?>
 
 <div class="booking-card" style="margin-top:0.85rem;">

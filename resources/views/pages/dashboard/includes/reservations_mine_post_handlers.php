@@ -264,21 +264,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
     }
 }
 
-// Resident self-cancellation: only for own reservations, status pending/approved, and before start time
+// Cancellation: for own reservations, status pending/approved, and before start time
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['action']) && $_POST['action'] === 'cancel_reservation' && $userId) {
     $reservationId = (int)($_POST['reservation_id'] ?? 0);
+    $userRole = $_SESSION['role'] ?? 'Resident';
+    $isAdminOrStaff = in_array($userRole, ['Admin', 'Staff'], true);
     
     try {
+        // Admin/Staff can cancel any reservation, residents only their own
+        $whereClause = $isAdminOrStaff ? 'WHERE r.id = :id' : 'WHERE r.id = :id AND r.user_id = :user_id';
+        $params = $isAdminOrStaff ? ['id' => $reservationId] : ['id' => $reservationId, 'user_id' => $userId];
+
         $resStmt = $pdo->prepare(
             'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.user_id,
                     f.name AS facility_name
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
-             WHERE r.id = :id AND r.user_id = :user_id'
+             ' . $whereClause
         );
-        $resStmt->execute(['id' => $reservationId, 'user_id' => $userId]);
+        $resStmt->execute($params);
         $reservation = $resStmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$reservation) {
             throw new Exception('Reservation not found or you do not have permission to cancel it.');
         }
@@ -294,7 +300,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
         $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
         $stmt->execute(['status' => 'cancelled', 'id' => $reservationId]);
         
-        $note = 'Cancelled by resident (self-cancellation).';
+        // Check if payment was made and issue refund
+        $paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, provider_event_id FROM payments WHERE reservation_id = :reservation_id AND status = :status LIMIT 1');
+        $paymentStmt->execute(['reservation_id' => $reservationId, 'status' => 'paid']);
+        $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($payment) {
+            // Issue refund via PayMongo if provider_event_id exists
+            if (!empty($payment['provider_event_id'])) {
+                $refundResult = frs_issue_refund($payment['provider_event_id'], $payment['amount']);
+
+                if ($refundResult['ok']) {
+                    // Update payment status to refunded
+                    $updatePaymentStmt = $pdo->prepare('UPDATE payments SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $updatePaymentStmt->execute(['status' => 'refunded', 'id' => $payment['id']]);
+                    $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Payment refunded via PayMongo.' : 'Cancelled by user. Payment refunded via PayMongo.';
+                } else {
+                    $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Refund failed: ' . $refundResult['message'] : 'Cancelled by user. Refund failed: ' . $refundResult['message'];
+                }
+            } else {
+                // No provider_event_id - payment may not have been processed via webhook
+                // Don't auto-refund, keep payment as paid and note that manual refund is needed
+                $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Payment exists but requires manual refund (no PayMongo event ID).' : 'Cancelled by user. Payment exists but requires manual refund (no PayMongo event ID).';
+            }
+        } else {
+            $note = $isAdminOrStaff ? 'Cancelled by admin/staff.' : 'Cancelled by user.';
+        }
+        
         $histStmt = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:reservation_id, :status, :note, :user_id)');
         $histStmt->execute([
             'reservation_id' => $reservationId,

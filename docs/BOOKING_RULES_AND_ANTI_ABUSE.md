@@ -136,6 +136,22 @@ Reservations that meet **all** of the following conditions may be **automaticall
 
 **ML Risk Override:** If an ML risk model is enabled and returns high risk with confidence > 70%, auto-approval is overridden and the reservation remains pending for manual review.
 
+## 3.1 Free vs Paid Facilities
+
+Facilities can be marked as free or paid using the `is_free` flag:
+
+| Facility Type | Booking Flow |
+|---------------|--------------|
+| **Free** (`is_free = true`) | `pending` → `approved` (no payment required) |
+| **Paid** (`is_free = false`) | `pending` → `approved` → `pending_payment` → `approved` (payment via PayMongo) |
+
+**Default Behavior:** All facilities are free by default (`is_free = true`). Payment flow is only triggered when:
+1. The facility has `is_free = false`
+2. The `PAYMENTS_ENABLED` configuration is active
+3. The `require_payment_for_reservations` setting is enabled
+
+This ensures that Barangay Culiat public facilities remain free for residents while allowing optional paid flows for fee-based venues when policy requires it.
+
 ---
 
 ## 4. Reschedule Rules

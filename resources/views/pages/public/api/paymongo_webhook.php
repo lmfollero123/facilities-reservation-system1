@@ -81,7 +81,7 @@ try {
     $paymentId = (int)$payment['id'];
     $reservationId = (int)$payment['reservation_id'];
     $userId = (int)$payment['user_id'];
-    $isSuccess = (stripos($eventType, 'payment.paid') !== false);
+    $isSuccess = (stripos($eventType, 'payment.paid') !== false || stripos($eventType, 'checkout_session.paid') !== false);
     $isFailed = (stripos($eventType, 'payment.failed') !== false || stripos($eventType, 'checkout_session.expired') !== false);
 
     if ($isSuccess) {

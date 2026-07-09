@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/database.php';
+require_once __DIR__ . '/../../../config/permissions.php';
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     $pdo = db();
 }
@@ -89,15 +90,21 @@ function renderCollapsibleGroup($title, $targetId, $links, $current, $iconPaths,
 }
 
 // ========== Grouped Navigation ==========
-$bookingGroup = [
-    ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'],
-    ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'],
-    ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'],
-];
+$bookingGroup = [];
 
-$aiToolsGroup = [
-    ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'],
-];
+// Check reservations permissions - Read controls page access
+if (frs_can_read($role, 'reservations')) {
+    $bookingGroup[] = ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'];
+    $bookingGroup[] = ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'];
+}
+$bookingGroup[] = ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'];
+
+$aiToolsGroup = [];
+
+// Check AI tools permissions
+if (frs_can_read($role, 'ai_tools')) {
+    $aiToolsGroup[] = ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
+}
 
 $reservationsFacilitiesGroup = [];
 $communicationsGroup = [];
@@ -106,38 +113,68 @@ $reportsGroup = [];
 $administrationGroup = [];
 
 if (in_array($role, ['Admin', 'Staff'], true)) {
-    $reservationsFacilitiesGroup = [
-        ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'],
-        ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'],
-        ['label' => 'Blackout Dates', 'href' => $base . '/dashboard/blackout-dates', 'icon' => 'calendar-days', 'page' => 'blackout_dates'],
-    ];
-    $communicationsGroup = [
-        ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'],
-        ['label' => 'Contact Inquiries', 'href' => $base . '/dashboard/contact-inquiries', 'icon' => 'telephone', 'page' => 'contact_inquiries'],
-        ['label' => 'Contact Information', 'href' => $base . '/dashboard/contact-info', 'icon' => 'telephone', 'page' => 'contact_info_manage'],
-    ];
-    $integrationsGroup = [
-        ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'],
-        ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'],
-        ['label' => 'Utilities', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'],
-    ];
-    $reportsGroup = [
-        ['label' => 'Live Occupancy', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'],
-        ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'],
-    ];
+    // Reservations & Facilities - check permissions
+    $reservationsFacilitiesGroup = [];
+    if (frs_can_read($role, 'reservations')) {
+        $reservationsFacilitiesGroup[] = ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'];
+    }
+    if (frs_can_read($role, 'facilities')) {
+        $reservationsFacilitiesGroup[] = ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'];
+    }
+    if (frs_can_read($role, 'blackout_dates')) {
+        $reservationsFacilitiesGroup[] = ['label' => 'Blackout Dates', 'href' => $base . '/dashboard/blackout-dates', 'icon' => 'calendar-days', 'page' => 'blackout_dates'];
+    }
+
+    // Communications - check permissions
+    $communicationsGroup = [];
+    if (frs_can_read($role, 'announcements')) {
+        $communicationsGroup[] = ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'];
+    }
+    if (frs_can_read($role, 'communications')) {
+        $communicationsGroup[] = ['label' => 'Contact Management', 'href' => $base . '/dashboard/contact', 'icon' => 'telephone', 'page' => 'contact'];
+    }
+
+    // Operations/Integrations - check permissions
+    $integrationsGroup = [];
+    if (frs_can_read($role, 'maintenance')) {
+        $integrationsGroup[] = ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
+    }
+    if (frs_can_read($role, 'infrastructure')) {
+        $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];
+    }
+    if (frs_can_read($role, 'utilities')) {
+        $integrationsGroup[] = ['label' => 'Utilities', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
+    }
+
+    // Reports - check permissions
+    $reportsGroup = [];
+    if (frs_can_read($role, 'reports')) {
+        $reportsGroup[] = ['label' => 'Live Occupancy', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'];
+        $reportsGroup[] = ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'];
+    }
 }
 
 if ($role === 'Admin') {
-    $administrationGroup = [
-        ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
-        ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'],
-        ['label' => 'SMS Test (IPROG)', 'href' => $base . '/dashboard/sms-test', 'icon' => 'telephone', 'page' => 'sms_test'],
-        ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'],
-    ];
+    // Administration - check permissions
+    $administrationGroup = [];
+    if (frs_can_read($role, 'users')) {
+        $administrationGroup[] = ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
+    }
+    if (frs_can_read($role, 'settings')) {
+        $administrationGroup[] = ['label' => 'System Settings', 'href' => $base . '/dashboard/system-settings', 'icon' => 'wrench', 'page' => 'system_settings'];
+    }
+    if (frs_can_read($role, 'documents')) {
+        $administrationGroup[] = ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'];
+    }
+    if (frs_can_read($role, 'audit_trail')) {
+        $administrationGroup[] = ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
+    }
 } elseif ($role === 'Staff') {
-    $administrationGroup = [
-        ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'],
-    ];
+    // Administration - check permissions
+    $administrationGroup = [];
+    if (frs_can_read($role, 'users')) {
+        $administrationGroup[] = ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
+    }
 }
 
 $accountLinks = [
@@ -174,8 +211,8 @@ $sidebarAvatarInitial = function_exists('mb_substr')
         <!-- Communications (Admin/Staff) -->
         <?= renderCollapsibleGroup('Communications', 'sidebar-communications', $communicationsGroup, $current, $iconPaths, true); ?>
 
-        <!-- Integrations / Microservices (Admin/Staff) -->
-        <?= renderCollapsibleGroup('Integrations', 'sidebar-integrations', $integrationsGroup, $current, $iconPaths, false); ?>
+        <!-- Operations (Admin/Staff) -->
+        <?= renderCollapsibleGroup('Operations', 'sidebar-integrations', $integrationsGroup, $current, $iconPaths, false); ?>
 
         <!-- Reports (Admin/Staff) -->
         <?= renderCollapsibleGroup('Reports', 'sidebar-reports', $reportsGroup, $current, $iconPaths, true); ?>

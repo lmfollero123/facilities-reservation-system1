@@ -4,9 +4,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
 $role = $_SESSION['role'] ?? 'Resident';
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'Staff'], true)) {
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'maintenance')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -337,22 +338,22 @@ ob_start();
 
 <section class="booking-card" style="margin-bottom: 1.5rem;">
     <h2>Predictive Maintenance (Recommendation)</h2>
-    <p style="color:#6b7280; margin:0.2rem 0 1rem;">
+    <p style="color:#6b7280; margin:0.2rem 0 1rem;" class="predictive-maintenance-desc">
         Rule-based forecast from recent booking pressure (last 90/30 days) to suggest low-demand maintenance windows.
     </p>
     <?php if (empty($predictiveMaintenanceRows)): ?>
-        <p style="color:#8b95b5; text-align:center; padding:1.2rem 0;">Not enough data yet to generate maintenance risk forecasts.</p>
+        <p style="color:#8b95b5; text-align:center; padding:1.2rem 0;" class="predictive-maintenance-empty">Not enough data yet to generate maintenance risk forecasts.</p>
     <?php else: ?>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.75rem;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.75rem;" class="predictive-maintenance-grid">
             <?php foreach (array_slice($predictiveMaintenanceRows, 0, 8) as $row): ?>
-                <div style="border:1px solid #e5e7eb; border-radius:12px; padding:0.8rem 0.9rem; background:#fff;">
+                <div style="border:1px solid #e5e7eb; border-radius:12px; padding:0.8rem 0.9rem; background:#fff;" class="predictive-maintenance-card">
                     <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:flex-start;">
-                        <div style="font-weight:800; color:#0f172a;"><?= htmlspecialchars($row['facility_name']); ?></div>
-                        <span style="background:<?= htmlspecialchars($row['risk_bg']); ?>; color:<?= htmlspecialchars($row['risk_color']); ?>; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.78rem; font-weight:800;">
+                        <div style="font-weight:800; color:#0f172a;" class="predictive-facility-name"><?= htmlspecialchars($row['facility_name']); ?></div>
+                        <span style="background:<?= htmlspecialchars($row['risk_bg']); ?>; color:<?= htmlspecialchars($row['risk_color']); ?>; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.78rem; font-weight:800;" class="predictive-risk-badge">
                             <?= htmlspecialchars($row['risk_band']); ?> Risk
                         </span>
                     </div>
-                    <div style="margin-top:0.5rem; color:#475569; font-size:0.86rem;">
+                    <div style="margin-top:0.5rem; color:#475569; font-size:0.86rem;" class="predictive-maintenance-details">
                         <div>Risk score: <strong><?= (int)$row['risk_score']; ?>/100</strong></div>
                         <div>Usage (90d): <strong><?= (int)$row['usage_90d']; ?></strong> bookings</div>
                         <div>Usage (30d): <strong><?= (int)$row['usage_30d']; ?></strong> bookings</div>
@@ -372,7 +373,7 @@ ob_start();
                                 </button>
                             </form>
                         <?php else: ?>
-                            <span style="font-size:0.82rem; color:#6b7280;">
+                            <span style="font-size:0.82rem; color:#6b7280;" class="predictive-maintenance-note">
                                 <?= $hasBlackoutTable ? 'No recommended date available.' : 'Blackout feature unavailable (missing table).' ?>
                             </span>
                         <?php endif; ?>
@@ -382,6 +383,85 @@ ob_start();
         </div>
     <?php endif; ?>
 </section>
+
+<style>
+/* Dark mode for Predictive Maintenance section */
+html[data-theme="dark"] section.booking-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-desc {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-empty {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] .predictive-facility-name {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-details {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-details strong {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-details div {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-note {
+    color: #94a3b8 !important;
+}
+
+/* Dark mode for the section header */
+html[data-theme="dark"] .booking-card h2 {
+    color: #f1f5f9 !important;
+}
+
+/* Dark mode for the Apply Blackout button */
+html[data-theme="dark"] .predictive-maintenance-card .btn-outline {
+    color: #f1f5f9 !important;
+    border-color: #475569 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-card .btn-outline:hover {
+    background: #334155 !important;
+    border-color: #64748b !important;
+}
+
+/* Dark mode for risk badge - ensure it remains visible */
+html[data-theme="dark"] .predictive-risk-badge {
+    color: #f1f5f9 !important;
+}
+
+/* Override inline styles for dark mode */
+html[data-theme="dark"] .predictive-maintenance-card [style*="color:#0f172a"] {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-card [style*="color:#475569"] {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .predictive-maintenance-card [style*="color:#6b7280"] {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] section.booking-card [style*="color:#6b7280"] {
+    color: #cbd5e1 !important;
+}
+</style>
 
 <div class="booking-wrapper">
     <!-- Upcoming Maintenance Schedules -->

@@ -884,12 +884,12 @@ function setSecurityHeaders(): void
     
     // Content Security Policy (adjust as needed)
     $csp = "default-src 'self'; " .
-           "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://challenges.cloudflare.com; " .
-           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com; " .
+           "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://static.cloudflareinsights.com https://challenges.cloudflare.com https://unpkg.com; " .
+           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com https://unpkg.com; " .
            "img-src 'self' data: https:; " .
            "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
            "frame-src 'self' https://www.google.com https://maps.google.com https://challenges.cloudflare.com; " .
-           "connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cloudflareinsights.com https://challenges.cloudflare.com;";
+           "connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cloudflareinsights.com https://challenges.cloudflare.com https://unpkg.com;";
     header("Content-Security-Policy: $csp");
     
     // Permissions Policy

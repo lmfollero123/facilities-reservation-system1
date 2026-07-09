@@ -7,8 +7,8 @@ require_once __DIR__ . '/../../../../config/app.php';
 if (!($_SESSION['user_authenticated'] ?? false)) {
     // Use HTTP for localhost/lgu.test, HTTPS detection can be unreliable
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $isLocal = (strpos($host, 'localhost') !== false || 
-               strpos($host, '127.0.0.1') !== false || 
+    $isLocal = (strpos($host, 'localhost') !== false ||
+               strpos($host, '127.0.0.1') !== false ||
                strpos($host, 'lgu.test') !== false);
     $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
     $redirectUrl = $protocol . '://' . $host . base_path() . '/login';
@@ -17,6 +17,21 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
+
+// Check permissions for booking facility
+$role = $_SESSION['role'] ?? 'Resident';
+$reservationsHubMine = (($_SERVER['_RESERVATIONS_HUB_ROUTE'] ?? '') === 'mine') || (isset($_GET['module']) && $_GET['module'] === 'mine');
+
+// Read permission controls page access for both booking and my reservations
+if (!frs_can_read($role, 'reservations')) {
+    header('Location: ' . base_path() . '/dashboard');
+    exit;
+}
+
+// Create permission controls ability to submit bookings
+$canCreateReservations = frs_can_create($role, 'reservations');
+require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
@@ -40,7 +55,6 @@ if (isset($_GET['tab']) && $_GET['tab'] === 'reservations') {
     exit;
 }
 
-$reservationsHubMine = (($_SERVER['_RESERVATIONS_HUB_ROUTE'] ?? '') === 'mine') || (isset($_GET['module']) && $_GET['module'] === 'mine');
 $pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservation' : 'Book a Facility | LGU Facilities Reservation';
 $success = '';
 $error = '';
@@ -1124,10 +1138,55 @@ $bookCalQuery = static function (array $extra): string {
     border-bottom: 1px solid #e8ecf4;
     flex-shrink: 0;
 }
+
+/* Dark mode for booking modal */
+html[data-theme="dark"] .bcf-modal-head {
+    border-bottom-color: #334155;
+}
+
+html[data-theme="dark"] .bcf-modal-head h2 {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .bcf-modal-close {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .bcf-modal-close:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
 .bcf-modal-body {
     padding: 1rem 1.1rem 1.25rem;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+}
+
+html[data-theme="dark"] .bcf-modal-body {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .bcf-walkin-box {
+    background: #1e3a5f;
+    border-color: #3b82f6;
+}
+
+html[data-theme="dark"] .bcf-walkin-title {
+    color: #93c5fd;
+}
+
+html[data-theme="dark"] .bcf-res-li {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .bcf-res-list-item-title {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .bcf-res-list-item-meta {
+    color: #94a3b8;
 }
 .bcf-walkin-box {
     padding: 1rem;
@@ -1838,7 +1897,15 @@ ul.bcf-scroll-select-menu {
             </div>
             <?php endif; ?>
 
-            <button class="btn-primary" type="submit" id="bcf-submit-booking">Submit Booking Request</button>
+            <?php if ($canCreateReservations): ?>
+            <button class="btn-primary" type="button" id="bcf-submit-booking">Submit Booking Request</button>
+            <?php else: ?>
+            <div style="padding:1rem; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; margin-top:1rem;">
+                <p style="margin:0; color:#856404; font-size:0.9rem; font-weight:600;">
+                    ⚠️ You do not have permission to create bookings. Please contact your administrator.
+                </p>
+            </div>
+            <?php endif; ?>
         </form>
 
         <?php if ($conflictWarning && $conflictWarning['has_conflict']): ?>
@@ -1923,6 +1990,115 @@ ul.bcf-scroll-select-menu {
     </div>
 </div>
 
+<!-- Booking Confirmation Modal -->
+<div id="bookingConfirmModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 13000; padding: 2rem; position: fixed; inset: 0;">
+    <div class="modal-dialog" style="max-width: 1000px; z-index: 13001; max-height: 85vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); margin: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark)); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-clipboard-check" style="font-size: 1.5rem; color: white;"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: var(--gov-blue-dark); font-size: 1.25rem; font-weight: 700;">Confirm Booking</h3>
+                    <p style="margin: 0.25rem 0 0; color: #64748b; font-size: 0.875rem;">Review your reservation details</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeBookingConfirmModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;">&times;</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-building" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Facility & Schedule</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Facility</span>
+                        <span id="confirm-facility" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Date</span>
+                        <span id="confirm-date" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Time</span>
+                        <span id="confirm-time" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Duration</span>
+                        <span id="confirm-duration" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-file-text" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Event Details</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Purpose</span>
+                        <span id="confirm-purpose" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Attendees</span>
+                        <span id="confirm-attendees" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Notes</span>
+                        <span id="confirm-notes" style="color: #1e293b;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-paperclip" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Supporting Document</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Type</span>
+                        <span id="confirm-doc-type" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">File</span>
+                        <span id="confirm-doc-file" style="color: #1e293b;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; padding: 1.25rem; color: white;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-currency-peso" style="font-size: 1.1rem;"></i>
+                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Cost Breakdown</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Rate per Hour</span>
+                        <span id="confirm-rate" style="font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Hours</span>
+                        <span id="confirm-hours"></span>
+                    </div>
+                    <div style="margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Total Cost</span>
+                        <span id="confirm-total" style="font-weight: 700; font-size: 1.5rem;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+            <button type="button" class="btn-outline" onclick="closeBookingConfirmModal()" style="flex: 1; padding: 0.875rem 1rem;">Edit Booking</button>
+            <button type="button" class="btn-primary" onclick="submitBooking()" style="flex: 1; padding: 0.875rem 1rem;">Confirm & Submit</button>
+        </div>
+    </div>
+</div>
+
 <script>
 function closeMaintenanceWarning() {
     const modal = document.getElementById('maintenanceWarningModal');
@@ -1942,6 +2118,96 @@ function closeMaintenanceWarning() {
         facilitySelect.value = '';
         // Trigger change event to clear any related UI
         facilitySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+}
+
+function closeBookingConfirmModal() {
+    const modal = document.getElementById('bookingConfirmModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.visibility = 'hidden';
+        modal.classList.remove('open');
+    }
+    document.body.style.overflow = '';
+    document.body.style.removeProperty('overflow');
+}
+
+function openBookingConfirmModal() {
+    const form = document.getElementById('main-booking-form');
+    if (!form) return;
+
+    // Get form values
+    const facilitySelect = document.getElementById('facility-select');
+    const dateInput = document.getElementById('reservation-date');
+    const startTimeInput = document.getElementById('start-time');
+    const endTimeInput = document.getElementById('end-time');
+    const purposeInput = document.getElementById('purpose-input');
+    const attendeesInput = document.getElementById('expected-attendees');
+    const notesInput = document.getElementById('booking-notes');
+    const docTypeSelect = document.querySelector('select[name="event_document_type"]');
+    const docFileInput = document.querySelector('input[name="event_supporting_doc"]');
+
+    // Validate required fields
+    if (!facilitySelect.value || !dateInput.value || !startTimeInput.value || !endTimeInput.value || !purposeInput.value || !attendeesInput.value) {
+        alert('Please fill in all required fields.');
+        return;
+    }
+
+    // Calculate duration and cost
+    const startTime = new Date(`2000-01-01T${startTimeInput.value}`);
+    const endTime = new Date(`2000-01-01T${endTimeInput.value}`);
+    const durationMs = endTime - startTime;
+    const durationHours = durationMs / (1000 * 60 * 60);
+
+    if (durationHours <= 0) {
+        alert('End time must be after start time.');
+        return;
+    }
+
+    // Get facility rate
+    const selectedOption = facilitySelect.options[facilitySelect.selectedIndex];
+    const facilityName = selectedOption.text;
+    const facilityData = <?= $frsJsonForInlineScript($facilities); ?>;
+    const facilityInfo = facilityData.find(f => f.id == facilitySelect.value);
+    const ratePerHour = facilityInfo ? parseFloat(facilityInfo.base_rate) : 0;
+    const totalCost = ratePerHour * durationHours;
+
+    // Populate modal
+    document.getElementById('confirm-facility').textContent = facilityName;
+    document.getElementById('confirm-date').textContent = new Date(dateInput.value).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('confirm-time').textContent = `${formatTime(startTimeInput.value)} - ${formatTime(endTimeInput.value)}`;
+    document.getElementById('confirm-duration').textContent = `${durationHours.toFixed(1)} hour(s)`;
+    document.getElementById('confirm-purpose').textContent = purposeInput.value;
+    document.getElementById('confirm-attendees').textContent = attendeesInput.value;
+    document.getElementById('confirm-notes').textContent = notesInput.value || 'None';
+    document.getElementById('confirm-doc-type').textContent = docTypeSelect ? docTypeSelect.options[docTypeSelect.selectedIndex].text : 'None';
+    document.getElementById('confirm-doc-file').textContent = docFileInput.files.length > 0 ? docFileInput.files[0].name : 'None';
+    document.getElementById('confirm-rate').textContent = `₱${ratePerHour.toFixed(2)}`;
+    document.getElementById('confirm-hours').textContent = durationHours.toFixed(1);
+    document.getElementById('confirm-total').textContent = `₱${totalCost.toFixed(2)}`;
+
+    // Show modal
+    const modal = document.getElementById('bookingConfirmModal');
+    modal.style.display = 'flex';
+    modal.style.opacity = '1';
+    modal.style.visibility = 'visible';
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function formatTime(time24) {
+    const [hours, minutes] = time24.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+}
+
+function submitBooking() {
+    const form = document.getElementById('main-booking-form');
+    if (form) {
+        form.submit();
     }
 }
 
@@ -2317,6 +2583,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (bookingFlowModal && bookingFlowModal.parentNode !== document.body) {
         document.body.appendChild(bookingFlowModal);
     }
+
+    const bookingConfirmModal = document.getElementById('bookingConfirmModal');
+    /* Reparent confirmation modal to body to ensure it appears above booking modal */
+    if (bookingConfirmModal && bookingConfirmModal.parentNode !== document.body) {
+        document.body.appendChild(bookingConfirmModal);
+    }
+
     bcfAttachTimeMenusOnce();
     bcfRebuildTimeMenus();
 
@@ -3624,6 +3897,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         closeBookingFlowModal();
+    });
+
+    document.getElementById('bcf-submit-booking')?.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        openBookingConfirmModal();
     });
 
     document.getElementById('main-booking-form')?.addEventListener('submit', function (ev) {

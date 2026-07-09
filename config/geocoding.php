@@ -107,6 +107,53 @@ function geocodeAddressPhoton($address)
 }
 
 /**
+ * Reverse geocode coordinates to address using OpenStreetMap Nominatim - FREE, no API key
+ * 
+ * @param float $lat Latitude
+ * @param float $lng Longitude
+ * @return string|null Address string or null on failure
+ */
+function reverseGeocodeCoordinates($lat, $lng)
+{
+    if (empty($lat) || empty($lng)) {
+        return null;
+    }
+    
+    // Nominatim reverse geocoding API (coordinates → address)
+    // No API key needed, completely free
+    $url = OSM_NOMINATIM_URL . '?format=json&lat=' . $lat . '&lon=' . $lng . '&zoom=18&addressdetails=1';
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'User-Agent: ' . OSM_USER_AGENT,
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200 || !$response) {
+        error_log("Nominatim Reverse Geocoding API error: HTTP $httpCode");
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    // Nominatim response format: [ { "display_name": "Full address", ... } ]
+    if (isset($data[0]['display_name'])) {
+        return $data[0]['display_name'];
+    }
+    
+    error_log("Nominatim Reverse Geocoding failed: No address found for coordinates: $lat, $lng");
+    return null;
+}
+
+/**
  * Geocode an address to coordinates using Mapbox (requires credit card for signup)
  * 
  * @param string $address Full address string

@@ -526,3 +526,49 @@ function paymongoVerifyWebhookSignature(string $rawPayload, string $signatureHea
 
     return hash_equals($expected, $providedSig);
 }
+
+/**
+ * Issue a refund via PayMongo API
+ *
+ * @param string $paymentId The payment ID from PayMongo (provider_event_id)
+ * @param float $amount The amount to refund in PHP (will be converted to centavos)
+ * @param string $reason The reason for refund (duplicate, fraudulent, others)
+ * @param string $notes Internal notes for the refund
+ * @return array{ok: bool, message: string, refund_id?: string}
+ */
+function frs_issue_refund(string $paymentId, float $amount, string $reason = 'others', string $notes = ''): array
+{
+    if (!paymongoEnabled()) {
+        return ['ok' => false, 'message' => 'PayMongo is not configured.'];
+    }
+
+    // Convert amount to centavos (PayMongo expects amount in smallest currency unit)
+    $amountInCentavos = (int)round($amount * 100);
+
+    $payload = [
+        'data' => [
+            'attributes' => [
+                'amount' => $amountInCentavos,
+                'payment_id' => $paymentId,
+                'reason' => $reason,
+                'notes' => $notes,
+            ],
+        ],
+    ];
+
+    $response = paymongoRequest('POST', 'refunds', $payload);
+
+    if (!$response['ok']) {
+        $errorMsg = $response['error'] ?? 'Failed to issue refund';
+        return ['ok' => false, 'message' => $errorMsg];
+    }
+
+    $refundData = $response['data']['data'] ?? [];
+    $refundId = $refundData['id'] ?? '';
+
+    return [
+        'ok' => true,
+        'message' => 'Refund issued successfully.',
+        'refund_id' => $refundId,
+    ];
+}

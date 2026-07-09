@@ -3,9 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-// RBAC: Audit Trail is Admin-only (full audit logs, security oversight)
-if (!($_SESSION['user_authenticated'] ?? false) || ($_SESSION['role'] ?? '') !== 'Admin') {
+$role = $_SESSION['role'] ?? 'Resident';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'audit_trail')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }

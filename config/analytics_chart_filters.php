@@ -204,7 +204,16 @@ if (!function_exists('frs_parse_dashboard_chart_filter')) {
      */
     function frs_parse_dashboard_chart_filter(string $prefix): array
     {
-        $allowedStatuses = ['approved', 'pending', 'denied', 'cancelled'];
+        // Use lookup values for allowed statuses
+        $allowedStatuses = [];
+        if (frs_lookups_table_ready(db())) {
+            foreach (frs_lookup_values(db(), 'reservation_status') as $status) {
+                $allowedStatuses[] = $status['slug'];
+            }
+        } else {
+            // Fallback to hardcoded statuses
+            $allowedStatuses = ['approved', 'pending', 'denied', 'cancelled'];
+        }
 
         $status = '';
         $statusKey = $prefix . '_status';

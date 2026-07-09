@@ -23,11 +23,24 @@
 - Timeline items highlight the sequential steps a booking passes through.
 
 ## Integration Touchpoints
-- **Facility Management:** populate facility dropdown with real data + capacity/rate.
+- **Facility Management:** populate facility dropdown with real data + capacity/rate + is_free flag.
 - **Reservation Workflow:** wire the submit button to create reservation requests and update `My Reservations`.
 - **Calendar & Scheduling:** replace snapshot with interactive full calendar, feed conflict detection.
 - **Notifications Module:** trigger alerts based on timeline milestones.
 - **AI Predictive Scheduling:** leverage booking history to auto-suggest time slots before submission.
+
+## Booking Flow
+
+### Free Facilities (Default)
+1. User submits booking request → Status: `pending`
+2. Admin approves → Status: `approved` (no payment required)
+3. Reservation is finalized immediately
+
+### Paid Facilities (When Payments Enabled)
+1. User submits booking request → Status: `pending`
+2. Admin approves → Status: `pending_payment`
+3. User completes payment via PayMongo → Status: `approved`
+4. Reservation is finalized
 
 ## Adding Logic Later
 1. Replace placeholder arrays (`$facilities`, `$calendar`, `$timeline`) with dynamic data.

@@ -3,10 +3,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-// RBAC: User Management for Admin and Staff (Staff: resident accounts only)
+// RBAC: User Management - check permissions
 $actorRole = $_SESSION['role'] ?? '';
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($actorRole, ['Admin', 'Staff'], true)) {
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($actorRole, 'users')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -30,60 +31,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $message = 'Your session expired or the form is invalid. Please refresh and try again.';
     $messageType = 'error';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_user') {
-    $createName = trim($_POST['create_name'] ?? '');
-    $createEmail = trim($_POST['create_email'] ?? '');
-    $createMobile = trim($_POST['create_mobile'] ?? '');
-    $createStreet = trim($_POST['create_street'] ?? '');
-    $createHouseNumber = trim($_POST['create_house_number'] ?? '');
-    $createAddress = frs_build_culiat_address($createHouseNumber, $createStreet);
-    $createRole = $_POST['create_role'] ?? 'Resident';
-    $createPassword = trim($_POST['create_password'] ?? '');
-    $markEmailVerified = isset($_POST['create_email_verified']);
-    $markIdVerified = isset($_POST['create_id_verified']);
-
-    if (!$isPageAdmin) {
-        $createRole = 'Resident';
-    }
-
-    $result = frs_admin_create_user(
-        $pdo,
-        $createName,
-        $createEmail,
-        $createRole,
-        $createMobile !== '' ? $createMobile : null,
-        $createAddress !== '' ? $createAddress : null,
-        $createPassword !== '' ? $createPassword : null,
-        $markEmailVerified,
-        $markIdVerified,
-        (int)($_SESSION['user_id'] ?? 0),
-        $createStreet !== '' ? $createStreet : null,
-        $createHouseNumber !== '' ? $createHouseNumber : null
-    );
-
-    if (!$result['ok']) {
-        $message = $result['message'];
+    // Check create permission
+    if (!frs_can_create($actorRole, 'users')) {
+        $message = 'You do not have permission to create users.';
         $messageType = 'error';
     } else {
-        $roleLabel = $createRole === 'Staff' ? 'Staff' : 'Resident';
-        logAudit(
-            'Created user account',
-            'User Management',
-            $createName . ' (' . $createEmail . ') — Role: ' . $roleLabel
-        );
-        $message = 'Account created for ' . $createEmail . '. Login credentials were sent by email.';
+        $createName = trim($_POST['create_name'] ?? '');
+        $createEmail = trim($_POST['create_email'] ?? '');
+        $createMobile = trim($_POST['create_mobile'] ?? '');
+        $createStreet = trim($_POST['create_street'] ?? '');
+        $createHouseNumber = trim($_POST['create_house_number'] ?? '');
+        $createAddress = frs_build_culiat_address($createHouseNumber, $createStreet);
+        $createRole = $_POST['create_role'] ?? 'Resident';
+        $createPassword = trim($_POST['create_password'] ?? '');
+        $markEmailVerified = isset($_POST['create_email_verified']);
+        $markIdVerified = isset($_POST['create_id_verified']);
 
-        if (!empty($result['plain_password'])) {
-            try {
-                $body = getAdminCreatedAccountEmailTemplate(
-                    $createName,
-                    $createEmail,
-                    $result['plain_password'],
-                    $roleLabel
-                );
-                sendEmail($createEmail, $createName, 'Your Facilities Reservation Account', $body);
-            } catch (Throwable $e) {
-                error_log('Failed to send admin-created account email: ' . $e->getMessage());
-                $message .= ' However, the welcome email could not be sent — please share the temporary password manually.';
+        if (!$isPageAdmin) {
+            $createRole = 'Resident';
+        }
+
+        $result = frs_admin_create_user(
+            $pdo,
+            $createName,
+            $createEmail,
+            $createRole,
+            $createMobile !== '' ? $createMobile : null,
+            $createAddress !== '' ? $createAddress : null,
+            $createPassword !== '' ? $createPassword : null,
+            $markEmailVerified,
+            $markIdVerified,
+            (int)($_SESSION['user_id'] ?? 0),
+            $createStreet !== '' ? $createStreet : null,
+            $createHouseNumber !== '' ? $createHouseNumber : null
+        );
+
+        if (!$result['ok']) {
+            $message = $result['message'];
+            $messageType = 'error';
+        } else {
+            $roleLabel = $createRole === 'Staff' ? 'Staff' : 'Resident';
+            logAudit(
+                'Created user account',
+                'User Management',
+                $createName . ' (' . $createEmail . ') — Role: ' . $roleLabel
+            );
+            $message = 'Account created for ' . $createEmail . '. Login credentials were sent by email.';
+
+            if (!empty($result['plain_password'])) {
+                try {
+                    $body = getAdminCreatedAccountEmailTemplate(
+                        $createName,
+                        $createEmail,
+                        $result['plain_password'],
+                        $roleLabel
+                    );
+                    sendEmail($createEmail, $createName, 'Your Facilities Reservation Account', $body);
+                } catch (Throwable $e) {
+                    error_log('Failed to send admin-created account email: ' . $e->getMessage());
+                    $message .= ' However, the welcome email could not be sent — please share the temporary password manually.';
+                }
             }
         }
     }
@@ -96,10 +103,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     if ($userId === $currentUserId && in_array($action, ['lock', 'unlock', 'delete'], true)) {
         $message = 'You cannot perform this action on your own account.';
         $messageType = 'error';
-    } elseif (!$isPageAdmin && in_array($action, ['change_role', 'delete'], true)) {
-        $message = 'You do not have permission to perform this action.';
-        $messageType = 'error';
     } else {
+        // Check permissions for each action
+        $permissionError = false;
+        switch ($action) {
+            case 'change_role':
+            case 'delete':
+                if (!frs_can_delete($actorRole, 'users')) {
+                    $permissionError = true;
+                }
+                break;
+            case 'approve':
+            case 'verify':
+            case 'lock':
+            case 'unlock':
+                if (!frs_can_update($actorRole, 'users')) {
+                    $permissionError = true;
+                }
+                break;
+        }
+
+        if ($permissionError) {
+            $message = 'You do not have permission to perform this action.';
+            $messageType = 'error';
+        } else {
         try {
             switch ($action) {
                 case 'approve':
@@ -408,6 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
         } catch (Throwable $e) {
             $message = 'Unable to process request. Please try again.';
             $messageType = 'error';
+        }
         }
     }
 }

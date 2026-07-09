@@ -83,20 +83,26 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <link rel="stylesheet" href="<?= base_path(); ?>/public/css/dashboard-pages.css?v=<?= $dashboardPagesVersion; ?>">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <!-- Leaflet CSS (Free, open-source map library) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <?php
     $dashboardChartsJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-charts.js';
     $dashboardChartsJsVer = is_file($dashboardChartsJsPath) ? (string)filemtime($dashboardChartsJsPath) : '1';
     ?>
     <script src="<?= base_path(); ?>/public/js/dashboard-charts.js?v=<?= htmlspecialchars($dashboardChartsJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php
+    $dashboardNavJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-navigation.js';
+    $dashboardNavJsVer = is_file($dashboardNavJsPath) ? (string)filemtime($dashboardNavJsPath) : '1';
+    ?>
+    <script src="<?= base_path(); ?>/public/js/dashboard-navigation.js?v=<?= htmlspecialchars($dashboardNavJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 </head>
 <body class="dashboard dashboard-page">
-<!-- Loading Overlay -->
-<div class="loading-overlay" id="loadingOverlay">
-    <div class="loading-spinner">
-        <div class="spinner"></div>
-        <div class="loading-text">Loading...</div>
-    </div>
+<!-- Dashboard Navigation Progress Bar -->
+<div class="dashboard-nav-progress" id="dashboardNavProgress" aria-hidden="true">
+    <div class="dashboard-nav-progress-bar"></div>
 </div>
 
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>

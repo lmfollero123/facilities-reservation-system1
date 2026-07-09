@@ -3,6 +3,60 @@
  * Matches public pages polish (Tailwind-friendly, fade-in, card-hover)
  */
 
+/* Dashboard Navigation Progress Bar */
+.dashboard-nav-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.dashboard-nav-progress.is-active {
+    opacity: 1;
+}
+
+.dashboard-nav-progress.is-done {
+    opacity: 0;
+}
+
+.dashboard-nav-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+    transition: width 0.3s ease;
+}
+
+.dashboard-nav-progress.is-active .dashboard-nav-progress-bar {
+    width: 70%;
+}
+
+.dashboard-nav-progress.is-done .dashboard-nav-progress-bar {
+    width: 100%;
+    transition: width 0.2s ease;
+}
+
+/* Dashboard Navigation Fade Transitions */
+.dashboard-content {
+    transition: opacity 0.3s ease;
+}
+
+.dashboard-nav-animating {
+    pointer-events: none;
+}
+
+.dashboard-fade-out {
+    opacity: 0;
+}
+
+.dashboard-fade-in {
+    opacity: 1;
+}
+
 /* Page entrance animation - same as public */
 .dashboard-fade-in {
     animation: dashboardFadeIn 0.5s ease-out forwards;

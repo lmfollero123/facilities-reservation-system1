@@ -199,7 +199,7 @@ try {
     if ($calendarScope === 'all') {
         $calStmt = $pdo->prepare(
             "SELECT r.id, r.user_id, r.facility_id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.reschedule_count,
-                    f.name AS facility_name, f.status AS facility_status, f.capacity_threshold, f.operating_hours,
+                    f.name AS facility_name, f.status AS facility_status, f.capacity_threshold, f.operating_hours, f.base_rate,
                     u.name AS requester_name
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
@@ -214,7 +214,7 @@ try {
     } else {
         $calStmt = $pdo->prepare(
             "SELECT r.id, r.user_id, r.facility_id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.reschedule_count,
-                    f.name AS facility_name, f.status AS facility_status, f.capacity_threshold, f.operating_hours,
+                    f.name AS facility_name, f.status AS facility_status, f.capacity_threshold, f.operating_hours, f.base_rate,
                     u.name AS requester_name
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
@@ -332,7 +332,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                     $s = strtolower($r['status']);
                     if ($s === 'approved') $hasApproved = true;
                     elseif (in_array($s, ['pending_payment', 'pending', 'postponed', 'on_hold'], true)) $hasPending = true;
-                    elseif (in_array($s, ['denied', 'cancelled'], true)) $hasDenied = true;
+                    elseif (in_array($s, ['denied', 'cancelled', 'completed'], true)) $hasDenied = true;
                 }
                 if ($hasApproved) $dayStatusClass = ' status-approved';
                 elseif ($hasPending) $dayStatusClass = ' status-pending';
@@ -403,7 +403,8 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                         $slotHasPassed = frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
                         $isOngoing = frs_reservation_slot_is_ongoing((string)$reservation['reservation_date'], (string)$reservation['time_slot']);
                         $slotStartedOrPassed = $slotHasPassed || $isOngoing;
-                        $isPastDisplay = $slotHasPassed && !in_array($status, ['denied', 'cancelled'], true);
+                        // Only apply past display to approved reservations
+                        $isPastDisplay = $slotHasPassed && $status === 'approved';
 
                         $statusBg = '#fef9c3'; $statusColor = '#854d0e';
                         if ($status === 'approved') { $statusBg = '#dcfce7'; $statusColor = '#166534'; }
@@ -456,7 +457,7 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
                                     <?php endif; ?>
                                 </span>
                                 <?php if (!($calendarScope === 'all' && !$isOwnReservation && !$canViewOtherReservationDetails)): ?>
-                                    <a href="<?= htmlspecialchars($hubMineDetailUrl((int)$reservation['id']), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:10px;">View details</a>
+                                    <button type="button" class="btn-outline" style="padding:0.4rem 0.75rem; border-radius:10px;" onclick="openReservationDetailModal(<?= (int)$reservation['id']; ?>)">View details</button>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -595,6 +596,118 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
     </div>
 </div>
 
+<!-- Reservation Detail Modal -->
+<div id="reservationDetailModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 13000; padding: 2rem; position: fixed; inset: 0;">
+    <div class="modal-dialog" style="max-width: 1000px; z-index: 13001; max-height: 85vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); margin: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark)); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-info-circle" style="font-size: 1.5rem; color: white;"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: var(--gov-blue-dark); font-size: 1.25rem; font-weight: 700;">Reservation Details</h3>
+                    <p style="margin: 0.25rem 0 0; color: #64748b; font-size: 0.875rem;">View your booking information</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeReservationDetailModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;">&times;</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-building" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Facility & Schedule</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Facility</span>
+                        <span id="detail-facility" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Date</span>
+                        <span id="detail-date" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Time</span>
+                        <span id="detail-time" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Duration</span>
+                        <span id="detail-duration" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Status</span>
+                        <span id="detail-status" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-file-text" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Event Details</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Purpose</span>
+                        <span id="detail-purpose" style="color: #1e293b; font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Expected Attendees</span>
+                        <span id="detail-attendees" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Notes</span>
+                        <span id="detail-notes" style="color: #1e293b;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-paperclip" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
+                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Supporting Document</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Document Type</span>
+                        <span id="detail-doc-type" style="color: #1e293b;"></span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">File</span>
+                        <span id="detail-doc-file" style="color: #1e293b;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; padding: 1.25rem; color: white;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="bi bi-currency-peso" style="font-size: 1.1rem;"></i>
+                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Cost Breakdown</h4>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Rate per Hour</span>
+                        <span id="detail-rate" style="font-weight: 600;"></span>
+                    </div>
+                    <div>
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Hours</span>
+                        <span id="detail-hours"></span>
+                    </div>
+                    <div style="margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Total Cost</span>
+                        <span id="detail-total" style="font-weight: 700; font-size: 1.5rem;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+            <button type="button" class="btn-outline" onclick="closeReservationDetailModal()" style="flex: 1; padding: 0.875rem 1rem;">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function(){
     const modal = document.getElementById('dayReservationsModal');
@@ -638,6 +751,92 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
     if (params.get('open_day_modal') === '1' && params.get('selected_date')) {
         openModal();
     }
+
+    // Reservation Detail Modal
+    const detailModal = document.getElementById('reservationDetailModal');
+    if (detailModal && detailModal.parentNode !== document.body) {
+        document.body.appendChild(detailModal);
+    }
+
+    function closeReservationDetailModal() {
+        const modal = document.getElementById('reservationDetailModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.style.opacity = '0';
+            modal.style.visibility = 'hidden';
+            modal.classList.remove('open');
+        }
+        document.body.style.overflow = '';
+        document.body.style.removeProperty('overflow');
+    }
+
+    function formatTime(time24) {
+        const [hours, minutes] = time24.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${ampm}`;
+    }
+
+    window.openReservationDetailModal = function(reservationId) {
+        // Find the reservation data from the calendar reservations
+        const reservationData = <?= json_encode($calendarReservations); ?>;
+        const reservation = reservationData.find(r => r.id === reservationId);
+
+        if (!reservation) {
+            alert('Reservation not found');
+            return;
+        }
+
+        // Calculate duration
+        const timeParts = reservation.time_slot.split(' - ');
+        if (timeParts.length !== 2) {
+            alert('Invalid time slot format');
+            return;
+        }
+
+        const startTime = new Date(`2000-01-01T${timeParts[0]}`);
+        const endTime = new Date(`2000-01-01T${timeParts[1]}`);
+        const durationMs = endTime - startTime;
+        const durationHours = durationMs / (1000 * 60 * 60);
+
+        // Get facility rate from reservation data
+        const ratePerHour = parseFloat(reservation.base_rate) || 0;
+        const totalCost = ratePerHour * durationHours;
+
+        // Populate modal
+        document.getElementById('detail-facility').textContent = reservation.facility_name;
+        document.getElementById('detail-date').textContent = new Date(reservation.reservation_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('detail-time').textContent = `${formatTime(timeParts[0])} - ${formatTime(timeParts[1])}`;
+        document.getElementById('detail-duration').textContent = `${durationHours.toFixed(1)} hour(s)`;
+        document.getElementById('detail-status').textContent = reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1);
+        document.getElementById('detail-purpose').textContent = reservation.purpose;
+        document.getElementById('detail-attendees').textContent = reservation.expected_attendees;
+        document.getElementById('detail-notes').textContent = 'N/A';
+
+        // Get document info
+        const docs = <?= json_encode($mineReservationDocsById); ?>;
+        const reservationDocs = docs[reservationId] || [];
+        if (reservationDocs.length > 0) {
+            document.getElementById('detail-doc-type').textContent = reservationDocs[0].document_type || 'None';
+            document.getElementById('detail-doc-file').textContent = reservationDocs[0].file_name || 'None';
+        } else {
+            document.getElementById('detail-doc-type').textContent = 'None';
+            document.getElementById('detail-doc-file').textContent = 'None';
+        }
+
+        document.getElementById('detail-rate').textContent = `₱${ratePerHour.toFixed(2)}`;
+        document.getElementById('detail-hours').textContent = durationHours.toFixed(1);
+        document.getElementById('detail-total').textContent = `₱${totalCost.toFixed(2)}`;
+
+        // Show modal
+        const modal = document.getElementById('reservationDetailModal');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.visibility = 'visible';
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    };
 })();
 </script>
 

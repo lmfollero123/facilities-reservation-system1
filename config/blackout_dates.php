@@ -114,7 +114,7 @@ function frs_count_blackout_dates(PDO $pdo, int $year, ?int $facilityId = null):
 }
 
 /**
- * @return array{added: int, skipped: int, errors: list<string>}
+ * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int}
  */
 function frs_add_blackout_date(
     PDO $pdo,
@@ -123,7 +123,7 @@ function frs_add_blackout_date(
     string $reason,
     ?int $createdBy = null
 ): array {
-    $result = ['added' => 0, 'skipped' => 0, 'errors' => []];
+    $result = ['added' => 0, 'skipped' => 0, 'errors' => [], 'affected_reservations' => 0];
 
     if (!frs_blackout_table_exists($pdo)) {
         $result['errors'][] = 'Blackout dates table is not available.';
@@ -153,13 +153,56 @@ function frs_add_blackout_date(
             return $result;
         }
 
+        $pdo->beginTransaction();
+
+        // Add blackout date
         $ins = $pdo->prepare(
             'INSERT INTO facility_blackout_dates (facility_id, blackout_date, reason, created_by, created_at)
              VALUES (?, ?, ?, ?, NOW())'
         );
         $ins->execute([$facilityId, $date, $reason, $createdBy]);
         $result['added']++;
+
+        // Handle existing reservations on this date
+        $affectedStmt = $pdo->prepare(
+            'SELECT id, user_id, reservation_date, time_slot, status 
+             FROM reservations 
+             WHERE facility_id = ? AND reservation_date = ? AND status IN (\'approved\', \'pending\', \'pending_payment\')'
+        );
+        $affectedStmt->execute([$facilityId, $date]);
+        $affectedReservations = $affectedStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($affectedReservations)) {
+            $result['affected_reservations'] = count($affectedReservations);
+
+            // Update affected reservations to postponed status
+            $updateStmt = $pdo->prepare(
+                'UPDATE reservations 
+                 SET status = \'postponed\', 
+                     reschedule_count = reschedule_count + 1,
+                     updated_at = NOW()
+                 WHERE id = ?'
+            );
+
+            $historyStmt = $pdo->prepare(
+                'INSERT INTO reservation_history (reservation_id, status, note, created_at)
+                 VALUES (?, \'postponed\', ?, NOW())'
+            );
+
+            foreach ($affectedReservations as $reservation) {
+                $updateStmt->execute([(int)$reservation['id']]);
+                $historyStmt->execute([
+                    (int)$reservation['id'],
+                    'Auto-postponed due to blackout date: ' . $reason
+                ]);
+            }
+        }
+
+        $pdo->commit();
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $result['errors'][] = $e->getMessage();
     }
 
@@ -167,7 +210,7 @@ function frs_add_blackout_date(
 }
 
 /**
- * @return array{added: int, skipped: int, errors: list<string>}
+ * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int}
  */
 function frs_add_blackout_date_range(
     PDO $pdo,
@@ -177,7 +220,7 @@ function frs_add_blackout_date_range(
     string $reason,
     ?int $createdBy = null
 ): array {
-    $total = ['added' => 0, 'skipped' => 0, 'errors' => []];
+    $total = ['added' => 0, 'skipped' => 0, 'errors' => [], 'affected_reservations' => 0];
 
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
         $total['errors'][] = 'Invalid date range.';
@@ -202,6 +245,7 @@ function frs_add_blackout_date_range(
         $r = frs_add_blackout_date($pdo, $facilityId, $cursor->format('Y-m-d'), $reason, $createdBy);
         $total['added'] += $r['added'];
         $total['skipped'] += $r['skipped'];
+        $total['affected_reservations'] += $r['affected_reservations'];
         foreach ($r['errors'] as $err) {
             $total['errors'][] = $err;
         }

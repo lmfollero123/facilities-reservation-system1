@@ -20,6 +20,9 @@ const FRS_FACILITY_LIVE_IN_USE = 'in_use';
 const FRS_FACILITY_LIVE_EVENT_ENDING = 'event_ending';
 const FRS_FACILITY_LIVE_CLOSED = 'closed';
 
+/** Manual staff in_use / event_ending without booking evidence expires after this many minutes */
+const FRS_FACILITY_LIVE_MANUAL_TTL_MINUTES = 240;
+
 const FRS_RES_STATE_UPCOMING = 'upcoming';
 const FRS_RES_STATE_SCHEDULED = 'scheduled';
 const FRS_RES_STATE_NO_SHOW_RISK = 'no_show_risk';
@@ -154,6 +157,87 @@ function frs_facility_aggregate_state_display(string $key): array
 }
 
 /**
+ * Reservation states that mean the facility slot is active right now (not later today).
+ *
+ * @param list<array<string, mixed>> $reservationsToday
+ */
+function frs_facility_has_in_slot_reservation(array $reservationsToday): bool
+{
+    $activeStates = [
+        FRS_RES_STATE_SCHEDULED,
+        FRS_RES_STATE_NO_SHOW_RISK,
+        FRS_RES_STATE_CHECKED_IN,
+    ];
+    foreach ($reservationsToday as $res) {
+        if (in_array((string)($res['operational_state'] ?? ''), $activeStates, true)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve whether a staff live override should apply, or fall back to auto-computed status.
+ *
+ * @param array<string, mixed>|null $staffLive
+ * @param array<string, mixed> $fac Facility bucket with counts + reservations_today
+ */
+function frs_effective_staff_live_status(?array $staffLive, array $fac, DateTimeInterface $now): string
+{
+    if (!$staffLive) {
+        return FRS_FACILITY_LIVE_AUTO;
+    }
+
+    $status = (string)($staffLive['status'] ?? FRS_FACILITY_LIVE_AUTO);
+    if ($status === FRS_FACILITY_LIVE_AUTO) {
+        return FRS_FACILITY_LIVE_AUTO;
+    }
+
+    $counts = is_array($fac['counts'] ?? null) ? $fac['counts'] : [];
+    $hasCheckedIn = ((int)($counts['checked_in'] ?? 0)) > 0;
+    $hasInSlot = frs_facility_has_in_slot_reservation($fac['reservations_today'] ?? []);
+
+    if (in_array($status, [FRS_FACILITY_LIVE_IN_USE, FRS_FACILITY_LIVE_EVENT_ENDING], true)) {
+        if ($hasCheckedIn || $hasInSlot) {
+            return $status;
+        }
+
+        $updatedAt = $staffLive['updated_at'] ?? null;
+        if (is_string($updatedAt) && $updatedAt !== '') {
+            try {
+                $updated = new DateTime($updatedAt, frs_app_timezone());
+                $ageMinutes = ($now->getTimestamp() - $updated->getTimestamp()) / 60;
+                if ($ageMinutes <= FRS_FACILITY_LIVE_MANUAL_TTL_MINUTES) {
+                    return $status;
+                }
+            } catch (Throwable $e) {
+                // Treat invalid timestamps as stale.
+            }
+        }
+
+        return FRS_FACILITY_LIVE_AUTO;
+    }
+
+    return $status;
+}
+
+/**
+ * Clear stale manual overrides so the board does not stay stuck on "In use (staff)".
+ */
+function frs_reset_facility_live_status_to_auto(PDO $pdo, int $facilityId): void
+{
+    if (!frs_occupancy_table_exists($pdo, 'facility_live_status')) {
+        return;
+    }
+    $stmt = $pdo->prepare(
+        'UPDATE facility_live_status
+         SET status = :auto, note = NULL, updated_at = NOW()
+         WHERE facility_id = :fid AND status IN ("in_use", "event_ending")'
+    );
+    $stmt->execute(['auto' => FRS_FACILITY_LIVE_AUTO, 'fid' => $facilityId]);
+}
+
+/**
  * Build live operational snapshot for today.
  *
  * @return array<string, mixed>
@@ -252,7 +336,7 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
             $byFacility[$fid]['counts']['checked_in']++;
         } elseif ($state === FRS_RES_STATE_NO_SHOW_RISK) {
             $byFacility[$fid]['counts']['no_show_risk']++;
-        } elseif (in_array($state, [FRS_RES_STATE_SCHEDULED, FRS_RES_STATE_UPCOMING], true)) {
+        } elseif ($state === FRS_RES_STATE_SCHEDULED) {
             $byFacility[$fid]['counts']['booked']++;
         }
     }
@@ -266,8 +350,21 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
         'checked_in' => 0,
     ];
 
-    foreach ($byFacility as &$fac) {
-        $staff = $fac['staff_live']['status'] ?? FRS_FACILITY_LIVE_AUTO;
+    foreach ($byFacility as $fid => &$fac) {
+        $rawStaff = $fac['staff_live']['status'] ?? FRS_FACILITY_LIVE_AUTO;
+        $staff = frs_effective_staff_live_status($fac['staff_live'], $fac, $now);
+
+        if (
+            $hasLiveStatus
+            && is_array($fac['staff_live'])
+            && in_array((string)$rawStaff, [FRS_FACILITY_LIVE_IN_USE, FRS_FACILITY_LIVE_EVENT_ENDING], true)
+            && $staff === FRS_FACILITY_LIVE_AUTO
+        ) {
+            frs_reset_facility_live_status_to_auto($pdo, (int)$fid);
+            $fac['staff_live']['status'] = FRS_FACILITY_LIVE_AUTO;
+            unset($fac['staff_live']['note']);
+        }
+
         $agg = 'available';
 
         if ($staff === FRS_FACILITY_LIVE_CLOSED) {

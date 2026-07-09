@@ -1181,6 +1181,12 @@ img {
     border-radius: 14px;
     transition: 0.25s ease;
     box-shadow: 0 10px 24px rgba(43, 91, 222, 0.22);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .btn-primary:hover {
@@ -1201,6 +1207,12 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .btn-outline:hover {
@@ -5695,7 +5707,7 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
-    z-index: 2000;
+    z-index: 100020;
 }
 
 .modal-confirm.open {

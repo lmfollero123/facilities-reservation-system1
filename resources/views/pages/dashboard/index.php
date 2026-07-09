@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/lookups.php';
 
 $pdo = db();
 
@@ -53,8 +54,16 @@ function applyFilters(array &$conditions, array &$params, string $statusFilter, 
     }
 }
 
-// Filters (Recent/Upcoming)
-$allowedStatuses = ['approved','pending','denied','cancelled'];
+// Filters (Recent/Upcoming) - use lookup values for allowed statuses
+$allowedStatuses = [];
+if (frs_lookups_table_ready($pdo)) {
+    foreach (frs_lookup_values($pdo, 'reservation_status') as $status) {
+        $allowedStatuses[] = $status['slug'];
+    }
+} else {
+    // Fallback to hardcoded statuses
+    $allowedStatuses = ['approved', 'pending', 'denied', 'cancelled', 'postponed', 'pending_payment', 'completed'];
+}
 if (isset($_GET['status']) && in_array(strtolower($_GET['status']), $allowedStatuses, true)) {
     $statusFilter = strtolower($_GET['status']);
 }
@@ -827,6 +836,43 @@ ob_start();
 
 <?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
 
+<!-- Global Filter for All Charts -->
+<div class="booking-card" style="margin-top: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: var(--gov-blue-dark);">Global Filter (Apply to All Charts)</h3>
+        <button type="button" onclick="applyGlobalFilter()" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">Apply to All</button>
+    </div>
+    <form id="global-filter-form" class="chart-filter-bar">
+        <div class="chart-filter-fields">
+            <label class="chart-filter-item">
+                <span>Status</span>
+                <select id="global-status" class="booking-form-control chart-filter-control">
+                    <option value=""<?= ($trendChartFilter['status'] === '') ? ' selected' : ''; ?>>All</option>
+                    <?php foreach (['approved' => 'Approved', 'pending' => 'Pending', 'denied' => 'Denied', 'cancelled' => 'Cancelled'] as $key => $label): ?>
+                        <option value="<?= $key; ?>"<?= ($trendChartFilter['status'] === $key) ? ' selected' : ''; ?>><?= $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Facility</span>
+                <select id="global-facility" class="booking-form-control chart-filter-control">
+                    <option value="0"<?= ($trendChartFilter['facility'] === 0) ? ' selected' : ''; ?>>All Facilities</option>
+                    <?php foreach ($facilityOptions as $facility): ?>
+                        <option value="<?= (int)$facility['id']; ?>"<?= ($trendChartFilter['facility'] === (int)$facility['id']) ? ' selected' : ''; ?>><?= htmlspecialchars($facility['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Months</span>
+                <select id="global-months" class="booking-form-control chart-filter-control">
+                    <option value="6"<?= ($trendChartFilter['months'] === 6) ? ' selected' : ''; ?>>Last 6 months</option>
+                    <option value="12"<?= ($trendChartFilter['months'] === 12) ? ' selected' : ''; ?>>Last 12 months</option>
+                </select>
+            </label>
+        </div>
+    </form>
+</div>
+
 <div class="booking-wrapper" style="margin-top: 1rem;">
     <section class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
@@ -1058,6 +1104,26 @@ ob_start();
     }
 })();
 
+function applyGlobalFilter() {
+    const status = document.getElementById('global-status').value;
+    const facility = document.getElementById('global-facility').value;
+    const months = document.getElementById('global-months').value;
+
+    // Build URL with the new filter values
+    const url = new URL(window.location.href);
+
+    // Set for all chart prefixes
+    const prefixes = ['trend', 'status', 'topfac'];
+    prefixes.forEach(prefix => {
+        url.searchParams.set(prefix + '_status', status);
+        url.searchParams.set(prefix + '_facility', facility);
+        url.searchParams.set(prefix + '_months', months);
+    });
+
+    // Redirect to apply filters
+    window.location.href = url.toString();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     if (window.frsInitReservationCharts) {
         window.frsInitReservationCharts({
@@ -1074,6 +1140,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<style>
+@media (max-width: 768px) {
+    .chart-filter-fields {
+        flex-direction: column;
+    }
+    .chart-filter-item {
+        width: 100%;
+    }
+    .stat-grid {
+        grid-template-columns: 1fr;
+    }
+    .reports-grid {
+        grid-template-columns: 1fr;
+    }
+    .booking-wrapper {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
 
 <?php
 $content = ob_get_clean();

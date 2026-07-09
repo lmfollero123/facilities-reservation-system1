@@ -3,9 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
 $role = $_SESSION['role'] ?? 'Resident';
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($role, ['Admin', 'Staff'], true)) {
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'facilities')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -15,14 +16,71 @@ require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/maintenance_helper.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/lookups.php';
 $pdo = db();
 $pageTitle = 'Facility Management | LGU Facilities Reservation';
+$facilityStatusOptions = frs_lookup_values($pdo, 'facility_status');
+
+// Permission checks
+$canUpdateFacilities = frs_can_update($role, 'facilities');
+$canDeleteFacilities = frs_can_delete($role, 'facilities');
 
 $message = '';
 $messageType = '';
 $hasFacilityQr = frs_facility_qr_column_exists($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Handle AJAX geocoding request
+    if (isset($_POST['geocode_address']) && $_POST['geocode_address'] === '1') {
+        header('Content-Type: application/json');
+
+        $address = trim($_POST['address'] ?? '');
+        if (empty($address)) {
+            echo json_encode(['ok' => false, 'message' => 'Address is required']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../../../../config/geocoding.php';
+        $coords = geocodeAddress($address);
+
+        if ($coords) {
+            echo json_encode([
+                'ok' => true,
+                'lat' => $coords['lat'],
+                'lng' => $coords['lng']
+            ]);
+        } else {
+            echo json_encode(['ok' => false, 'message' => 'Could not find coordinates for this address']);
+        }
+        exit;
+    }
+
+    // Handle AJAX reverse geocoding request
+    if (isset($_POST['reverse_geocode']) && $_POST['reverse_geocode'] === '1') {
+        header('Content-Type: application/json');
+
+        $lat = trim($_POST['lat'] ?? '');
+        $lng = trim($_POST['lng'] ?? '');
+
+        if (empty($lat) || empty($lng)) {
+            echo json_encode(['ok' => false, 'message' => 'Coordinates are required']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../../../../config/geocoding.php';
+        $address = reverseGeocodeCoordinates($lat, $lng);
+
+        if ($address) {
+            echo json_encode([
+                'ok' => true,
+                'address' => $address
+            ]);
+        } else {
+            echo json_encode(['ok' => false, 'message' => 'Could not find address for these coordinates']);
+        }
+        exit;
+    }
+
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
@@ -49,11 +107,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } else {
+        // Check permissions for create/update/delete
+        $isUpdate = $facilityId > 0;
+        $action = $isUpdate ? 'update' : 'create';
+        
+        if ($isUpdate && !frs_can_update($role, 'facilities')) {
+            $message = 'You do not have permission to update facilities.';
+            $messageType = 'error';
+        } elseif (!$isUpdate && !frs_can_create($role, 'facilities')) {
+            $message = 'You do not have permission to create facilities.';
+            $messageType = 'error';
+        }
+        
+        if ($messageType !== 'error') {
     $facilityId = (int)($_POST['facility_id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $rateInput = trim((string)($_POST['base_rate'] ?? ''));
     $rate = null;
+    $isFree = isset($_POST['is_free']) && $_POST['is_free'] === '1';
     $location = trim($_POST['location'] ?? '');
     $capacity = trim($_POST['capacity'] ?? '');
     $amenities = trim($_POST['amenities'] ?? '');
@@ -148,8 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ?, extension_fee_per_hour = ?, extension_auto_approve_max_hours = ?, allow_same_day_extension = ? WHERE id = ?');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $facilityId]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, is_free = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ?, extension_fee_per_hour = ?, extension_auto_approve_max_hours = ?, allow_same_day_extension = ? WHERE id = ?');
+                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $facilityId]);
                 
                 // Log audit event
                 $details = $name;
@@ -201,8 +273,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours, extension_fee_per_hour, extension_auto_approve_max_hours, allow_same_day_extension) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$name, $description, $rate, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0]);
+                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, is_free, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours, extension_fee_per_hour, extension_auto_approve_max_hours, allow_same_day_extension) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0]);
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
@@ -219,6 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Unable to save facility. Please try again.';
             $messageType = 'error';
         }
+    }
     }
     }
 }
@@ -295,10 +368,12 @@ ob_start();
 
 <div class="facility-admin">
     <div style="margin-bottom: 1.5rem;">
+        <?php if (frs_can_create($role, 'facilities')): ?>
         <button class="btn-primary" type="button" onclick="openFacilityModal()" style="display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 1.75rem; font-size: 1rem; font-weight: 600;">
             <span style="font-size: 1.2rem;">➕</span>
             <span>Add Facility</span>
         </button>
+        <?php endif; ?>
     </div>
 
     <section class="collapsible-card">
@@ -321,8 +396,8 @@ ob_start();
                                     <small>₱<?= number_format((int)$facility['base_rate']); ?></small>
                                 <?php endif; ?>
                             </div>
-                            <span class="status-badge <?= $facility['status']; ?>">
-                                <?= ucfirst($facility['status']); ?>
+                            <span class="status-badge <?= htmlspecialchars(frs_facility_status_badge_class($pdo, (string)$facility['status'])); ?>">
+                                <?= htmlspecialchars(frs_lookup_label($pdo, 'facility_status', (string)$facility['status'])); ?>
                             </span>
                         </header>
                         <?php if ($facility['description']): ?>
@@ -330,7 +405,12 @@ ob_start();
                         <?php endif; ?>
                         <div class="availability-toggle" style="display:flex; align-items:flex-start; gap:0.5rem;">
                             <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
-                            <span style="line-height:1.5;"><?= $facility['status'] === 'available' ? 'Available for booking' : ($facility['status'] === 'maintenance' ? 'Under Maintenance' : 'Offline'); ?></span>
+                            <span style="line-height:1.5;"><?php
+                                $fsLabel = frs_lookup_label($pdo, 'facility_status', (string)$facility['status']);
+                                echo frs_facility_status_blocks_booking($pdo, (string)$facility['status'])
+                                    ? htmlspecialchars($fsLabel) . ' — booking blocked'
+                                    : 'Available for booking';
+                            ?></span>
                         </div>
                         <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
                         <div class="facility-card-actions">
@@ -349,7 +429,9 @@ ob_start();
                             <?php elseif (!$hasFacilityQr): ?>
                                 <span class="fm-qr-hint">Run <code>migration_add_facility_checkin_qr.sql</code> to enable facility QR posters.</span>
                             <?php endif; ?>
+                            <?php if ($canUpdateFacilities): ?>
                             <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                            <?php endif; ?>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -435,10 +517,16 @@ ob_start();
                         </div>
                     </label>
                     <label>
-                        Standard Rate
-                        <div class="input-wrapper">
-                            <span class="input-icon">₱</span>
-                            <input type="text" name="base_rate" id="form-rate" placeholder="e.g., 2,500" inputmode="numeric" autocomplete="off">
+                        <span style="font-weight: 500; color: #1b1b1f; display: block; margin-bottom: 0.5rem;">Standard Rate</span>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="input-wrapper" style="flex: 1; max-width: 200px;">
+                                <span class="input-icon">₱</span>
+                                <input type="text" name="base_rate" id="form-rate" placeholder="e.g., 2,500" inputmode="numeric" autocomplete="off">
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0; white-space: nowrap;">
+                                <input type="checkbox" name="is_free" id="form-is-free" value="1" checked style="width: 18px; height: 18px; cursor: pointer; margin: 0;">
+                                <span style="font-weight: 500; color: #334155;">Free Facility</span>
+                            </label>
                         </div>
                         <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
                             Whole pesos only. Comma is added automatically (e.g., 2,500). Decimals are not allowed.
@@ -454,25 +542,38 @@ ob_start();
                             <span class="input-icon">📍</span>
                             <input type="text" name="location" id="form-location" placeholder="e.g., Barangay Culiat, Quezon City">
                         </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Full address for location-based recommendations</small>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Full address for location-based recommendations. Enter address to auto-fill coordinates.</small>
                         <div id="facility-geocode-status" style="margin-top:0.25rem; display:none; font-size:0.85rem;"></div>
                     </label>
-                    <label>
-                        Latitude (Optional)
-                        <div class="input-wrapper">
-                            <span class="input-icon">🌐</span>
-                            <input type="number" step="any" name="latitude" id="form-latitude" placeholder="14.6760">
-                        </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled when you enter an address</small>
-                    </label>
-                    <label>
-                        Longitude (Optional)
-                        <div class="input-wrapper">
-                            <span class="input-icon">🌐</span>
-                            <input type="number" step="any" name="longitude" id="form-longitude" placeholder="121.0437">
-                        </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Will be auto-filled when you enter an address</small>
-                    </label>
+                    
+                    <!-- Map Section -->
+                    <div style="margin-top: 1rem;">
+                        <label style="display:block; margin-bottom:0.5rem; font-weight:600; color:#1b1b1f;">
+                            Facility Location Map
+                        </label>
+                        <div id="facility-map" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc;"></div>
+                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
+                            Click on the map to set the exact location, or enter an address above to auto-locate.
+                        </small>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                        <label>
+                            Latitude (Optional)
+                            <div class="input-wrapper">
+                                <span class="input-icon">🌐</span>
+                                <input type="number" step="any" name="latitude" id="form-latitude" placeholder="14.6760">
+                            </div>
+                        </label>
+                        <label>
+                            Longitude (Optional)
+                            <div class="input-wrapper">
+                                <span class="input-icon">🌐</span>
+                                <input type="number" step="any" name="longitude" id="form-longitude" placeholder="121.0437">
+                            </div>
+                        </label>
+                    </div>
+                    <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Coordinates will be auto-filled when you enter an address or click on the map</small>
                     <label>
                         Capacity
                         <div class="input-wrapper">
@@ -505,9 +606,11 @@ ob_start();
                         <div class="input-wrapper">
                             <span class="input-icon">📊</span>
                             <select name="status" id="form-status">
-                                <option value="available">Available</option>
-                                <option value="maintenance">Maintenance</option>
-                                <option value="offline">Offline</option>
+                                <?php foreach ($facilityStatusOptions as $statusOpt): ?>
+                                    <option value="<?= htmlspecialchars((string)$statusOpt['slug'], ENT_QUOTES); ?>">
+                                        <?= htmlspecialchars((string)$statusOpt['label']); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </label>
@@ -685,6 +788,9 @@ function openFacilityModal(resetForm = true) {
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
     setTimeout(() => {
+        // Initialize map after modal is visible
+        initFacilityMap();
+        
         const nameField = document.getElementById('form-name');
         if (nameField) {
             nameField.focus();
@@ -750,6 +856,7 @@ function editFacility(payload) {
     document.getElementById('facility_id').value = facility.id || '';
     document.getElementById('form-name').value = facility.name || '';
     document.getElementById('form-rate').value = formatRateInput(facility.base_rate || '');
+    document.getElementById('form-is-free').checked = (facility.is_free == 1 || facility.is_free === true || facility.is_free === null);
     document.getElementById('form-description').value = facility.description || '';
     document.getElementById('form-location').value = facility.location || '';
     document.getElementById('form-latitude').value = facility.latitude || '';
@@ -767,6 +874,34 @@ function editFacility(payload) {
     document.getElementById('form-extension-auto-approve').value = facility.extension_auto_approve_max_hours || '';
     document.getElementById('form-allow-same-day').checked = (facility.allow_same_day_extension == 1 || facility.allow_same_day_extension === true);
 
+    // Update map if coordinates exist
+    if (facility.latitude && facility.longitude) {
+        setTimeout(() => {
+            updateMapFromCoordinates(parseFloat(facility.latitude), parseFloat(facility.longitude));
+        }, 300);
+    }
+
+    // Trigger rate input toggle based on checkbox state
+    const isFreeCheckbox = document.getElementById('form-is-free');
+    const rateEl = document.getElementById('form-rate');
+    if (isFreeCheckbox && rateEl) {
+        if (isFreeCheckbox.checked) {
+            rateEl.disabled = true;
+            rateEl.style.backgroundColor = '#f1f5f9';
+            rateEl.style.color = '#94a3b8';
+            rateEl.style.cursor = 'not-allowed';
+            if (!rateEl.value) {
+                rateEl.placeholder = 'Free - no rate required';
+            }
+        } else {
+            rateEl.disabled = false;
+            rateEl.style.backgroundColor = '';
+            rateEl.style.color = '';
+            rateEl.style.cursor = '';
+            rateEl.placeholder = 'e.g., 2,500';
+        }
+    }
+
     // Open modal WITHOUT resetting the form (pass false)
     openFacilityModal(false);
 }
@@ -776,6 +911,7 @@ function resetFacilityForm() {
     document.getElementById('facility_id').value = '';
     document.getElementById('form-name').value = '';
     document.getElementById('form-rate').value = '';
+    document.getElementById('form-is-free').checked = true;
     document.getElementById('form-description').value = '';
     document.getElementById('form-location').value = '';
     document.getElementById('form-latitude').value = '';
@@ -793,7 +929,26 @@ function resetFacilityForm() {
     document.getElementById('form-extension-auto-approve').value = '';
     document.getElementById('form-allow-same-day').checked = false;
     document.getElementById('form-image').value = '';
-    
+
+    // Trigger rate input toggle based on checkbox state
+    const isFreeCheckbox = document.getElementById('form-is-free');
+    const rateEl = document.getElementById('form-rate');
+    if (isFreeCheckbox && rateEl) {
+        if (isFreeCheckbox.checked) {
+            rateEl.disabled = true;
+            rateEl.style.backgroundColor = '#f1f5f9';
+            rateEl.style.color = '#94a3b8';
+            rateEl.style.cursor = 'not-allowed';
+            rateEl.placeholder = 'Free - no rate required';
+        } else {
+            rateEl.disabled = false;
+            rateEl.style.backgroundColor = '';
+            rateEl.style.color = '';
+            rateEl.style.cursor = '';
+            rateEl.placeholder = 'e.g., 2,500';
+        }
+    }
+
     // Reset auto-approval section to collapsed state
     const autoApprovalSection = document.getElementById('auto-approval-settings');
     const autoApprovalChevron = document.getElementById('auto-approval-chevron');
@@ -807,6 +962,185 @@ function resetFacilityForm() {
     if (extensionSection && extensionChevron) {
         extensionSection.classList.add('is-collapsed');
         extensionChevron.style.transform = 'rotate(-90deg)';
+    }
+    
+    // Reset map
+    if (typeof facilityMap !== 'undefined' && facilityMap) {
+        facilityMap.setView([14.6760, 121.0437], 13);
+        if (facilityMarker) {
+            facilityMarker.setLatLng([14.6760, 121.0437]);
+        }
+    }
+}
+
+// Map functionality
+let facilityMap = null;
+let facilityMarker = null;
+
+function initFacilityMap() {
+    if (typeof L === 'undefined') {
+        console.error('Leaflet is not loaded');
+        return;
+    }
+    
+    const mapContainer = document.getElementById('facility-map');
+    if (!mapContainer) return;
+    
+    // Default to Quezon City coordinates
+    const defaultLat = 14.6760;
+    const defaultLng = 121.0437;
+    
+    // Initialize map
+    facilityMap = L.map('facility-map').setView([defaultLat, defaultLng], 13);
+    
+    // Add OpenStreetMap tiles (free, no API key required)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(facilityMap);
+    
+    // Add marker
+    facilityMarker = L.marker([defaultLat, defaultLng], {
+        draggable: true
+    }).addTo(facilityMap);
+    
+    // Handle marker drag
+    facilityMarker.on('dragend', function(e) {
+        const position = e.target.getLatLng();
+        document.getElementById('form-latitude').value = position.lat.toFixed(6);
+        document.getElementById('form-longitude').value = position.lng.toFixed(6);
+        reverseGeocodeFacilityLocation(position.lat, position.lng);
+    });
+
+    // Handle map click
+    facilityMap.on('click', function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        facilityMarker.setLatLng([lat, lng]);
+        document.getElementById('form-latitude').value = lat.toFixed(6);
+        document.getElementById('form-longitude').value = lng.toFixed(6);
+        reverseGeocodeFacilityLocation(lat, lng);
+    });
+}
+
+function updateMapFromCoordinates(lat, lng) {
+    if (!facilityMap || !facilityMarker) return;
+    
+    if (lat && lng) {
+        facilityMap.setView([lat, lng], 15);
+        facilityMarker.setLatLng([lat, lng]);
+    }
+}
+
+// Geocode address using existing API
+async function geocodeFacilityAddress() {
+    const address = document.getElementById('form-location').value;
+    const statusEl = document.getElementById('facility-geocode-status');
+
+    if (!address || address.length < 5) {
+        if (statusEl) {
+            statusEl.style.display = 'none';
+        }
+        return;
+    }
+
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#64748b';
+        statusEl.textContent = 'Looking up coordinates...';
+    }
+
+    try {
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                'geocode_address': '1',
+                'address': address
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.ok && data.lat && data.lng) {
+            document.getElementById('form-latitude').value = data.lat;
+            document.getElementById('form-longitude').value = data.lng;
+            updateMapFromCoordinates(parseFloat(data.lat), parseFloat(data.lng));
+
+            if (statusEl) {
+                statusEl.style.color = '#0d7a43';
+                statusEl.textContent = '✓ Coordinates found and map updated';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+            }
+        } else {
+            if (statusEl) {
+                statusEl.style.color = '#b23030';
+                statusEl.textContent = data.message || 'Could not find coordinates for this address';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+            }
+        }
+    } catch (error) {
+        console.error('Geocoding error:', error);
+        if (statusEl) {
+            statusEl.style.color = '#b23030';
+            statusEl.textContent = 'Geocoding unavailable. Enter coordinates manually or click on the map.';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+        }
+    }
+}
+
+// Reverse geocode coordinates to address
+async function reverseGeocodeFacilityLocation(lat, lng) {
+    const statusEl = document.getElementById('facility-geocode-status');
+
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#64748b';
+        statusEl.textContent = 'Looking up address...';
+    }
+
+    try {
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                'reverse_geocode': '1',
+                'lat': lat,
+                'lng': lng
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.ok && data.address) {
+            document.getElementById('form-location').value = data.address;
+
+            if (statusEl) {
+                statusEl.style.color = '#0d7a43';
+                statusEl.textContent = '✓ Address updated from map location';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+            }
+        } else {
+            if (statusEl) {
+                statusEl.style.color = '#b23030';
+                statusEl.textContent = data.message || 'Could not find address for this location';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+            }
+        }
+    } catch (error) {
+        console.error('Reverse geocoding error:', error);
+        if (statusEl) {
+            statusEl.style.color = '#b23030';
+            statusEl.textContent = 'Address lookup unavailable. Coordinates saved.';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+        }
     }
 }
 
@@ -890,10 +1224,28 @@ function resetFacilityForm() {
     setTimeout(initCollapsibles, 300);
 })();
 
+// Add event listener for location input geocoding
+(function() {
+    const locationInput = document.getElementById('form-location');
+    if (locationInput) {
+        let geocodeTimer = null;
+        
+        locationInput.addEventListener('blur', function() {
+            geocodeFacilityAddress();
+        });
+        
+        locationInput.addEventListener('input', function() {
+            if (geocodeTimer) clearTimeout(geocodeTimer);
+            geocodeTimer = setTimeout(geocodeFacilityAddress, 800);
+        });
+    }
+})();
+
 // Price input UX: integer-only pesos + auto comma formatting.
 (function() {
     const form = document.getElementById('facilityForm');
     const rateEl = document.getElementById('form-rate');
+    const isFreeCheckbox = document.getElementById('form-is-free');
     if (!form || !rateEl) return;
 
     window.formatRateInput = function(value) {
@@ -905,6 +1257,33 @@ function resetFacilityForm() {
     rateEl.addEventListener('input', function() {
         rateEl.value = window.formatRateInput(rateEl.value);
     });
+
+    // Handle Free Facility checkbox - disable/enable rate input
+    function toggleRateInput() {
+        if (isFreeCheckbox && rateEl) {
+            if (isFreeCheckbox.checked) {
+                rateEl.disabled = true;
+                rateEl.style.backgroundColor = '#f1f5f9';
+                rateEl.style.color = '#94a3b8';
+                rateEl.style.cursor = 'not-allowed';
+                if (!rateEl.value) {
+                    rateEl.placeholder = 'Free - no rate required';
+                }
+            } else {
+                rateEl.disabled = false;
+                rateEl.style.backgroundColor = '';
+                rateEl.style.color = '';
+                rateEl.style.cursor = '';
+                rateEl.placeholder = 'e.g., 2,500';
+            }
+        }
+    }
+
+    // Initialize on load
+    if (isFreeCheckbox) {
+        isFreeCheckbox.addEventListener('change', toggleRateInput);
+        toggleRateInput(); // Apply initial state
+    }
 
     form.addEventListener('submit', function(e) {
         const digits = String(rateEl.value || '').replace(/\D/g, '');

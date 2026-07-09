@@ -46,6 +46,9 @@ if ($isIntegrationsApi) {
 // Load app configuration (includes base_path function) - AFTER API routes
 require_once __DIR__ . '/config/app.php';
 
+// Check for dashboard AJAX navigation request
+$isDashboardNav = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'FRS-Dashboard-Nav';
+
 // Route the request
 if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/public/announcements.php';
@@ -155,7 +158,9 @@ if ($path === 'announcements') {
         'reports' => 'reports.php',
         'user-management' => 'user_management.php',
         'document-management' => 'document_management.php',
+        'contact' => 'contact.php',
         'contact-info' => 'contact_info_manage.php',
+        'contact-inquiries' => 'contact_inquiries.php',
         'audit-trail' => 'audit_trail.php',
         'profile' => 'profile.php',
         'calendar' => 'calendar.php',
@@ -164,6 +169,7 @@ if ($path === 'announcements') {
         'session-keepalive' => 'session_keepalive.php',
         'pay-now' => 'pay_now.php',
         'facility-recommendations' => 'facility_recommendations_api.php',
+        'system-settings' => 'system_settings.php',
         'booking-smart-hints' => 'booking_smart_hints_api.php',
         'occupancy-monitor' => 'occupancy_monitor.php',
         'occupancy-live' => 'occupancy_live_api.php',
@@ -184,6 +190,7 @@ if ($path === 'announcements') {
         'download-export' => 'download_export.php',
         'contact-inquiries' => 'contact_inquiries.php',
         'sms-test' => 'sms_test.php',
+        'system-settings' => 'system_settings.php',
     ];
     
     // Extract dashboard path
@@ -204,12 +211,45 @@ if ($path === 'announcements') {
     }
     
     $fullPath = __DIR__ . '/resources/views/pages/dashboard/' . $dashboardFile;
-    
+
     // If file exists, require it; otherwise default to index
     if (file_exists($fullPath)) {
-        require_once $fullPath;
+        // For AJAX navigation, capture content and return only the dashboard-content portion
+        if ($isDashboardNav) {
+            ob_start();
+            require_once $fullPath;
+            $fullContent = ob_get_clean();
+            
+            // Extract only the dashboard-content section
+            if (preg_match('/<section class="dashboard-content[^"]*">(.*?)<\/section>/s', $fullContent, $matches)) {
+                header('Content-Type: text/html; charset=UTF-8');
+                echo '<section class="dashboard-content">' . $matches[1] . '</section>';
+            } else {
+                // Fallback: return the full content
+                header('Content-Type: text/html; charset=UTF-8');
+                echo $fullContent;
+            }
+            exit;
+        } else {
+            require_once $fullPath;
+        }
     } else {
-        require_once __DIR__ . '/resources/views/pages/dashboard/index.php';
+        if ($isDashboardNav) {
+            ob_start();
+            require_once __DIR__ . '/resources/views/pages/dashboard/index.php';
+            $fullContent = ob_get_clean();
+            
+            if (preg_match('/<section class="dashboard-content[^"]*">(.*?)<\/section>/s', $fullContent, $matches)) {
+                header('Content-Type: text/html; charset=UTF-8');
+                echo '<section class="dashboard-content">' . $matches[1] . '</section>';
+            } else {
+                header('Content-Type: text/html; charset=UTF-8');
+                echo $fullContent;
+            }
+            exit;
+        } else {
+            require_once __DIR__ . '/resources/views/pages/dashboard/index.php';
+        }
     }
 } else {
     // Default to home page

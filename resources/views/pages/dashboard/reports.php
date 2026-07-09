@@ -3,15 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-if (!($_SESSION['user_authenticated'] ?? false)) {
-    header('Location: ' . base_path() . '/login');
-    exit;
-}
-
-// Role-based access: Admin/Staff only
-$userRole = $_SESSION['role'] ?? '';
-if (!in_array($userRole, ['Admin', 'Staff'])) {
+$role = $_SESSION['role'] ?? 'Resident';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reports')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -21,6 +16,7 @@ require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 require_once __DIR__ . '/../../../../config/analytics_chart_filters.php';
+require_once __DIR__ . '/../../../../config/lookups.php';
 $pdo = db();
 $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 
@@ -114,6 +110,7 @@ if (isset($_GET['export'])) {
         fputcsv($output, ['Date', 'Facility', 'Requester', 'Time Slot', 'Status', 'Purpose']);
         $exportStmt = $pdo->prepare($exportSql);
         $exportStmt->execute($exportParams);
+        $rowCount = 0;
         while ($row = $exportStmt->fetch(PDO::FETCH_ASSOC)) {
             fputcsv($output, [
                 $row['reservation_date'],
@@ -123,6 +120,10 @@ if (isset($_GET['export'])) {
                 $row['status'],
                 substr((string)$row['purpose'], 0, 100),
             ]);
+            $rowCount++;
+        }
+        if ($rowCount === 0) {
+            fputcsv($output, ['No reservations found for the selected period.']);
         }
         fclose($output);
         exit;
@@ -138,14 +139,16 @@ if (isset($_GET['export'])) {
         $approvedCount = $deniedCount = $pendingCount = $cancelledCount = 0;
         foreach ($reservations as $res) {
             $status = strtolower((string)$res['status']);
-            if ($status === 'approved') {
+            if (frs_reservation_status_is_final($pdo, $status) && $status !== 'completed') {
+                if ($status === 'denied') {
+                    $deniedCount++;
+                } else {
+                    $cancelledCount++;
+                }
+            } elseif ($status === 'approved') {
                 $approvedCount++;
-            } elseif ($status === 'denied') {
-                $deniedCount++;
-            } elseif ($status === 'pending') {
+            } else {
                 $pendingCount++;
-            } elseif ($status === 'cancelled') {
-                $cancelledCount++;
             }
         }
         $periodTitle = $exportLabel;
@@ -271,12 +274,23 @@ $deniedStmt = $pdo->prepare($deniedSql);
 $deniedStmt->execute($dateParams);
 $deniedCount = (int)$deniedStmt->fetch(PDO::FETCH_ASSOC)['count'];
 
-// Cancelled count
+// Cancelled count - use lookup values for final statuses (excluding denied)
+$finalStatuses = [];
+if (frs_lookups_table_ready($pdo)) {
+    foreach (frs_lookup_values($pdo, 'reservation_status', false) as $status) {
+        if (($status['metadata']['is_final'] ?? false) && $status['slug'] !== 'denied') {
+            $finalStatuses[] = $status['slug'];
+        }
+    }
+} else {
+    // Fallback to hardcoded statuses
+    $finalStatuses = ['cancelled', 'completed'];
+}
 $cancelledSql = 'SELECT COUNT(*) as count FROM reservations';
 if ($dateFilterClause) {
-    $cancelledSql .= ' ' . $dateFilterClause . ' AND status = "cancelled"';
+    $cancelledSql .= ' ' . $dateFilterClause . ' AND status IN ("' . implode('", "', $finalStatuses) . '")';
 } else {
-    $cancelledSql .= ' WHERE status = "cancelled"';
+    $cancelledSql .= ' WHERE status IN ("' . implode('", "', $finalStatuses) . '")';
 }
 $cancelledStmt = $pdo->prepare($cancelledSql);
 $cancelledStmt->execute($dateParams);
@@ -585,7 +599,7 @@ if ($occFacilityFilter && !empty($occupancyNow['items'])) {
     $occupancyNow['occupancy_rate'] = $total > 0 ? round(($occupied / $total) * 100, 1) : 0;
 }
 
-// Status distribution (status chart filters)
+// Status distribution (status chart filters) - use lookup values
 $statusSql = 'SELECT status, COUNT(*) as count FROM reservations';
 if ($statusPeriod['clause']) {
     $statusSql .= ' ' . $statusPeriod['clause'];
@@ -594,16 +608,44 @@ $statusSql .= ' GROUP BY status';
 $statusStmt = $pdo->prepare($statusSql);
 $statusStmt->execute($statusPeriod['params']);
 $statusData = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
-$statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
+
+// Build status map from lookup values
+$statusMap = [];
+$statusLabels = [];
+$statusColors = [];
+if (frs_lookups_table_ready($pdo)) {
+    $lookupStatuses = frs_lookup_values($pdo, 'reservation_status');
+    foreach ($lookupStatuses as $status) {
+        $statusMap[$status['slug']] = 0;
+        $statusLabels[] = $status['label'];
+        // Use badge_class from metadata or fallback to slug
+        $badgeClass = $status['metadata']['badge_class'] ?? $status['slug'];
+        // Map badge classes to colors
+        $colorMap = [
+            'approved' => '#28a745',
+            'pending' => '#ff9800',
+            'denied' => '#e53935',
+            'cancelled' => '#6c757d',
+            'postponed' => '#9c27b0',
+            'pending_payment' => '#ff5722',
+            'completed' => '#2196f3'
+        ];
+        $statusColors[] = $colorMap[$badgeClass] ?? '#999999';
+    }
+} else {
+    // Fallback to hardcoded statuses
+    $statusMap = ['approved' => 0, 'pending' => 0, 'denied' => 0, 'cancelled' => 0];
+    $statusLabels = ['Approved','Pending','Denied','Cancelled'];
+    $statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
+}
+
 foreach ($statusData as $row) {
     $k = strtolower($row['status']);
     if (isset($statusMap[$k])) {
         $statusMap[$k] = (int)$row['count'];
     }
 }
-$statusLabels = ['Approved','Pending','Denied','Cancelled'];
-$statusCounts = [$statusMap['approved'], $statusMap['pending'], $statusMap['denied'], $statusMap['cancelled']];
-$statusColors = ['#28a745', '#ff9800', '#e53935', '#6c757d'];
+$statusCounts = array_values($statusMap);
 
 // Top facilities bar chart (topfac chart filters)
 if ($topfacPeriod['start'] && $topfacPeriod['end']) {
@@ -816,23 +858,59 @@ ob_start();
     </div>
     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
         <div>
-            <?= frs_page_title('Reports & Analytics', 'Each chart has its own filter. Print and AI summary use the Overview KPIs filter at the bottom.'); ?>
+            <?= frs_page_title('Reports & Analytics', 'Each chart has its own filter. Use the global filter below to apply settings to all charts at once.'); ?>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
         <a href="<?= htmlspecialchars(frs_reports_export_href('csv'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Uses Overview KPIs month/year/facility filter">
-            ⬇ Export CSV
-        </a>
-        <a href="<?= htmlspecialchars(frs_reports_export_href('pdf'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Download printable HTML — open in browser and use Print → Save as PDF">
-            ⬇ Export HTML (Print to PDF)
+            Export CSV
         </a>
         <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
-            📄 Print Summary
+            Print Summary
         </button>
         <button type="button" onclick="openAiSummaryModal()" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap;">
-            ✨ Generate AI Summary
+            Generate AI Summary
         </button>
         </div>
     </div>
+</div>
+
+<!-- Global Filter for All Charts -->
+<div class="booking-card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: var(--gov-blue-dark);">Global Filter (Apply to All Charts)</h3>
+        <button type="button" onclick="applyGlobalFilter()" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">Apply to All</button>
+    </div>
+    <form id="global-filter-form" class="chart-filter-bar">
+        <div class="chart-filter-fields">
+            <label class="chart-filter-item">
+                <span>Facility</span>
+                <select id="global-facility" class="booking-form-control chart-filter-control">
+                    <option value="all">All Facilities</option>
+                    <?php foreach ($allFacilities as $fac): ?>
+                        <option value="<?= (int)$fac['id']; ?>"<?= ($kpiPeriod['facility'] === (int)$fac['id']) ? ' selected' : ''; ?>><?= htmlspecialchars($fac['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Month</span>
+                <select id="global-month" class="booking-form-control chart-filter-control">
+                    <option value="all"<?= ($kpiPeriod['month'] === null) ? ' selected' : ''; ?>>All Time</option>
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <option value="<?= $m; ?>"<?= ($kpiPeriod['month'] === $m) ? ' selected' : ''; ?>><?= date('F', mktime(0, 0, 0, $m, 1)); ?></option>
+                    <?php endfor; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Year</span>
+                <select id="global-year" class="booking-form-control chart-filter-control">
+                    <option value="all"<?= ($kpiPeriod['year'] === null) ? ' selected' : ''; ?>>All Years</option>
+                    <?php for ($y = (int)date('Y'); $y >= (int)date('Y') - 2; $y--): ?>
+                        <option value="<?= $y; ?>"<?= ($kpiPeriod['year'] === $y) ? ' selected' : ''; ?>><?= $y; ?></option>
+                    <?php endfor; ?>
+                </select>
+            </label>
+        </div>
+    </form>
 </div>
 
 <div id="frsAiSummaryModal" class="frs-modal-overlay" role="dialog" aria-labelledby="aiSummaryTitle" aria-modal="true">
@@ -1155,6 +1233,29 @@ function openAiSummaryModal() {
         });
 }
 
+function applyGlobalFilter() {
+    const facility = document.getElementById('global-facility').value;
+    const month = document.getElementById('global-month').value;
+    const year = document.getElementById('global-year').value;
+
+    // Build URL with the new filter values
+    const url = new URL(window.location.href);
+    url.searchParams.set('kpi_facility', facility);
+    url.searchParams.set('kpi_month', month);
+    url.searchParams.set('kpi_year', year);
+
+    // Also set for all chart prefixes
+    const prefixes = ['trend', 'status', 'topfac', 'forecast', 'util', 'outcomes'];
+    prefixes.forEach(prefix => {
+        url.searchParams.set(prefix + '_facility', facility);
+        url.searchParams.set(prefix + '_month', month);
+        url.searchParams.set(prefix + '_year', year);
+    });
+
+    // Redirect to apply filters
+    window.location.href = url.toString();
+}
+
 function printAiSummary() {
     const contentEl = document.getElementById('aiSummaryContent');
     const metaEl = document.getElementById('aiSummaryMeta');
@@ -1242,6 +1343,117 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(refreshRealtimeOccupancy, 30000);
 });
 </script>
+
+<style>
+.frs-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 1rem;
+}
+
+.frs-modal-overlay.is-open {
+    display: flex;
+}
+
+.frs-modal-panel {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.frs-modal-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 12px 12px 0 0;
+}
+
+.frs-modal-panel-header h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.25rem;
+    color: #111827;
+}
+
+.frs-modal-meta {
+    color: #6b7280;
+    font-size: 0.85rem;
+}
+
+.frs-modal-panel-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    color: #374151;
+    line-height: 1.6;
+}
+
+html[data-theme="dark"] .frs-modal-panel {
+    background: var(--bg-secondary, #1e293b);
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .frs-modal-panel-header {
+    background: var(--bg-tertiary, #334155);
+    border-color: var(--border-color, #475569);
+}
+
+html[data-theme="dark"] .frs-modal-panel-header h3 {
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .frs-modal-meta {
+    color: var(--text-secondary, #cbd5e1);
+}
+
+html[data-theme="dark"] .frs-modal-panel-body {
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .frs-modal-panel-body p {
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .frs-modal-panel-body ul {
+    color: var(--text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .frs-modal-panel-body li {
+    color: var(--text-primary, #f1f5f9);
+}
+
+@media (max-width: 768px) {
+    .frs-modal-panel {
+        max-height: 95vh;
+        margin: 0.5rem;
+    }
+    .frs-modal-panel-header,
+    .frs-modal-panel-body {
+        padding: 1rem;
+    }
+    .chart-filter-fields {
+        flex-direction: column;
+    }
+    .chart-filter-item {
+        width: 100%;
+    }
+}
+</style>
 
 <?php
 $content = ob_get_clean();

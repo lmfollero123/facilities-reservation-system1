@@ -4,12 +4,14 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/blackout_dates.php';
 
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+$role = $_SESSION['role'] ?? 'Resident';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'blackout_dates')) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }
@@ -62,6 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
             } elseif ($r['added'] > 0) {
                 logAudit('Added blackout date', 'Blackout Dates', "Facility #{$facilityId} on {$date}: {$reason}");
                 $message = 'Blackout date added. Bookings are blocked for that facility on that day.';
+                if ($r['affected_reservations'] > 0) {
+                    $message .= " {$r['affected_reservations']} existing reservation(s) were auto-postponed.";
+                }
                 $messageType = 'success';
             } else {
                 $message = 'That date is already blacked out for this facility.';
@@ -87,6 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 );
                 $message = "Added {$r['added']} blackout day(s)."
                     . ($r['skipped'] > 0 ? " {$r['skipped']} day(s) were already blocked." : '');
+                if ($r['affected_reservations'] > 0) {
+                    $message .= " {$r['affected_reservations']} existing reservation(s) were auto-postponed.";
+                }
                 $messageType = $r['added'] > 0 ? 'success' : 'error';
             }
         } elseif ($action === 'delete') {

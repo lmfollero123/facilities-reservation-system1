@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../../config/app.php';
+require_once __DIR__ . '/../../../config/permissions.php';
 $base = base_path();
 $username = $_SESSION['user_name'] ?? 'Guest';
 $userId = $_SESSION['user_id'] ?? null;
@@ -14,30 +15,55 @@ $unreadCount = $userId ? getUnreadNotificationCount($userId) : 0;
 // Global search: flat list of { label, url, keywords } for dashboard pages (role-aware)
 $dashboardSearchItems = [
     ['label' => 'Dashboard', 'url' => $base . '/dashboard', 'keywords' => 'dashboard home main'],
-    ['label' => 'Book a Facility', 'url' => $base . '/dashboard/book-facility', 'keywords' => 'booking book facility reserve reservation'],
-    ['label' => 'My Reservations', 'url' => $base . '/dashboard/book-facility?module=mine', 'keywords' => 'booking reservations my bookings list'],
-    ['label' => 'Check In / Out', 'url' => $base . '/dashboard/time-tracking', 'keywords' => 'check in out time in out attendance clock in out'],
-    ['label' => 'Smart Scheduler', 'url' => $base . '/dashboard/ai-scheduling', 'keywords' => 'AI smart scheduler scheduling'],
-    ['label' => 'Profile', 'url' => $base . '/dashboard/profile', 'keywords' => 'profile account my profile security'],
 ];
+
+// Add items based on Read permissions (controls page access)
+if (frs_can_read($role, 'reservations')) {
+    $dashboardSearchItems[] = ['label' => 'Book a Facility', 'url' => $base . '/dashboard/book-facility', 'keywords' => 'booking book facility reserve reservation'];
+    $dashboardSearchItems[] = ['label' => 'My Reservations', 'url' => $base . '/dashboard/book-facility?module=mine', 'keywords' => 'booking reservations my bookings list'];
+}
+$dashboardSearchItems[] = ['label' => 'Check In / Out', 'url' => $base . '/dashboard/time-tracking', 'keywords' => 'check in out time in out attendance clock in out'];
+if (frs_can_read($role, 'ai_tools')) {
+    $dashboardSearchItems[] = ['label' => 'Smart Scheduler', 'url' => $base . '/dashboard/ai-scheduling', 'keywords' => 'AI smart scheduler scheduling'];
+}
+$dashboardSearchItems[] = ['label' => 'Profile', 'url' => $base . '/dashboard/profile', 'keywords' => 'profile account my profile security'];
+
 if (in_array($role, ['Admin', 'Staff'], true)) {
-    $dashboardSearchItems = array_merge($dashboardSearchItems, [
-        ['label' => 'Reservation Approvals', 'url' => $base . '/dashboard/reservations-manage', 'keywords' => 'reservations approvals manage pending approve'],
-        ['label' => 'Facility Management', 'url' => $base . '/dashboard/facility-management', 'keywords' => 'facility management facilities admin'],
-        ['label' => 'User Management', 'url' => $base . '/dashboard/user-management', 'keywords' => 'users management residents create account'],
-        ['label' => 'Announcements', 'url' => $base . '/dashboard/announcements-manage', 'keywords' => 'announcements news communications'],
-        ['label' => 'Contact Information', 'url' => $base . '/dashboard/contact-info', 'keywords' => 'contact info communications'],
-        ['label' => 'Maintenance', 'url' => $base . '/dashboard/maintenance-integration', 'keywords' => 'maintenance integration'],
-        ['label' => 'Infrastructure Projects', 'url' => $base . '/dashboard/infrastructure-projects', 'keywords' => 'infrastructure projects'],
-        ['label' => 'Utilities', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'utilities integration'],
-        ['label' => 'Reports & Analytics', 'url' => $base . '/dashboard/reports', 'keywords' => 'reports analytics charts'],
-    ]);
+    if (frs_can_read($role, 'reservations')) {
+        $dashboardSearchItems[] = ['label' => 'Reservation Approvals', 'url' => $base . '/dashboard/reservations-manage', 'keywords' => 'reservations approvals manage pending approve'];
+    }
+    if (frs_can_read($role, 'facilities')) {
+        $dashboardSearchItems[] = ['label' => 'Facility Management', 'url' => $base . '/dashboard/facility-management', 'keywords' => 'facility management facilities admin'];
+    }
+    if (frs_can_read($role, 'users')) {
+        $dashboardSearchItems[] = ['label' => 'User Management', 'url' => $base . '/dashboard/user-management', 'keywords' => 'users management residents create account'];
+    }
+    if (frs_can_read($role, 'announcements')) {
+        $dashboardSearchItems[] = ['label' => 'Announcements', 'url' => $base . '/dashboard/announcements-manage', 'keywords' => 'announcements news communications'];
+    }
+    if (frs_can_read($role, 'communications')) {
+        $dashboardSearchItems[] = ['label' => 'Contact Information', 'url' => $base . '/dashboard/contact-info', 'keywords' => 'contact info communications'];
+    }
+    if (frs_can_read($role, 'maintenance')) {
+        $dashboardSearchItems[] = ['label' => 'Maintenance', 'url' => $base . '/dashboard/maintenance-integration', 'keywords' => 'maintenance integration'];
+    }
+    if (frs_can_read($role, 'infrastructure')) {
+        $dashboardSearchItems[] = ['label' => 'Infrastructure Projects', 'url' => $base . '/dashboard/infrastructure-projects', 'keywords' => 'infrastructure projects'];
+    }
+    if (frs_can_read($role, 'utilities')) {
+        $dashboardSearchItems[] = ['label' => 'Utilities', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'utilities integration'];
+    }
+    if (frs_can_read($role, 'reports')) {
+        $dashboardSearchItems[] = ['label' => 'Reports & Analytics', 'url' => $base . '/dashboard/reports', 'keywords' => 'reports analytics charts'];
+    }
 }
 if ($role === 'Admin') {
-    $dashboardSearchItems = array_merge($dashboardSearchItems, [
-        ['label' => 'Document Management', 'url' => $base . '/dashboard/document-management', 'keywords' => 'documents files management'],
-        ['label' => 'Audit Trail', 'url' => $base . '/dashboard/audit-trail', 'keywords' => 'audit trail logs'],
-    ]);
+    if (frs_can_read($role, 'documents')) {
+        $dashboardSearchItems[] = ['label' => 'Document Management', 'url' => $base . '/dashboard/document-management', 'keywords' => 'documents files management'];
+    }
+    if (frs_can_read($role, 'audit_trail')) {
+        $dashboardSearchItems[] = ['label' => 'Audit Trail', 'url' => $base . '/dashboard/audit-trail', 'keywords' => 'audit trail logs'];
+    }
 }
 $dashboardSearchItems[] = ['label' => 'Notifications', 'url' => $base . '/dashboard/notifications', 'keywords' => 'notifications alerts'];
 ?>
