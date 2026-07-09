@@ -153,7 +153,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId && in_array($_SESSION['role
         }
     } elseif (isset($_POST['totp_verify']) && isset($_POST['totp_code']) && !empty($_SESSION['totp_pending_secret'])) {
         if (isset($_POST[CSRF_TOKEN_NAME]) && verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $code = trim(preg_replace('/\D/', '', $_POST['totp_code']));
+            // Combine individual TOTP fields if they exist
+            if (isset($_POST['totp_1']) && isset($_POST['totp_2']) && isset($_POST['totp_3']) && 
+                isset($_POST['totp_4']) && isset($_POST['totp_5']) && isset($_POST['totp_6'])) {
+                $code = trim($_POST['totp_1'] . $_POST['totp_2'] . $_POST['totp_3'] . 
+                        $_POST['totp_4'] . $_POST['totp_5'] . $_POST['totp_6']);
+            } else {
+                $code = trim(preg_replace('/\D/', '', $_POST['totp_code']));
+            }
+            
             try {
                 if (!class_exists('RobThree\Auth\TwoFactorAuth')) {
                     throw new Exception('TwoFactorAuth class not available');
@@ -1427,11 +1435,22 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                                 <div id="totp-setup-modal" style="display:block;">
                                     <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="TOTP QR" style="display:block; margin:0.75rem 0; max-width:200px;">
                                     <p style="font-size:0.8rem; color:#6b7280; margin:0.5rem 0;">Or enter manually: <code style="background:#eee; padding:2px 6px; border-radius:4px;"><?= htmlspecialchars($totpSecret); ?></code></p>
-                                    <form method="POST" style="margin-top:0.75rem;">
+                                    <form method="POST" style="margin-top:0.75rem;" id="totpVerifyForm">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="totp_verify" value="1">
-                                        <input type="text" name="totp_code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:8em; padding:0.5rem; font-size:1.1rem; letter-spacing:0.2em; text-align:center;" required>
-                                        <button type="submit" class="btn-primary" style="margin-left:0.5rem; padding:0.5rem 1rem;">Verify and enable</button>
+                                        <div style="margin-bottom: 0.5rem;">
+                                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Enter verification code</label>
+                                            <div class="otp-input-container" id="totpVerifyContainer">
+                                                <input type="text" name="totp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="text" name="totp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="text" name="totp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="text" name="totp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="text" name="totp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="text" name="totp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                                                <input type="hidden" name="totp_code" id="totpVerifyCombined" value="">
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn-primary" style="padding:0.5rem 1rem;">Verify and enable</button>
                                     </form>
                                 </div>
                             <?php else: ?>
@@ -1641,6 +1660,67 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
     </div>
 <?php endif; ?>
 
+<style>
+.otp-input-container {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 0.75rem;
+    width: 100%;
+}
+
+.otp-input {
+    width: 50px !important;
+    height: 50px !important;
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #1e293b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.otp-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.otp-input:not(:placeholder-shown) {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.otp-input::placeholder {
+    color: #cbd5e1;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 480px) {
+    .otp-input {
+        width: 45px !important;
+        height: 45px !important;
+        font-size: 1.5rem;
+        border-radius: 10px;
+        max-width: 45px !important;
+        min-width: 45px !important;
+    }
+    
+    .otp-input-container {
+        gap: 0.5rem;
+    }
+}
+</style>
+
 <script>
 const otpTotpActive = <?= frs_user_totp_active($user) ? 'true' : 'false'; ?>;
 const otpRoleRequires2fa = <?= frs_role_requires_two_factor((string)($user['role'] ?? '')) ? 'true' : 'false'; ?>;
@@ -1723,6 +1803,75 @@ function toggleOTPPreference(checkbox) {
         setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
     });
 }
+
+// OTP Input Handler for TOTP verification
+document.addEventListener('DOMContentLoaded', function() {
+    const totpVerifyInputs = document.querySelectorAll('#totpVerifyContainer .otp-input');
+    const totpVerifyCombined = document.getElementById('totpVerifyCombined');
+    const totpVerifyForm = document.getElementById('totpVerifyForm');
+    
+    if (totpVerifyInputs.length && totpVerifyCombined && totpVerifyForm) {
+        totpVerifyInputs.forEach((input, index) => {
+            input.addEventListener('input', function(e) {
+                const value = e.target.value;
+                
+                if (!/^\d*$/.test(value)) {
+                    e.target.value = value.replace(/\D/g, '');
+                    return;
+                }
+                
+                if (value.length === 1 && index < totpVerifyInputs.length - 1) {
+                    totpVerifyInputs[index + 1].focus();
+                }
+                
+                updateCombinedOtp();
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                    totpVerifyInputs[index - 1].focus();
+                }
+                
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (index === totpVerifyInputs.length - 1) {
+                        totpVerifyForm.submit();
+                    }
+                }
+            });
+            
+            input.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
+                
+                if (pastedData.length > 0) {
+                    totpVerifyInputs.forEach((inp, i) => {
+                        if (i < pastedData.length) {
+                            inp.value = pastedData[i];
+                        }
+                    });
+                    
+                    const focusIndex = Math.min(pastedData.length, totpVerifyInputs.length - 1);
+                    totpVerifyInputs[focusIndex].focus();
+                    updateCombinedOtp();
+                }
+            });
+            
+            input.addEventListener('focus', function() {
+                this.select();
+            });
+        });
+        
+        if (totpVerifyInputs.length > 0) {
+            totpVerifyInputs[0].focus();
+        }
+        
+        function updateCombinedOtp() {
+            const combined = Array.from(totpVerifyInputs).map(input => input.value).join('');
+            totpVerifyCombined.value = combined;
+        }
+    }
+});
 
 function openPasswordModal() {
     const modal = document.getElementById('passwordModal');

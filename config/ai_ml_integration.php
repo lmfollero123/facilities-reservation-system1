@@ -500,3 +500,44 @@ function checkMLModelsStatus(): array {
     
     return $status;
 }
+
+/**
+ * Detect Philippines holidays for a given date or date range
+ * 
+ * @param string|null $date Date string in Y-m-d format (optional)
+ * @param string|null $startDate Start date string in Y-m-d format (optional)
+ * @param string|null $endDate End date string in Y-m-d format (optional)
+ * @param int|null $year Year to check holidays for (optional)
+ * @return array Holiday detection result
+ */
+function detectPhilippinesHolidays(?string $date = null, ?string $startDate = null, ?string $endDate = null, ?int $year = null): array {
+    $inputData = [];
+    
+    if ($date) {
+        $inputData['date'] = $date;
+    }
+    if ($startDate) {
+        $inputData['start_date'] = $startDate;
+    }
+    if ($endDate) {
+        $inputData['end_date'] = $endDate;
+    }
+    if ($year) {
+        $inputData['year'] = $year;
+    }
+    
+    $result = callPythonModel('api/detect_holidays.py', [], $inputData);
+    
+    // Return default if error
+    if (isset($result['error'])) {
+        return [
+            'is_holiday' => false,
+            'holiday' => null,
+            'holidays' => [],
+            'count' => 0,
+            'error' => $result['error'],
+        ];
+    }
+    
+    return $result;
+}

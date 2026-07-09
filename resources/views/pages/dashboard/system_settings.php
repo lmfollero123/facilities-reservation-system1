@@ -19,12 +19,47 @@ $pageTitle = 'System Settings | LGU Facilities Reservation';
 $message = '';
 $messageType = 'success';
 $tablesReady = frs_lookups_table_ready($pdo);
-$activeCategory = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['category'] ?? 'facility_status')) ?: 'facility_status';
+$rolePermissionsTableReady = false;
+try {
+    $pdo->query('SELECT 1 FROM role_permissions LIMIT 1');
+    $rolePermissionsTableReady = true;
+} catch (Throwable $e) {
+    $rolePermissionsTableReady = false;
+}
+$canShowSettingsLayout = $tablesReady || $rolePermissionsTableReady;
+$activeCategory = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['category'] ?? '')) ?: '';
+if ($activeCategory === '') {
+    $activeCategory = $tablesReady ? 'facility_status' : ($rolePermissionsTableReady ? 'role_permissions' : 'facility_status');
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesReady && frs_csrf_ok()) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
     $action = $_POST['action'] ?? '';
     try {
-        if ($action === 'add_value') {
+        if ($action === 'update_permissions') {
+            if (!$rolePermissionsTableReady) {
+                $message = 'Role permissions table not installed. Run migration_add_role_permissions.sql.';
+                $messageType = 'error';
+            } else {
+                $role = trim($_POST['role'] ?? '');
+                $permissionKey = trim($_POST['permission_key'] ?? '');
+                $permissions = [
+                    'create' => isset($_POST['can_create']),
+                    'read' => isset($_POST['can_read']),
+                    'update' => isset($_POST['can_update']),
+                    'delete' => isset($_POST['can_delete']),
+                ];
+                $result = frs_update_permission($role, $permissionKey, $permissions);
+                $message = $result['message'];
+                $messageType = $result['ok'] ? 'success' : 'error';
+                if ($result['ok']) {
+                    logAudit('Updated role permissions', 'System Settings', $role . ' - ' . $permissionKey);
+                    $activeCategory = 'role_permissions';
+                }
+            }
+        } elseif (!$tablesReady) {
+            $message = 'Lookup tables are not installed. Run database/migration_add_system_lookups.sql.';
+            $messageType = 'error';
+        } elseif ($action === 'add_value') {
             $category = preg_replace('/[^a-z0-9_]/', '', (string)($_POST['category'] ?? ''));
             $label = trim($_POST['label'] ?? '');
             $slug = trim($_POST['slug'] ?? '');
@@ -61,21 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesReady && frs_csrf_ok()) {
             if ($result['ok']) {
                 logAudit('Deleted lookup value', 'System Settings', 'ID ' . $valueId);
             }
-        } elseif ($action === 'update_permissions') {
-            $role = trim($_POST['role'] ?? '');
-            $permissionKey = trim($_POST['permission_key'] ?? '');
-            $permissions = [
-                'create' => isset($_POST['can_create']),
-                'read' => isset($_POST['can_read']),
-                'update' => isset($_POST['can_update']),
-                'delete' => isset($_POST['can_delete']),
-            ];
-            $result = frs_update_permission($role, $permissionKey, $permissions);
-            $message = $result['message'];
-            $messageType = $result['ok'] ? 'success' : 'error';
-            if ($result['ok']) {
-                logAudit('Updated role permissions', 'System Settings', $role . ' - ' . $permissionKey);
-            }
         }
     } catch (Throwable $e) {
         $message = 'Unable to save changes. Please try again.';
@@ -84,13 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesReady && frs_csrf_ok()) {
 }
 
 $categories = frs_lookup_categories($pdo);
-$rolePermissionsTableReady = false;
-try {
-    $pdo->query('SELECT 1 FROM role_permissions LIMIT 1');
-    $rolePermissionsTableReady = true;
-} catch (Throwable $e) {
-    $rolePermissionsTableReady = false;
-}
 if ($rolePermissionsTableReady && !in_array('role_permissions', array_column($categories, 'slug'), true)) {
     $categories[] = [
         'id' => 0,
@@ -126,10 +139,10 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<?php if (!$tablesReady): ?>
+<?php if (!$canShowSettingsLayout): ?>
     <div class="booking-card ss-notice">
         <strong>Setup required</strong>
-        <p>Run <code>database/migration_add_system_lookups.sql</code> on your database to enable configurable categories.</p>
+        <p>Run <code>database/migration_add_system_lookups.sql</code> or <code>database/migration_add_role_permissions.sql</code> to enable system settings.</p>
     </div>
 <?php else: ?>
 
@@ -250,8 +263,12 @@ ob_start();
                 <span class="ss-legend-item"><span class="ss-legend-dot ss-legend-resident"></span> Resident: Self-only access</span>
             </div>
         </div>
+        <?php elseif (!$tablesReady): ?>
+        <div class="booking-card ss-notice">
+            <strong>Setup required</strong>
+            <p>Run <code>database/migration_add_system_lookups.sql</code> on your database to enable configurable lookup categories.</p>
+        </div>
         <?php else: ?>
-        <!-- Stats Cards -->
         <div class="ss-stats-grid">
             <div class="ss-stat-card">
                 <div class="ss-stat-icon"><i class="bi bi-bar-chart"></i></div>

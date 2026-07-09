@@ -88,6 +88,18 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <?php
+    $formValidationJsPath = dirname(__DIR__, 3) . '/public/js/frs-form-validation.js';
+    $formValidationJsVer = is_file($formValidationJsPath) ? (string)filemtime($formValidationJsPath) : '1';
+    $frsAnimJsPath = dirname(__DIR__, 3) . '/public/js/frs-animations.js';
+    $frsAnimJsVer = is_file($frsAnimJsPath) ? (string)filemtime($frsAnimJsPath) : '1';
+    $frsToastJsPath = dirname(__DIR__, 3) . '/public/js/frs-toast.js';
+    $frsToastJsVer = is_file($frsToastJsPath) ? (string)filemtime($frsToastJsPath) : '1';
+    ?>
+    <script src="<?= base_path(); ?>/public/js/frs-form-validation.js?v=<?= htmlspecialchars($formValidationJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script src="<?= base_path(); ?>/public/js/frs-animations.js?v=<?= htmlspecialchars($frsAnimJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script src="<?= base_path(); ?>/public/js/frs-toast.js?v=<?= htmlspecialchars($frsToastJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php
     $dashboardChartsJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-charts.js';
     $dashboardChartsJsVer = is_file($dashboardChartsJsPath) ? (string)filemtime($dashboardChartsJsPath) : '1';
@@ -100,11 +112,22 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <script src="<?= base_path(); ?>/public/js/dashboard-navigation.js?v=<?= htmlspecialchars($dashboardNavJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 </head>
 <body class="dashboard dashboard-page">
+<?php
+$loginToast = $_SESSION['frs_login_toast'] ?? null;
+if (is_array($loginToast) && !empty($loginToast['message'])) {
+    unset($_SESSION['frs_login_toast']);
+}
+?>
 <!-- Dashboard Navigation Progress Bar -->
 <div class="dashboard-nav-progress" id="dashboardNavProgress" aria-hidden="true">
     <div class="dashboard-nav-progress-bar"></div>
 </div>
 
+<div class="frs-toast-stack" id="frsToastStack" aria-live="polite">
+    <?php if (!empty($loginToast['message'])): ?>
+        <div class="frs-toast-preset" data-frs-toast-message="<?= htmlspecialchars((string)$loginToast['message'], ENT_QUOTES, 'UTF-8'); ?>" data-frs-toast-type="<?= htmlspecialchars((string)($loginToast['type'] ?? 'success'), ENT_QUOTES, 'UTF-8'); ?>" hidden></div>
+    <?php endif; ?>
+</div>
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
     <?php include __DIR__ . '/../components/navbar_dashboard.php'; ?>

@@ -347,10 +347,67 @@
         initAnnouncementsSort(main);
         initFacilityCalendarClicks(main);
         initContactForm(main);
+        initFacilityMap(main);
         document.dispatchEvent(new CustomEvent('frs:public-page-loaded', {
             bubbles: true,
             detail: { path: window.location.pathname },
         }));
+    }
+
+    function initFacilityMap(main) {
+        const container = main || document.querySelector(MAIN_SEL);
+        if (!container) return;
+        
+        const mapContainer = container.querySelector('#facility-map');
+        if (!mapContainer) return;
+        
+        // Check if map already has data attributes for coordinates
+        const lat = mapContainer.getAttribute('data-lat');
+        const lng = mapContainer.getAttribute('data-lng');
+        
+        if (!lat || !lng) return;
+        
+        // Wait a bit for the container to be rendered
+        setTimeout(function() {
+            if (typeof L === 'undefined') {
+                console.error('Leaflet is not loaded');
+                mapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;">Map unavailable - Leaflet library not loaded</div>';
+                return;
+            }
+            
+            // Ensure container has dimensions
+            if (mapContainer.offsetHeight === 0) {
+                mapContainer.style.height = '300px';
+                mapContainer.style.minHeight = '300px';
+            }
+            
+            try {
+                const map = L.map('facility-map', {
+                    center: [parseFloat(lat), parseFloat(lng)],
+                    zoom: 15,
+                    zoomControl: true
+                });
+                
+                // Add OpenStreetMap tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 19
+                }).addTo(map);
+                
+                // Add marker
+                L.marker([parseFloat(lat), parseFloat(lng)], {
+                    draggable: false
+                }).addTo(map);
+                
+                // Invalidate size to fix rendering issues
+                setTimeout(function() {
+                    map.invalidateSize();
+                }, 200);
+            } catch (error) {
+                console.error('Map initialization error:', error);
+                mapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;">Map error: ' + error.message + '</div>';
+            }
+        }, 100);
     }
 
     async function animateOut(main, direction) {

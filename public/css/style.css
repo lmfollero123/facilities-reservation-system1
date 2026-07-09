@@ -4750,6 +4750,12 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     font-size: 0.9rem;
 }
 
+.booking-form label > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
 .booking-form .input-wrapper {
     position: relative;
 }

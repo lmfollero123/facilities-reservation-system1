@@ -89,7 +89,15 @@ try {
             $error = 'Invalid security token. Please refresh and try again.';
             $view = 'email';
         } else {
-            $otpInput = trim((string) ($_POST['otp'] ?? ''));
+            // Combine individual OTP fields if they exist
+            if (isset($_POST['otp_1']) && isset($_POST['otp_2']) && isset($_POST['otp_3']) && 
+                isset($_POST['otp_4']) && isset($_POST['otp_5']) && isset($_POST['otp_6'])) {
+                $otpInput = trim($_POST['otp_1'] . $_POST['otp_2'] . $_POST['otp_3'] . 
+                            $_POST['otp_4'] . $_POST['otp_5'] . $_POST['otp_6']);
+            } else {
+                $otpInput = trim((string) ($_POST['otp'] ?? ''));
+            }
+            
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
 
@@ -152,7 +160,15 @@ try {
             $error = 'Authenticator setup expired. Please start again.';
             $view = 'choose';
         } else {
-            $code = trim(preg_replace('/\D/', '', (string) ($_POST['totp_code'] ?? '')));
+            // Combine individual TOTP fields if they exist
+            if (isset($_POST['totp_1']) && isset($_POST['totp_2']) && isset($_POST['totp_3']) && 
+                isset($_POST['totp_4']) && isset($_POST['totp_5']) && isset($_POST['totp_6'])) {
+                $code = trim($_POST['totp_1'] . $_POST['totp_2'] . $_POST['totp_3'] . 
+                        $_POST['totp_4'] . $_POST['totp_5'] . $_POST['totp_6']);
+            } else {
+                $code = trim(preg_replace('/\D/', '', (string) ($_POST['totp_code'] ?? '')));
+            }
+            
             try {
                 $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
                 $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
@@ -268,14 +284,20 @@ ob_start();
             <?php else: ?>
                 <p style="margin:0 0 1rem;color:#b23030;font-size:0.9rem;">Code expired. Request a new verification code.</p>
             <?php endif; ?>
-            <form method="POST" class="auth-form">
+            <form method="POST" class="auth-form" id="emailOtpForm">
                 <?= csrf_field(); ?>
-                <label>
-                    Verification code
-                    <div class="input-wrapper">
-                        <input name="otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" required autofocus>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Verification code</label>
+                    <div class="otp-input-container" id="emailOtpContainer">
+                        <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="otp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="otp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="otp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="otp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="hidden" name="otp" id="emailOtpCombined" value="">
                     </div>
-                </label>
+                </div>
                 <button class="btn-primary" type="submit" name="verify_email_setup" value="1">Verify and Sign In</button>
             </form>
             <form method="POST" style="margin-top:0.75rem;">
@@ -297,14 +319,20 @@ ob_start();
                     Manual entry key: <code><?= htmlspecialchars($totpSecretDisplay); ?></code>
                 </p>
             <?php endif; ?>
-            <form method="POST" class="auth-form">
+            <form method="POST" class="auth-form" id="totpForm">
                 <?= csrf_field(); ?>
-                <label>
-                    Authenticator code
-                    <div class="input-wrapper">
-                        <input name="totp_code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" required autofocus>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Authenticator code</label>
+                    <div class="otp-input-container" id="totpContainer">
+                        <input type="text" name="totp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="totp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="totp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="totp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="totp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="text" name="totp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                        <input type="hidden" name="totp_code" id="totpCombined" value="">
                     </div>
-                </label>
+                </div>
                 <button class="btn-primary" type="submit" name="verify_totp_setup" value="1">Verify and Sign In</button>
             </form>
             <form method="POST" style="margin-top:1rem;text-align:center;">
@@ -324,9 +352,149 @@ ob_start();
     </div>
 </div>
 <?php if ($view === 'email' && $emailOtpValid && $otpRemainingSeconds > 0): ?>
+<style>
+.otp-input-container {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 0.75rem;
+    width: 100%;
+}
+
+.otp-input {
+    width: 50px !important;
+    height: 50px !important;
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #1e293b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.otp-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.otp-input:not(:placeholder-shown) {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.otp-input::placeholder {
+    color: #cbd5e1;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 480px) {
+    .otp-input {
+        width: 45px !important;
+        height: 45px !important;
+        font-size: 1.5rem;
+        border-radius: 10px;
+        max-width: 45px !important;
+        min-width: 45px !important;
+    }
+    
+    .otp-input-container {
+        gap: 0.5rem;
+    }
+}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const countdownEl = document.getElementById('setupOtpCountdown');
+    const otpInputs = document.querySelectorAll('.otp-input');
+    const emailOtpCombined = document.getElementById('emailOtpCombined');
+    const emailOtpForm = document.getElementById('emailOtpForm');
+    const totpCombined = document.getElementById('totpCombined');
+    const totpForm = document.getElementById('totpForm');
+    
+    // OTP input handling for both email and TOTP forms
+    function setupOtpInputs(inputs, combinedInput, form) {
+        if (!inputs.length || !combinedInput || !form) return;
+        
+        inputs.forEach((input, index) => {
+            input.addEventListener('input', function(e) {
+                const value = e.target.value;
+                
+                if (!/^\d*$/.test(value)) {
+                    e.target.value = value.replace(/\D/g, '');
+                    return;
+                }
+                
+                if (value.length === 1 && index < inputs.length - 1) {
+                    inputs[index + 1].focus();
+                }
+                
+                updateCombinedOtp();
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                    inputs[index - 1].focus();
+                }
+                
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (index === inputs.length - 1) {
+                        form.submit();
+                    }
+                }
+            });
+            
+            input.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
+                
+                if (pastedData.length > 0) {
+                    inputs.forEach((inp, i) => {
+                        if (i < pastedData.length) {
+                            inp.value = pastedData[i];
+                        }
+                    });
+                    
+                    const focusIndex = Math.min(pastedData.length, inputs.length - 1);
+                    inputs[focusIndex].focus();
+                    updateCombinedOtp();
+                }
+            });
+            
+            input.addEventListener('focus', function() {
+                this.select();
+            });
+        });
+        
+        if (inputs.length > 0) {
+            inputs[0].focus();
+        }
+        
+        function updateCombinedOtp() {
+            const combined = Array.from(inputs).map(input => input.value).join('');
+            combinedInput.value = combined;
+        }
+    }
+    
+    // Setup email OTP inputs
+    const emailOtpInputs = document.querySelectorAll('#emailOtpContainer .otp-input');
+    setupOtpInputs(emailOtpInputs, emailOtpCombined, emailOtpForm);
+    
+    // Setup TOTP inputs
+    const totpInputs = document.querySelectorAll('#totpContainer .otp-input');
+    setupOtpInputs(totpInputs, totpCombined, totpForm);
+    
+    // Countdown timer
     if (!countdownEl) return;
     let remaining = <?= (int) $otpRemainingSeconds; ?>;
     const timer = setInterval(function () {

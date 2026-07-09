@@ -49,7 +49,14 @@ try {
             logSecurityEvent('csrf_validation_failed', 'OTP verify form', 'warning');
         }
 
-        $otpInput = trim($_POST['otp']);
+        // Combine individual OTP fields if they exist
+        if (isset($_POST['otp_1']) && isset($_POST['otp_2']) && isset($_POST['otp_3']) && 
+            isset($_POST['otp_4']) && isset($_POST['otp_5']) && isset($_POST['otp_6'])) {
+            $otpInput = trim($_POST['otp_1'] . $_POST['otp_2'] . $_POST['otp_3'] . 
+                        $_POST['otp_4'] . $_POST['otp_5'] . $_POST['otp_6']);
+        } else {
+            $otpInput = trim($_POST['otp']);
+        }
 
         if (empty($error) && !$otpInput) {
             $error = 'Please enter the OTP from your email or authenticator app.';
@@ -100,28 +107,12 @@ try {
         if (empty($error)) {
             // OTP valid -> finalize login
             $pdo->prepare("UPDATE users SET otp_code_hash = NULL, otp_expires_at = NULL, otp_attempts = 0 WHERE id = ?")->execute([$userId]);
+            $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_ip = ? WHERE id = ?")
+                ->execute([getClientIP(), $userId]);
 
-            session_regenerate_id(true);
-            $_SESSION['user_authenticated'] = true;
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_name'] = $user['name'];
-            $_SESSION['name'] = $user['name'];
-            $_SESSION['user_email'] = $user['email'];
-            $_SESSION['role'] = $user['role'];
-            $_SESSION['user_org'] = $user['role'];
-            $_SESSION['last_activity'] = time();
-
-            unset($_SESSION['pending_otp_user_id'], $_SESSION['pending_otp_email'], $_SESSION['pending_otp_name'], $_SESSION['login_otp_email_sent']);
-
-            // Redirect to requested page if provided and safe, otherwise dashboard
-            $redirect = frs_safe_redirect_path($_SESSION['post_login_redirect'] ?? null);
-            unset($_SESSION['post_login_redirect']);
-            if ($redirect !== null) {
-                header('Location: ' . $redirect);
-            } else {
-                header('Location: ' . base_path() . '/dashboard');
-            }
-            exit;
+            frs_complete_authenticated_login($user);
+            logSecurityEvent('login_success', 'User logged in successfully via OTP: ' . ($user['email'] ?? ''), 'info');
+            frs_redirect_after_login();
         }
     }
 
@@ -218,14 +209,20 @@ ob_start();
             </div>
         <?php endif; ?>
 
-        <form method="POST" class="auth-form">
+        <form method="POST" class="auth-form" id="otpForm">
             <?= csrf_field(); ?>
-            <label>
-                OTP Code
-                <div class="input-wrapper">
-                    <input name="otp" type="text" inputmode="numeric" pattern="\d{6}" placeholder="Enter 6-digit code" required>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">OTP Code</label>
+                <div class="otp-input-container" id="otpContainer">
+                    <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="text" name="otp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="text" name="otp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="text" name="otp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="text" name="otp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                    <input type="hidden" name="otp" id="otpCombined" value="">
                 </div>
-            </label>
+            </div>
 
             <button class="btn-primary" type="submit">Verify &amp; Sign In</button>
         </form>
@@ -246,56 +243,190 @@ ob_start();
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
 
-if ($showEmailOtpCountdown):
+// Always load OTP styling since it's used for both email OTP and TOTP
 ?>
+<style>
+.otp-input-container {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 0.75rem;
+    width: 100%;
+}
+
+.otp-input {
+    width: 50px !important;
+    height: 50px !important;
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #1e293b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.otp-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.otp-input:not(:placeholder-shown) {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.otp-input::placeholder {
+    color: #cbd5e1;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 480px) {
+    .otp-input {
+        width: 45px !important;
+        height: 45px !important;
+        font-size: 1.5rem;
+        border-radius: 10px;
+        max-width: 45px !important;
+        min-width: 45px !important;
+    }
+    
+    .otp-input-container {
+        gap: 0.5rem;
+    }
+}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const countdownEl = document.getElementById('otpCountdown');
     const resendBtn = document.getElementById('loginOtpResendBtn');
-    if (!countdownEl) return;
-
-    let remaining = <?= (int)$otpRemainingSeconds; ?>;
-    const resendLabels = ['Resend Code', 'Send code to email instead'];
-
-    function renderCountdown() {
-        const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
-        const ss = String(remaining % 60).padStart(2, '0');
-        const resendText = resendBtn ? resendBtn.textContent.trim() : 'Resend Code';
-        if (remaining > 0) {
-            countdownEl.textContent = `Code expires in ${mm}:${ss}`;
-            countdownEl.style.color = '#b45309';
-            if (resendBtn && resendLabels.includes(resendText)) {
-                resendBtn.classList.remove('btn-primary');
-                resendBtn.classList.add('btn-outline');
+    const otpInputs = document.querySelectorAll('.otp-input');
+    const otpCombined = document.getElementById('otpCombined');
+    const otpForm = document.getElementById('otpForm');
+    
+    // OTP input handling
+    otpInputs.forEach((input, index) => {
+        // Auto-focus next input on digit entry
+        input.addEventListener('input', function(e) {
+            const value = e.target.value;
+            
+            // Only allow numbers
+            if (!/^\d*$/.test(value)) {
+                e.target.value = value.replace(/\D/g, '');
+                return;
             }
-        } else {
-            countdownEl.textContent = `Code expired. Click "${resendText}" below to get a new one.`;
-            countdownEl.style.color = '#b23030';
-            if (resendBtn && resendLabels.includes(resendText)) {
-                resendBtn.classList.remove('btn-outline');
-                resendBtn.classList.add('btn-primary');
+            
+            // Move to next input if value is entered
+            if (value.length === 1 && index < otpInputs.length - 1) {
+                otpInputs[index + 1].focus();
+            }
+            
+            // Combine all digits
+            updateCombinedOtp();
+        });
+        
+        // Handle backspace - move to previous input
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                otpInputs[index - 1].focus();
+            }
+            
+            // Handle Enter key - submit form
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index === otpInputs.length - 1) {
+                    otpForm.submit();
+                }
+            }
+        });
+        
+        // Handle paste - distribute digits across inputs
+        input.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
+            
+            if (pastedData.length > 0) {
+                otpInputs.forEach((inp, i) => {
+                    if (i < pastedData.length) {
+                        inp.value = pastedData[i];
+                    }
+                });
+                
+                // Focus the last filled input or the next empty one
+                const focusIndex = Math.min(pastedData.length, otpInputs.length - 1);
+                otpInputs[focusIndex].focus();
+                updateCombinedOtp();
+            }
+        });
+        
+        // Select all content on focus
+        input.addEventListener('focus', function() {
+            this.select();
+        });
+    });
+    
+    // Auto-focus first input on page load
+    if (otpInputs.length > 0) {
+        otpInputs[0].focus();
+    }
+    
+    function updateCombinedOtp() {
+        const combined = Array.from(otpInputs).map(input => input.value).join('');
+        otpCombined.value = combined;
+    }
+    
+    // Countdown timer (only if countdown element exists and we have remaining seconds)
+    <?php if (isset($otpRemainingSeconds) && $showEmailOtpCountdown): ?>
+    if (countdownEl) {
+        let remaining = <?= (int)$otpRemainingSeconds; ?>;
+        const resendLabels = ['Resend Code', 'Send code to email instead'];
+
+        function renderCountdown() {
+            const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const ss = String(remaining % 60).padStart(2, '0');
+            const resendText = resendBtn ? resendBtn.textContent.trim() : 'Resend Code';
+            if (remaining > 0) {
+                countdownEl.textContent = `Code expires in ${mm}:${ss}`;
+                countdownEl.style.color = '#b45309';
+                if (resendBtn && resendLabels.includes(resendText)) {
+                    resendBtn.classList.remove('btn-primary');
+                    resendBtn.classList.add('btn-outline');
+                }
+            } else {
+                countdownEl.textContent = `Code expired. Click "${resendText}" below to get a new one.`;
+                countdownEl.style.color = '#b23030';
+                if (resendBtn && resendLabels.includes(resendText)) {
+                    resendBtn.classList.remove('btn-outline');
+                    resendBtn.classList.add('btn-primary');
+                }
             }
         }
-    }
 
-    renderCountdown();
-    if (remaining > 0) {
-        const timer = setInterval(function () {
-            remaining--;
-            renderCountdown();
-            if (remaining <= 0) {
-                clearInterval(timer);
-            }
-        }, 1000);
-    } else if (resendBtn && resendLabels.includes(resendBtn.textContent.trim())) {
-        resendBtn.classList.remove('btn-outline');
-        resendBtn.classList.add('btn-primary');
+        renderCountdown();
+        if (remaining > 0) {
+            const timer = setInterval(function () {
+                remaining--;
+                renderCountdown();
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                }
+            }, 1000);
+        } else if (resendBtn && resendLabels.includes(resendBtn.textContent.trim())) {
+            resendBtn.classList.remove('btn-outline');
+            resendBtn.classList.add('btn-primary');
+        }
     }
+    <?php endif; ?>
 });
 </script>
-<?php
-endif;
-
-
 
 

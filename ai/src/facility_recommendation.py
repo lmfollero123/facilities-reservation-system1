@@ -75,6 +75,88 @@ def extract_purpose_keywords(purpose: str):
     return keywords
 
 
+def calculate_text_match_score(purpose: str, facility_text: str):
+    """
+    Calculate text similarity score between purpose and facility text
+    Uses keyword overlap and semantic matching
+    """
+    if pd.isna(purpose) or pd.isna(facility_text) or not purpose or not facility_text:
+        return 0.0
+    
+    purpose_lower = str(purpose).lower()
+    facility_lower = str(facility_text).lower()
+    
+    # Extract meaningful words (length >= 3)
+    purpose_words = set(word for word in purpose_lower.split() if len(word) >= 3)
+    facility_words = set(word for word in facility_lower.split() if len(word) >= 3)
+    
+    if not purpose_words or not facility_words:
+        return 0.0
+    
+    # Calculate overlap
+    overlap = purpose_words & facility_words
+    overlap_ratio = len(overlap) / len(purpose_words) if purpose_words else 0
+    
+    # Boost for exact phrase matches
+    exact_match_bonus = 0.0
+    for word in purpose_words:
+        if word in facility_lower:
+            exact_match_bonus += 0.1
+    
+    return min(1.0, overlap_ratio + exact_match_bonus)
+
+
+def extract_operating_hours_features(operating_hours: str, time_slot: str):
+    """
+    Extract operating hours features and check if time slot fits
+    Returns: dict with hours features and match score
+    """
+    if pd.isna(operating_hours) or not operating_hours:
+        return {
+            'opens_early': 0,
+            'opens_late': 0,
+            'hours_match_score': 0.5
+        }
+    
+    # Parse operating hours
+    hours_lower = str(operating_hours).lower()
+    opens_early = 1 if any(x in hours_lower for x in ['6:', '7:', '8:']) else 0
+    opens_late = 1 if any(x in hours_lower for x in ['20:', '21:', '22:']) else 0
+    
+    # Parse time slot
+    try:
+        if ' - ' in time_slot:
+            start_time_str, end_time_str = time_slot.split(' - ')
+            start_hour = int(start_time_str.split(':')[0])
+            end_hour = int(end_time_str.split(':')[0])
+        else:
+            start_hour = 8
+            end_hour = 17
+    except:
+        start_hour = 8
+        end_hour = 17
+    
+    # Check if time slot fits within operating hours
+    # This is a simplified check - real implementation would parse actual hours
+    hours_match_score = 0.8  # Default moderate score
+    
+    # If facility has extended hours, boost score for evening events
+    if end_hour >= 18 and opens_late:
+        hours_match_score = 1.0
+    # If facility opens early, boost for morning events
+    elif start_hour <= 9 and opens_early:
+        hours_match_score = 1.0
+    # Standard business hours
+    elif 8 <= start_hour and end_hour <= 17:
+        hours_match_score = 0.9
+    
+    return {
+        'opens_early': opens_early,
+        'opens_late': opens_late,
+        'hours_match_score': hours_match_score
+    }
+
+
 def is_holiday(date_input):
     """Check if date is a holiday"""
     if isinstance(date_input, pd.Timestamp):
@@ -136,6 +218,10 @@ class FacilityRecommendationModel:
                 'facility_id': features.get('facility_id', 0),
                 'capacity': features.get('capacity', 100),
                 'amenities_count': features.get('amenities_count', 0),
+                'description_match_score': features.get('description_match_score', 0.0),
+                'hours_match_score': features.get('hours_match_score', 0.5),
+                'opens_early': features.get('opens_early', 0),
+                'opens_late': features.get('opens_late', 0),
                 'start_hour': features.get('start_hour', 12),
                 'end_hour': features.get('end_hour', 17),
                 'duration_hours': features.get('duration_hours', 4),
@@ -182,7 +268,8 @@ class FacilityRecommendationModel:
             # Ensure all columns from training are present
             # (This should match the training feature order)
             expected_features = [
-                'capacity', 'amenities_count', 'start_hour', 'end_hour', 'duration_hours',
+                'capacity', 'amenities_count', 'description_match_score', 'hours_match_score',
+                'opens_early', 'opens_late', 'start_hour', 'end_hour', 'duration_hours',
                 'day_of_week', 'month', 'is_weekend', 'is_holiday', 'expected_attendees',
                 'capacity_ratio', 'is_commercial', 'user_booking_count',
                 'meeting', 'celebration', 'sports', 'education', 'religious',
@@ -259,14 +346,27 @@ class FacilityRecommendationModel:
             # Prepare features
             capacity = extract_capacity_number(facility.get('capacity', 100))
             amenities = facility.get('amenities', '')
+            description = facility.get('description', '')
             amenities_count = len(str(amenities).split(',')) if amenities else 0
             capacity_ratio = expected_attendees / capacity if capacity > 0 else 0.5
+            
+            # Calculate text match score with description
+            facility_text = f"{description} {amenities}"
+            description_match_score = calculate_text_match_score(purpose, facility_text)
+            
+            # Extract operating hours features
+            operating_hours = facility.get('operating_hours', '')
+            hours_features = extract_operating_hours_features(operating_hours, time_slot)
             
             features = {
                 'user_id': user_id,
                 'facility_id': facility.get('id', 0),
                 'capacity': capacity,
                 'amenities_count': amenities_count,
+                'description_match_score': description_match_score,
+                'hours_match_score': hours_features['hours_match_score'],
+                'opens_early': hours_features['opens_early'],
+                'opens_late': hours_features['opens_late'],
                 'start_hour': time_feat['start_hour'],
                 'end_hour': time_feat['end_hour'],
                 'duration_hours': time_feat['duration_hours'],
@@ -326,11 +426,27 @@ class FacilityRecommendationModel:
             capacity = extract_capacity_number(facility.get('capacity', 100))
             name = str(facility.get('name', ''))
             amenities = str(facility.get('amenities', ''))
-            desc = str(facility.get('description', ''))
-            blob = f"{name} {amenities} {desc}".lower()
+            description = str(facility.get('description', ''))
+            operating_hours = str(facility.get('operating_hours', ''))
+            blob = f"{name} {amenities} {description}".lower()
 
             score = 1.0
             reasons = []
+
+            # Text match with description and amenities
+            description_match_score = calculate_text_match_score(purpose, blob)
+            if description_match_score > 0.3:
+                score += description_match_score * 2.0
+                reasons.append(f'Description/amenities match ({int(description_match_score * 100)}%)')
+
+            # Operating hours matching
+            hours_features = extract_operating_hours_features(operating_hours, time_slot)
+            if hours_features['hours_match_score'] >= 0.9:
+                score += 1.5
+                reasons.append('Operating hours match your time slot')
+            elif hours_features['hours_match_score'] >= 0.7:
+                score += 0.8
+                reasons.append('Operating hours suitable')
 
             if purpose_keywords.get('sports') or any(w in purpose_lower for w in ('zumba', 'fitness', 'dance', 'yoga')):
                 if any(x in blob for x in ('court', 'sport', 'gym', 'field', 'covered', 'multipurpose')):

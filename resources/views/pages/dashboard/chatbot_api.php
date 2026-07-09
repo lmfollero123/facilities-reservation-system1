@@ -17,6 +17,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
+require_once __DIR__ . '/../../../../services/RecommendationService.php';
 
 // Load ML integration if available
 if (file_exists(__DIR__ . '/../../../../config/ai_ml_integration.php')) {
@@ -48,12 +49,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['question'])) {
     $intent = $intentResult['intent'] ?? 'unknown';
     $confidence = $intentResult['confidence'] ?? 0.0;
     
+    // Fallback: Check for recommendation-related keywords if intent is unknown or low confidence
+    $recommendationKeywords = [
+        'recommend', 'suggestion', 'best time', 'preferred', 'usual', 'frequently',
+        'most reserved', 'my history', 'my pattern', 'my schedule', 'personalized',
+        'for me', 'similar to my', 'less crowded', 'quiet', 'my favorite'
+    ];
+    
+    $isRecommendationQuery = false;
+    foreach ($recommendationKeywords as $keyword) {
+        if (stripos($question, $keyword) !== false) {
+            $isRecommendationQuery = true;
+            break;
+        }
+    }
+    
+    // Override intent if recommendation keywords detected
+    if ($isRecommendationQuery && ($intent === 'unknown' || $confidence < 0.5)) {
+        $intent = 'get_recommendations';
+    }
+    
     $pdo = db();
     $response = '';
     $data = null;
     
+    // Initialize RecommendationService
+    $recommendationService = new RecommendationService($pdo);
+    $userId = $_SESSION['user_id'] ?? null;
+    
     // Handle different intents
     switch ($intent) {
+        case 'get_recommendations':
+            if ($userId) {
+                $recommendations = $recommendationService->getPersonalizedRecommendations($userId);
+                
+                if (!empty($recommendations)) {
+                    $topRec = $recommendations[0];
+                    $response = "Based on your reservation history, I recommend **" . htmlspecialchars($topRec['facility_name']) . "** with a " . $topRec['score'] . "% match score.\n\n";
+                    
+                    if (isset($topRec['is_fallback']) && $topRec['is_fallback']) {
+                        $response .= "Since you're new to our system, I'm showing you popular choices among users.\n\n";
+                    }
+                    
+                    $response .= "**Suggested Schedule:**\n";
+                    $response .= "• Date: " . date('l, F j, Y', strtotime($topRec['suggested_date'])) . "\n";
+                    $response .= "• Time: " . htmlspecialchars($topRec['suggested_time']) . "\n";
+                    $response .= "• Duration: " . $topRec['suggested_duration'] . " hours\n";
+                    $response .= "• Expected attendees: " . $topRec['suggested_attendees'] . "\n\n";
+                    
+                    $response .= "**Why this recommendation:**\n";
+                    foreach ($topRec['reasons'] as $reason) {
+                        $response .= "• " . htmlspecialchars($reason) . "\n";
+                    }
+                    
+                    if (count($recommendations) > 1) {
+                        $response .= "\n**Other options:**\n";
+                        for ($i = 1; $i < min(3, count($recommendations)); $i++) {
+                            $rec = $recommendations[$i];
+                            $response .= "• " . htmlspecialchars($rec['facility_name']) . " (" . $rec['score'] . "% match)\n";
+                        }
+                    }
+                    
+                    $response .= "\nWould you like me to help you book this reservation?";
+                    $data = ['recommendations' => $recommendations];
+                } else {
+                    $response = "I don't have enough reservation history to provide personalized recommendations yet. ";
+                    $response .= "Start making a few reservations, and I'll be able to suggest the best options for you based on your preferences.\n\n";
+                    $response .= "In the meantime, you can check the available facilities on the booking page.";
+                }
+            } else {
+                $response = "Please log in to get personalized recommendations.";
+            }
+            break;
         case 'list_facilities':
             $stmt = $pdo->query(
                 'SELECT id, name, description, capacity, location, status 
@@ -200,7 +267,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['question'])) {
             $response .= "• Checking availability\n";
             $response .= "• Booking rules and policies\n";
             $response .= "• Viewing your reservations\n";
-            $response .= "• Cancelling bookings\n\n";
+            $response .= "• Cancelling bookings\n";
+            $response .= "• Personalized recommendations based on your history\n\n";
             $response .= "Just ask me anything about facility reservations!";
             break;
             

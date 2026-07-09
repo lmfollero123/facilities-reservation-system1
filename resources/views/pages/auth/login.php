@@ -151,28 +151,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
                                     $logStmt->execute([$email, getClientIP()]);
 
-                                    // Create session
-                                    session_regenerate_id(true);
-                                    secureSession();
-                                    $_SESSION['user_authenticated'] = true;
-                                    $_SESSION['user_id'] = $user['id'];
-                                    $_SESSION['user_name'] = $user['name'];
-                                    $_SESSION['name'] = $user['name'];
-                                    $_SESSION['user_email'] = $user['email'];
-                                    $_SESSION['role'] = $user['role'];
-                                    $_SESSION['user_org'] = $user['role'];
-                                    $_SESSION['last_activity'] = time();
-
-                                    logSecurityEvent('login_success', "User logged in successfully: $email (OTP disabled)", 'info');
-
-                                    // Redirect to requested page or dashboard
-                                    $safeRedirect = frs_safe_redirect_path($next !== '' ? $next : ($_SESSION['post_login_redirect'] ?? null));
-                                    if ($safeRedirect !== null) {
-                                        header('Location: ' . $safeRedirect);
-                                    } else {
-                                        header('Location: ' . base_path() . '/dashboard');
+                                    if ($next) {
+                                        $_SESSION['post_login_redirect'] = $next;
                                     }
-                                    exit;
+                                    frs_complete_authenticated_login($user);
+                                    logSecurityEvent('login_success', "User logged in successfully: $email (OTP disabled)", 'info');
+                                    frs_redirect_after_login();
                                 }
                                 }
                                 }

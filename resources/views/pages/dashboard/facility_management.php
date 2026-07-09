@@ -107,6 +107,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } else {
+        // Get facility ID from POST data first
+        $facilityId = (int)($_POST['facility_id'] ?? 0);
+        
         // Check permissions for create/update/delete
         $isUpdate = $facilityId > 0;
         $action = $isUpdate ? 'update' : 'create';
@@ -120,12 +123,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         if ($messageType !== 'error') {
-    $facilityId = (int)($_POST['facility_id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $rateInput = trim((string)($_POST['base_rate'] ?? ''));
     $rate = null;
     $isFree = isset($_POST['is_free']) && $_POST['is_free'] === '1';
+    
+    // Calculate extension fee from base rate (base rate is typically for 4 hours, so hourly rate = base_rate / 4)
+    if (!$isFree && $rateInput !== '') {
+        $rate = (int)str_replace([' ', ','], '', $rateInput);
+        $extensionFeePerHour = $rate > 0 ? round($rate / 4, 2) : 10.00;
+    } else {
+        $extensionFeePerHour = 0.00; // Free facilities have no extension fee
+    }
     $location = trim($_POST['location'] ?? '');
     $capacity = trim($_POST['capacity'] ?? '');
     $amenities = trim($_POST['amenities'] ?? '');
@@ -138,7 +148,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $capacityThreshold = !empty($_POST['capacity_threshold']) ? (int)$_POST['capacity_threshold'] : null;
     $maxDurationHours = !empty($_POST['max_duration_hours']) ? (float)$_POST['max_duration_hours'] : null;
     $operatingHours = trim($_POST['operating_hours'] ?? '');
-    $extensionFeePerHour = !empty($_POST['extension_fee_per_hour']) ? (float)$_POST['extension_fee_per_hour'] : null;
     $extensionAutoApproveMaxHours = !empty($_POST['extension_auto_approve_max_hours']) ? (float)$_POST['extension_auto_approve_max_hours'] : null;
     $allowSameDayExtension = isset($_POST['allow_same_day_extension']) && $_POST['allow_same_day_extension'] === '1';
 
@@ -557,7 +566,7 @@ ob_start();
                         </small>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; display: none;">
                         <label>
                             Latitude (Optional)
                             <div class="input-wrapper">
@@ -592,14 +601,6 @@ ob_start();
                     <label>
                         Facility Image
                         <input type="file" name="image" id="form-image" accept="image/*">
-                    </label>
-                    <label>
-                        Image Citation
-                        <div class="input-wrapper">
-                            <span class="input-icon">📷</span>
-                            <input type="text" name="image_citation" id="form-image-citation" placeholder="e.g., Google Maps, Photo by John Doe">
-                        </div>
-                        <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">Source/attribution for the facility image (optional)</small>
                     </label>
                     <label>
                         Status
@@ -674,10 +675,10 @@ ob_start();
                                 Extension Fee per Hour (₱)
                                 <div class="input-wrapper">
                                     <span class="input-icon">₱</span>
-                                    <input type="number" step="0.01" name="extension_fee_per_hour" id="form-extension-fee" min="0" placeholder="e.g., 10.00">
+                                    <input type="number" step="0.01" name="extension_fee_per_hour" id="form-extension-fee" min="0" placeholder="e.g., 10.00" readonly style="background-color: #f8f9fa; cursor: not-allowed;">
                                 </div>
                                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                                    Fee charged per hour for extending reservations. Default: ₱10.00 per hour.
+                                    Automatically calculated from the facility's standard rate. Not editable.
                                 </small>
                             </label>
 
@@ -864,13 +865,13 @@ function editFacility(payload) {
     document.getElementById('form-capacity').value = facility.capacity || '';
     document.getElementById('form-amenities').value = facility.amenities || '';
     document.getElementById('form-rules').value = facility.rules || '';
-    document.getElementById('form-image-citation').value = facility.image_citation || '';
     document.getElementById('form-status').value = facility.status || 'available';
     document.getElementById('form-operating-hours').value = facility.operating_hours || '';
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
     document.getElementById('form-extension-fee').value = facility.extension_fee_per_hour || '';
+    updateExtensionFeeFromRate();
     document.getElementById('form-extension-auto-approve').value = facility.extension_auto_approve_max_hours || '';
     document.getElementById('form-allow-same-day').checked = (facility.allow_same_day_extension == 1 || facility.allow_same_day_extension === true);
 
@@ -926,6 +927,7 @@ function resetFacilityForm() {
     document.getElementById('form-capacity-threshold').value = '';
     document.getElementById('form-max-duration').value = '';
     document.getElementById('form-extension-fee').value = '';
+    updateExtensionFeeFromRate();
     document.getElementById('form-extension-auto-approve').value = '';
     document.getElementById('form-allow-same-day').checked = false;
     document.getElementById('form-image').value = '';
@@ -1143,6 +1145,45 @@ async function reverseGeocodeFacilityLocation(lat, lng) {
         }
     }
 }
+
+function updateExtensionFeeFromRate() {
+    const rateInput = document.getElementById('form-rate');
+    const isFreeCheckbox = document.getElementById('form-is-free');
+    const extensionFeeInput = document.getElementById('form-extension-fee');
+    
+    if (!rateInput || !isFreeCheckbox || !extensionFeeInput) return;
+    
+    if (isFreeCheckbox.checked) {
+        extensionFeeInput.value = '0.00';
+        return;
+    }
+    
+    const rateValue = rateInput.value.replace(/[^0-9]/g, '');
+    const rate = parseFloat(rateValue) || 0;
+    
+    if (rate > 0) {
+        // Base rate is typically for 4 hours, so hourly rate = base_rate / 4
+        const hourlyRate = Math.round((rate / 4) * 100) / 100;
+        extensionFeeInput.value = hourlyRate.toFixed(2);
+    } else {
+        extensionFeeInput.value = '10.00'; // Default fallback
+    }
+}
+
+// Add event listeners for auto-calculation
+document.addEventListener('DOMContentLoaded', function() {
+    const rateInput = document.getElementById('form-rate');
+    const isFreeCheckbox = document.getElementById('form-is-free');
+    
+    if (rateInput) {
+        rateInput.addEventListener('input', updateExtensionFeeFromRate);
+        rateInput.addEventListener('change', updateExtensionFeeFromRate);
+    }
+    
+    if (isFreeCheckbox) {
+        isFreeCheckbox.addEventListener('change', updateExtensionFeeFromRate);
+    }
+});
 
 // Collapsible helper with localStorage persistence
 (function() {

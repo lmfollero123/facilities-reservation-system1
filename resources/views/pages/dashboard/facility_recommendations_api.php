@@ -85,6 +85,8 @@ try {
             'name' => $f['name'],
             'capacity' => $f['capacity'],
             'amenities' => $f['amenities'] ?? '',
+            'description' => $f['description'] ?? '',
+            'operating_hours' => $f['operating_hours'] ?? '',
         ];
     }, $facilities);
 
@@ -201,12 +203,37 @@ try {
             }
         }
 
+        // Enhanced text matching with description and amenities
         $ft = ($facility['name'] ?? '') . ' ' . ($facility['description'] ?? '') . ' ' . ($facility['location'] ?? '') . ' ' . ($facility['amenities'] ?? '');
         if ($purpose && function_exists('matchPurpose')) {
             $pm = matchPurpose($purpose, $ft);
             if (($pm['score'] ?? 0) > 0) {
                 $score += (float)($pm['score'] ?? 0) / 10;
                 $reasons[] = $pm['reason'] ?? 'Matches purpose';
+            }
+        }
+
+        // Operating hours matching
+        $operatingHours = $facility['operating_hours'] ?? '';
+        if ($operatingHours && $timeSlot) {
+            // Parse time slot
+            $timeParts = explode(' - ', $timeSlot);
+            if (count($timeParts) === 2) {
+                $startHour = (int)explode(':', $timeParts[0])[0];
+                $endHour = (int)explode(':', $timeParts[1])[0];
+                
+                // Check if facility has suitable hours
+                $hoursLower = strtolower($operatingHours);
+                if ($endHour >= 18 && (strpos($hoursLower, '20:') !== false || strpos($hoursLower, '21:') !== false || strpos($hoursLower, '22:') !== false)) {
+                    $score += 1.5;
+                    $reasons[] = 'Operating hours match your time slot';
+                } elseif ($startHour <= 9 && (strpos($hoursLower, '6:') !== false || strpos($hoursLower, '7:') !== false || strpos($hoursLower, '8:') !== false)) {
+                    $score += 1.5;
+                    $reasons[] = 'Operating hours match your time slot';
+                } elseif (8 <= $startHour && $endHour <= 17) {
+                    $score += 0.8;
+                    $reasons[] = 'Operating hours suitable';
+                }
             }
         }
 
@@ -240,6 +267,7 @@ try {
             'name' => $facility['name'],
             'capacity' => $facility['capacity'],
             'amenities' => $facility['amenities'] ?? '',
+            'description' => $facility['description'] ?? '',
             'operating_hours' => $facility['operating_hours'] ?? null,
             'ml_relevance_score' => round($score, 1),
             'reason' => !empty($reasons) ? implode('; ', $reasons) : 'General purpose facility',

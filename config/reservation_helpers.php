@@ -15,6 +15,53 @@ require_once __DIR__ . '/time_helpers.php';
 require_once __DIR__ . '/paymongo_helper.php';
 require_once __DIR__ . '/lookups.php';
 
+if (!defined('FRS_BOOKING_PURPOSE_MAX')) {
+    define('FRS_BOOKING_PURPOSE_MAX', 2000);
+}
+if (!defined('FRS_BOOKING_NOTES_MAX')) {
+    define('FRS_BOOKING_NOTES_MAX', 1200);
+}
+if (!defined('FRS_BOOKING_PURPOSE_COMBINED_MAX')) {
+    define('FRS_BOOKING_PURPOSE_COMBINED_MAX', 3200);
+}
+
+/**
+ * Validate booking purpose and notes lengths.
+ *
+ * @return array{ok: bool, message: string, field: string}
+ */
+function frs_validate_booking_text_fields(string $purpose, string $bookingNotes): array
+{
+    if (mb_strlen($purpose) > FRS_BOOKING_PURPOSE_MAX) {
+        return [
+            'ok' => false,
+            'message' => 'Purpose of use must be ' . FRS_BOOKING_PURPOSE_MAX . ' characters or fewer.',
+            'field' => 'purpose',
+        ];
+    }
+    if (mb_strlen($bookingNotes) > FRS_BOOKING_NOTES_MAX) {
+        return [
+            'ok' => false,
+            'message' => 'Notes for staff must be ' . FRS_BOOKING_NOTES_MAX . ' characters or fewer.',
+            'field' => 'booking_notes',
+        ];
+    }
+    $combined = $purpose;
+    if ($purpose !== '' && $bookingNotes !== '') {
+        $combined .= "\n\n--- Additional notes ---\n" . $bookingNotes;
+    } elseif ($bookingNotes !== '') {
+        $combined = $bookingNotes;
+    }
+    if (mb_strlen($combined) > FRS_BOOKING_PURPOSE_COMBINED_MAX) {
+        return [
+            'ok' => false,
+            'message' => 'Combined purpose and notes must be ' . FRS_BOOKING_PURPOSE_COMBINED_MAX . ' characters or fewer.',
+            'field' => 'purpose',
+        ];
+    }
+    return ['ok' => true, 'message' => '', 'field' => ''];
+}
+
 /**
  * Payment hold window from config/payments.php (minutes).
  */

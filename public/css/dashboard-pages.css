@@ -165,3 +165,329 @@
 [data-theme="dark"] .session-timeout-title { color: #fdba74; }
 [data-theme="dark"] .session-timeout-message { color: #cbd5e1; }
 [data-theme="dark"] .session-timeout-countdown { color: #fca5a5; }
+
+/* Login / system toasts — top-right, green success */
+.frs-toast-stack {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    left: auto;
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    max-width: min(26rem, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.frs-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #86efac;
+    box-shadow: 0 12px 32px rgba(5, 150, 105, 0.22);
+    opacity: 0;
+    transform: translateX(1.25rem);
+    pointer-events: auto;
+}
+
+.frs-toast.is-visible,
+.frs-toast.frs-toast-css-in {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.frs-toast-success {
+    border: 2px solid #22c55e;
+    background: linear-gradient(135deg, #ecfdf5 0%, #bbf7d0 100%);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.28);
+}
+
+.frs-toast-success .frs-toast-message {
+    color: #047857;
+    font-weight: 600;
+}
+
+.frs-toast-success .frs-toast-icon {
+    background: #16a34a;
+    color: #fff;
+}
+
+.frs-toast-error {
+    border: 2px solid #f87171;
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    box-shadow: 0 12px 32px rgba(220, 38, 38, 0.18);
+}
+
+.frs-toast-error .frs-toast-message {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.frs-toast-icon {
+    flex-shrink: 0;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: #059669;
+    color: #fff;
+}
+
+.frs-toast-error .frs-toast-icon {
+    background: #dc2626;
+}
+
+.frs-toast-message {
+    flex: 1;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: #0f172a;
+}
+
+.frs-toast-close {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.frs-toast-close:hover {
+    color: #0f172a;
+}
+
+/* Form validation highlight */
+.frs-field-error-highlight {
+    outline: 2px solid #ef4444 !important;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2) !important;
+    animation: frs-field-shake 0.45s ease;
+}
+
+@keyframes frs-field-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+
+.bcf-scroll-select-trigger.frs-field-error-highlight,
+.bcf-res-date-readonly.frs-field-error-highlight,
+.input-wrapper.frs-field-error-highlight {
+    border-radius: 10px;
+}
+
+.bcf-char-count {
+    margin: 0.25rem 0 0;
+    font-size: 0.78rem;
+    color: #64748b;
+    text-align: right;
+}
+
+.bcf-char-count.is-near-limit {
+    color: #b45309;
+}
+
+.bcf-char-count.is-at-limit {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+/* Prominent required-field marker */
+.frs-required-mark {
+    display: inline-block;
+    color: #dc2626;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1;
+    margin-left: 0.15rem;
+    vertical-align: middle;
+}
+
+.booking-form label:has(.frs-required-mark),
+.booking-form label:has([required]) {
+    font-weight: 600;
+}
+
+/* Booking confirmation modal — wide layout, all cards visible on desktop */
+#bookingConfirmModal.modal-confirm {
+    padding: 1rem;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+}
+
+#bookingConfirmModal .modal-dialog.booking-confirm-dialog {
+    width: min(1200px, 98vw) !important;
+    max-width: 98vw !important;
+    max-height: min(94vh, 920px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1.25rem 1.5rem;
+    margin: auto;
+    border-radius: 16px;
+    background: var(--gov-white, #fff);
+    border: 1px solid #e4e8f3;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.booking-confirm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.booking-confirm-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    align-items: stretch;
+}
+
+.booking-confirm-card {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    border: 1px solid #e2e8f0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.booking-confirm-card--cost {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-color: transparent;
+    color: #fff;
+}
+
+.booking-confirm-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gov-blue-dark, #0f172a);
+}
+
+.booking-confirm-card--cost .booking-confirm-card-title {
+    color: #fff;
+}
+
+.booking-confirm-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.booking-confirm-fields--single {
+    grid-template-columns: 1fr;
+}
+
+.booking-confirm-field {
+    min-width: 0;
+}
+
+.booking-confirm-field--full {
+    grid-column: 1 / -1;
+}
+
+.booking-confirm-label {
+    color: #64748b;
+    font-size: 0.75rem;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.booking-confirm-value {
+    color: #1e293b;
+    font-weight: 600;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+#confirm-purpose {
+    display: block;
+    max-height: 3.6em;
+    overflow-y: auto;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+.booking-confirm-card--cost .booking-confirm-label {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.booking-confirm-card--cost .booking-confirm-value {
+    color: #fff;
+}
+
+.booking-confirm-total {
+    font-weight: 700;
+    font-size: 1.35rem;
+}
+
+.booking-confirm-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.booking-confirm-actions .btn-outline,
+.booking-confirm-actions .btn-primary {
+    flex: 1;
+    padding: 0.875rem 1rem;
+}
+
+@media (max-width: 1024px) {
+    .booking-confirm-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .frs-toast-stack {
+        top: 0.75rem;
+        right: 0.75rem;
+        left: 0.75rem;
+        max-width: none;
+        align-items: stretch;
+    }
+
+    #bookingConfirmModal .modal-dialog.booking-confirm-dialog {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 96vh;
+        padding: 1rem;
+    }
+
+    .booking-confirm-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .booking-confirm-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .booking-confirm-actions {
+        flex-direction: column;
+    }
+}

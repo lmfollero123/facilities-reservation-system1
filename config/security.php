@@ -613,6 +613,15 @@ function frs_complete_authenticated_login(array $user): void
         $_SESSION['login_otp_email_sent']
     );
     frs_clear_pending_2fa_setup();
+
+    if (function_exists('secureSession')) {
+        secureSession();
+    }
+
+    $_SESSION['frs_login_toast'] = [
+        'message' => 'Welcome back, ' . ($user['name'] ?? 'User') . '!',
+        'type' => 'success',
+    ];
 }
 
 /**

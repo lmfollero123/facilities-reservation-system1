@@ -9,6 +9,7 @@
 .env.*.local
 config/geocoding_config.php
 config/gemini_config.php
+/INTEGRATION
 # database.php may contain fallbacks — use .env for production credentials
 
 # Logs & generated data

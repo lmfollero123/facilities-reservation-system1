@@ -106,6 +106,7 @@ ob_start();
                             <?php endif; ?>
                         </p>
                     <?php endif; ?>
+                    
                     <p class="facility-description">
                         <?= nl2br(htmlspecialchars($facility['description'] ?: 'LGU-owned facility available for reservation.')); ?>
                     </p>
@@ -166,10 +167,22 @@ ob_start();
                     All facilities are provided free of charge for public use.
                 </p>
             </div>
+            
+            <?php if (!empty($facility['latitude']) && !empty($facility['longitude'])): ?>
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                    <h4 style="margin:0 0 0.5rem; color:#1b1b1f; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
+                        <span>🗺️</span> Facility Location Map
+                    </h4>
+                    <div id="facility-map" data-lat="<?= (float)$facility['latitude']; ?>" data-lng="<?= (float)$facility['longitude']; ?>" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; min-height: 300px;"></div>
+                </div>
+            <?php endif; ?>
         </aside>
     </div>
 </section>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
+
+
+
 

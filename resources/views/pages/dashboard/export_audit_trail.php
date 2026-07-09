@@ -9,11 +9,12 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/../../../../config/app.php';
+require_once __DIR__ . '/../../../../config/permissions.php';
 
-// Check authentication and authorization (Admin/Staff only)
-if (!($_SESSION['user_authenticated'] ?? false) || !in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
-    http_response_code(403);
-    die('Unauthorized: Only Admin and Staff can export audit trails.');
+$role = $_SESSION['role'] ?? 'Resident';
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'audit_trail')) {
+    header('Location: ' . base_path() . '/dashboard');
+    exit;
 }
 
 require_once __DIR__ . '/../../../../config/database.php';

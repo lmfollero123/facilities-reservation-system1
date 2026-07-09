@@ -180,6 +180,10 @@
             if (prefersReducedMotion) {
                 return;
             }
+            if (window.frsAnim && typeof window.frsAnim.pageOut === 'function') {
+                await window.frsAnim.pageOut(main, 0.28);
+                return;
+            }
             clearFadeClasses(main);
             forceReflow(main);
             main.classList.add('dashboard-nav-animating');
@@ -190,6 +194,13 @@
 
         async function animateIn(main) {
             if (prefersReducedMotion) {
+                return;
+            }
+            if (window.frsAnim && typeof window.frsAnim.pageIn === 'function') {
+                await window.frsAnim.pageIn(main, 0.32);
+                if (window.frsAnim.staggerCards) {
+                    window.frsAnim.staggerCards(main);
+                }
                 return;
             }
             clearFadeClasses(main);
@@ -319,6 +330,11 @@
         }
 
         window.frsDashboardNavigate = navigate;
+
+        const initialMain = document.querySelector(MAIN_SEL);
+        if (initialMain && window.frsAnim && typeof window.frsAnim.staggerCards === 'function') {
+            window.frsAnim.staggerCards(initialMain);
+        }
     }
 
     // Wait for DOM to be ready

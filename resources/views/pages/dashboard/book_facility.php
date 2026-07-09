@@ -18,6 +18,8 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
+require_once __DIR__ . '/../../../../services/PredictionService.php';
+require_once __DIR__ . '/../../../../services/HolidayService.php';
 
 // Check permissions for booking facility
 $role = $_SESSION['role'] ?? 'Resident';
@@ -58,6 +60,7 @@ if (isset($_GET['tab']) && $_GET['tab'] === 'reservations') {
 $pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservation' : 'Book a Facility | LGU Facilities Reservation';
 $success = '';
 $error = '';
+$errorField = '';
 if (!empty($_SESSION['booking_flash']) && is_array($_SESSION['booking_flash'])) {
     $success = (string)($_SESSION['booking_flash']['msg'] ?? '');
     unset($_SESSION['booking_flash']);
@@ -202,7 +205,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     $endTime = $_POST['end_time'] ?? '';
     $purpose = trim($_POST['purpose'] ?? '');
     $bookingNotes = trim($_POST['booking_notes'] ?? '');
-    if ($purpose !== '' && $bookingNotes !== '') {
+    $textCheck = frs_validate_booking_text_fields($purpose, $bookingNotes);
+    if (!$textCheck['ok']) {
+        $error = $textCheck['message'];
+        $errorField = $textCheck['field'];
+    }
+    if ($purpose !== '' && $bookingNotes !== '' && empty($error)) {
         $purpose .= "\n\n--- Additional notes ---\n" . $bookingNotes;
     }
     $expectedAttendees = isset($_POST['expected_attendees']) ? (int)$_POST['expected_attendees'] : 0;
@@ -251,16 +259,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     // If user is not verified and hasn't uploaded a valid ID, require ID upload
     if (!$staffAssistedBooking && !$isVerifiedOrPrivileged && !$hasValidIdDocument && !$hasValidIdUpload) {
         $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
+        $errorField = 'doc_valid_id';
     }
     
     // If user already has a valid ID document uploaded, don't allow another upload
     if (!$isVerifiedOrPrivileged && $hasValidIdDocument && $hasValidIdUpload) {
         $error = 'You have already submitted a valid ID document. Please wait for admin verification.';
+        $errorField = 'doc_valid_id';
     }
     
     // Validate time inputs and create time slot string
     if (!$startTime || !$endTime) {
         $error = 'Please select both start and end times.';
+        $errorField = $startTime ? 'end_time' : 'start_time';
     } else {
         // Validate time format and range
         $startTimeObj = DateTime::createFromFormat('H:i', $startTime);
@@ -289,6 +300,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
 
     if (!$facilityId || !$date || !$purpose || !$userId) {
         $error = 'Please complete all required fields.';
+        if (!$facilityId) {
+            $errorField = 'facility_id';
+        } elseif (!$date) {
+            $errorField = 'reservation_date';
+        } elseif (!$purpose) {
+            $errorField = 'purpose';
+        }
     } else {
         // Validate date - ensure it's not in the past (use server timezone)
         $today = new DateTime('today', new DateTimeZone(date_default_timezone_get() ?: 'Asia/Manila'));
@@ -311,6 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
 
     if (!$error && $expectedAttendees < 1) {
         $error = 'Expected number of attendees is required (enter at least 1).';
+        $errorField = 'expected_attendees';
     }
 
     // Enforce occupancy vs listing capacity when a numeric capacity is configured
@@ -904,6 +923,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($error)) {
     $bcfOpenBookingModal = true;
 }
 
+$bookingFieldSelectors = [
+    'facility_id' => '#facility-select',
+    'reservation_date' => '#bcf-reservation-date-display',
+    'start_time' => '#bcf-start-time-trigger',
+    'end_time' => '#bcf-end-time-trigger',
+    'purpose' => '#purpose-input',
+    'booking_notes' => '#booking-notes',
+    'expected_attendees' => '#expected-attendees',
+    'doc_valid_id' => 'input[name="doc_valid_id"]',
+    'book_for_user_id' => '#book-for-user-id',
+];
+
 // Get facility recommendations - will be loaded via AJAX when user types in purpose field
 $recommendations = [];
 
@@ -958,6 +989,65 @@ $bookFacilityPick = (int)($_GET['book_fac'] ?? $_GET['cal_fac'] ?? ($prefillFaci
 $calendarToneMatrix = [];
 if ($bookFacilityPick > 0) {
     $calendarToneMatrix = frs_facility_calendar_matrix($pdo, $bookFacilityPick, $bookCalYear, $bookCalMonth);
+}
+
+// Get demand forecast for the selected facility and month
+$demandForecastMatrix = [];
+if ($bookFacilityPick > 0) {
+    $predictionService = new PredictionService($pdo);
+    
+    // Get forecast for 60 days (booking advance window) instead of just days in month
+    $advanceBookingDays = 60;
+    $monthForecast = $predictionService->getFacilityDemandForecast($bookFacilityPick, $advanceBookingDays);
+    
+    if (!empty($monthForecast)) {
+        foreach ($monthForecast as $dayForecast) {
+            $date = $dayForecast['date'];
+            $slots = $dayForecast['slots'] ?? [];
+            
+            if (!empty($slots)) {
+                $totalScore = 0;
+                $slotCount = count($slots);
+                
+                foreach ($slots as $slot) {
+                    $totalScore += $slot['score'];
+                }
+                
+                $avgScore = $slotCount > 0 ? round($totalScore / $slotCount) : 0;
+                
+                // Determine classification
+                $classification = 'Low';
+                if ($avgScore >= 76) $classification = 'Very High';
+                elseif ($avgScore >= 51) $classification = 'High';
+                elseif ($avgScore >= 26) $classification = 'Medium';
+                
+                $demandForecastMatrix[$date] = [
+                    'score' => $avgScore,
+                    'classification' => $classification
+                ];
+            }
+        }
+    }
+}
+
+// Get Philippines holidays for the selected calendar month/year
+$holidayMatrix = [];
+$holidayData = [];
+$holidayService = new HolidayService();
+
+$monthStart = sprintf('%04d-%02d-01', $bookCalYear, $bookCalMonth);
+$monthEnd = sprintf('%04d-%02d-%02d', $bookCalYear, $bookCalMonth, date('t', mktime(0, 0, 0, $bookCalMonth, 1, $bookCalYear)));
+
+$holidayList = $holidayService->getHolidaysInRange($monthStart, $monthEnd);
+
+if (!empty($holidayList)) {
+    foreach ($holidayList as $holiday) {
+        $holidayMatrix[$holiday['date']] = $holiday;
+        $holidayData[$holiday['date']] = [
+            'name' => $holiday['name'],
+            'type' => $holiday['type']
+        ];
+    }
 }
 $bookCalFirstDay = sprintf('%04d-%02d-01', $bookCalYear, $bookCalMonth);
 $bookCalAnchor = new DateTimeImmutable($bookCalFirstDay);
@@ -1299,6 +1389,24 @@ html[data-theme="dark"] .bcf-res-list-item-meta {
     justify-content: center;
     flex: 0 0 auto;
 }
+
+.bcf-cal-month-select,
+.bcf-cal-year-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1e293b;
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.bcf-cal-month-select:hover,
+.bcf-cal-year-select:hover {
+    border-color: #3b82f6;
+}
 .bcf-cal-nav-cluster .bcf-cal-nav-btn {
     display: inline-flex;
     align-items: center;
@@ -1496,6 +1604,68 @@ ul.bcf-scroll-select-menu {
     font-weight: 800;
     color: #5b21b6;
 }
+
+/* Demand Forecast Strip */
+.demand-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    border-radius: 0 0 6px 6px;
+    margin-top: 4px;
+}
+
+.demand-strip.demand-low {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    color: #166534;
+}
+
+.demand-strip.demand-medium {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+}
+
+.demand-strip.demand-high {
+    background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+    color: #9a3412;
+}
+
+.demand-strip.demand-very-high {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #dc2626;
+}
+
+.demand-score {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.holiday-indicator {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 0.7rem;
+    color: #dc2626;
+    z-index: 2;
+}
+
+.my-reservations-calendar-cell {
+    position: relative;
+    min-height: 70px;
+}
+
+.status-blackout {
+    background: #94a3b8 !important;
+    color: #1e293b !important;
+    border-color: #64748b !important;
+}
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -1518,7 +1688,7 @@ ul.bcf-scroll-select-menu {
         <?= htmlspecialchars($success); ?>
     </div>
 <?php elseif ($error): ?>
-    <div class="message error" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
+    <div class="message error booking-error" data-error-field="<?= htmlspecialchars($errorField); ?>" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($error); ?>
     </div>
 <?php endif; ?>
@@ -1584,8 +1754,22 @@ ul.bcf-scroll-select-menu {
                                 </div>
                             </div>
                             <div class="bcf-cal-nav-cluster">
-                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($bookCalNavPrevParams)); ?>">← Prev</a>
-                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery($bookCalNavNextParams)); ?>">Next →</a>
+                                <select name="month" onchange="this.form.submit()" class="bcf-cal-month-select" aria-label="Select month">
+                                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                                        <option value="<?= $m; ?>" <?= $bookCalMonth === $m ? 'selected' : ''; ?>>
+                                            <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                                <select name="year" onchange="this.form.submit()" class="bcf-cal-year-select" aria-label="Select year">
+                                    <?php 
+                                    $currentYear = (int)date('Y');
+                                    for ($y = $currentYear; $y <= $currentYear + 2; $y++): ?>
+                                        <option value="<?= $y; ?>" <?= $bookCalYear === $y ? 'selected' : ''; ?>>
+                                            <?= $y; ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
                                 <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery(array_merge($bookPaneQuery, ['year' => (int)date('Y'), 'month' => (int)date('n')]))); ?>">Today</a>
                             </div>
                         </div>
@@ -1599,6 +1783,13 @@ ul.bcf-scroll-select-menu {
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Fully booked</div>
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Blocked</div>
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="border:2px solid #7c3aed; background:transparent;"></span> AI-suggested day</div>
+                            <div class="my-reservations-legend-item" style="margin-left: 1rem; border-left: 1px solid #e2e8f0; padding-left: 1rem;">
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Demand:</span>
+                            </div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#dcfce7;"></span> Low</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#fef3c7;"></span> Med</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#fed7aa;"></span> High</div>
+                            <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#fee2e2;"></span> Very High</div>
                         </div>
                     </div>
                     <div class="my-reservations-calendar-grid">
@@ -1632,7 +1823,7 @@ ul.bcf-scroll-select-menu {
                                     $dayStatusClass = ' status-denied';
                                     $chipLabel = 'Full';
                                 } elseif ($tone === 'blackout' || $tone === 'maintenance' || $tone === 'offline') {
-                                    $dayStatusClass = ' status-denied';
+                                    $dayStatusClass = ' status-blackout';
                                     $chipLabel = ($tone === 'blackout') ? 'Blackout' : 'N/A';
                                 } elseif ($tone === 'muted') {
                                     $chipLabel = '—';
@@ -1659,6 +1850,23 @@ ul.bcf-scroll-select-menu {
                                 <div class="date-label"><?= (int)$bd; ?></div>
                                 <?php if ($chipLabel !== ''): ?>
                                     <div class="status-chip"><?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php endif; ?>
+                                <?php if (isset($holidayMatrix[$iso])): ?>
+                                    <div class="holiday-indicator" title="<?= htmlspecialchars($holidayMatrix[$iso]['name']); ?> (<?= htmlspecialchars($holidayMatrix[$iso]['type']); ?>)">
+                                        <i class="bi bi-calendar-event"></i>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (isset($demandForecastMatrix[$iso]) && $iso >= $todayISO): ?>
+                                    <?php 
+                                    $demand = $demandForecastMatrix[$iso];
+                                    $demandClass = 'demand-low';
+                                    if ($demand['score'] >= 76) $demandClass = 'demand-very-high';
+                                    elseif ($demand['score'] >= 51) $demandClass = 'demand-high';
+                                    elseif ($demand['score'] >= 26) $demandClass = 'demand-medium';
+                                    ?>
+                                    <div class="demand-strip <?= $demandClass; ?>" title="Demand: <?= $demand['score']; ?>% (<?= $demand['classification']; ?>)">
+                                        <span class="demand-score"><?= $demand['score']; ?>%</span>
+                                    </div>
                                 <?php endif; ?>
                             </div>
                         <?php endfor; ?>
@@ -1728,7 +1936,7 @@ ul.bcf-scroll-select-menu {
             </div>
             <?php endif; ?>
             <label>
-                Facility
+                <span>Facility <span class="frs-required-mark" aria-hidden="true">*</span></span>
                 <div class="input-wrapper">
                     <i class="bi bi-building input-icon"></i>
                     <select name="facility_id" id="facility-select" required>
@@ -1746,7 +1954,7 @@ ul.bcf-scroll-select-menu {
 
 
             <label>
-                <span class="bcf-label-row">Reservation Date <?= frs_field_tip('Chosen from the month grid on the booking page (not editable here).'); ?></span>
+                <span class="bcf-label-row">Reservation Date <span class="frs-required-mark" aria-hidden="true">*</span> <?= frs_field_tip('Chosen from the month grid on the booking page (not editable here).'); ?></span>
                 <input type="hidden" name="reservation_date" id="reservation-date" value="">
                 <div class="input-wrapper bcf-res-date-wrapper">
                     <i class="bi bi-calendar input-icon"></i>
@@ -1755,7 +1963,7 @@ ul.bcf-scroll-select-menu {
             </label>
 
             <label>
-                Start Time
+                <span>Start Time <span class="frs-required-mark" aria-hidden="true">*</span></span>
                 <div class="input-wrapper bcf-scroll-select-slot">
                     <i class="bi bi-clock input-icon"></i>
                     <button type="button" id="bcf-start-time-trigger" class="bcf-scroll-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="bcf-start-time-menu">
@@ -1780,7 +1988,7 @@ ul.bcf-scroll-select-menu {
             </label>
 
             <label>
-                End Time
+                <span>End Time <span class="frs-required-mark" aria-hidden="true">*</span></span>
                 <div class="input-wrapper bcf-scroll-select-slot">
                     <i class="bi bi-clock input-icon"></i>
                     <button type="button" id="bcf-end-time-trigger" class="bcf-scroll-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="bcf-end-time-menu">
@@ -1825,16 +2033,22 @@ ul.bcf-scroll-select-menu {
                     <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
                 </div>
                 <p id="conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
+                <p id="demand-prediction" style="margin:0.5rem 0 0.75rem; font-size:0.85rem; display:none;"></p>
+                <div id="demand-alternatives" style="display:none;">
+                    <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Suggested alternatives (lower demand):</p>
+                    <ul id="demand-alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
+                </div>
                 <span id="conflict-hint-wrap" style="display:none;"><?= frs_field_tip('Risk factors may include holidays/events, pending requests, and historical demand.'); ?></span>
             </div>
 
             <label>
-                Purpose of Use
-                <textarea name="purpose" id="purpose-input" rows="3" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required></textarea>
+                <span>Purpose of Use <span class="frs-required-mark" aria-hidden="true">*</span></span>
+                <textarea name="purpose" id="purpose-input" rows="3" maxlength="<?= (int)FRS_BOOKING_PURPOSE_MAX; ?>" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required></textarea>
+                <p class="bcf-char-count" id="purpose-char-count" aria-live="polite">0 / <?= (int)FRS_BOOKING_PURPOSE_MAX; ?></p>
             </label>
 
             <label>
-                Expected Number of Attendees <span style="color:#dc3545;">*</span>
+                <span>Expected Number of Attendees <span class="frs-required-mark" aria-hidden="true">*</span></span>
                 <div class="input-wrapper">
                     <i class="bi bi-people input-icon"></i>
                     <input type="number" name="expected_attendees" id="expected-attendees" min="1" required inputmode="numeric" placeholder="e.g., 50">
@@ -1842,19 +2056,10 @@ ul.bcf-scroll-select-menu {
                 <p id="bcf-capacity-msg" style="display:none; color:#b23030; margin:0.35rem 0 0; font-size:0.85rem;"></p>
             </label>
 
-            <div id="ai-recommendations" style="display:none; background:#e3f8ef; border:1px solid #0d7a43; border-radius:8px; padding:1rem; margin-top:1rem;">
-                <h4 style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
-                    <span>🤖</span> AI Recommendations
-                </h4>
-                <p id="recommendations-intro" style="margin:0 0 0.5rem; color:#0d7a43; font-size:0.85rem;">Enter your purpose, choose a date on the calendar, and start/end times. Suggestions use 50 attendees until you enter a number.</p>
-                <p id="recommendations-best-times" style="margin:0 0 0.75rem; color:#0d7a43; font-size:0.82rem; font-weight:600; display:none;"></p>
-                <div id="recommendations-loading" style="display:none; color:#0d7a43; font-size:0.85rem; font-style:italic;">Loading recommendations...</div>
-                <div id="recommendations-list" style="color:#0d7a43; font-size:0.85rem;"></div>
-            </div>
-
             <label>
                 Notes for staff (optional, appended to purpose on save)
-                <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="1200" placeholder="Parking, setup time, accessibility, etc."></textarea>
+                <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="<?= (int)FRS_BOOKING_NOTES_MAX; ?>" placeholder="Parking, setup time, accessibility, etc."></textarea>
+                <p class="bcf-char-count" id="booking-notes-char-count" aria-live="polite">0 / <?= (int)FRS_BOOKING_NOTES_MAX; ?></p>
             </label>
 
             <div class="frs-notice-panel frs-notice-muted">
@@ -1991,9 +2196,9 @@ ul.bcf-scroll-select-menu {
 </div>
 
 <!-- Booking Confirmation Modal -->
-<div id="bookingConfirmModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 13000; padding: 2rem; position: fixed; inset: 0;">
-    <div class="modal-dialog" style="max-width: 1000px; z-index: 13001; max-height: 85vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); margin: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+<div id="bookingConfirmModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 13000; position: fixed; inset: 0;">
+    <div class="modal-dialog booking-confirm-dialog" style="z-index: 13001;">
+        <div class="booking-confirm-header">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <div style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark)); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-clipboard-check" style="font-size: 1.5rem; color: white;"></i>
@@ -2003,98 +2208,98 @@ ul.bcf-scroll-select-menu {
                     <p style="margin: 0.25rem 0 0; color: #64748b; font-size: 0.875rem;">Review your reservation details</p>
                 </div>
             </div>
-            <button type="button" onclick="closeBookingConfirmModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;">&times;</button>
+            <button type="button" onclick="closeBookingConfirmModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;" aria-label="Close">&times;</button>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-building" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Facility & Schedule</h4>
+        <div class="booking-confirm-grid">
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-building" style="color: var(--gov-blue);"></i>
+                    <span>Facility & Schedule</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Facility</span>
-                        <span id="confirm-facility" style="color: #1e293b; font-weight: 600;"></span>
+                <div class="booking-confirm-fields">
+                    <div class="booking-confirm-field booking-confirm-field--full">
+                        <span class="booking-confirm-label">Facility</span>
+                        <span id="confirm-facility" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Date</span>
-                        <span id="confirm-date" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Date</span>
+                        <span id="confirm-date" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Time</span>
-                        <span id="confirm-time" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Duration</span>
+                        <span id="confirm-duration" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Duration</span>
-                        <span id="confirm-duration" style="color: #1e293b; font-weight: 600;"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-file-text" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Event Details</h4>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Purpose</span>
-                        <span id="confirm-purpose" style="color: #1e293b; font-weight: 600;"></span>
-                    </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Attendees</span>
-                        <span id="confirm-attendees" style="color: #1e293b;"></span>
-                    </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Notes</span>
-                        <span id="confirm-notes" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field booking-confirm-field--full">
+                        <span class="booking-confirm-label">Time</span>
+                        <span id="confirm-time" class="booking-confirm-value"></span>
                     </div>
                 </div>
             </div>
 
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-paperclip" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Supporting Document</h4>
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-file-text" style="color: var(--gov-blue);"></i>
+                    <span>Event Details</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Type</span>
-                        <span id="confirm-doc-type" style="color: #1e293b;"></span>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Purpose</span>
+                        <span id="confirm-purpose" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">File</span>
-                        <span id="confirm-doc-file" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Attendees</span>
+                        <span id="confirm-attendees" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Notes</span>
+                        <span id="confirm-notes" class="booking-confirm-value"></span>
                     </div>
                 </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; padding: 1.25rem; color: white;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-currency-peso" style="font-size: 1.1rem;"></i>
-                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Cost Breakdown</h4>
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-paperclip" style="color: var(--gov-blue);"></i>
+                    <span>Supporting Document</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Rate per Hour</span>
-                        <span id="confirm-rate" style="font-weight: 600;"></span>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Type</span>
+                        <span id="confirm-doc-type" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Hours</span>
-                        <span id="confirm-hours"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">File</span>
+                        <span id="confirm-doc-file" class="booking-confirm-value"></span>
                     </div>
-                    <div style="margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.2);">
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Total Cost</span>
-                        <span id="confirm-total" style="font-weight: 700; font-size: 1.5rem;"></span>
+                </div>
+            </div>
+
+            <div class="booking-confirm-card booking-confirm-card--cost">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-currency-peso"></i>
+                    <span>Cost Breakdown</span>
+                </div>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Rate per Hour</span>
+                        <span id="confirm-rate" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Hours</span>
+                        <span id="confirm-hours" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field" style="margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid rgba(255,255,255,0.25);">
+                        <span class="booking-confirm-label">Total Cost</span>
+                        <span id="confirm-total" class="booking-confirm-value booking-confirm-total"></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-            <button type="button" class="btn-outline" onclick="closeBookingConfirmModal()" style="flex: 1; padding: 0.875rem 1rem;">Edit Booking</button>
-            <button type="button" class="btn-primary" onclick="submitBooking()" style="flex: 1; padding: 0.875rem 1rem;">Confirm & Submit</button>
+        <div class="booking-confirm-actions">
+            <button type="button" class="btn-outline" onclick="closeBookingConfirmModal()">Edit Booking</button>
+            <button type="button" class="btn-primary" onclick="submitBooking()">Confirm & Submit</button>
         </div>
     </div>
 </div>
@@ -2133,11 +2338,130 @@ function closeBookingConfirmModal() {
     document.body.style.removeProperty('overflow');
 }
 
+function bcfEnsureBookingModalOpen() {
+    if (typeof window.openBookingFlowModal === 'function') {
+        window.openBookingFlowModal();
+    }
+}
+
+function bcfCloseBookingFlowModalForValidation() {
+    if (typeof window.closeBookingFlowModal === 'function') {
+        window.closeBookingFlowModal();
+    }
+}
+
+function bcfGetBookingValidationRules() {
+    const purposeMax = <?= (int)FRS_BOOKING_PURPOSE_MAX; ?>;
+    const notesMax = <?= (int)FRS_BOOKING_NOTES_MAX; ?>;
+    const docValidId = document.querySelector('input[name="doc_valid_id"]');
+    const modalFocusDelay = 380;
+
+    return [
+        {
+            selector: '#reservation-date',
+            focusSelector: '#bcf-reservation-date-display',
+            test: function (el) { return !!(el && String(el.value || '').trim()); },
+            message: 'Please choose a reservation date on the calendar.',
+            beforeFocus: function () {
+                bcfCloseBookingFlowModalForValidation();
+                const cal = document.querySelector('.booking-calendar-myres-panel');
+                if (cal) {
+                    cal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            },
+            focusDelay: 120,
+        },
+        {
+            selector: '#facility-select',
+            focusSelector: '#facility-select',
+            test: function (el) { return !!(el && String(el.value || '').trim()); },
+            message: 'Please select a facility.',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: '#start-time',
+            focusSelector: '#bcf-start-time-trigger',
+            test: function (el) { return !!(el && String(el.value || '').trim()); },
+            message: 'Please select a start time.',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: '#end-time',
+            focusSelector: '#bcf-end-time-trigger',
+            test: function (el) {
+                const start = document.getElementById('start-time');
+                const endVal = el ? String(el.value || '').trim() : '';
+                const startVal = start ? String(start.value || '').trim() : '';
+                if (!endVal || !startVal) return false;
+                try {
+                    return endVal > startVal;
+                } catch (e) {
+                    console.error('End time comparison error:', e);
+                    return false;
+                }
+            },
+            message: 'End time must be after start time.',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: '#purpose-input',
+            focusSelector: '#purpose-input',
+            test: function (el) {
+                const val = el ? String(el.value || '').trim() : '';
+                return val.length > 0 && val.length <= purposeMax;
+            },
+            message: 'Please enter a purpose (' + purposeMax + ' characters max).',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: '#expected-attendees',
+            focusSelector: '#expected-attendees',
+            test: function (el) {
+                const val = el ? String(el.value || '').trim() : '';
+                if (!val) return false;
+                const n = parseInt(val, 10);
+                return !isNaN(n) && n >= 1;
+            },
+            message: 'Please enter the expected number of attendees (at least 1).',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: '#booking-notes',
+            focusSelector: '#booking-notes',
+            test: function (el) {
+                const val = el ? String(el.value || '') : '';
+                return val.length <= notesMax;
+            },
+            message: 'Notes for staff must be ' + notesMax + ' characters or fewer.',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+    ].concat(docValidId && docValidId.required ? [{
+        selector: 'input[name="doc_valid_id"]',
+        focusSelector: 'input[name="doc_valid_id"]',
+        test: function (el) { return !!(el && el.files && el.files.length > 0); },
+        message: 'Please upload a valid ID document.',
+        beforeFocus: bcfEnsureBookingModalOpen,
+        focusDelay: modalFocusDelay,
+    }] : []);
+}
+
 function openBookingConfirmModal() {
     const form = document.getElementById('main-booking-form');
     if (!form) return;
 
-    // Get form values
+    if (typeof window.frsFocusFirstInvalid === 'function') {
+        const result = window.frsFocusFirstInvalid(bcfGetBookingValidationRules());
+        if (!result.ok) {
+            return;
+        }
+    }
+
     const facilitySelect = document.getElementById('facility-select');
     const dateInput = document.getElementById('reservation-date');
     const startTimeInput = document.getElementById('start-time');
@@ -2148,24 +2472,11 @@ function openBookingConfirmModal() {
     const docTypeSelect = document.querySelector('select[name="event_document_type"]');
     const docFileInput = document.querySelector('input[name="event_supporting_doc"]');
 
-    // Validate required fields
-    if (!facilitySelect.value || !dateInput.value || !startTimeInput.value || !endTimeInput.value || !purposeInput.value || !attendeesInput.value) {
-        alert('Please fill in all required fields.');
-        return;
-    }
-
     // Calculate duration and cost
     const startTime = new Date(`2000-01-01T${startTimeInput.value}`);
     const endTime = new Date(`2000-01-01T${endTimeInput.value}`);
     const durationMs = endTime - startTime;
     const durationHours = durationMs / (1000 * 60 * 60);
-
-    if (durationHours <= 0) {
-        alert('End time must be after start time.');
-        return;
-    }
-
-    // Get facility rate
     const selectedOption = facilitySelect.options[facilitySelect.selectedIndex];
     const facilityName = selectedOption.text;
     const facilityData = <?= $frsJsonForInlineScript($facilities); ?>;
@@ -2178,7 +2489,7 @@ function openBookingConfirmModal() {
     document.getElementById('confirm-date').textContent = new Date(dateInput.value).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     document.getElementById('confirm-time').textContent = `${formatTime(startTimeInput.value)} - ${formatTime(endTimeInput.value)}`;
     document.getElementById('confirm-duration').textContent = `${durationHours.toFixed(1)} hour(s)`;
-    document.getElementById('confirm-purpose').textContent = purposeInput.value;
+    document.getElementById('confirm-purpose').textContent = purposeInput ? purposeInput.value : '';
     document.getElementById('confirm-attendees').textContent = attendeesInput.value;
     document.getElementById('confirm-notes').textContent = notesInput.value || 'None';
     document.getElementById('confirm-doc-type').textContent = docTypeSelect ? docTypeSelect.options[docTypeSelect.selectedIndex].text : 'None';
@@ -2225,11 +2536,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('reservation-date');
     const startTimeInput = document.getElementById('start-time');
     const endTimeInput = document.getElementById('end-time');
+    const purposeInput = document.getElementById('purpose-input');
     const messageBox = document.getElementById('conflict-warning');
     const messageText = document.getElementById('conflict-message');
     const altWrap = document.getElementById('conflict-alternatives');
     const altList = document.getElementById('alternatives-list');
     const riskLine = document.getElementById('conflict-risk');
+    const demandPrediction = document.getElementById('demand-prediction');
+    const demandAlternativesWrap = document.getElementById('demand-alternatives');
+    const demandAlternativesList = document.getElementById('demand-alternatives-list');
 
     const eventMap = <?= $frsJsonForInlineScript($eventMap); ?>;
     const basePath = <?= $frsJsonForInlineScript((string)$basePath); ?>;
@@ -2253,6 +2568,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const BCF_OPEN_ON_LOAD = <?= !empty($bcfOpenBookingModal) ? 'true' : 'false'; ?>;
+    const BCF_FIELD_SELECTORS = <?= json_encode($bookingFieldSelectors, JSON_UNESCAPED_SLASHES); ?>;
+    const BCF_PURPOSE_MAX = <?= (int)FRS_BOOKING_PURPOSE_MAX; ?>;
+    const BCF_NOTES_MAX = <?= (int)FRS_BOOKING_NOTES_MAX; ?>;
+
+    function bcfBindCharCount(textarea, counterEl, max) {
+        if (!textarea || !counterEl) {
+            return;
+        }
+        function update() {
+            const len = (textarea.value || '').length;
+            counterEl.textContent = len + ' / ' + max;
+            counterEl.classList.toggle('is-near-limit', len > max * 0.9);
+            counterEl.classList.toggle('is-at-limit', len >= max);
+        }
+        textarea.addEventListener('input', update);
+        update();
+    }
+
+    bcfBindCharCount(document.getElementById('purpose-input'), document.getElementById('purpose-char-count'), BCF_PURPOSE_MAX);
+    bcfBindCharCount(document.getElementById('booking-notes'), document.getElementById('booking-notes-char-count'), BCF_NOTES_MAX);
+
+    const bookingErr = document.querySelector('.booking-error[data-error-field]');
+    if (bookingErr && bookingErr.dataset.errorField && window.frsFocusByFieldKey) {
+        setTimeout(function () {
+            if (BCF_OPEN_ON_LOAD && typeof window.openBookingFlowModal === 'function') {
+                window.openBookingFlowModal();
+            }
+            window.frsFocusByFieldKey(bookingErr.dataset.errorField, BCF_FIELD_SELECTORS);
+        }, BCF_OPEN_ON_LOAD ? 350 : 120);
+    }
     const bookCalFacilityId = <?= (int)$bookFacilityPick; ?>;
     const BCF_CAL_YEAR = <?= (int)$bookCalYear; ?>;
     const BCF_CAL_MONTH = <?= (int)$bookCalMonth; ?>;
@@ -2402,7 +2747,9 @@ document.addEventListener('DOMContentLoaded', function() {
             capMsg.style.display = 'none';
             capMsg.textContent = '';
         }
-        btn.disabled = !!(window._bcfLastConflictHard || capErr || attendeeMissing);
+        // Only disable button for hard conflicts (facility fully booked), not for missing required fields
+        // Validation will handle missing fields on click
+        btn.disabled = !!window._bcfLastConflictHard;
     }
 
     function updateBcfReservationDateReadout() {
@@ -2626,6 +2973,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = '';
         }
     }
+    window.openBookingFlowModal = openBookingFlowModal;
+    window.closeBookingFlowModal = closeBookingFlowModal;
 
     function bcfApplyTimeSlotToInputs(slotStr) {
         if (!slotStr || !startTimeInput || !endTimeInput) return;
@@ -2927,9 +3276,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 riskLine.style.display = 'none';
                 riskLine.textContent = '';
             }
+            if (demandPrediction) {
+                demandPrediction.style.display = 'none';
+                demandPrediction.textContent = '';
+            }
+            if (demandAlternativesWrap) {
+                demandAlternativesWrap.style.display = 'none';
+                demandAlternativesList.innerHTML = '';
+            }
             window._bcfLastConflictHard = false;
             refreshBookingGates();
         }, 300);
+    }
+
+    function showDemandPrediction(data) {
+        if (!demandPrediction || !data.demand_score) return;
+        
+        const score = data.demand_score;
+        const classification = data.demand_classification;
+        const confidence = data.demand_confidence;
+        
+        let color = '#166534';
+        let label = 'Low Demand';
+        
+        if (score >= 76) {
+            color = '#dc2626';
+            label = 'Very High Demand';
+        } else if (score >= 51) {
+            color = '#9a3412';
+            label = 'High Demand';
+        } else if (score >= 26) {
+            color = '#92400e';
+            label = 'Medium Demand';
+        }
+        
+        demandPrediction.style.display = 'block';
+        demandPrediction.style.color = color;
+        demandPrediction.innerHTML = `<strong>Predicted Demand:</strong> ${score}% (${label})`;
+        
+        if (confidence) {
+            demandPrediction.innerHTML += ` • Confidence: ${confidence}%`;
+        }
+        
+        // Show alternative suggestions if demand is high
+        if (score >= 50 && data.demand_alternatives && data.demand_alternatives.length > 0) {
+            if (demandAlternativesWrap && demandAlternativesList) {
+                demandAlternativesWrap.style.display = 'block';
+                demandAlternativesList.innerHTML = '';
+                
+                data.demand_alternatives.slice(0, 3).forEach(alt => {
+                    const li = document.createElement('li');
+                    const altDate = new Date(alt.date);
+                    const formattedDate = altDate.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                    li.innerHTML = `<strong>${formattedDate}</strong> • ${alt.time_slot} (${alt.score}% ${alt.classification}) - ${alt.reason}`;
+                    demandAlternativesList.appendChild(li);
+                });
+            }
+        } else {
+            if (demandAlternativesWrap) {
+                demandAlternativesWrap.style.display = 'none';
+            }
+        }
     }
 
     function showMessage(text, alternatives, riskScore, eventLabel, conflictType = 'hard') {
@@ -2968,13 +3379,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (conflictTitle) conflictTitle.textContent = 'Warning - Pending Reservations';
             if (conflictTitle) conflictTitle.style.color = '#856404';
         } else if (conflictType === 'risk') {
-            // High risk - orange/warning
-            messageBox.style.background = '#fff4e5';
-            messageBox.style.border = '2px solid #ffc107';
-            messageText.style.color = '#856404';
+            // High risk - red/warning
+            messageBox.style.background = '#fee2e2';
+            messageBox.style.border = '2px solid #dc2626';
+            messageText.style.color = '#dc2626';
             if (conflictIcon) conflictIcon.textContent = '⚠️';
             if (conflictTitle) conflictTitle.textContent = 'High Demand Period';
-            if (conflictTitle) conflictTitle.style.color = '#856404';
+            if (conflictTitle) conflictTitle.style.color = '#dc2626';
         } else {
             // Hard conflict (approved) - red/error, blocks submission
             messageBox.style.background = '#fdecee';
@@ -3071,6 +3482,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (altWrap) altWrap.style.display = 'none';
         if (riskLine) riskLine.style.display = 'none';
+        if (demandPrediction) demandPrediction.style.display = 'none';
+        if (demandAlternativesWrap) demandAlternativesWrap.style.display = 'none';
         
         try {
             const url = basePath + '/dashboard/ai-conflict-check';
@@ -3125,6 +3538,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pendingCount = data.pending_count || data.soft_conflicts.length;
                 const msg = `Warning: ${pendingCount} pending reservation(s) exist for this slot. You can still book, but admin will approve only one based on priority.`;
                 showMessage(msg, [], data.risk_score ?? null, eventLabel, 'soft');
+                showDemandPrediction(data);
                 lastShown = {fid, date, timeSlot};
             } 
             // High risk or holiday
@@ -3134,6 +3548,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
                     : 'Higher demand expected. Consider alternative slots.';
                 showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel, 'risk');
+                showDemandPrediction(data);
                 lastShown = {fid, date, timeSlot};
             } else {
                 window._bcfLastConflictHard = false;
@@ -3142,6 +3557,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ? `Slot is available! Note: ${eventLabel} may increase demand.`
                     : '✓ This time slot is available for booking!';
                 showMessage(successMsg, [], data.risk_score ?? null, eventLabel, 'success');
+                showDemandPrediction(data);
                 lastShown = {fid, date, timeSlot};
                 
                 // Keep success message visible - don't auto-hide
@@ -3325,316 +3741,14 @@ document.addEventListener('DOMContentLoaded', function() {
         bcfRebuildTimeMenus();
     });
     
-    // Facility Recommendations (dashboard route — not legacy ai_recommendations_api.php)
-    const purposeInput = document.getElementById('purpose-input');
-    const recommendationsDiv = document.getElementById('ai-recommendations');
-    const recommendationsList = document.getElementById('recommendations-list');
-    let recommendationTimeout = null;
-
-    const expectedAttendeesInput = document.getElementById('expected-attendees');
-
-    /** Hint until purpose + calendar date + times exist; attendees optional (API defaults to 50). */
-    function syncAiRecommendationsGate() {
-        const purpose = purposeInput?.value?.trim() || '';
-        const loadingEl = document.getElementById('recommendations-loading');
-        const bestTimesEl = document.getElementById('recommendations-best-times');
-        const introEl = document.getElementById('recommendations-intro');
-
-        if (!purpose || purpose.length < 3) {
-            if (recommendationsDiv) recommendationsDiv.style.display = 'none';
-            if (loadingEl) loadingEl.style.display = 'none';
-            return;
-        }
-
-        const date = (dateInput?.value || '').trim();
-        const startTime = (startTimeInput?.value || '').trim();
-        const endTime = (endTimeInput?.value || '').trim();
-
-        const missing = [];
-        if (!date) {
-            missing.push('reservation date — tap a day on the month grid (or close the modal and pick a date first)');
-        }
-        if (!startTime || !endTime) {
-            missing.push('start and end times — use the time dropdowns above');
-        }
-
-        if (missing.length) {
-            if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-            if (introEl) {
-                introEl.textContent = 'Still needed for AI suggestions: ' + missing.join(' ') + ' Expected attendees can be filled later (defaults to 50 for ranking until you enter a number).';
-            }
-            if (loadingEl) loadingEl.style.display = 'none';
-            if (bestTimesEl) bestTimesEl.style.display = 'none';
-            if (recommendationsList) recommendationsList.innerHTML = '';
-            return;
-        }
-
-        fetchRecommendationsCore();
-    }
-
-    function debouncedSyncAiRecommendations() {
-        if (recommendationTimeout) clearTimeout(recommendationTimeout);
-        recommendationTimeout = setTimeout(syncAiRecommendationsGate, 600);
-    }
-
-    document.addEventListener('bcf-booking-modal-opened', function () {
-        debouncedSyncAiRecommendations();
-    });
-    
-    async function fetchRecommendationsCore() {
-        const purpose = purposeInput?.value?.trim();
-        if (!purpose || purpose.length < 3) {
-            return;
-        }
-
-        const loadingEl = document.getElementById('recommendations-loading');
-        
-        const date = dateInput?.value;
-        const startTime = startTimeInput?.value;
-        const endTime = endTimeInput?.value;
-        if (!date || !startTime || !endTime) return;
-
-        const timeSlot = startTime + ' - ' + endTime;
-        const expectedAttendeesRaw = (expectedAttendeesInput?.value || '').trim();
-        const expectedAttendees = expectedAttendeesRaw !== '' ? expectedAttendeesRaw : '50';
-        // Show loading indicator
-        if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-        if (loadingEl) loadingEl.style.display = 'block';
-        if (recommendationsList) recommendationsList.innerHTML = '';
-        
-        try {
-            const formData = new URLSearchParams();
-            formData.append('purpose', purpose);
-            formData.append('reservation_date', date);
-            formData.append('time_slot', timeSlot);
-            formData.append('expected_attendees', expectedAttendees);
-            
-            const response = await bcfFetchPost(basePath + '/dashboard/facility-recommendations', formData);
-            
-            if (!response.ok) {
-                throw new Error('Failed to fetch recommendations');
-            }
-            
-            const rawBody = await response.text();
-            let data;
-            try {
-                data = JSON.parse(rawBody);
-            } catch (parseErr) {
-                console.error('facility-recommendations: non-JSON response', rawBody.substring(0, 400));
-                throw parseErr;
-            }
-            if (data.error) {
-                console.warn('facility-recommendations:', data.error);
-                if (loadingEl) loadingEl.style.display = 'none';
-                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-                const errIntro = document.getElementById('recommendations-intro');
-                if (errIntro) errIntro.textContent = String(data.error);
-                if (recommendationsList) recommendationsList.innerHTML = '';
-                return;
-            }
-            
-            // Store recommendations data for use in selectRecommendation
-            currentRecommendationsData = data;
-            
-            // Hide loading indicator
-            if (loadingEl) loadingEl.style.display = 'none';
-
-            const introEl = document.getElementById('recommendations-intro');
-            if (introEl) {
-                const engine = data.recommendation_engine || (data.ml_enabled ? 'sklearn' : 'php_rules');
-                if (engine === 'php_rules') {
-                    introEl.textContent = 'Suggested facilities for your event (match level, distance, and capacity):';
-                } else {
-                    introEl.textContent = 'AI-ranked facilities for your event (match level, distance, and capacity):';
-                }
-            }
-            
-            if (data.recommendations && data.recommendations.length > 0) {
-                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-                const bestTimesEl = document.getElementById('recommendations-best-times');
-                if (bestTimesEl) {
-                    if (data.best_times_label) {
-                        const timesIcon = data.suggested_times_source === 'database' ? '📊 ' : '🕐 ';
-                        bestTimesEl.textContent = timesIcon + data.best_times_label;
-                        bestTimesEl.style.display = 'block';
-                    } else {
-                        bestTimesEl.style.display = 'none';
-                    }
-                }
-                if (recommendationsList) {
-                    const recScores = data.recommendations.map(function (r) {
-                        return r.ml_relevance_score != null ? Number(r.ml_relevance_score) : NaN;
-                    }).filter(function (n) { return !isNaN(n); });
-                    function bcfMatchTier(score) {
-                        const s = Number(score);
-                        if (isNaN(s) || recScores.length === 0) return 'MEDIUM';
-                        const max = Math.max.apply(null, recScores);
-                        const min = Math.min.apply(null, recScores);
-                        if (max === min) return 'HIGH';
-                        const ratio = (s - min) / (max - min);
-                        if (ratio >= 0.66) return 'HIGH';
-                        if (ratio >= 0.33) return 'MEDIUM';
-                        return 'LOW';
-                    }
-                    function bcfTierStyle(tier) {
-                        if (tier === 'HIGH') return 'background:#dcfce7;color:#14532d;border:1px solid #86efac;';
-                        if (tier === 'LOW') return 'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;';
-                        return 'background:#fef9c3;color:#713f12;border:1px solid #fde047;';
-                    }
-                    recommendationsList.innerHTML = data.recommendations.map((rec, idx) => {
-                        const tier = bcfMatchTier(rec.ml_relevance_score);
-                        const tierStyle = bcfTierStyle(tier);
-                        let reason = rec.reason || 'Recommended based on your event purpose';
-                        if (rec.distance && reason.indexOf(rec.distance) === -1) {
-                            reason += ' · ' + rec.distance + ' from you';
-                        }
-                        
-                        // Format operating hours for display
-                        let operatingHoursDisplay = '';
-                        if (rec.operating_hours) {
-                            const hours = rec.operating_hours;
-                            // Try to format nicely
-                            if (hours.includes('-')) {
-                                const parts = hours.split('-').map(h => h.trim());
-                                if (parts.length === 2) {
-                                    // Convert 24-hour to 12-hour if needed
-                                    const formatTime = (timeStr) => {
-                                        if (timeStr.match(/^\d{2}:\d{2}$/)) {
-                                            const [h, m] = timeStr.split(':').map(Number);
-                                            const period = h >= 12 ? 'PM' : 'AM';
-                                            const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-                                            return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
-                                        }
-                                        return timeStr;
-                                    };
-                                    operatingHoursDisplay = `🕐 ${formatTime(parts[0])} - ${formatTime(parts[1])}`;
-                                } else {
-                                    operatingHoursDisplay = `🕐 ${hours}`;
-                                }
-                            } else {
-                                operatingHoursDisplay = `🕐 ${hours}`;
-                            }
-                        }
-                        
-                        const hoursRow = operatingHoursDisplay
-                            ? `<div style="font-size:0.75rem; color:#0d7a43; font-weight:500; margin-top:0.25rem;">${operatingHoursDisplay}</div>`
-                            : '';
-                        return `
-                            <div class="recommendation-item" 
-                                 data-facility-id="${rec.id}" 
-                                 data-facility-name="${rec.name.replace(/"/g, '&quot;')}"
-                                 style="padding:0.75rem; margin-bottom:0.5rem; background:white; border-radius:6px; border:1px solid #d0e8d0; cursor:pointer; transition:all 0.2s ease;"
-                                 onmouseover="this.style.background='#f0f8f0'; this.style.borderColor='#0d7a43';"
-                                 onmouseout="this.style.background='white'; this.style.borderColor='#d0e8d0';"
-                                 onclick="selectRecommendation(${rec.id}, '${rec.name.replace(/'/g, "\\'")}')">
-                                <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.25rem;">
-                                    <strong style="color:#0d7a43; font-size:0.95rem;">${idx + 1}. ${rec.name}</strong>
-                                    <span style="font-weight:700;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:999px;${tierStyle}">${tier} match</span>
-                                </div>
-                                <div style="font-size:0.8rem; color:#666; margin-top:0.25rem; margin-bottom:0.25rem;">${reason}</div>
-                                ${hoursRow}
-                                <div style="font-size:0.7rem; color:#8b95b5; margin-top:0.25rem; font-style:italic;">Click to select this facility</div>
-                            </div>
-                        `;
-                    }).join('');
-                }
-            } else {
-                if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-                const emptyIntro = document.getElementById('recommendations-intro');
-                if (emptyIntro) emptyIntro.textContent = 'No facility suggestions returned (none available or filters excluded all). Try a different purpose or check that facilities are marked available.';
-                const bestTimesElEmpty = document.getElementById('recommendations-best-times');
-                if (bestTimesElEmpty) bestTimesElEmpty.style.display = 'none';
-            }
-        } catch (error) {
-            console.error('Recommendation error:', error);
-            if (loadingEl) loadingEl.style.display = 'none';
-            if (recommendationsDiv) recommendationsDiv.style.display = 'block';
-            const failIntro = document.getElementById('recommendations-intro');
-            if (failIntro) {
-                failIntro.textContent = 'Could not load suggestions. Confirm you are logged in and open DevTools → Network for POST ' + basePath + '/dashboard/facility-recommendations (expect 200 JSON).';
-            }
-            if (recommendationsList) recommendationsList.innerHTML = '';
-        }
-    }
-
     purposeInput?.addEventListener('input', function () {
         const pv = document.getElementById('bcf-purpose-preview');
         if (pv) pv.value = this.value;
         try { sessionStorage.setItem('bcf_booking_purpose', this.value); } catch (e) { /* ignore */ }
-        bcfDebouncedSmartHints();
-        debouncedSyncAiRecommendations();
-    });
-    purposeInput?.addEventListener('blur', syncAiRecommendationsGate);
-    dateInput?.addEventListener('change', syncAiRecommendationsGate);
-    dateInput?.addEventListener('input', debouncedSyncAiRecommendations);
-    startTimeInput?.addEventListener('change', syncAiRecommendationsGate);
-    endTimeInput?.addEventListener('change', syncAiRecommendationsGate);
-    startTimeInput?.addEventListener('input', debouncedSyncAiRecommendations);
-    endTimeInput?.addEventListener('input', debouncedSyncAiRecommendations);
-    expectedAttendeesInput?.addEventListener('input', function () {
-        refreshBookingGates();
-        debouncedSyncAiRecommendations();
-    });
-    expectedAttendeesInput?.addEventListener('change', function () {
-        refreshBookingGates();
-        syncAiRecommendationsGate();
-    });
-    // Function to select a recommendation and auto-fill facility and suggested time
-    // Make it globally accessible for inline onclick handlers
-    window.selectRecommendation = function(facilityId, facilityName) {
-        if (!facilitySel || !startTimeInput || !endTimeInput) return;
-        
-        // Set the facility
-        facilitySel.value = facilityId;
-        filterTimeSlotsByOperatingHours(); // Filter time slots first
-        
-        // Try to set suggested time from recommendations if available
-        if (currentRecommendationsData && currentRecommendationsData.suggested_times && currentRecommendationsData.suggested_times.length > 0) {
-            // Use the first suggested time slot (format: "HH:MM - HH:MM")
-            const suggestedSlot = currentRecommendationsData.suggested_times[0];
-            if (suggestedSlot && suggestedSlot.includes(' - ')) {
-                const [start, end] = suggestedSlot.split(' - ').map(t => t.trim());
-                // Times are already in 24-hour format (e.g., "08:00", "12:00")
-                if (start && end && start.match(/^\d{2}:\d{2}$/) && end.match(/^\d{2}:\d{2}$/)) {
-                    // Set times after filtering is done
-                    setTimeout(() => {
-                        // Check if the times are still available after filtering
-                        const startOpt = startTimeInput.querySelector(`option[value="${start}"]`);
-                        const endOpt = endTimeInput.querySelector(`option[value="${end}"]`);
-                        if (startOpt && !startOpt.disabled && endOpt && !endOpt.disabled) {
-                            startTimeInput.value = start;
-                            endTimeInput.value = end;
-                            startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                            endTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        } else {
-                            // If suggested time is not available, use first available time
-                            const firstStartOpt = startTimeInput.querySelector('option:not([disabled]):not([value=""])');
-                            if (firstStartOpt) {
-                                startTimeInput.value = firstStartOpt.value;
-                                startTimeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                            }
-                        }
-                    }, 150);
-                }
-            }
+        if (typeof bcfDebouncedSmartHints === 'function') {
+            bcfDebouncedSmartHints();
         }
-        
-        facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
-        
-        // Scroll to facility select to show it's been selected
-        facilitySel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        
-        // Show a brief notification
-        const notification = document.createElement('div');
-        notification.style.cssText = 'position:fixed; top:20px; right:20px; background:#0d7a43; color:white; padding:1rem 1.5rem; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:10000; font-size:0.9rem;';
-        notification.textContent = `✓ Selected: ${facilityName}`;
-        document.body.appendChild(notification);
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transition = 'opacity 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }, 2000);
-    };
+    });
     
     // Function to parse operating hours and return start/end times in 24-hour format
     function parseOperatingHours(operatingHours) {
@@ -3901,29 +4015,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('bcf-submit-booking')?.addEventListener('click', function (ev) {
         ev.preventDefault();
-        openBookingConfirmModal();
-    });
-
-    document.getElementById('main-booking-form')?.addEventListener('submit', function (ev) {
-        const d = dateInput ? (dateInput.value || '').trim() : '';
-        if (!d) {
-            ev.preventDefault();
-            alert('Please choose a reservation date by selecting a day on the calendar.');
-            return;
+        if (typeof window.frsFocusFirstInvalid === 'function') {
+            const result = window.frsFocusFirstInvalid(bcfGetBookingValidationRules());
+            if (!result.ok) {
+                return;
+            }
         }
         const attEl = document.getElementById('expected-attendees');
         const attRaw = attEl ? (attEl.value || '').trim() : '';
         const n = parseInt(attRaw, 10);
-        if (!attRaw || isNaN(n) || n < 1) {
-            ev.preventDefault();
-            alert('Please enter the expected number of attendees (at least 1).');
-            if (attEl) attEl.reportValidity();
+        const maxC = window._bcfMaxFacilityCapacity;
+        if (maxC != null && !isNaN(maxC) && n > maxC) {
+            if (window.frsFocusBySelector) {
+                window.frsFocusBySelector('#expected-attendees');
+            }
             return;
         }
+        openBookingConfirmModal();
+    });
+
+    document.getElementById('main-booking-form')?.addEventListener('submit', function (ev) {
+        if (typeof window.frsFocusFirstInvalid === 'function') {
+            const result = window.frsFocusFirstInvalid(bcfGetBookingValidationRules());
+            if (!result.ok) {
+                ev.preventDefault();
+                return;
+            }
+        }
+        const attEl = document.getElementById('expected-attendees');
+        const attRaw = attEl ? (attEl.value || '').trim() : '';
+        const n = parseInt(attRaw, 10);
         const maxC = window._bcfMaxFacilityCapacity;
         if (maxC != null && !isNaN(maxC) && n > maxC) {
             ev.preventDefault();
-            alert('Expected attendees (' + n + ') cannot exceed this facility\'s maximum occupancy (' + maxC + ').');
+            if (window.frsFocusBySelector) {
+                window.frsFocusBySelector('#expected-attendees');
+            }
         }
     });
 
