@@ -133,12 +133,18 @@ function mapCIMMToCPRF(array $rawSchedules): array {
             $stableId = 'CIMM-S-' . (string)$schedId;
         }
 
+        $location = trim((string)($row['location'] ?? ''));
+        $matchedFacilityName = trim((string)($row['facility_name'] ?? ''));
+        $cprfFacilityId = isset($row['facility_id']) ? (int)$row['facility_id'] : 0;
+
         $mappedSchedules[] = [
             'id' => $stableId,
             'source' => $normalizedSource,
             'sched_id' => $schedId ?? '',
             'rep_id' => $repId ?? '',
-            'facility_name' => $row['location'] ?? '',
+            'facility_name' => $matchedFacilityName !== '' ? $matchedFacilityName : $location,
+            'matched_facility_name' => $matchedFacilityName,
+            'cprf_facility_id' => $cprfFacilityId > 0 ? $cprfFacilityId : null,
             'maintenance_type' => $row['task'] ?? '',
             'scheduled_start' => $row['starting_date'] ?? '',
             'scheduled_end' => $row['estimated_completion_date'] ?? '',
@@ -153,12 +159,100 @@ function mapCIMMToCPRF(array $rawSchedules): array {
             'created_at' => $row['created_at'] ?? date('Y-m-d H:i:s'),
             // Additional fields for calendar compatibility
             'task' => $row['task'] ?? '',
-            'location' => $row['location'] ?? '',
+            'location' => $location,
             'schedule_date' => date('Y-m-d', strtotime($row['starting_date'] ?? 'now'))
         ];
     }
     
     return $mappedSchedules;
+}
+
+/**
+ * Normalize CIMM maintenance status labels to snake_case tokens.
+ */
+function cimmNormalizeMaintenanceStatus(string $status): string
+{
+    return strtolower(str_replace([' ', '-'], '_', trim($status)));
+}
+
+/**
+ * Whether today's date falls inside a schedule's start/end day range.
+ */
+function cimmScheduleWithinDateWindow(array $schedule, ?int $now = null): bool
+{
+    $now = $now ?? time();
+    $startTs = strtotime((string)($schedule['scheduled_start'] ?? ''));
+    $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
+    if (!$startTs) {
+        return false;
+    }
+
+    $startDay = strtotime(date('Y-m-d', $startTs));
+    $endDay = $endTs ? strtotime(date('Y-m-d', $endTs)) : $startDay;
+    $today = strtotime(date('Y-m-d', $now));
+
+    return $today >= $startDay && $today <= $endDay;
+}
+
+/**
+ * True when CIMM indicates the facility should be treated as under maintenance now.
+ */
+function cimmIsActiveMaintenanceSchedule(array $schedule, ?int $now = null): bool
+{
+    $now = $now ?? time();
+    $status = cimmNormalizeMaintenanceStatus((string)($schedule['status'] ?? ''));
+
+    if (in_array($status, ['completed', 'cancelled'], true)) {
+        return false;
+    }
+
+    $inWindow = cimmScheduleWithinDateWindow($schedule, $now);
+    $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
+
+    if (in_array($status, ['in_progress', 'delayed', 'under_maintenance'], true)) {
+        if (!$endTs) {
+            return true;
+        }
+        return $inWindow || $now <= $endTs;
+    }
+
+    if ($status === 'scheduled' && $inWindow) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Resolve a mapped CIMM schedule to a local facilities.id.
+ *
+ * @param array<int,array<string,mixed>> $facilities
+ */
+function cimmResolveScheduleFacilityId(array $schedule, array $facilities): ?int
+{
+    $cprfFacilityId = (int)($schedule['cprf_facility_id'] ?? 0);
+    if ($cprfFacilityId > 0) {
+        foreach ($facilities as $facility) {
+            if ((int)($facility['id'] ?? 0) === $cprfFacilityId) {
+                return $cprfFacilityId;
+            }
+        }
+    }
+
+    $candidates = array_filter([
+        trim((string)($schedule['matched_facility_name'] ?? '')),
+        trim((string)($schedule['facility_name'] ?? '')),
+        trim((string)($schedule['location'] ?? '')),
+    ]);
+
+    foreach ($candidates as $candidate) {
+        $facilityId = cimmMatchFacilityId($candidate, $facilities);
+        if ($facilityId) {
+            return $facilityId;
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -246,13 +340,20 @@ function cimmMatchFacilityId(string $cimmLocation, array $facilities): ?int
             $score = max($score, 60);
         }
 
+        // Shared primary identifier (e.g. "Cassanova" in both names).
+        $needlePrimary = explode(' ', $needle)[0] ?? '';
+        $namePrimary = explode(' ', $name)[0] ?? '';
+        if ($needlePrimary !== '' && strlen($needlePrimary) >= 5 && $needlePrimary === $namePrimary) {
+            $score = max($score, 85);
+        }
+
         if ($score > $bestScore) {
             $bestScore = $score;
             $bestId = $facilityId;
         }
     }
 
-    return $bestScore >= 75 ? $bestId : null;
+    return $bestScore >= 70 ? $bestId : null;
 }
 
 /**
@@ -438,38 +539,25 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         $facilityById[(int)$facility['id']] = $facility;
     }
 
-    $managedFacilityIds = [];
     $activeMaintenanceFacilityIds = [];
     $matchedSchedulesForBlackout = [];
     $desiredBlackouts = [];
     $now = time();
     $cimmManagedMaintenance = frs_cimm_load_managed_maintenance_ids();
+    $facilitiesWentToMaintenance = [];
+    $facilitiesWentToAvailable = [];
 
     foreach ($mappedSchedules as $schedule) {
-        $rawLocation = (string)($schedule['facility_name'] ?? $schedule['location'] ?? '');
-        $facilityId = cimmMatchFacilityId($rawLocation, $facilities);
+        $facilityId = cimmResolveScheduleFacilityId($schedule, $facilities);
         if (!$facilityId) {
             $summary['unmatched_schedule_count']++;
             continue;
         }
 
         $summary['matched_schedule_count']++;
-        $managedFacilityIds[$facilityId] = true;
         $matchedSchedulesForBlackout[] = ['facility_id' => $facilityId, 'schedule' => $schedule];
 
-        $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
-        $isActiveStatus = in_array($status, ['in_progress', 'delayed'], true);
-
-        $startTs = strtotime((string)($schedule['scheduled_start'] ?? ''));
-        $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
-        $withinWindow = false;
-        if ($startTs && $endTs) {
-            $withinWindow = ($now >= $startTs && $now <= $endTs);
-        } elseif ($startTs) {
-            $withinWindow = ($now >= $startTs);
-        }
-
-        if ($isActiveStatus && $withinWindow) {
+        if (cimmIsActiveMaintenanceSchedule($schedule, $now)) {
             $activeMaintenanceFacilityIds[$facilityId] = true;
         }
     }
@@ -481,17 +569,20 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
             $currentStatus = strtolower((string)($facility['status'] ?? 'available'));
             $isActiveNow = isset($activeMaintenanceFacilityIds[$facilityId]);
             $cimmManaged = isset($cimmManagedMaintenance[$facilityId]);
+            $facilityName = (string)($facility['name'] ?? 'Facility');
 
             if ($isActiveNow && $currentStatus !== 'maintenance') {
                 $upd = $pdo->prepare('UPDATE facilities SET status = "maintenance", updated_at = NOW() WHERE id = :id');
                 $upd->execute(['id' => $facilityId]);
                 $cimmManagedMaintenance[$facilityId] = true;
                 $summary['updated_to_maintenance']++;
+                $facilitiesWentToMaintenance[$facilityId] = $facilityName;
             } elseif (!$isActiveNow && $currentStatus === 'maintenance' && $cimmManaged) {
                 $upd = $pdo->prepare('UPDATE facilities SET status = "available", updated_at = NOW() WHERE id = :id');
                 $upd->execute(['id' => $facilityId]);
                 unset($cimmManagedMaintenance[$facilityId]);
                 $summary['updated_to_available']++;
+                $facilitiesWentToAvailable[$facilityId] = $facilityName;
             }
         }
 
@@ -567,6 +658,19 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         }
 
         $pdo->commit();
+
+        if (!empty($facilitiesWentToMaintenance) || !empty($facilitiesWentToAvailable)) {
+            $maintenanceHelper = dirname(__DIR__) . '/config/maintenance_helper.php';
+            if (is_file($maintenanceHelper)) {
+                require_once $maintenanceHelper;
+                foreach ($facilitiesWentToMaintenance as $facilityId => $facilityName) {
+                    handleFacilityMaintenanceStatusChange((int)$facilityId, (string)$facilityName);
+                }
+                foreach ($facilitiesWentToAvailable as $facilityId => $facilityName) {
+                    handleFacilityAvailableStatusChange((int)$facilityId, (string)$facilityName);
+                }
+            }
+        }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

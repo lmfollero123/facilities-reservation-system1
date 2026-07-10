@@ -22,7 +22,7 @@ storage/private/
 storage/tmp/
 storage/tmp_*
 storage/*.html
-
+storage/*.json
 # Local / test scripts (may load secrets)
 test_gemini_api.php
 

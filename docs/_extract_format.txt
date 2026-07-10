@@ -1,0 +1,667 @@
+﻿style=|spacing=before= after= line=|font=|sz=|bold=1|VIAHALE: TRANSPORT NETWORK VEHICLE SERVICE CORE I SYSTEM WITH PREDICTIVE DISPATCHING AND DYNAMIC
+style=|spacing=before= after= line=|font=|sz=|bold=1|TRIP MATCHING USING AI FORECASTING POWERED
+style=|spacing=before= after= line=|font=|sz=|bold=1|BY TENSORFLOW AND SCIKIT-LEARN
+style=|spacing=before= after= line=|font=|sz=|bold=0|A Capstone
+style=|spacing=before= after= line=|font=|sz=|bold=0|Presented to the Faculty of
+style=|spacing=before= after= line=|font=|sz=|bold=0|The College of Computer Studies Bestlink College of the Philippines
+style=|spacing=before= after= line=|font=|sz=|bold=0|In Partial Fulfilment
+style=|spacing=before= after= line=|font=|sz=|bold=0|of the Requirements for the Degree
+style=|spacing=before= after= line=|font=|sz=|bold=0|Bachelor of Science in Information Technology
+style=|spacing=before= after= line=|font=|sz=|bold=1|FIRSTNAME M.I. LASTNAME
+style=|spacing=before= after= line=|font=|sz=|bold=1|FIRSTNAME M.I. LASTNAME
+style=|spacing=before= after= line=|font=|sz=|bold=1|FIRSTNAME M.I. LASTNAMEFIRSTNAME M.I. LASTNAME
+style=|spacing=before= after= line=|font=|sz=|bold=1|FIRSTNAME M.I. LASTNAME
+style=|spacing=before= after= line=|font=|sz=|bold=0|February 2026
+style=|spacing=before= after= line=|font=|sz=|bold=1|APPROVAL SHEET
+style=|spacing=before= after= line=|font=|sz=|bold=0|This capstone entitled VIAHALE: TRANSPORT NETWORK VEHICLE SERVICE CORE I SYSTEM WITH PREDICTIVE DISPATCHING AND DYNAMIC TRIP MATCHING USING AI FORECASTING POWERED BY TENSORFLOW AND SCIKIT-LEARN , prepared and submitted byLislyan M. Dela Cruz, Cristianber B. Gordora, Leandro C. Quisado, Jeffrey T. Tatoy, and Richelyn A. Villasor, in partial fulfilment of the requirements for the degree of Bachelor of Science in Information Technology, has been examined and is recommended for acceptance and approval Oral Defense.
+style=|spacing=before= after= line=|font=|sz=|bold=1|RICHELYN A. VILLASOR
+style=|spacing=before= after= line=|font=|sz=|bold=0|Adviser
+style=|spacing=before= after= line=|font=|sz=|bold=1|CAPSTONE REVIEW PANEL
+style=|spacing=before= after= line=|font=|sz=|bold=0|Approved by the Committee on Oral Examination with a grade of 1.25.
+style=|spacing=before= after= line=|font=|sz=|bold=1|REYNANTE B. PONAY, CpEVINCENT CARLO T. GARADOS
+style=|spacing=before= after= line=|font=|sz=|bold=0|Member                                                     Member
+style=|spacing=before= after= line=|font=|sz=|bold=1|ROMMEL J. CONSTANTINO, DIT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chairperson
+style=|spacing=before= after= line=|font=|sz=|bold=0|Accepted and approved in partial fulfillment of the requirements for the degree of Bachelor of Science in Information Technology.
+style=|spacing=before= after= line=|font=|sz=|bold=1|ROSICAR E. ESCOBER, Ph. D, DIT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Dean, College of Computer Studies
+style=|spacing=before= after= line=|font=|sz=|bold=0|Date of Final Defense:
+style=|spacing=before= after= line=|font=|sz=|bold=1|ACKNOWLEDGEMENT
+style=|spacing=before= after= line=|font=|sz=|bold=0|The researchers would like to express their heartfelt thanks and gratitude to the following persons who, in one way or another, has contributed much, and extended willingness and support needed to make this research possible:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Maria M. Vicente, President/CEO, Bestlink College of the Philippines, for her generosity and kind heart in establishing this institution and giving opportunities to those less fortunate students to continue their studies and pursue their dreams;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Ms. Edith M. Vicente, Executive Vice President, for providing the needed information to complete this research;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Charlie I. Cariño, Vice President for Academic Affairs, for his support and encouragement to make this thesis writing possible;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Engr. Diosdado T. Lleno, Vice President for Administration and
+style=|spacing=before= after= line=|font=|sz=|bold=0|Finance, for his words of encouragement and motivation;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Joy Evelyn A. Ignacio, College Associate Research Head, for her good heart to extend her help needed by the researchers.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Dr. Rosicar E. Escober, Dean, College of Computer Studies of Bestlink College of the Philippines, for providing a guideline documentation in capstone project.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Rommel J. Constantino, Program Head, Bachelor of Science in Information Technology, for the constant supervision as well as providing necessary information regarding the project and also for his support in completing this project
+style=|spacing=before= after= line=|font=|sz=|bold=1|Ms. Richelyn A. Villasor, Research Coordinator, for helping us in improving our research and guiding us in completing this project.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Ms. Richelyn A. Villasor, Capstone Adviser, for giving us suggestions and ideas to improve our research and guiding us in completing this project.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Panelists, Mr.Vincent Carlo T.Garados, Engr. Reynante B. Ponay, and Dr. Rommel J. Constantino, who extended their effort and time to be able to constructively criticize this thesis and share their knowledge with them to deepen and widen their needed information.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Families and Friends, for all the financial and moral support that have enabled the researchers to triumph all the challenges, especially during the lowest time that served as their inspiration to complete this study; and
+style=|spacing=before= after= line=|font=|sz=|bold=0|Above all, to the Almighty God, for the strength and knowledge that were used for the accomplishment of this research journey.
+style=|spacing=before= after= line=|font=|sz=|bold=1|THE RESEARCHERS
+style=|spacing=before= after= line=|font=|sz=|bold=1|DEDICATION
+style=|spacing=before= after= line=|font=|sz=|bold=0|This research study is wholeheartedly dedicated first and foremost to the researchers, for executing dedication, time, effort, motivation, sacrifice, and courage to make this conducting study a fruitful and successful piece of work.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To our beloved parents who have been our inspiration and gave us strength when we thought of giving up, which continually provide their moral, spiritual, emotional and financial support.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To each sibling and circle of friends who shared their words of advice and encouragement to finish this study.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To the research advisers and professors, for extending help by giving guidance, supervision, time and wisdom to the researchers in conducting this business research study.
+style=|spacing=before= after= line=|font=|sz=|bold=0|And lastly, above all, to our Almighty God, for giving guidance, strength, power of mind, protection, skills and for giving us a healthy life. All of these we offer to you.
+style=|spacing=before= after= line=|font=|sz=|bold=1|THE RESEARCHERS
+style=|spacing=before= after= line=|font=|sz=|bold=1|ABSTRACT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Title:GOVERNMENT SERVICE MANAGEMENT SYSTEM: SMART REVENUE TRACKER WITH AI-BASED ANOMALY DETECTION USING ML.JS
+style=|spacing=before= after= line=|font=|sz=|bold=0|Authors:IVAN D. ANORICO
+style=|spacing=before= after= line=|font=|sz=|bold=1|HANZ VERNE R. CELLONA
+style=|spacing=before= after= line=|font=|sz=|bold=1|SHANNY BHELL O. DE LARA
+style=|spacing=before= after= line=|font=|sz=|bold=1|JERICK R. GENOSAS
+style=|spacing=before= after= line=|font=|sz=|bold=1|SHERILYN MAE B. PARES
+style=|spacing=before= after= line=|font=|sz=|bold=0|Degree:Bachelor of Science of Information Technology
+style=|spacing=before= after= line=|font=|sz=|bold=0|Major:Information Management, Information Security, Network
+style=|spacing=before= after= line=|font=|sz=|bold=1|Administrative
+style=|spacing=before= after= line=|font=|sz=|bold=0|Date of Completion:
+style=|spacing=before= after= line=|font=|sz=|bold=0|IMRAD TYPE Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+style=|spacing=before= after= line=|font=|sz=|bold=1|TABLE OF CONTENTS
+style=|spacing=before= after= line=|font=|sz=|bold=1|Page
+style=|spacing=before= after= line=|font=|sz=|bold=1|TITLE PAGE i
+style=|spacing=before= after= line=|font=|sz=|bold=1|APPROVAL SHEET ii
+style=|spacing=before= after= line=|font=|sz=|bold=1|ACKNOWLEDGMENT iii
+style=|spacing=before= after= line=|font=|sz=|bold=1|DEDICATION v
+style=|spacing=before= after= line=|font=|sz=|bold=1|ABSTRACT vi
+style=|spacing=before= after= line=|font=|sz=|bold=1|TABLE OF CONTENTS viii
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF TABLES xiii
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF FIGURES xiv
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF APPENDICES xv
+style=|spacing=before= after= line=|font=|sz=|bold=1|CHAPTER
+style=|spacing=before= after= line=|font=|sz=|bold=1|1Introduction
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.1.Background of the Capstone Project1
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.2.Context and Scope3
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.3.Problem Statement7
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.4.Objectives and Goals8
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.5.Significance and Relevance10
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.6.Structure of the Document12
+style=|spacing=before= after= line=|font=|sz=|bold=1|CHAPTER
+style=|spacing=before= after= line=|font=|sz=|bold=1|2Reviewof Related Literature
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.1.Agile Scrum Methodology Overview14
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.2.Enterprise Architecture Concepts16
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.3.Microservices Architecture18
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.4      DevOps and CI/CD 18
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.5      Relevant Studies and Research      20
+style=|spacing=before= after= line=|font=|sz=|bold=0|2.6Integration of Information Systems in24
+style=|spacing=before= after= line=|font=|sz=|bold=0|Enterprise Environment
+style=|spacing=before= after= line=|font=|sz=|bold=1|CHAPTER
+style=|spacing=before= after= line=|font=|sz=|bold=1|3Methodology
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.1. Agile Scrum Methodology in the Project       25
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.2. Roles (e.g., Scrum Master, Product Owner,27
+style=|spacing=before= after= line=|font=|sz=|bold=0|Development Team)
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.3. Sprint Cycles (e.g., Sprint Planning,31
+style=|spacing=before= after= line=|font=|sz=|bold=0|Daily Standups, Sprint Review)
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.4. Scrum Artifacts 37
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.5 Microservices Architecture77
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.6 DevOps Implementation82
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.7 Integration Approach for Information Systems87
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.8 Introduction to TOGAF and the Four90
+style=|spacing=before= after= line=|font=|sz=|bold=0|Architectural Domains
+style=|spacing=before= after= line=|font=|sz=|bold=1|CHAPTER
+style=|spacing=before= after= line=|font=|sz=|bold=1|4Requirements Analysis
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.1. Stakeholder Identification
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.2. Requirements Gathering Techniques
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.3. User Stories and Use Cases
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.4. Functional Requirements for Integration
+style=|spacing=before= after= line=|font=|sz=|bold=1|5 Business Process Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.1. Identification of Business Processes
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.2. Business Process Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.3. Alignment of Integrated System with
+style=|spacing=before= after= line=|font=|sz=|bold=0|Business Processes
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.4. Business Process Improvements
+style=|spacing=before= after= line=|font=|sz=|bold=1|6 Application Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.1. Components of Application Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.2. Application Architecture Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.3. Integration of Software Modules
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.4. Communication and Interaction Patterns
+style=|spacing=before= after= line=|font=|sz=|bold=1|7 Data Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.1. Data Sources and Types
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.2. Data Flow Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.3. Data Storage and Management
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.4. Data Synchronization Across Systems
+style=|spacing=before= after= line=|font=|sz=|bold=1|8 Technology Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.1 Technology Stack and Infrastructure
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.2 Software Technologies
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.3. Scalability and Performance Considerations
+style=|spacing=before= after= line=|font=|sz=|bold=1|9  Development Process
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.1. Agile Scrum Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.2. Sprint Planning and Backlog Management
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.3. Sprint Execution and Deliverables
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.4. Challenges Faced In the Development Process
+style=|spacing=before= after= line=|font=|sz=|bold=1|10 Implementation
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.1. Technical Implementation Details
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.2. Tools and Technologies Used
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.3. Code Integration and Interoperability
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.4. Integration Testing and Debugging
+style=|spacing=before= after= line=|font=|sz=|bold=1|11. Testing and Quality Assurance
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.1. Testing Strategies and Methodologies
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.2. Test Cases and Test Data
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.3. Test Results and Bug Reports
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.4. Quality Assurance Measures
+style=|spacing=before= after= line=|font=|sz=|bold=1|12. Results and Evaluation
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.1. Project Outcomes and Deliverables
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.2. Alignment with Project Objectives
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.3 Stakeholder and User Feedback
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.4. Lessons Learned
+style=|spacing=before= after= line=|font=|sz=|bold=1|CHAPTER
+style=|spacing=before= after= line=|font=|sz=|bold=1|5Conclusion
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.1. Key Takeaways and Summary
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.2. Project Achievements and Contributions
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.3. Future Work and Enhancements
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.4. Closing Remarks
+style=|spacing=before= after= line=|font=|sz=|bold=1|REFERENCES
+style=|spacing=before= after= line=|font=|sz=|bold=1|APPENDICES
+style=|spacing=before= after= line=|font=|sz=|bold=1|CURRICULUM VITAE
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF TABLES
+style=|spacing=before= after= line=|font=|sz=|bold=1|TablePage
+style=|spacing=before= after= line=|font=|sz=|bold=0|Roles and Responsibilities  27
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sprint Cycle  33
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog (User Stories)  37
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog for EIS Information Security  47
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog for EIS Standards  49
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog for EIS Integration  51
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog for Analytics  56
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Backlog for EIS Analytics  58
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sprint Backlog (User Stories)   60
+style=|spacing=before= after= line=|font=|sz=|bold=0|Scrum Board  73
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF FIGURES
+style=|spacing=before= after= line=|font=|sz=|bold=1|FigurePage
+style=|spacing=before= after= line=|font=|sz=|bold=0|Agile Scrum Framework  26
+style=|spacing=before= after= line=|font=|sz=|bold=0|Burndown Chart  76
+style=|spacing=before= after= line=|font=|sz=|bold=0|Microservices Diagram  79
+style=|spacing=before= after= line=|font=|sz=|bold=0|Communication Pattern  80
+style=|spacing=before= after= line=|font=|sz=|bold=0|Data Flow Diagram  81
+style=|spacing=before= after= line=|font=|sz=|bold=0|CI/CD Pipeline  85
+style=|spacing=before= after= line=|font=|sz=|bold=0|Infrastructure as a Code (IaC)  85
+style=|spacing=before= after= line=|font=|sz=|bold=0|Monitoring and Alerting  86
+style=|spacing=before= after= line=|font=|sz=|bold=0|Integration Diagram  88
+style=|spacing=before= after= line=|font=|sz=|bold=0|API Gateway  88
+style=|spacing=before= after= line=|font=|sz=|bold=0|Data Flow Diagram  89
+style=|spacing=before= after= line=|font=|sz=|bold=0|Use Case Diagram  92
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sequence Diagram             93
+style=|spacing=before= after= line=|font=|sz=|bold=0|Flowchart             93
+style=|spacing=before= after= line=|font=|sz=|bold=1|LIST OF APPENDICES
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix A Detailed Technical Documentation
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix B Documents/URLs
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix CCertificate of Originality
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix DCertificate of Technical Adviser and Grammarian
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix EGrammarian Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix FTechnical Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix GResearch Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix H Researcher’s Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 1
+style=|spacing=before= after= line=|font=|sz=|bold=1|INTRODUCTION
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.1 Background of the Capstone Project
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur
+style=|spacing=before= after= line=|font=|sz=|bold=0|At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.2 Context and Scope
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|To be focused and achievable in implementation, the project scope shall involve:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Lorem ipsum dolor sit amet,\
+style=|spacing=before= after= line=|font=|sz=|bold=0|- consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=1|Out of Scope:
+style=|spacing=before= after= line=|font=|sz=|bold=0|Blal=blahlanaksba
+style=|spacing=before= after= line=|font=|sz=|bold=0|Blal=blahlanaksba
+style=|spacing=before= after= line=|font=|sz=|bold=0|Blal=blahlanaksba
+style=|spacing=before= after= line=|font=|sz=|bold=0|Blal=blahlanaksba
+style=|spacing=before= after= line=|font=|sz=|bold=0|Blal=blahlanaksba
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.3 Problem Statement
+style=|spacing=before= after= line=|font=|sz=|bold=0|At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|jabdbakfn
+style=|spacing=before= after= line=|font=|sz=|bold=0|kanfknesed
+style=|spacing=before= after= line=|font=|sz=|bold=0|anegwieohoisb
+style=|spacing=before= after= line=|font=|sz=|bold=0|aivjbjssjd
+style=|spacing=before= after= line=|font=|sz=|bold=0|najvsbsdjvsndvjsd
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4 Objectives and Goals
+style=|spacing=before= after= line=|font=|sz=|bold=0|At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.
+style=|spacing=before= after= line=|font=|sz=|bold=0|skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk.
+style=|spacing=before= after= line=|font=|sz=|bold=0|skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk.
+style=|spacing=before= after= line=|font=|sz=|bold=0|skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.5 Significance and Relevance
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Key beneficiaries include:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Future Researcher:Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.6 Structure of the Document
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 1: Introduction - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 2: Review of Related Literature -Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. detection, putting this project in the larger context of research.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 3: Methodology -Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 4: Requirement Analysis -Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 5: Conclusion and Recommendations -Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 2
+style=|spacing=before= after= line=|font=|sz=|bold=1|REVIEW OF RELATED LITERATURE
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.1 Agile Scrum Methodology Overview
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|The three pillars, according to Schwaber, K, & Sutherland, J. (2020), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Overall, Agile Scrum assisted us Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.2 Enterprise Architecture Concepts
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. sers and will be able to be scaled and maintained in the future.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.3 Microservices Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.4 DevOps and CI/CD
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.5 Relevant Studies and Research
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Local Studies
+style=|spacing=before= after= line=|font=|sz=|bold=1|Andaya (2025), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Leah A. Bayona and Ma. Theresa B. Ballados (2025),Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat..
+style=|spacing=before= after= line=|font=|sz=|bold=1|Foreign Studies
+style=|spacing=before= after= line=|font=|sz=|bold=1|Aldemir and Uysal (2025),Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Zheng and O’Penetrante (2025),Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.6 Integration of Information Systems in Enterprise Environment
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 3
+style=|spacing=before= after= line=|font=|sz=|bold=1|METHODOLOGY
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.1 Agile Scrum Methodology in the Project
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 1 Agile Scrum Framework
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.2 Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=0|Each role in the project team carries significant responsibilities that directly influence the success and overall performance of the capstone project. The table below outlines the key duties assigned to each team member:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Name
+style=|spacing=before= after= line=|font=|sz=|bold=1|Role
+style=|spacing=before= after= line=|font=|sz=|bold=1|Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Research Adviser
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Owner
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Project Manager
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Developer/Lead Programmer
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|QA Tester
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Documentation Specialist
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ms. Richelyn Villasor
+style=|spacing=before= after= line=|font=|sz=|bold=0|Security Lead
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no.1 Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3 Sprint Cycles
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To Do
+style=|spacing=before= after= line=|font=|sz=|bold=0|In Progress
+style=|spacing=before= after= line=|font=|sz=|bold=0|Done
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 2 Scrum Board
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4 Scrum Artifacts
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.1 Product Backlog (User Stories)
+style=|spacing=|font=|sz=|bold=1|User Story No.
+style=|spacing=|font=|sz=|bold=1|Features/ Task
+style=|spacing=|font=|sz=|bold=1|User Stories
+style=|spacing=|font=|sz=|bold=1|Priority
+style=|spacing=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=1|MODULE 1
+style=|spacing=before= after= line=|font=|sz=|bold=1|F1
+style=|spacing=before= after= line=|font=|sz=|bold=1|F2
+style=|spacing=before= after= line=|font=|sz=|bold=1|F10
+style=|spacing=before= after= line=|font=|sz=|bold=1|MODULE 2
+style=|spacing=before= after= line=|font=|sz=|bold=1|F11
+style=|spacing=before= after= line=|font=|sz=|bold=1|F20
+style=|spacing=before= after= line=|font=|sz=|bold=1|MODULE 3
+style=|spacing=before= after= line=|font=|sz=|bold=1|F21
+style=|spacing=before= after= line=|font=|sz=|bold=1|F30
+style=|spacing=before= after= line=|font=|sz=|bold=1|MODULE 4
+style=|spacing=before= after= line=|font=|sz=|bold=1|F31
+style=|spacing=before= after= line=|font=|sz=|bold=1|F40
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 3 Product Backlog
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.2 Product Backlog for EIS Information Security
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS User Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS IS Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Revision Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|1
+style=|spacing=before= after= line=|font=|sz=|bold=0|1
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|1
+style=|spacing=before= after= line=|font=|sz=|bold=0|2
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|1
+style=|spacing=before= after= line=|font=|sz=|bold=0|2
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 4 Product Backlog for EIS Information Security
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.3 Product Backlog for EIS Standards
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.3.1 UI/UX (Icons, Color, etc…)
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Standard No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Standard User Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Standard Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Revision Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=0|UI-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|UI-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|UI-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 5 Product Backlog for EIS Standards
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.4 Product Backlog for EIS Integration
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration User Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Revision Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=0|INT-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|INT-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|INT-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 6 Product Backlog for EIS Integration
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.5 Product Backlog for Analytics
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.5.1 Application System Analytics
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration User Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Integration Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Revision Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=0|ASA-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|ASA-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|ASA-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 7 Product Backlog for Analytics
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.5.2 EIS Analytics
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Analytics No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Analytics Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|EIS Analytics Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Revision Priority
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=0|EA-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|EA-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|EA-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no.8 EIS Analytics
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.6 Sprint Backlog (User Stories)
+style=|spacing=before= after= line=|font=|sz=|bold=1|Task No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|User Story No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|User Stories
+style=|spacing=before= after= line=|font=|sz=|bold=1|Tasks
+style=|spacing=before= after= line=|font=|sz=|bold=1|Timeline
+style=|spacing=before= after= line=|font=|sz=|bold=1|Responsible Team Member/s
+style=|spacing=before= after= line=|font=|sz=|bold=1|SPRINT 1
+style=|spacing=before= after= line=|font=|sz=|bold=0|S1_1
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|PLANNING
+style=|spacing=before= after= line=|font=|sz=|bold=0|DESIGN
+style=|spacing=before= after= line=|font=|sz=|bold=0|CODE
+style=|spacing=before= after= line=|font=|sz=|bold=0|DOCUMENTATION
+style=|spacing=before= after= line=|font=|sz=|bold=0|S1_2
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-2
+style=|spacing=before= after= line=|font=|sz=|bold=0|S1_3
+style=|spacing=before= after= line=|font=|sz=|bold=0|F-1
+style=|spacing=before= after= line=|font=|sz=|bold=0|S1_4
+style=|spacing=before= after= line=|font=|sz=|bold=0|F2
+style=|spacing=before= after= line=|font=|sz=|bold=0|S1_5
+style=|spacing=before= after= line=|font=|sz=|bold=0|F-3
+style=|spacing=before= after= line=|font=|sz=|bold=1|SPRINT 2
+style=|spacing=before= after= line=|font=|sz=|bold=0|S2_1
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-3
+style=|spacing=before= after= line=|font=|sz=|bold=0|PLANNING
+style=|spacing=before= after= line=|font=|sz=|bold=0|DESIGN
+style=|spacing=before= after= line=|font=|sz=|bold=0|CODE
+style=|spacing=before= after= line=|font=|sz=|bold=0|DOCUMENTATION
+style=|spacing=before= after= line=|font=|sz=|bold=0|S2_2
+style=|spacing=before= after= line=|font=|sz=|bold=0|IS-4
+style=|spacing=before= after= line=|font=|sz=|bold=0|S2_3
+style=|spacing=before= after= line=|font=|sz=|bold=0|F-4
+style=|spacing=before= after= line=|font=|sz=|bold=0|S2_4
+style=|spacing=before= after= line=|font=|sz=|bold=0|F5
+style=|spacing=before= after= line=|font=|sz=|bold=0|S2_5
+style=|spacing=before= after= line=|font=|sz=|bold=0|F-6
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 9 Sprint Backlog (User Stories)
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.4.6.1 Sprint Burndown Chart
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 2 Burndown Chart
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.4.7. Increment
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sprint No.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Increment / Feature Delivered
+style=|spacing=before= after= line=|font=|sz=|bold=1|User Story / Backlog Reference
+style=|spacing=before= after= line=|font=|sz=|bold=1|Definition of Done (DoD) Criteria
+style=|spacing=before= after= line=|font=|sz=|bold=1|Status
+style=|spacing=before= after= line=|font=|sz=|bold=1|Remarks
+style=|spacing=|font=|sz=|bold=0|Sprint 1
+style=|spacing=|font=|sz=|bold=0|User Registration & Login Module
+style=|spacing=|font=|sz=|bold=0|IS-1, IS-2
+style=|spacing=|font=|sz=|bold=0|Code completed - Unit tested - Integrated with DB - Documentation updated
+style=|spacing=|font=|sz=|bold=0|Done
+style=|spacing=|font=|sz=|bold=0|Basic authentication working
+style=|spacing=|font=|sz=|bold=0|Sprint 1
+style=|spacing=|font=|sz=|bold=0|Database Schema Setup
+style=|spacing=|font=|sz=|bold=0|F-1
+style=|spacing=|font=|sz=|bold=0|- Schema created - Tables normalized - Tested with sample data
+style=|spacing=|font=|sz=|bold=0|Done
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ready for integration
+style=|spacing=|font=|sz=|bold=0|Sprint 2
+style=|spacing=|font=|sz=|bold=0|Product Catalog Module
+style=|spacing=|font=|sz=|bold=0|IS-3, IS-4
+style=|spacing=|font=|sz=|bold=0|- UI designed - CRUD operations functional - Tested on staging
+style=|spacing=|font=|sz=|bold=0|In Progress
+style=|spacing=|font=|sz=|bold=0|Pending UI review
+style=|spacing=|font=|sz=|bold=0|Sprint 2
+style=|spacing=|font=|sz=|bold=0|Shopping Cart
+style=|spacing=|font=|sz=|bold=0|F-4
+style=|spacing=|font=|sz=|bold=0|- Add/remove items working - Cart persists in session - Unit tested
+style=|spacing=|font=|sz=|bold=0|In Progress
+style=|spacing=|font=|sz=|bold=0|Needs integration with checkout
+style=|spacing=|font=|sz=|bold=0|Sprint 3
+style=|spacing=|font=|sz=|bold=0|Checkout & Payment Integration
+style=|spacing=|font=|sz=|bold=0|IS-5, F-5
+style=|spacing=|font=|sz=|bold=0|- Payment gateway connected - Security tested (SSL) - Error handling in place
+style=|spacing=|font=|sz=|bold=0|Planned
+style=|spacing=|font=|sz=|bold=0|To be developed in Sprint 3
+style=|spacing=|font=|sz=|bold=0|Table no. Increment
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.5 Microservices Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 3 Microservices Diagram
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 4 Communication Pattern for Microservices
+style=|spacing=before= after= line=|font=|sz=|bold=0|Here’s the communication pattern diagram for an e-commerce microservices system:
+style=|spacing=before= after= line=|font=|sz=|bold=0|🔵Blue solid lines → Synchronous (Request/Response) calls (e.g., login, product search, payment validation).
+style=|spacing=before= after= line=|font=|sz=|bold=0|🟢Green dashed lines → Asynchronous (Event-driven) interactions (e.g., order triggers stock updates, shipping, notifications).
+style=|spacing=before= after= line=|font=|sz=|bold=0|Dfd level 1
+style=|spacing=before= after= line=|font=|sz=|bold=1|Level 1 DFD (Context Diagram)
+style=|spacing=before= after= line=|font=|sz=|bold=0|This shows the entire e-commerce system as one process and how external entities interact with it.
+style=|spacing=before= after= line=|font=|sz=|bold=1|External Entity: Customer
+style=|spacing=before= after= line=|font=|sz=|bold=1|System (Process): E-commerce Microservices System
+style=|spacing=before= after= line=|font=|sz=|bold=1|Data Stores: Account DB, Inventory DB, Order DB, Payment DB
+style=|spacing=before= after= line=|font=|sz=|bold=1|Data Flows: Login, Browse Products, Place Order, Make Payment, Receive Notification, Shipping Info
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 5 Data Flow Diagram for Microservices
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.6 DevOps Implementation
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 6 CI/CD Pipeline
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 7 Infrastructure as a Code (IaC)
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 8 Monitoring and Alerting
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.7 Integration Approach for Information Systems
+style=|spacing=before= after= line=|font=|sz=|bold=0|The integration approach for the information systems developed Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 9 Business Process Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 10 API Gateway
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 11 Data Flow Diagram
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 12 Use Case Diagram
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 13 Sequence Diagram
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 14 Flowchart
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.8 Introduction to TOGAF and the Four Architectural Domains
+style=|spacing=before= after= line=|font=|sz=|bold=1|1. Business Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+style=|spacing=before= after= line=|font=|sz=|bold=1|2. Data Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+style=|spacing=before= after= line=|font=|sz=|bold=1|3. Application Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+style=|spacing=before= after= line=|font=|sz=|bold=1|4. Technology Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter4
+style=|spacing=before= after= line=|font=|sz=|bold=1|REQUIREMENTS ANALYSIS
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.1. Stakeholder Identification
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.2. Requirements Gathering Techniques
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.3. User Stories and Use Cases
+style=|spacing=before= after= line=|font=|sz=|bold=0|4.4. Functional Requirements for Integration
+style=|spacing=before= after= line=|font=|sz=|bold=1|5Business Process Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.1. Identification of Business Processes
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.2. Business Process Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.3. Alignment of Integrated System with
+style=|spacing=before= after= line=|font=|sz=|bold=0|Business Processes
+style=|spacing=before= after= line=|font=|sz=|bold=0|5.4. Business Process Improvements
+style=|spacing=before= after= line=|font=|sz=|bold=1|6Application Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.1. Components of Application Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.2. Application Architecture Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.3. Integration of Software Modules
+style=|spacing=before= after= line=|font=|sz=|bold=0|6.4. Communication and Interaction Patterns
+style=|spacing=before= after= line=|font=|sz=|bold=1|7Data Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.1. Data Sources and Types
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.2. Data Flow Diagrams
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.3. Data Storage and Management
+style=|spacing=before= after= line=|font=|sz=|bold=0|7.4. Data Synchronization Across Systems
+style=|spacing=before= after= line=|font=|sz=|bold=1|8Technology Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.1 Technology Stack and Infrastructure
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.2 Software Technologies
+style=|spacing=before= after= line=|font=|sz=|bold=0|8.3. Scalability and Performance Considerations
+style=|spacing=before= after= line=|font=|sz=|bold=1|9 Development Process
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.1. Agile Scrum Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.2. Sprint Planning and Backlog Management
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.3. Sprint Execution and Deliverables
+style=|spacing=before= after= line=|font=|sz=|bold=0|9.4. Challenges Faced In the Development Process
+style=|spacing=before= after= line=|font=|sz=|bold=1|10Implementation
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.1. Technical Implementation Details
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.2. Tools and Technologies Used
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.3. Code Integration and Interoperability
+style=|spacing=before= after= line=|font=|sz=|bold=0|10.4. Integration Testing and Debugging
+style=|spacing=before= after= line=|font=|sz=|bold=1|11Testing and Quality Assurance
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.1. Testing Strategies and Methodologies
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.2. Test Cases and Test Data
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.3. Test Results and Bug Reports
+style=|spacing=before= after= line=|font=|sz=|bold=0|11.4. Quality Assurance Measures
+style=|spacing=before= after= line=|font=|sz=|bold=1|12Results and Evaluation
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.1. Project Outcomes and Deliverables
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.2. Alignment with Project Objectives
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.3 Stakeholder and User Feedback
+style=|spacing=before= after= line=|font=|sz=|bold=0|12.4. Lessons Learned
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 5
+style=|spacing=before= after= line=|font=|sz=|bold=1|CONCLUSION
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.1. Key Takeaways and Summary
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.2. Project Achievements and Contributions
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.3. Future Work and Enhancements
+style=|spacing=before= after= line=|font=|sz=|bold=0|13.4. Closing Remarks
+style=|spacing=before= after= line=|font=|sz=|bold=1|REFERENCES
+style=|spacing=before= after= line=|font=|sz=|bold=0|Sarker, I. H. (2021). Machine learning: Algorithms, real-world applications and research directions. SN Computer Science, 2(3), 160. https://doi.org/10.1007/s42979-021-00592-x
+style=|spacing=before= after= line=|font=|sz=|bold=0|Scikit-learn Developers. (2023). Anomaly detection. https://scikit-learn.org/stable/modules/outlier_detection.html
+style=|spacing=before= after= line=|font=|sz=|bold=0|W3Schools. (2024). Machine learning with JavaScript. https://www.w3schools.com/ai
+style=|spacing=before= after= line=|font=|sz=|bold=1|APPENDICES
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix A : Detailed Technical Documentation
+style=|spacing=before= after= line=|font=|sz=|bold=0|1. System Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|2. Information Systems Integration
+style=|spacing=before= after= line=|font=|sz=|bold=0|3. Application Design and Development
+style=|spacing=before= after= line=|font=|sz=|bold=0|4. Database Schema and Data Management:
+style=|spacing=before= after= line=|font=|sz=|bold=0|5. Network Configuration
+style=|spacing=before= after= line=|font=|sz=|bold=0|6. Deployment and Infrastructure
+style=|spacing=before= after= line=|font=|sz=|bold=0|7. Security Measures:
+style=|spacing=before= after= line=|font=|sz=|bold=0|8. Testing and Quality Assurance
+style=|spacing=before= after= line=|font=|sz=|bold=0|9. System Monitoring and Maintenance:
+style=|spacing=before= after= line=|font=|sz=|bold=0|10. APIs and Integration Points:
+style=|spacing=before= after= line=|font=|sz=|bold=0|11. User Documentation:
+style=|spacing=before= after= line=|font=|sz=|bold=0|12. Known Issues and Troubleshooting
+style=|spacing=before= after= line=|font=|sz=|bold=0|13. Version Control and Source Code Repository
+style=|spacing=before= after= line=|font=|sz=|bold=0|14. DevOps and Continuous Integration/Continuous Deployment (CI/CD):
+style=|spacing=before= after= line=|font=|sz=|bold=0|15. Licensing and Open Source Libraries:
+style=|spacing=before= after= line=|font=|sz=|bold=0|16. Performance Metrics and Monitoring:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix B : Documents/URLs
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.Adviser Acceptance
+style=|spacing=before= after= line=|font=|sz=|bold=0|This letter hereby certifies that the system entitled GOVERNMENT SERVICE MANAGEMENT SYSTEM: SMART REVENUE TRACKER WITH AI-BASED ANOMALY DETECTION USING ML.JS, together with its accompanying documentation, has been thoroughly reviewed and officially accepted.
+style=|spacing=before= after= line=|font=|sz=|bold=0|The proponents have satisfactorily complied with the academic standards, technical requirements, and research objectives prescribed for the course. The work presented demonstrates commendable effort in terms of technical implementation, documentation, and collaborative teamwork.
+style=|spacing=before= after= line=|font=|sz=|bold=0|This certification is issued to acknowledge the successful completion and acceptance of the system and research output.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Issued this ______ day of ______, 20.
+style=|spacing=before= after= line=|font=|sz=|bold=1|RICHELYN A. VILLASORResearch Adviser
+style=|spacing=|font=|sz=|bold=0|2. Company Confirmation
+style=|spacing=|font=|sz=|bold=0|Interview letter
+style=|spacing=before= after= line=|font=|sz=|bold=1|Project Acceptance Form
+style=|spacing=before= after= line=|font=|sz=|bold=1|Bestlink College of the Philippines
+style=|spacing=before= after= line=|font=|sz=|bold=1|College of Computer Studies
+style=|spacing=before= after= line=|font=|sz=|bold=1|Bachelor of Science in Information Technology
+style=|spacing=before= after= line=|font=|sz=|bold=1|1071 Brgy. Kaligayahan, Quirino Highway, Novaliches, Quezon City
+style=|spacing=before= after= line=|font=|sz=|bold=1|Project Details
+style=|spacing=before= after= line=|font=|sz=|bold=1|Project Title: [Insert Project Title]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Project Description: [Brief description of the project, including its purpose and scope]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Developed By: [Student Names and IDs]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Academic Program: Bachelor of Science in Information Technology (BSIT)
+style=|spacing=before= after= line=|font=|sz=|bold=1|Capstone Adviser: [Adviser’s Name]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Supervising Professor: [Professor's Name]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Company Name: [Company Name]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Company Representative: [Name of Company Representative]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Date of Project Submission: [Insert Date]
+style=|spacing=before= after= line=|font=|sz=|bold=1|Acceptance and Agreement
+style=|spacing=before= after= line=|font=|sz=|bold=0|The undersigned, representing [Company Name], acknowledges the completion of the project titled [Project Title] developed by the students of [ University Name]. By signing this form, the company agrees to the following:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Acceptance of the Project:
+style=|spacing=before= after= line=|font=|sz=|bold=0|The company accepts the project as developed by the students and acknowledges that it meets the agreed-upon requirements and specifications.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Use of the Project:
+style=|spacing=before= after= line=|font=|sz=|bold=0|The company agrees to use the project for its intended purpose as outlined in the scope. The company may use, modify, or distribute the project as needed, subject to agreed-upon terms.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Feedback and Evaluation:
+style=|spacing=before= after= line=|font=|sz=|bold=0|The company agrees to provide feedback on the project's performance, usability, and any areas for improvement. This feedback will be used for academic evaluation and potential future enhancements.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Confidentiality and Intellectual Property:
+style=|spacing=before= after= line=|font=|sz=|bold=0|The company acknowledges that the project may contain confidential information and agrees to handle it responsibly. The agreement between the university and the company will govern any intellectual property rights.
+style=|spacing=before= after= line=|font=|sz=|bold=1|No Warranty:
+style=|spacing=before= after= line=|font=|sz=|bold=0|The project is provided "as is" without any warranties, express or implied. The university and the students are not liable for any issues arising from using the project.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Signatures
+style=|spacing=before= after= line=|font=|sz=|bold=1|Company Representative:
+style=|spacing=before= after= line=|font=|sz=|bold=0|I, [Name of Company Representative], representing [Company Name], acknowledge the project's completion and agree to the terms outlined above.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Signature: ___________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Name: _______________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Designation: _________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Date: _______________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|University Representative:
+style=|spacing=before= after= line=|font=|sz=|bold=0|I, [Name of Supervising Professor], representing [ University Name], confirm that the students have completed the project as part of their academic requirements.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Signature: ___________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Name: _______________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Designation: _________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|Date: _______________________________
+style=|spacing=before= after= line=|font=|sz=|bold=1|RATING/GRADE:Maximum PointsScore Given
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.Functionality:20
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Completeness of features10
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Accuracy and reliability10
+style=|spacing=before= after= line=|font=|sz=|bold=1|2. Usability15
+style=|spacing=before= after= line=|font=|sz=|bold=0|- User interface design8
+style=|spacing=before= after= line=|font=|sz=|bold=0|- User experience (UX)7
+style=|spacing=before= after= line=|font=|sz=|bold=1|3. Technical Design and Architecture15
+style=|spacing=before= after= line=|font=|sz=|bold=0|- System architecture and modularity8
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Code quality and organization7
+style=|spacing=before= after= line=|font=|sz=|bold=1|4. Performance15
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Speed and responsiveness8
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Load handling and scalability7
+style=|spacing=before= after= line=|font=|sz=|bold=1|5. Security10
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Data protection and privacy6
+style=|spacing=before= after= line=|font=|sz=|bold=0|- System vulnerabilities4
+style=|spacing=before= after= line=|font=|sz=|bold=1|6. Testing and Validation10
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Unit testing and bug fixing5
+style=|spacing=before= after= line=|font=|sz=|bold=0|- User acceptance testing (UAT)5
+style=|spacing=before= after= line=|font=|sz=|bold=1|7. Documentation10
+style=|spacing=before= after= line=|font=|sz=|bold=0|- User manuals and guides5
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Technical documentation5
+style=|spacing=before= after= line=|font=|sz=|bold=1|8. Innovation and Creativity5
+style=|spacing=before= after= line=|font=|sz=|bold=0|- Novelty of the solution5
+style=|spacing=before= after= line=|font=|sz=|bold=1|Feedback Section (Optional)
+style=|spacing=before= after= line=|font=|sz=|bold=0|The company is encouraged to provide feedback on the project to help improve its quality and usability.
+style=|spacing=before= after= line=|font=|sz=|bold=1|What aspects of the project do you find most useful?
+style=|spacing=before= after= line=|font=|sz=|bold=1|What improvements or additional features would you suggest?
+style=|spacing=before= after= line=|font=|sz=|bold=1|Overall satisfaction with the project (Rate from 1 to 5):
+style=|spacing=before= after= line=|font=|sz=|bold=0|☐ 1 (Poor) ☐ 2 (Fair) ☐ 3 (Good) ☐ 4 (Very Good) ☐ 5 (Excellent)
+style=|spacing=before= after= line=|font=|sz=|bold=1|Additional Comments:
+style=|spacing=|font=|sz=|bold=0|3.  Pilot Companies’ Background with proofs of interviews
+style=|spacing=|font=|sz=|bold=0|Interview picture (short description)
+style=|spacing=|font=|sz=|bold=0|Formal picture with client (short description)
+style=|spacing=|font=|sz=|bold=0|Client navigating the system (short description)
+style=|spacing=before= after= line=|font=|sz=|bold=0|4. Link to codes (good for 3 years)
+style=|spacing=before= after= line=|font=|sz=|bold=0|5. Link to documentation (good for 3 years)
+style=|spacing=before= after= line=|font=|sz=|bold=0|6. Link to demo video guide (good for 3 years
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix C: Certificate of Originality
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix D: Certificate of Technical Adviser and Grammarian
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix E: Grammarian Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix F: Technical Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix G: Research Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=1|Appendix H : Researcher’s Curriculum Vitae

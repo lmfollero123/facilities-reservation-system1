@@ -1,0 +1,413 @@
+﻿style=|spacing=before= after= line=|font=|sz=|bold=1|LOCAL GOVERNMENT UNIT 1: AI DRIVEN FACILITIES
+style=|spacing=before= after= line=|font=|sz=|bold=1|RESERVATION SYSTEM WITH PREDICTIVE
+style=|spacing=before= after= line=|font=|sz=|bold=1|SCHEDULING FEATURES
+style=|spacing=before= after= line=|font=|sz=|bold=0|A Capstone
+style=|spacing=before= after= line=|font=|sz=|bold=0|Presented to the Faculty of
+style=|spacing=before= after= line=|font=|sz=|bold=0|The College of Computer Studies  Bestlink College of the Philippines
+style=|spacing=before= after= line=|font=|sz=|bold=0|In Partial Fulfilment of the Requirements for the Degree
+style=|spacing=before= after= line=|font=|sz=|bold=0|Bachelor of Science in Information Technology
+style=|spacing=before= after= line=|font=|sz=|bold=1|JORICHO E. AZUELA
+style=|spacing=before= after= line=|font=|sz=|bold=1|LUIS MIGUEL N. FOLLERO
+style=|spacing=before= after= line=|font=|sz=|bold=1|HAJAR P. GILI
+style=|spacing=before= after= line=|font=|sz=|bold=1|DARYLL PARCIA
+style=|spacing=before= after= line=|font=|sz=|bold=1|GILBERT A. TABLAC JR.
+style=|spacing=before= after= line=|font=|sz=|bold=0|February 2026
+style=|spacing=before= after= line=|font=|sz=|bold=0|APPROVAL SHEET
+style=|spacing=before= after= line=|font=|sz=|bold=0|This capstone entitled LOCAL GOVERNMENT UNIT 1:AI DRIVEN FACILITIES RESERVATION SYSTEM WITH PREDICTIVESCHEDULING FEATURES, prepared and submitted by Joricho E. Azuela, Luis Miguel N. Follero, Hajar P. Gili, Gilbert A. Tablac Jr. and Daryll Parcia, in partial fulfilment of the requirements for the degree of Bachelor of Science in Information Technology, has been examined and is recommended for acceptance and approval Pre-Oral Defense.
+style=|spacing=before= after= line=|font=|sz=|bold=1|RONALD G. ROLDAN JR.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Adviser
+style=|spacing=before= after= line=|font=|sz=|bold=1|CAPSTONE REVIEW PANEL
+style=|spacing=before= after= line=|font=|sz=|bold=0|Approved by the Committee on Pre-Oral Examination with a grade ofPASSED
+style=|spacing=before= after= line=|font=|sz=|bold=1|WENDYLL P. OJASTRO                     CYRILLE ANNE I. NERY MSIT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Member                                                     Member
+style=|spacing=before= after= line=|font=|sz=|bold=0|JUNNEL E. AVESTRO DIT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chairperson
+style=|spacing=before= after= line=|font=|sz=|bold=0|Accepted and approved in partial fulfillment of the requirements for the degree of Bachelor of Science in Information Technology.
+style=|spacing=before= after= line=|font=|sz=|bold=0|ROSICAR E. ESCOBER, Ph. D DIT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Dean, College of Computer Studies
+style=|spacing=before= after= line=|font=|sz=|bold=0|Date of Pre-Oral Defense: February 24, 2026
+style=|spacing=|font=|sz=|bold=0|ACKNOWLEDGEMENT
+style=|spacing=before= after= line=|font=|sz=|bold=0|The researchers would like to express their heartfelt thanks and gratitude to the following persons who, in one way or another, has contributed much, and extended willingness and support needed to make this research possible:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Maria M. Vicente, President/CEO, Bestlink College of the Philippines, for her generosity and kind heart in establishing this institution and giving opportunities to those less fortunate students to continue their studies and pursue their dreams;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Ms. Edith M. Vicente, Executive Vice President, for providing the needed information to complete this research;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Charlie I. Cariño, Vice President for Academic Affairs, for his support and encouragement to make this thesis writing possible;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Engr. Diosdado T. Lleno, Vice President for Administration and
+style=|spacing=before= after= line=|font=|sz=|bold=0|Finance, for his words of encouragement and motivation;
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Joy Evelyn A. Ignacio,College Associate Research Head, for her good heart to extend her help needed by the researchers.
+style=|spacing=|font=|sz=|bold=0|Dr. Rosicar E. Escober, Dean, College of Computer Studies of
+style=|spacing=before= after= line=|font=|sz=|bold=0|Bestlink College of the Philippines, for providing a guideline documentation in capstone project.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dr. Rommel J. Constantino, Program Head, Bachelor of Science in Information Technology, for the constant supervision as well as providing necessary information regarding the project and also for his support in completing this project
+style=|spacing=before= after= line=|font=|sz=|bold=1|Ms. Richelyn A. Villasor,Research Coordinator, for helping us in improving our research and guiding us in completing this project.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Mr. Ronald Roldan Jr., Capstone Adviser, for giving us suggestions and ideas to improve our research and guiding us in
+style=|spacing=before= after= line=|font=|sz=|bold=0|completing this project.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Panelists, Dr. Junnel E. Avestro, Ms. Cyrille Anne I. Nery , andMr.Wendyll P. Ojastro,who extended their effort and time to be able to constructively criticize this thesis and share their knowledge with them to deepen and widen their needed information.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Families and Friends, for all the financial and moral support that have enabled the researchers to triumph all the challenges, especially during the lowest time that served as their inspiration to complete this study; and
+style=|spacing=before= after= line=|font=|sz=|bold=0|Above all, to the Almighty God, for the strength and knowledge that were used for the accomplishment of this research journey.
+style=|spacing=before= after= line=|font=|sz=|bold=1|THE RESEARCHERS
+style=|spacing=|font=|sz=|bold=0|DEDICATION
+style=|spacing=before= after= line=|font=|sz=|bold=0|This business research study is wholeheartedly dedicated first and foremost to the researchers, for executing dedication, time, effort, motivation, sacrifice, and courage to make this conducting study a fruitful and successful piece of work.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To our beloved parents who have been our inspiration and gave us strength when we thought of giving up, which continually provide their moral, spiritual, emotional and financial support.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To each sibling and circle of friends who shared their words of advice and encouragement to finish this study.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To the research advisers and professors, for extending help by giving guidance, supervision, time and wisdom to the researchers in conducting this business research study.
+style=|spacing=before= after= line=|font=|sz=|bold=0|And lastly, above all, to our Almighty God, for giving guidance, strength, power of mind, protection, skills and for giving us a healthy life. All of these we offer to you.
+style=|spacing=before= after= line=|font=|sz=|bold=1|THE RESEARCHERS
+style=|spacing=before= after= line=|font=|sz=|bold=0|ABSTRACT
+style=|spacing=before= after= line=|font=|sz=|bold=0|Title:
+style=|spacing=before= after= line=|font=|sz=|bold=1|LOCAL GOVERNMENT UNIT 1: AI DRIVEN FACILITIES RESERVATION SYSTEM WITH PREDICTIVE SCHEDULING FEATURES
+style=|spacing=before= after= line=|font=|sz=|bold=0|Authors:
+style=|spacing=before= after= line=|font=|sz=|bold=1|JORICHO E. AZUELA
+style=|spacing=before= after= line=|font=|sz=|bold=1|LUIS MIGUEL N. FOLLERO
+style=|spacing=before= after= line=|font=|sz=|bold=1|HAJAR P. GILI
+style=|spacing=before= after= line=|font=|sz=|bold=1|DARYLL PARCIA
+style=|spacing=before= after= line=|font=|sz=|bold=1|GILBERT A. TABLAC JR
+style=|spacing=before= after= line=|font=|sz=|bold=0|Degree:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Bachelor of Science of Information Technology
+style=|spacing=before= after= line=|font=|sz=|bold=0|Major:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Information Management, Information Security,
+style=|spacing=|font=|sz=|bold=0|Date of Completion:
+style=|spacing=|font=|sz=|bold=0|TABLE OF CONTENTS
+style=|spacing=before= after= line=|font=|sz=|bold=1|Page
+style=|spacing=|font=|sz=|bold=1|TITLE PAGE  i
+style=|spacing=|font=|sz=|bold=1|APPROVAL SHEET  ii
+style=|spacing=|font=|sz=|bold=1|ACKNOWLEDGMENT iii
+style=|spacing=|font=|sz=|bold=1|DEDICATION  v
+style=|spacing=|font=|sz=|bold=1|ABSTRACT   vi
+style=|spacing=|font=|sz=|bold=1|TABLE OF CONTENTS  viii
+style=|spacing=|font=|sz=|bold=1|LIST OF TABLES   x
+style=|spacing=|font=|sz=|bold=1|LIST OF FIGURES   xi
+style=|spacing=|font=|sz=|bold=1|LIST OF APPENDICES  xii
+style=|spacing=|font=|sz=|bold=1|CHAPTER
+style=|spacing=|font=|sz=|bold=1|Introduction
+style=|spacing=|font=|sz=|bold=0|Background of the Capstone Project 13
+style=|spacing=|font=|sz=|bold=0|Context and Scope  14
+style=|spacing=|font=|sz=|bold=0|Problem Statement  15
+style=|spacing=|font=|sz=|bold=0|Objectives and Goals 16
+style=|spacing=|font=|sz=|bold=0|Significance and Relevance 18
+style=|spacing=|font=|sz=|bold=0|Structure of the Document  19
+style=|spacing=|font=|sz=|bold=1|CHAPTER
+style=|spacing=|font=|sz=|bold=1|Review of Related Literature
+style=|spacing=|font=|sz=|bold=0|Agile Scrum Methodology Overview 23
+style=|spacing=|font=|sz=|bold=0|Enterprise Architecture Concepts  24
+style=|spacing=|font=|sz=|bold=0|Microservices Architecture  27
+style=|spacing=|font=|sz=|bold=0|DevOps and CI/CD   34
+style=|spacing=|font=|sz=|bold=0|Relevant Studies and Research       38
+style=|spacing=|font=|sz=|bold=0|Integration of Information Systems in 39
+style=|spacing=before= after= line=|font=|sz=|bold=0|Enterprise Environment
+style=|spacing=|font=|sz=|bold=1|CHAPTER
+style=|spacing=|font=|sz=|bold=1|Methodology
+style=|spacing=|font=|sz=|bold=0|Agile Scrum Methodology in the Project        41
+style=|spacing=|font=|sz=|bold=0|Roles (e.g., Scrum Master, Product Owner, 41
+style=|spacing=|font=|sz=|bold=0|Development Team)
+style=|spacing=|font=|sz=|bold=0|Sprint Cycles (e.g., Sprint Planning,  46
+style=|spacing=before= after= line=|font=|sz=|bold=0|Daily Standups, Sprint Review)
+style=|spacing=|font=|sz=|bold=0|Scrum Artifacts  51
+style=|spacing=|font=|sz=|bold=0|Microservices Architecture 59
+style=|spacing=|font=|sz=|bold=0|DevOps Implementation 60
+style=|spacing=|font=|sz=|bold=0|Integration Approach for Information Systems 66
+style=|spacing=|font=|sz=|bold=0|Introduction to TOGAF and the Four  66 Architectural Domains
+style=|spacing=before= after= line=|font=|sz=|bold=1|REFERENCES
+style=|spacing=before= after= line=|font=|sz=|bold=1|APPENDICES
+style=|spacing=before= after= line=|font=|sz=|bold=1|CURRICULUM VITAE
+style=|spacing=|font=|sz=|bold=0|LIST OF TABLES
+style=|spacing=|font=|sz=|bold=1|Table  Page
+style=|spacing=|font=|sz=|bold=0|Roles and Responsibilities  41
+style=|spacing=|font=|sz=|bold=0|Sprint Cycle  50
+style=|spacing=|font=|sz=|bold=0|LIST OF FIGURES
+style=|spacing=|font=|sz=|bold=1|Figure Page
+style=|spacing=|font=|sz=|bold=0|Enterprise Architecture25
+style=|spacing=|font=|sz=|bold=0|Microservices Architecture27
+style=|spacing=|font=|sz=|bold=0|Microservices Communication Diagram 28
+style=|spacing=|font=|sz=|bold=0|CI/CD Pipeline            34
+style=|spacing=|font=|sz=|bold=0|System Integration Architecture39
+style=|spacing=|font=|sz=|bold=0|Agile Scrum Framework  45
+style=|spacing=|font=|sz=|bold=0|Product Backlogs   51
+style=|spacing=|font=|sz=|bold=0|Kanban and Gantt Chart 52
+style=|spacing=|font=|sz=|bold=0|Burndown Chart and Mindmap  53
+style=|spacing=|font=|sz=|bold=0|Sprint Backlog, User Stories, and Points56
+style=|spacing=|font=|sz=|bold=0|CI/CD Pipeline Development    59
+style=|spacing=|font=|sz=|bold=0|Network Topology   60
+style=|spacing=|font=|sz=|bold=0|Use Case   61
+style=|spacing=|font=|sz=|bold=0|Infrastructure as Code   63
+style=|spacing=|font=|sz=|bold=0|Data Flow Diagram 1   64
+style=|spacing=before= after= line=|font=|sz=|bold=0|LIST OF APPENDICES
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix A
+style=|spacing=before= after= line=|font=|sz=|bold=0|Technical Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix B
+style=|spacing=before= after= line=|font=|sz=|bold=0|Research Adviser Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix C
+style=|spacing=before= after= line=|font=|sz=|bold=0|Grammarian Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Appendix D
+style=|spacing=before= after= line=|font=|sz=|bold=0|Researcher’s Curriculum Vitae
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chapter 1
+style=|spacing=before= after= line=|font=|sz=|bold=1|INTRODUCTION
+style=|spacing=before= after= line=|font=|sz=|bold=0|1.1 Background of the Capstone Project
+style=|spacing=before= after= line=|font=|sz=|bold=0|The Barangays in the Philippines serve as the smallest administrative units responsible for delivering basic public services and managing shared community resources. Among these responsibilities is the proper scheduling and allocation of public facilities such as basketball courts, playgrounds, health care rooms, and barangay-owned equipment like chairs and tables. Despite the importance of these services, many barangays continue to rely on manual and informal processes for managing reservations and resource usage.
+style=|spacing=before= after= line=|font=|sz=|bold=0|In Barangay Culiat, Quezon City, the reservation of public facilities is commonly done through personal visits to the barangay hall or informal communication channels such as private messages on social media platforms. These methods often result in delayed responses, overlooked reservation requests, unclear scheduling, and frequent conflicts due to the absence of a centralized and organized reservation system. Furthermore, manual record-keeping increases the risk of inaccurate data, misplaced resources, and inefficient coordination among barangay personnel.
+style=|spacing=before= after= line=|font=|sz=|bold=0|To address these challenges, the AI-Driven Facilities Reservation System with Predictive Scheduling Features was conceptualized and developed. The system aims to modernize the reservation process by providing a centralized digital platform that enables residents to check real-time availability, submit reservation requests online, and receive timely updates. By incorporating intelligent scheduling and automation, the system seeks to improve operational efficiency, transparency, and accessibility in barangay facility management.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.2 Context and Scope
+style=|spacing=before= after= line=|font=|sz=|bold=0|This capstone project addresses the challenges of barangay-level public service management, focusing on the digital transformation of facility and equipment reservation processes. The system is designed as a web-based application accessible to residents, barangay staff, and administrators with defined roles and permissions.
+style=|spacing=before= after= line=|font=|sz=|bold=0|The scope of the system includes:
+style=|spacing=before= after= line=|font=|sz=|bold=0|• Online reservation of barangay facilities and equipment• Real-time availability and scheduling display• Automated and AI-driven predictive scheduling to reduce conflicts• Centralized reservation records and monitoring• Communication support between residents and barangay personnel
+style=|spacing=before= after= line=|font=|sz=|bold=0|The system is intended for use within Barangay Culiat and is designed to support current operational needs while remaining scalable for future enhancements. Features such as online payments and mobile application support are considered beyond the scope of the current implementation.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.3 Problem Statement
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.3.1 Main Problem
+style=|spacing=before= after= line=|font=|sz=|bold=0|Barangay Culiat experiences inefficiencies in managing and scheduling its community facilities due to reliance on manual and informal reservation procedures. These practices result in delayed communication, inaccurate records, scheduling conflicts, and limited accessibility for residents.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.3.2 Specific Problems
+style=|spacing=before= after= line=|font=|sz=|bold=0|The following specific problems were identified:
+style=|spacing=before= after= line=|font=|sz=|bold=0|1. Lack of a centralized system for real-time monitoring of facility and equipment availability
+style=|spacing=before= after= line=|font=|sz=|bold=0|2. Frequent double bookings and scheduling conflicts
+style=|spacing=before= after= line=|font=|sz=|bold=0|3. Delayed responses or overlooked requests caused by manual and unorganized reservation methods
+style=|spacing=before= after= line=|font=|sz=|bold=0|4. Difficulty in tracking barangay equipment, leading to misplaced or inaccurately recorded resources
+style=|spacing=before= after= line=|font=|sz=|bold=0|5. Inconvenient reservation process that requires physical visits or reliance on social media communication
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4 Objectives and Goals
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4.1 General Objective
+style=|spacing=before= after= line=|font=|sz=|bold=0|The general objective of this project is to develop an AI-driven reservation and scheduling system that improves the efficiency, accuracy, and accessibility of facility and equipment management in Barangay Culiat.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4.2 Specific Objectives
+style=|spacing=before= after= line=|font=|sz=|bold=0|The project aims to:
+style=|spacing=before= after= line=|font=|sz=|bold=0|Develop a digital platform for real-time viewing and reservation of barangay facilities and equipment
+style=|spacing=before= after= line=|font=|sz=|bold=0|Implement AI-based predictive scheduling to minimize double bookings and scheduling conflicts
+style=|spacing=before= after= line=|font=|sz=|bold=0|Provide an efficient communication channel between residents and barangay staff
+style=|spacing=before= after= line=|font=|sz=|bold=0|Improve monitoring and tracking of facility usage and barangay-owned equipment
+style=|spacing=before= after= line=|font=|sz=|bold=0|Enhance the overall quality and reliability of public service delivery in Barangay Culiat
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4.3 Goal
+style=|spacing=before= after= line=|font=|sz=|bold=0|Modernize Barangay Culiat’s facility and equipment management by introducing a centralized, automated, and intelligent reservation system that increases transparency, convenience, and operational efficiency for both residents and barangay personnel.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.4.4 Users and Beneficiaries
+style=|spacing=before= after= line=|font=|sz=|bold=0|Users: Residents of Barangay Culiat, barangay staff, and system administrators.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Beneficiaries: The entire community of Barangay Culiat, as the system reduces scheduling conflicts, improves access to facilities, and enhances overall public service delivery.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.5 Significance and Relevance
+style=|spacing=before= after= line=|font=|sz=|bold=0|This system provides a modern and organized approach to managing barangay facility reservations. It enables barangay officials to efficiently allocate resources, reduce administrative workload, and maintain accurate records. For residents, the system offers a more convenient, transparent, and accessible reservation process.
+style=|spacing=before= after= line=|font=|sz=|bold=0|This study is significant as it demonstrates how small local government units can adopt digital and AI-driven solutions to improve operational efficiency and public service delivery. It also serves as a practical reference for future information systems designed for community-level governance and resource management.
+style=|spacing=before= after= line=|font=|sz=|bold=1|1.6 Structure of the Document
+style=|spacing=before= after= line=|font=|sz=|bold=0|This capstone document is organized into the following chapters:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 1 introduces the foundation of the capstone project, starting with the Background of the Capstone Project, which explains the context of barangay public service management, the current manual reservation system in Barangay Culiat, and the rationale for developing the AI-driven reservation system. The Context and Scope section defines the boundaries of the project, including the features implemented, such as online reservations, real-time availability, AI-driven scheduling, centralized monitoring, and communication support, while clarifying out-of-scope features like online payments and mobile application support. The Problem Statement identifies the main issue of inefficiency in managing facilities and equipment, as well as specific problems like double bookings, delayed responses, and difficulty tracking resources. In Objectives and Goals, the general objective, specific objectives, overall goal, and the intended users and beneficiaries of the system are presented. Finally, the Significance and Relevance of the Study highlight the importance of the project for barangay officials and residents, emphasizing operational efficiency, transparency, accessibility, and its value as a reference for future community-level information systems.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chapter 2 presents the theories, technologies, and previous studies that support the development of the AI-Driven Facilities Reservation System for Barangay Culiat. It discusses Agile Scrum methodology as the development approach used to ensure flexibility, continuous improvement, and responsiveness to user feedback during system implementation. The chapter also explains enterprise architecture concepts, which provide a structured framework for aligning the reservation system with existing barangay processes and ensuring scalability and maintainability. Microservices architecture is reviewed to justify the system’s modular design, allowing independent services such as reservations, facility management, notifications, and AI-based recommendations to operate reliably and be enhanced over time. DevOps and CI/CD practices are included to emphasize the importance of automated testing, deployment, monitoring, and security in maintaining a stable and efficient system. In addition, relevant studies on digital reservation and appointment systems are examined to highlight their benefits and limitations, serving as references for improving community-level facility management. Lastly, the integration of information systems in an enterprise environment is discussed to show how seamless data exchange between system components improves coordination, reduces manual errors, and enhances overall service delivery in the barangay.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Chapter 3illustrates the methodology used in developing the AI-Driven Facilities Reservation System with Predictive Scheduling Features for Barangay Culiat. It begins by discussing the Agile Scrum approach, which guided the development through iterative sprints, allowing continuous feedback and timely delivery of system features. The section on Roles and Responsibilities describes how the project team, composed of the Product Owner, Scrum Master, Project Manager, programmers, and researchers, worked collaboratively with clearly defined tasks to ensure accountability and smooth progress. The Sprint Cycles section highlights the weekly breakdown of tasks, including secure user authentication, facility management, AI-driven scheduling, reservation processing, and reporting, which enabled systematic progress and efficient problem-solving. The chapter also covers Scrum Artifacts used for tracking and managing work, such as Product and Sprint Backlogs, Kanban boards, Gantt charts, burndown charts, and mind maps. In addition, the system architecture follows a Microservices design for scalability and maintainability, while DevOps practices with CI/CD pipelines ensured consistent testing, integration, and deployment. The Integration Approach describes how the system communicates with key LGU modules like maintenance, infrastructure, and utilities, allowing real-time updates for accurate facility availability. Finally, TOGAF and the Four Architectural Domains guided the alignment of system design with barangay operations and technological infrastructure, supporting efficiency, interoperability, and transparency. Overall, this chapter demonstrates how the combination ofmethodology, technical architecture, and integration strategies enabled the development of a robust, user-focused, and sustainable reservation system.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chapter 2
+style=|spacing=before= after= line=|font=|sz=|bold=1|REVIEW OF RELATED LITERATURE
+style=|spacing=before= after= line=|font=|sz=|bold=0|This chapter presents the reviewed theories, technologies, and previous studies relevant to the development of the AI-Driven Facilities Reservation System for Barangay Culiat. It discusses established concepts that guided the system’s design and implementation, including Agile Scrum methodology, enterprise architecture, microservices architecture, DevOps and CI/CD practices, relevant research studies, and integration of information systems in enterprise environments. These literature sources provide a foundation for understanding how modern information systems can enhance community facility management, optimize resource allocation, streamline communication between residents and staff, and improve service delivery in a local government context.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.1 Agile Scrum Methodology Overview
+style=|spacing=before= after= line=|font=|sz=|bold=0|Agile Scrum is a software development methodology that emphasizes iterative progress, collaboration, and adaptability. Projects are divided into short cycles called sprints, allowing teams to deliver functional features quickly and adjust based on user feedback. Scrum roles, including Product Owner, Scrum Master, and Development Team, ensure organized workflow and accountability.In the context of the AI-Driven Facilities Reservation System for Barangay Culiat, Agile Scrum facilitates rapid development of features such as real-time facility availability, predictive scheduling, and user communication. This approach ensures that the system can adapt to the needs of residents and barangay staff efficiently, minimizing delays and improving service delivery.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.2 Enterprise Architecture Concepts
+style=|spacing=before= after= line=|font=|sz=|bold=0|Enterprise Architecture is a structured framework that defines how an organization’s processes, information systems, and technology work together. It serves as a blueprint, ensuring that all components are connected, efficient, and aligned with organizational goals.
+style=|spacing=before= after= line=|font=|sz=|bold=0|In simple terms, EA is like a map of the system: it shows how different parts of the organization interact and how new systems can fit without causing problems.
+style=|spacing=before= after= line=|font=|sz=|bold=0|For the AI-Driven Facilities Reservation System in Barangay Culiat, EA ensures that the system integrates smoothly with existing barangay operations. This includes facility scheduling, equipment tracking, and communication between residents and staff. Following EA principles also allows the system to be scalable, maintainable, and adaptable to future digital improvements. The diagram below illustrates the EA of the AI-Driven Facilities Reservation System.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 1 Enterprise Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|It identifies key stakeholders (Resident Users and Barangay Personnel), the central digital platform that manages reservation workflows, communication channels, and AI components such as predictive scheduling. This architecture ensures real-time availability, efficient communication, and optimized resource management, aligning technology with the barangay’s service objectives. The central digital platform allows residents to view and submit reservation requests, receive real-time notifications about approvals or schedule changes, while barangay personnel manage approvals and resources. The AI module predicts peak usage and prevents scheduling conflicts, enhancing overall operational efficiency.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.3 Microservices Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|For the AI-Driven Facilities Reservation System for Barangay Culiat, microservices are suitable because they allow independent deployment, modular maintenance, and fault isolation. Even if one service such as the Notification Service fails, the core reservation system can continue operating normally.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 2Microservices Architecture
+style=|spacing=|font=|sz=|bold=0|Figure no. 3Microservices Communication Diagram
+style=|spacing=before= after= line=|font=|sz=|bold=1|Gateway / Frontend – Serves PHP views, routes user traffic to backend endpoints.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Auth & Session Service – Handles login (email/password), OTP issuance/verification, lockout, rate limits, sessions.
+style=|spacing=before= after= line=|font=|sz=|bold=1|User & Profile Service – Manages user records (name/email/mobile/address/coordinates/profilepicture), role/status.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Document Service – Handles resident document uploads/validation/storage(public/uploads/documents/{userId}), metadata in DB.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Facility Service – Manages facilities (details, status, citations, lat/long), facility audit entries.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Reservation Service – Manages bookings with flexible time slots, conflict checks, history/timeline, auto-decline of expired reservations, booking limit enforcement (≤3 active/30 days, ≤60-day advance, ≤1/day), reschedule functionality (up to 3 days before, one reschedules per reservation).
+style=|spacing=before= after= line=|font=|sz=|bold=1|Auto-Approval Service – Evaluates reservations against 8 conditions, automatically approves eligible reservations.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Violation Tracking Service – Records/manages user violations (no-show, late cancellation, policy violation, damage, other), tracks severity levels, disables auto-approval for high/critical violations.
+style=|spacing=before= after= line=|font=|sz=|bold=1|AI Recommendation Service – Provides conflict detection, facility recommendations with distance scoring (Haversine), purpose-based ranking, and holiday/event risk tagging.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Calendar Service – Exposes calendar views and reservation event data (Month/Week/Day).
+style=|spacing=before= after= line=|font=|sz=|bold=1|Notification Service – Creates in-app notifications (panel, mark-as-read) for approvals/denials and key events.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Export/Reports Service – Generates CSV and HTML-for-PDF reports from quick actions.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Email/OTP Service – Sends approval and OTP emails via SMTP (currently Gmail; target Brevo/domain).
+style=|spacing=before= after= line=|font=|sz=|bold=1|Password Reset Service – Issues/validates reset tokens, updates passwords, sends reset links via email.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Audit & Security Service – Logs security events, audit trails, login attempts, rate limit records.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Contact Inquiry Service – Accepts public contact form submissions, stores them, and emails admins/dashboard inbox.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Communication Patterns:
+style=|spacing=before= after= line=|font=|sz=|bold=0|Gateway → Services: REST/HTTP for auth, user, documents, facilities, reservations, calendar, notifications, exports, audit.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Auth & Session → Email/OTP: SMTP for OTP and approval emails.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Password Reset → Email/OTP: SMTP for reset links.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Reservation → Notification: Direct DB writes to notification store (polled by UI).
+style=|spacing=before= after= line=|font=|sz=|bold=0|Reservation → Auto-Approval: In-process call to evaluate conditions and determine approval.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Reservation → Violation Tracking: Links violations to reservations.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Reservation → AI Recommendation: In-process/HTTP call for conflict detection and recommendations.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Reservation → Calendar: Shared DB view; read-only queries.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Facility → AI Recommendation: Reads facility coordinates/status to compute scores.
+style=|spacing=before= after= line=|font=|sz=|bold=0|User/Profile → Document Service: HTTP/form upload; service writes file + metadata.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Audit & Security: Synchronous DB writes on critical actions.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Contact Form → Contact Inquiry Service: HTTP/AJAX posts; stores inquiry and triggers admin email.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Future/Planned Microservices:
+style=|spacing=before= after= line=|font=|sz=|bold=1|AI Chatbot Service – Frontend complete; backend integration pending; floating chatbot widget; mock responses; planned AI/ML API integration; context retrieval from reservations/facilities; FAQ grounding; safety filtering.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Urban Planning Integration Service – Frontend complete; backend integration pending; admin dashboard with mock data; planned API integration; analytics export; webhooks; zoning compliance validation.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Maintenance Management Integration Service – Planned, high priority; receive schedules via API/webhook; auto-update facility status; block bookings during maintenance; notify users.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Project Management Integration Service – Planned, medium priority; receive project timelines via API; auto-block facilities during construction; auto-create facilities; update facility capacity.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.4 DevOps and CI/CD
+style=|spacing=before= after= line=|font=|sz=|bold=0|DevOps is a set of practices that combines software development and IT operations to improve collaboration, speed, and reliability in software delivery. It ensures that developers and operations teams work together to maintain a stable and efficient system.
+style=|spacing=before= after= line=|font=|sz=|bold=0|In the Barangay Culiat AI-driven reservation system, DevOps helps streamline development and system maintenance, reducing delays and errors. The following practices and strategies were implemented to support continuous integration, deployment, monitoring, security, and environment management.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 4 CI/CD Pipeline
+style=|spacing=before= after= line=|font=|sz=|bold=1|Continuous Integration (CI):
+style=|spacing=before= after= line=|font=|sz=|bold=1|Build: composer install, lint PHP/JS/CSS, validate migrations(includinglock_reason,contact_inquiries, auto_approvalfields,user_violations, facility_blackout_dates).
+style=|spacing=before= after= line=|font=|sz=|bold=1|Smoke (Staging): login + OTP, forgot/reset, booking limits (≤3/30d, ≤60d advance, ≤1/day) with holiday/event risk banner stable, auto-approval evaluation (8 conditions), flexible time slot validation, violations recording, rescheduling, approvals, exports, contact submissions (inbox + email), dashboard filters/charts.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Continuous Deployment (CD):
+style=|spacing=before= after= line=|font=|sz=|bold=1|Deploy: run migrations, zero-downtime sync/rolling update.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Post-DeployChecks:verifyemails (OTP/reset/approval/lock/inquiry),auto-approvallogic, violation tracking, time slot parsing.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Monitoring & Alerts:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Health Check: HTTP /health (or /).
+style=|spacing=before= after= line=|font=|sz=|bold=1|Watch: 5xx/4xx, latency, auth/OTP failures, reset failures, booking-limit denials, auto-approval evaluation failures, time slot parsing errors, violation recording errors, reschedule validation failures, contact submit errors, DB errors/slow queries, disk usage for public/uploads.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Alerts: uptime, error spikes, email send failures, auto-approval logic errors, disk near-full, DB slow/connection issues.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Security & Configuration:
+style=|spacing=before= after= line=|font=|sz=|bold=1|CSP Allowlist: fonts.googleapis.com, fonts.gstatic.com, cdn.jsdelivr.net(BootstrapIcons/SimpleLightbox), cdnjs.cloudflare.com, Chart.js CDN.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Secrets: SMTP (Brevo/Gmail), DB, app keys, OTP/pepper, reset token secret, email “from”.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Tunables via Env: rate limits/lockout, booking limits.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Backups:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Database: scheduled snapshots / PITR.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Files: snapshot public/uploads; verify restore.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Environments:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Dev:Mailhog/Mailtrap SMTP; verbose logs; minimal seed data.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Staging: mirrors prod CSP/CDN; dry-run migrations; sandbox email.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Prod: zero-downtime deploy; post-deploy email smoke test (OTP/reset/inquiry).
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.5 Relevant Studies and Research
+style=|spacing=before= after= line=|font=|sz=|bold=0|Several existing systems have demonstrated the benefits of digital reservation and appointment technologies, particularly in improving resource management and user accessibility. For instance, the AI-Driven Sit-in Reservation System at the University of Cebu optimizes resource allocation, provides real-time monitoring, and offers a user-friendly interface, although it is limited to educational laboratories and sit-in reservations. Similarly, web-based appointment systems at Mindanao State University and PRC IV-A improve scheduling efficiency and operational workflow, but they either lack AI-based predictive features or are constrained to specific office or professional services, with occasional accessibility issues. The Customer-Driven Facility Management System at Mapua University incorporates user requirements and automates reservation processes, yet it does not include predictive scheduling and focuses solely on university settings. Broader analyses, such as studies on AI adoption in local governments and optimization techniques for appointment scheduling, provide valuable insights into efficiency gains and algorithmic approaches, but they are either too general or healthcare-focused, with limited practical guidance for community facility management. Building on these findings, the proposed AI-Driven Facilities Reservation System for Barangay Culiat aims to integrate the strengths of these existing solutions while addressing their limitations. By implementing AI-driven predictive scheduling, real-time notifications, mobile and web accessibility, and optimization algorithms to prevent double bookings, the system enhances community-wide facility management, streamlines communication between residents and barangay staff, and ensures organized, transparent, and efficient use of barangay resources.
+style=|spacing=before= after= line=|font=|sz=|bold=1|2.6Integration of Information Systems in Enterprise Environment
+style=|spacing=before= after= line=|font=|sz=|bold=0|Integration of information systems in an enterprise environment refers to the process of connecting various software applications and tools so that they can work together efficiently within an organization. In the case of the AI-Driven Facilities Reservation System for Barangay Culiat, integration ensures that when a resident makes a facility reservation, the equipment inventory is automatically updated, notifications are sent to the resident, and staff can monitor all activities through a centralized dashboard. This integration streamlines operations, reduces manual errors, and allows for seamless management of community resources, making the system more effective and reliable for both residents and barangay staff.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 5System Integration Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Chapter 3
+style=|spacing=before= after= line=|font=|sz=|bold=1|METHODOLOGY
+style=|spacing=before= after= line=|font=|sz=|bold=0|Provided a detailed approach and methodology that was used on this project. Included an agile scrum methodology, the roles and responsibility inside of the project team, sprint cycles and scrum artifacts. It contains microservices architecture adopted also DevOps Implementation, and innovation integration on system. By the end of this document, the reader will achieve a complete understanding of our subsystems on how will impact operational, efficiency, and effectiveness in LGU.
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.1Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=0|The development team behind the AI-Driven Facilities Reservation System is composed of skilled and dedicated professionals, each focusing on specific areas of the project. Every member is assigned clear responsibilities to ensure the smooth design, development, and implementation of the system. Together, the team works cofeatures and to deliver a solution that makes facility reservations easier, improves scheduling with predictive features, and meets the needs of both end-users and stakeholders.
+style=|spacing=before= after= line=|font=|sz=|bold=1|NAMES
+style=|spacing=before= after= line=|font=|sz=|bold=1|ROLES
+style=|spacing=before= after= line=|font=|sz=|bold=1|RESPONSIBILITIES
+style=|spacing=before= after= line=|font=|sz=|bold=1|Cristina V. Bernardino
+style=|spacing=before= after= line=|font=|sz=|bold=0|Product Owner
+style=|spacing=before= after= line=|font=|sz=|bold=0|Defines the project vision and backlog to ensure the product aligns with end-user and stakeholder needs.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Prioritizes development tasks to maximize value and guide the team toward project goals.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Stephnie G. Sagun
+style=|spacing=before= after= line=|font=|sz=|bold=0|Scrum Master
+style=|spacing=before= after= line=|font=|sz=|bold=0|Facilitates daily stand-ups, sprint planning, and retrospectives to keep the team aligned with Agile practices.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Removes obstacles and ensures smooth workflow to improve team efficiency and productivity.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Promotes collaboration and fosters a supportive team environment.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Exequiel Kent T. Bartolome
+style=|spacing=before= after= line=|font=|sz=|bold=0|Lead Programmer
+style=|spacing=before= after= line=|font=|sz=|bold=0|Oversees software development, sets coding standards, and conducts code reviews to ensure technical quality.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Guides junior programmers and mentors team members to maintain consistent and efficient coding practices.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Makes architectural decisions to support robust and scalable project outcomes.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Joricho E. Azuela
+style=|spacing=before= after= line=|font=|sz=|bold=0|Project Manager / Lead Researcher
+style=|spacing=before= after= line=|font=|sz=|bold=0|Manages project timeline, resources, and task assignments to ensure deadlines and deliverables are met.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Communicates directly with stakeholders to clarify requirements and ensure alignment with project goals.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Leads research activities and provides insights to guide project development.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Motivates the team during low-energy or burnout periods, boosting morale and maintaining productivity.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Luis Miguel N. Follero
+style=|spacing=before= after= line=|font=|sz=|bold=0|Programmer
+style=|spacing=before= after= line=|font=|sz=|bold=0|Develops and implements software modules according to project specifications.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Collaborates with the lead programmer to maintain functionality and code quality.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Troubleshoots and fixes bugs to ensure smooth operation of the system.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Hajar P. Gili
+style=|spacing=before= after= line=|font=|sz=|bold=0|Researcher
+style=|spacing=before= after= line=|font=|sz=|bold=0|Conducts research on relevant topics to support project requirements and design decisions.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Analyzes data and provides insights that inform project direction and planning.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Daryll Parcia
+style=|spacing=before= after= line=|font=|sz=|bold=0|Researcher
+style=|spacing=before= after= line=|font=|sz=|bold=0|Assists in research activities, gathers and organizes data, and contributes to analytical reports.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Ensures accuracy and reliability of research outputs to support development decisions.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Gilbert A. Tablac Jr.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Assistant Programmer
+style=|spacing=before= after= line=|font=|sz=|bold=0|Supports programming tasks under guidance of senior developers, including coding and debugging.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Maintains documentation for code and project processes to ensure clarity and team alignment.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Contributes to team discussions and offers input on development challenges and solutions.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 1 Roles and Responsibilities
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.2Sprint Cycles
+style=|spacing=before= after= line=|font=|sz=|bold=0|This development timeline outlines the planned activities, goals, and tasks of the team for the AI-Driven Facilities Reservation System with Predictive Scheduling Features. Following an Agile Scrum approach, the team organizes work into weekly sprints to ensure systematic progress, continuous evaluation, and timely delivery of features. Each sprint focuses on specific objectives, such as brainstorming ideas, defining roles, implementing secure user authentication, managing reservations, integrating AI recommendations, and enhancing the user interface. By breaking down work into actionable tasks, the team can track progress, address challenges promptly, and deliver a reliable system that meets the needs of end-users and stakeholders.
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 6 Agile Scrum Framework
+style=|spacing=|font=|sz=|bold=1|Date
+style=|spacing=|font=|sz=|bold=1|Goal
+style=|spacing=|font=|sz=|bold=1|User Stories
+style=|spacing=|font=|sz=|bold=1|Tasks
+style=|spacing=|font=|sz=|bold=0|Nov 28 - Dec 4
+style=|spacing=|font=|sz=|bold=0|Tobrainstorm, evaluate, and prioritize team ideasfor actionable next steps.
+style=|spacing=|font=|sz=|bold=0|1. Team meetings for Ideas.
+style=|spacing=|font=|sz=|bold=0|Dec5 – Dec 11
+style=|spacing=|font=|sz=|bold=0|verify research and ideas while defining clear roles and responsibilities for the team.
+style=|spacing=|font=|sz=|bold=0|1. Checking of the research and title listing of ideas and features
+style=|spacing=|font=|sz=|bold=0|2. Distribution of tasks, roles, and responsibilities
+style=|spacing=|font=|sz=|bold=0|Dec 12 – Dec 18
+style=|spacing=|font=|sz=|bold=0|Establish secure user registration/login flows with OTP and password policies
+style=|spacing=|font=|sz=|bold=0|We will enforce email OTP on login with deliverability monitoring and retry logic, create an OTP email template, automatically open the T&C modal with anacceptance checkbox, enforce password policies on registration and reset, and enhance session security by regenerating session IDs, implementing timeouts, and using SameSite/HttpOnly settings.
+style=|spacing=|font=|sz=|bold=0|1. Implement OTP backend
+style=|spacing=|font=|sz=|bold=0|2. Design OTP email templates
+style=|spacing=|font=|sz=|bold=0|3. Frontend T&C modal with acceptance validation
+style=|spacing=|font=|sz=|bold=0|4. Password validation and enforcement on registration/reset
+style=|spacing=|font=|sz=|bold=0|5. Session and cookie security settings
+style=|spacing=|font=|sz=|bold=0|Dec 19 – Dec 25
+style=|spacing=|font=|sz=|bold=0|Prevent abuse / brute-force attacks and complete password reset flow
+style=|spacing=|font=|sz=|bold=0|We will implement IP-based registration rate limiting, login rate limiting with lockout tracking tables, OTP expiry timers and attempt limits with UX feedback, OTP resend throttling with messaging, and a forgot password flow with reset token emails.
+style=|spacing=|font=|sz=|bold=0|1. Backend tables and logic for login and registration rate limiting
+style=|spacing=|font=|sz=|bold=0|2. Implement OTP timers, attempt limits, and UX feedback
+style=|spacing=|font=|sz=|bold=0|3. OTP resend throttling with messaging
+style=|spacing=|font=|sz=|bold=0|4. Forgot password email templates and flow
+style=|spacing=|font=|sz=|bold=0|5. Lockout logic and messaging
+style=|spacing=|font=|sz=|bold=0|Dec 26 – Jan 1
+style=|spacing=|font=|sz=|bold=0|Build user profile, document handling, and notifications
+style=|spacing=|font=|sz=|bold=0|We will integrate latitude/longitude and geocoding on the profile page, display reservation statuses on the My Reservations page, include reasons and next steps in approval and lock emails, enable document upload and validation for PDF, JPG, PNG, and WebP files with size limits and sanitization, and provide admin document actions in the review queue.
+style=|spacing=|font=|sz=|bold=0|1. Geocode integration for profile
+style=|spacing=|font=|sz=|bold=0|2. My Reservations page with status indicators
+style=|spacing=|font=|sz=|bold=0|3. Approval and lock email templates with delivery
+style=|spacing=|font=|sz=|bold=0|4. File upload validation and safe storage
+style=|spacing=|font=|sz=|bold=0|5. Admin dashboard document review features
+style=|spacing=|font=|sz=|bold=0|Jan 2 – Jan 8
+style=|spacing=|font=|sz=|bold=0|Develop facility management and UI/UX polish
+style=|spacing=|font=|sz=|bold=0|We will implement a facility form with latitude/longitude validation, create a public facility listing with glass-morphism design and equal-width CTA buttons, build a facility details page with image citations, add recent activity pagination, enable collapsible sections with state persistence, design a Cityhall background with blur overlay and high-contrast cards, and integrate OpenStreetMap.
+style=|spacing=|font=|sz=|bold=0|1.Facility CRUD with validation
+style=|spacing=|font=|sz=|bold=0|2.Public listing page UI and accessibility
+style=|spacing=|font=|sz=|bold=0|3.Image display with citation on hover
+style=|spacing=|font=|sz=|bold=0|4.Pagination and collapsible UI states
+style=|spacing=|font=|sz=|bold=0|5.Map integration
+style=|spacing=|font=|sz=|bold=0|Jan 9 – Jan 14
+style=|spacing=|font=|sz=|bold=0|Complete reservation management, AI recommendations, admin tools, and reporting
+style=|spacing=|font=|sz=|bold=0|We will implement calendar events with redirects, distance-based AI recommendations with holiday and event risk tagging, AI conflict detection with a persistent warning UI, a cron job for expired reservations, booking rules enforcement for up to 3 active reservations in 30 days, a maximum 60-day advance booking, and one reservation per day, admin capabilities to re-request documents, add remarks, and optional notes, user management filters with captured lock reasons, and reports export in CSV/PDF with dashboard filters, charts, and print-ready CSS.
+style=|spacing=|font=|sz=|bold=0|1. Implement calendar, booking rules, and AI recommendations
+style=|spacing=|font=|sz=|bold=0|2. Admin review queue enhancements
+style=|spacing=|font=|sz=|bold=0|3. Reporting and analytics with export functionality
+style=|spacing=|font=|sz=|bold=0|4. Final system-wide testing and bug fixes
+style=|spacing=before= after= line=|font=|sz=|bold=0|Table no. 2 Sprint Cycles
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3 Scrum Artifacts
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3.1 Product Backlog
+style=|spacing=before= after= line=|font=|sz=|bold=0|The Product Backlog is a continuously updated list of all required features, functions, and system enhancements for the AI-Driven Facilities Reservation System with Predictive Scheduling Features for Local Government Unit 1. It includes the core modules necessary to support user account management, facility administration, reservation processing, reporting and analytics, document handling, security and system management, user interface design, and artificial intelligence based predictive scheduling. The Product Backlog is managed and prioritized to ensure that the most critical and valuable features for local government administrators, staff, and facility users are developed first. As the system progresses, backlog items may be added, refined, or reprioritized based on stakeholder feedback, operational needs, and system performance requirements.
+style=|spacing=|font=|sz=|bold=0|Figure no. 7Product Backlogs
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3.2Kanban and Gantt Chart (Product Backlog)
+style=|spacing=|font=|sz=|bold=0|Figure no. 8Kanban and Gantt Chart
+style=|spacing=|font=|sz=|bold=1|3.3.3Burndown Chart and Mindmap (Product Backlog)
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 9Burndown Chart and Mindmap
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3.4 Sprint Backlog, User Stories, and Points
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 10Sprint Backlog, User Stories, and Points
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.3.5Burndownchart(SprintBacklog,UserStories,Points)
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 11Burndownchart
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.3.6Mindmap(SprintBacklog,UserStories,Points)
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 12Mindmap
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.3.7Gantt Chart (SprintBacklog,UserStories,Points)Figure no. 13 Gantt Chart
+style=|spacing=before= after= line=|font=|sz=|bold=0|3.4Microservices Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 14Microservices Architecture
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.5DevOps Implementation
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 15CI/CD Pipeline
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 16CI/CD Pipeline Development
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.6 Additional Considerations
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.6.1 Network Topology
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 17Network Topology
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no. 18Use Case
+style=|spacing=before= after= line=|font=|sz=|bold=1|Figure no. 18Use Case
+style=|spacing=before= after= line=|font=|sz=|bold=0|Figure no.18Use Case
+style=|spacing=before= after= line=|font=|sz=|bold=1|Figure no. 19Infrastructure as code
+style=|spacing=before= after= line=|font=|sz=|bold=1|Figure no. 20Data Flow Diagram 1
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.7Integration Approach for Information Systems
+style=|spacing=before= after= line=|font=|sz=|bold=0|The Barangay Culiat AI-Driven Facilities Reservation System is designed to achieve seamless integration with key Local Government Unit (LGU) modules, including maintenance, infrastructure, and utilities management. This integration enables real-time communication and data exchange, ensuring that facility availability is dynamically updated based on ongoing maintenance work, active infrastructure projects, and the operational status of essential utilities.
+style=|spacing=before= after= line=|font=|sz=|bold=1|3.8 Introduction to TOGAF and theFourArchitectural Domains
+style=|spacing=before= after= line=|font=|sz=|bold=1|Enterprise Architecture:Goal: Provides a comprehensive view of organizational processes, resources, information flows, and systems, ensuring alignment between business needs and technology infrastructure.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Relevance to Barangay Facilities Management:Facilitates a unified understanding of how barangay facilities are scheduled, monitored, and maintained. It ensures that AI-driven reservation processes align with operational workflows and community requirements, helping barangay staff manage resources efficiently while providing transparency and accountability to residents.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Architecture for Applications:Goal: Defines the structure and integration of software applications to meet functional requirements, ensure system reliability, and support future scalability.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Relevance to Barangay Facilities Management:Supports AI-driven reservation and predictive scheduling applications that optimize facility usage. Applications can handle real-time updates, prevent double bookings, and provide a user-friendly interface for residents, ensuring smooth coordination between the community and barangay staff.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Technology Framework:Goal: Specifies the hardware, networks, and technological standards required to support applications and enterprise processes reliably and securely.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Relevance to Barangay Facilities Management:Ensures the system leverages cloud-based servers, secure mobile and web platforms, and AI processing units to provide fast, reliable, and accessible services to residents. The framework supports scalability as demand for facility reservations grows, enabling uninterrupted operations during peak periods.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Compliance with Social Service and CommunityGoals:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Enhance Accessibility: Residents can easily reserve barangay facilities anytime via web or mobile platforms, reducing bottlenecks in community service access.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Efficient Resource Management: AI-driven predictive algorithms optimize scheduling to maximize facility utilization while avoiding conflicts.
+style=|spacing=before= after= line=|font=|sz=|bold=1|DataDriven Decision Making: Usage data from the system informs barangay staff about peak hours, popular facilities, and maintenance needs, supporting evidence-based planning and policy adjustments.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Advantages of TOGAF:
+style=|spacing=before= after= line=|font=|sz=|bold=1|Proactive Risk Management: Early identification of potential scheduling conflicts, system failures, or resource shortages allows mitigation before they impact residents.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Scalable and Flexible Architecture: Supports system growth as the community expands or additional facilities are added, with minimal disruption.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Interoperability and Integration: Ensures the reservation system can communicate with other barangay platforms (e.g., announcements, billing, or community portals), providing a seamless user experience.
+style=|spacing=before= after= line=|font=|sz=|bold=1|Technical Adviser Curriculum Vitae
+style=|spacing=|font=|sz=|bold=0|Research Adviser Curriculum Vitae
+style=|spacing=|font=|sz=|bold=0|Grammarian Curriculum Vitae
+style=|spacing=|font=|sz=|bold=0|Researchers Curriculum Vitae

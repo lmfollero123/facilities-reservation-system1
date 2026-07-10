@@ -1,8 +1,8 @@
-# Microservices Overview & Communication Patterns
+# Logical Service Boundaries & Communication Patterns
 
-## Microservices Diagram (Textual)
-- **Gateway / Frontend**  
-  - Serves PHP views, routes user traffic to backend endpoints.
+## Service Boundaries Diagram (Textual)
+- **Web App Front Controller (`index.php`)**  
+  - Serves PHP views and dispatches requests to in-app modules.
 - **Auth & Session Service**  
   - Handles login (email/password), OTP issuance/verification, lockout, rate limits, sessions.
 - **User & Profile Service**  
@@ -36,7 +36,7 @@
   - Accepts public contact form submissions, stores them, and emails admins/dashboard inbox.
 
 ## Communication Patterns
-- **Gateway → Services:** REST/HTTP (PHP controllers) for auth, user, documents, facilities, reservations, calendar, notifications, exports, audit.
+- **Front Controller → Modules:** In-process PHP includes/controllers for auth, user, documents, facilities, reservations, calendar, notifications, exports, and audit.
 - **Auth & Session → Email/OTP:** SMTP to send OTP and approval emails.
 - **Password Reset → Email/OTP:** SMTP to send reset links with tokens.
 - **Reservation → Notification:** Direct DB writes to notification store (polled via HTTP by the UI); no message queue.
@@ -49,20 +49,16 @@
 - **Audit & Security:** Synchronous DB writes on each critical action; no queue.
 - **Contact Form → Contact Inquiry Service:** HTTP/AJAX posts; service stores inquiry and triggers admin email.
 
-## Future/Planned Microservices (UI Ready or Design Complete)
+## Future/Planned Integrations (UI Ready or Design Complete)
 
-### **AI Chatbot Service** (UI Implemented, Model Integration Pending)
-- **Status**: Frontend complete, backend integration pending
-- **Current Implementation**: 
+### **AI Chatbot** (Implemented with Gemini + fallback)
+- **Status**: Implemented in dashboard
+- **Current Implementation**:
   - Floating chatbot widget on dashboard pages
-  - Mock response system for testing
-  - Message handling and UI state management
-- **Planned Backend**:
-  - AI/ML model API integration (OpenAI, custom LLM, or hosted service)
-  - Context retrieval from reservations and facilities
-  - FAQ grounding system
-  - Safety filtering and allow-listing
-- **Communication Pattern**: REST API to AI provider, queries internal DB for context
+  - `/dashboard/chatbot-api` handler
+  - Gemini API integration when `GEMINI_API_KEY` is configured
+  - ML intent + rule-based fallback replies when AI provider is unavailable
+- **Communication Pattern**: HTTP request to chatbot endpoint; endpoint calls Gemini and internal context helpers
 
 ### **Maintenance Management Integration (CIMM)** — Partial (Outbound Pull)
 - **Status**: Outbound integration live; inbound webhooks not deployed
@@ -83,7 +79,7 @@
 - **Planned**: Outage alerts, usage/cost tracking, billing reconciliation
 
 ## Notes
-- Current deployment is monolithic PHP with modular responsibilities; the "services" above are logical boundaries. Actual calls are HTTP within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today.
+- Current deployment is a modular monolithic PHP application; the "services" above are logical boundaries, not independently deployed runtime services. Most calls are in-process within the app; SMTP is used for email/OTP/reset/inquiry alerts. No message queue is present today.
 - **Integrations (May 2026)**: CIMM outbound sync is partially live (`scripts/sync_cimm_maintenance.php`). Infrastructure and Utilities dashboard pages are preview/mock UI only. Inbound `/api/integrations/*` routes return HTTP 501 until implemented. Gemini powers the AI chatbot when `GEMINI_API_KEY` is configured.
 
 

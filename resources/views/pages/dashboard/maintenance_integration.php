@@ -70,13 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch maintenance schedules from CIMM API (read-only on page load — DB sync runs via cron/manual sync)
+// Fetch maintenance schedules from CIMM API, then sync facility status + blackouts to the local DB.
 $apiResult = fetchCIMMMaintenanceSchedules();
 $rawSchedules = $apiResult['data'] ?? [];
 $apiError = $apiResult['error'] ?? null;
 $maintenanceSchedules = mapCIMMToCPRF($rawSchedules);
-$cimmSyncState = frs_cimm_load_sync_state();
-$syncSummary = $cimmSyncState['last_summary'] ?: [
+
+$syncSummary = [
     'updated_to_maintenance' => 0,
     'updated_to_available' => 0,
     'blackouts_added' => 0,
@@ -85,6 +85,13 @@ $syncSummary = $cimmSyncState['last_summary'] ?: [
     'unmatched_schedule_count' => 0,
     'errors' => [],
 ];
+
+if (empty($apiError)) {
+    $syncSummary = syncFacilitiesFromCIMM($pdo, $maintenanceSchedules);
+    frs_cimm_save_sync_state($syncSummary);
+}
+
+$cimmSyncState = frs_cimm_load_sync_state();
 
 // Separate completed schedules for history
 $mockMaintenanceHistory = [];
@@ -316,11 +323,12 @@ ob_start();
                 </div>
             <?php endif; ?>
             <small style="color:#8b95b5; display:block; margin-top:0.5rem;">
-                Facility status and blackout writes run via <code>scripts/sync_cimm_maintenance.php</code> (cron or Sync Now), not on every page view.
+                Facility status and blackout dates sync automatically when this page loads or when you click Sync Now.
+                Cron (<code>php scripts/sync_cimm_maintenance.php</code>) is optional for background updates.
             </small>
         <?php else: ?>
             <small style="color:#8b95b5;">
-                No sync has run yet. Schedule <code>php scripts/sync_cimm_maintenance.php</code> in cron, or click Sync Now.
+                No sync has run yet. Open this page while CIMM is connected, click Sync Now, or schedule <code>php scripts/sync_cimm_maintenance.php</code> in cron.
             </small>
         <?php endif; ?>
     </div>
