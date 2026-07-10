@@ -1,0 +1,1069 @@
+
+VIAHALE: TRANSPORT NETWORK VEHICLE SERVICE CORE I SYSTEM WITH PREDICTIVE DISPATCHING AND DYNAMIC 
+TRIP MATCHING USING AI FORECASTING POWERED 
+BY TENSORFLOW AND SCIKIT-LEARN
+
+
+A Capstone
+Presented to the Faculty of
+The College of Computer Studies Bestlink College of the Philippines
+
+
+In Partial Fulfilment
+of the Requirements for the Degree 
+Bachelor of Science in Information Technology
+
+
+
+FIRSTNAME M.I. LASTNAME
+FIRSTNAME M.I. LASTNAME
+FIRSTNAME M.I. LASTNAMEFIRSTNAME M.I. LASTNAME
+FIRSTNAME M.I. LASTNAME
+
+
+February 2026
+APPROVAL SHEET
+
+This capstone entitled VIAHALE: TRANSPORT NETWORK VEHICLE SERVICE CORE I SYSTEM WITH PREDICTIVE DISPATCHING AND DYNAMIC TRIP MATCHING USING AI FORECASTING POWERED BY TENSORFLOW AND SCIKIT-LEARN , prepared and submitted by Lislyan M. Dela Cruz, Cristianber B. Gordora, Leandro C. Quisado, Jeffrey T. Tatoy, and Richelyn A. Villasor, in partial fulfilment of the requirements for the degree of Bachelor of Science in Information Technology, has been examined and is recommended for acceptance and approval Oral Defense.
+
+RICHELYN A. VILLASOR
+                 							    Adviser
+CAPSTONE REVIEW PANEL
+  Approved by the Committee on Oral Examination with a grade of 1.25. 
+
+   REYNANTE B. PONAY, CpE              VINCENT CARLO T. GARADOS                
+                Member                                                     Member
+
+ROMMEL J. CONSTANTINO, DIT
+Chairperson
+
+	Accepted and approved in partial fulfillment of the requirements for the degree of Bachelor of Science in Information Technology.
+
+ROSICAR E. ESCOBER, Ph. D, DIT
+Dean, College of Computer Studies
+Date of Final Defense: 
+
+ACKNOWLEDGEMENT
+The researchers would like to express their heartfelt thanks and gratitude to the following persons who, in one way or another, has contributed much, and extended willingness and support needed to make this research possible:
+Dr. Maria M. Vicente, President/CEO, Bestlink College of the Philippines, for her generosity and kind heart in establishing this institution and giving opportunities to those less fortunate students to continue their studies and pursue their dreams; 
+Ms. Edith M. Vicente, Executive Vice President, for providing the needed information to complete this research;
+Dr. Charlie I. Cariño, Vice President for Academic Affairs, for his support and encouragement to make this thesis writing possible;
+Engr. Diosdado T. Lleno, Vice President for Administration and
+Finance, for his words of encouragement and motivation;
+Dr. Joy Evelyn A. Ignacio, College Associate Research Head, for her good heart to extend her help needed by the researchers.
+	Dr. Rosicar E. Escober, Dean, College of Computer Studies of Bestlink College of the Philippines, for providing a guideline documentation in capstone project.
+Dr. Rommel J. Constantino, Program Head, Bachelor of Science in Information Technology, for the constant supervision as well as providing necessary information regarding the project and also for his support in completing this project
+Ms. Richelyn A. Villasor, Research Coordinator, for helping us in improving our research and guiding us in completing this project.
+Ms. Richelyn A. Villasor, Capstone Adviser, for giving us suggestions and ideas to improve our research and guiding us in completing this project.
+Panelists, Mr. Vincent Carlo T. Garados, Engr. Reynante B. Ponay, and Dr. Rommel J. Constantino, who extended their effort and time to be able to constructively criticize this thesis and share their knowledge with them to deepen and widen their needed information.
+Families and Friends, for all the financial and moral support that have enabled the researchers to triumph all the challenges, especially during the lowest time that served as their inspiration to complete this study; and
+Above all, to the Almighty God, for the strength and knowledge that were used for the accomplishment of this research journey.
+
+THE RESEARCHERS
+DEDICATION
+This research study is wholeheartedly dedicated first and foremost to the researchers, for executing dedication, time, effort, motivation, sacrifice, and courage to make this conducting study a fruitful and successful piece of work. 
+To our beloved parents who have been our inspiration and gave us strength when we thought of giving up, which continually provide their moral, spiritual, emotional and financial support.
+To each sibling and circle of friends who shared their words of advice and encouragement to finish this study. 
+To the research advisers and professors, for extending help by giving guidance, supervision, time and wisdom to the researchers in conducting this business research study. 
+And lastly, above all, to our Almighty God, for giving guidance, strength, power of mind, protection, skills and for giving us a healthy life. All of these we offer to you. 
+THE RESEARCHERS
+
+
+
+
+ABSTRACT
+Title:	GOVERNMENT SERVICE MANAGEMENT SYSTEM: SMART REVENUE TRACKER WITH AI-BASED ANOMALY DETECTION USING ML.JS
+Authors:	IVAN D. ANORICO
+HANZ VERNE R. CELLONA
+SHANNY BHELL O. DE LARA
+JERICK R. GENOSAS
+SHERILYN MAE B. PARES
+Degree:	Bachelor of Science of Information Technology
+Major:		Information Management, Information Security, Network
+Administrative
+	Date of Completion: 	
+	
+IMRAD TYPE Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+
+
+
+
+
+
+
+TABLE OF CONTENTS
+Page
+TITLE PAGE									 i
+APPROVAL SHEET							 ii
+ACKNOWLEDGMENT							 iii
+DEDICATION								 v
+ABSTRACT									 vi
+TABLE OF CONTENTS							 viii
+LIST OF TABLES								 xiii
+LIST OF FIGURES								 xiv
+LIST OF APPENDICES							 xv
+CHAPTER	
+1	Introduction	
+1.1.	Background of the Capstone Project		1
+1.2.	Context and Scope					3
+1.3.	Problem Statement					7
+1.4.	Objectives and Goals				8
+1.5.	Significance and Relevance			10
+1.6.	Structure of the Document				12
+  
+
+CHAPTER 	
+2	Review of Related Literature
+2.1.	Agile Scrum Methodology Overview		14
+2.2.	Enterprise Architecture Concepts			16
+2.3.	Microservices Architecture				18
+2.4      DevOps and CI/CD 					18
+2.5      Relevant Studies and Research      		20
+2.6	Integration of Information Systems in		24
+Enterprise Environment
+ CHAPTER 	
+3	Methodology
+3.1. Agile Scrum Methodology in the Project       	25
+3.2. Roles (e.g., Scrum Master, Product Owner,	27
+Development Team)
+3.3. Sprint Cycles (e.g., Sprint Planning,			31
+Daily Standups, Sprint Review)
+3.4. Scrum Artifacts 					37
+3.5 Microservices Architecture				77
+3.6 DevOps Implementation				82
+3.7 Integration Approach for Information Systems	87
+3.8 Introduction to TOGAF and the Four			90
+Architectural Domains
+CHAPTER	
+4	Requirements Analysis
+4.1. Stakeholder Identification				
+4.2. Requirements Gathering Techniques		
+4.3. User Stories and Use Cases				
+4.4. Functional Requirements for Integration		
+5 Business Process Architecture
+5.1. Identification of Business Processes			
+5.2. Business Process Diagrams				
+5.3. Alignment of Integrated System with			
+Business Processes
+5.4. Business Process Improvements			
+6 Application Architecture				
+6.1. Components of Application Architecture		
+6.2. Application Architecture Diagrams			
+6.3. Integration of Software Modules			
+6.4. Communication and Interaction Patterns		
+7 Data Architecture					
+7.1. Data Sources and Types				
+7.2. Data Flow Diagrams					
+7.3. Data Storage and Management			
+7.4. Data Synchronization Across Systems		
+8 Technology Architecture				
+8.1 Technology Stack and Infrastructure			
+8.2 Software Technologies					
+8.3. Scalability and Performance Considerations	
+9  Development Process					
+9.1. Agile Scrum Roles and Responsibilities		
+9.2. Sprint Planning and Backlog Management		
+9.3. Sprint Execution and Deliverables			
+9.4. Challenges Faced In the Development Process	
+10 Implementation						
+	10.1. Technical Implementation Details			
+	10.2. Tools and Technologies Used			
+	10.3. Code Integration and Interoperability		
+	10.4. Integration Testing and Debugging			
+11. Testing and Quality Assurance			
+11.1. Testing Strategies and Methodologies		
+11.2. Test Cases and Test Data				
+11.3. Test Results and Bug Reports			
+11.4. Quality Assurance Measures			
+12. Results and Evaluation				
+12.1. Project Outcomes and Deliverables		
+12.2. Alignment with Project Objectives			
+12.3 Stakeholder and User Feedback			
+12.4. Lessons Learned					
+CHAPTER 
+5	Conclusion							
+13.1. Key Takeaways and Summary			
+13.2. Project Achievements and Contributions		
+13.3. Future Work and Enhancements			
+13.4. Closing Remarks					
+REFERENCES
+APPENDICES
+CURRICULUM VITAE
+
+
+
+
+
+
+
+
+
+LIST OF TABLES
+Table										Page
+Roles and Responsibilities						  27
+Sprint Cycle								  33
+Product Backlog (User Stories)					  37
+Product Backlog for EIS Information Security			  47
+Product Backlog for EIS Standards				  49
+Product Backlog for EIS Integration				  51
+Product Backlog for Analytics					  56
+Product Backlog for EIS Analytics					  58
+Sprint Backlog (User Stories) 					  60
+Scrum Board								  73
+
+		
+
+
+
+
+
+
+
+LIST OF FIGURES
+Figure									Page
+Agile Scrum Framework						  26
+Burndown Chart							  76
+Microservices Diagram						  79
+Communication Pattern						  80
+Data Flow Diagram							  81
+CI/CD Pipeline							  85
+Infrastructure as a Code (IaC)					  85
+Monitoring and Alerting						  86
+Integration Diagram							  88
+API Gateway								  88
+Data Flow Diagram		                                                     	  89
+Use Case Diagram							  92
+Sequence Diagram						             93 
+Flowchart							             93
+							
+		
+
+
+
+LIST OF APPENDICES
+Appendix A 		Detailed Technical Documentation
+Appendix B 		Documents/URLs
+Appendix C		Certificate of Originality
+Appendix D		Certificate of Technical Adviser and Grammarian
+Appendix E		Grammarian Curriculum Vitae
+Appendix F		Technical Adviser Curriculum Vitae
+Appendix G		Research Adviser Curriculum Vitae
+Appendix H 		Researcher’s Curriculum Vitae
+	
+
+
+
+Chapter 1
+INTRODUCTION
+1.1 Background of the Capstone Project
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur
+At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.
+
+
+
+1.2 Context and Scope  
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+To be focused and achievable in implementation, the project scope shall involve:
+Lorem ipsum dolor sit amet,\
+- consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+Out of Scope:
+Blal=blahlanaksba
+Blal=blahlanaksba
+Blal=blahlanaksba
+Blal=blahlanaksba
+Blal=blahlanaksba
+
+1.3 Problem Statement
+At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.
+jabdbakfn
+kanfknesed
+anegwieohoisb
+aivjbjssjd
+najvsbsdjvsndvjsd
+1.4 Objectives and Goals 
+At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. 
+skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk.
+skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk.
+ skdkslkslslk4s fbks klb sdvmsklld skldmsk klsdksmdk s msd ks s d kd kd fdf ldf fdflk mdfk
+1.5 Significance and Relevance
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Key beneficiaries include:
+Future Researcher: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+1.6 Structure of the Document
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Chapter 1: Introduction - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Chapter 2: Review of Related Literature - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. detection, putting this project in the larger context of research.
+Chapter 3: Methodology - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Chapter 4: Requirement Analysis - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Chapter 5: Conclusion and Recommendations - Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Chapter 2
+REVIEW OF RELATED LITERATURE
+2.1 Agile Scrum Methodology Overview
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+The three pillars, according to Schwaber, K, & Sutherland, J. (2020), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Overall, Agile Scrum assisted us Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+
+
+2.2 Enterprise Architecture Concepts
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. sers and will be able to be scaled and maintained in the future.
+
+2.3 Microservices Architecture 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+2.4 DevOps and CI/CD 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+2.5 Relevant Studies and Research
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Local Studies
+Andaya (2025), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Leah A. Bayona and Ma. Theresa B. Ballados (2025), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat..
+Foreign Studies
+Aldemir and Uysal (2025), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Zheng and O’Penetrante (2025), Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+2.6 Integration of Information Systems in Enterprise Environment
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Chapter 3
+METHODOLOGY
+3.1 Agile Scrum Methodology in the Project
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Figure no. 1 Agile Scrum Framework
+
+
+3.2 Roles and Responsibilities 
+Each role in the project team carries significant responsibilities that directly influence the success and overall performance of the capstone project. The table below outlines the key duties assigned to each team member:
+Name
+Role
+Responsibilities
+Ms. Richelyn Villasor
+Research Adviser
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+Product Owner
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+Project Manager
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+Developer/Lead Programmer
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+QA Tester
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+Documentation Specialist
+ 
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Ms. Richelyn Villasor
+Security Lead
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+Table no.1 Roles and Responsibilities
+
+
+
+3.3 Sprint Cycles
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. 
+To Do
+In Progress 
+Done
+
+
+
+
+
+
+
+
+
+Table no. 2 Scrum Board
+
+
+
+
+
+
+
+
+
+3.4 Scrum Artifacts 
+3.4.1 Product Backlog (User Stories)
+User Story No.
+Features/ Task
+User Stories
+Priority
+Status
+MODULE 1
+F1
+
+
+
+
+F2
+
+
+
+
+F10
+
+
+
+
+MODULE 2
+F11
+
+
+
+
+F20
+
+
+
+
+
+
+
+
+
+MODULE 3
+F21
+
+
+
+
+F30
+
+
+
+
+MODULE 4
+F31
+
+
+
+
+F40
+
+
+
+
+Table no. 3 Product Backlog
+
+3.4.2 Product Backlog for EIS Information Security
+EIS No.
+EIS User Stories
+EIS IS Priority
+Revision Priority
+Status
+IS-1
+
+1
+1
+
+IS-2
+
+1
+2
+
+IS-3
+
+1
+2
+
+             Table no. 4 Product Backlog for EIS Information Security
+3.4.3 Product Backlog for EIS Standards
+3.4.3.1 UI/UX (Icons, Color, etc…)
+EIS Standard No.
+EIS Standard User Stories
+EIS Standard Priority
+Revision Priority
+Status
+UI-1
+
+
+
+
+UI-2
+
+
+
+
+UI-3
+
+
+
+
+Table no. 5 Product Backlog for EIS Standards
+
+
+
+
+
+
+3.4.4 Product Backlog for EIS Integration
+EIS Integration No.
+EIS Integration User Stories
+EIS Integration Priority
+Revision Priority
+Status
+INT-1
+
+
+
+
+INT-2
+
+
+
+
+INT-3
+
+
+
+
+Table no. 6 Product Backlog for EIS Integration
+3.4.5 Product Backlog for Analytics
+3.4.5.1 Application System Analytics
+EIS Integration No.
+EIS Integration User Stories
+EIS Integration Priority
+Revision Priority
+Status
+ASA-1
+
+
+
+
+ASA-2
+
+
+
+
+ASA-3
+
+
+
+
+Table no. 7 Product Backlog for Analytics
+3.4.5.2 EIS Analytics
+EIS Analytics No.
+EIS Analytics Stories
+EIS Analytics Priority
+Revision Priority
+Status
+EA-1
+
+
+
+
+EA-2
+
+
+
+
+EA-3
+
+
+
+
+Table no.8 EIS Analytics
+
+
+
+
+
+
+
+
+
+3.4.6 Sprint Backlog (User Stories)
+Task No.
+User Story No.
+User Stories
+Tasks
+Timeline
+Responsible Team Member/s
+SPRINT 1
+S1_1
+IS-1
+
+PLANNING
+DESIGN
+CODE
+DOCUMENTATION
+
+
+S1_2
+IS-2
+
+
+
+
+S1_3
+F-1
+
+
+
+
+S1_4
+F2
+
+
+
+
+S1_5
+F-3
+
+
+
+
+SPRINT 2
+S2_1
+IS-3
+
+PLANNING
+DESIGN
+CODE
+DOCUMENTATION
+
+
+S2_2
+IS-4
+
+
+
+
+S2_3
+F-4
+
+
+
+
+S2_4
+F5
+
+
+
+
+S2_5
+F-6
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Table no. 9 Sprint Backlog (User Stories)
+
+74295342900	3.4.6.1 Sprint Burndown Chart
+
+
+
+
+
+
+Figure no. 2 Burndown Chart
+
+
+
+
+
+
+
+
+
+
+3.4.7. Increment
+Sprint No.
+
+Increment / Feature Delivered
+User Story / Backlog Reference
+Definition of Done (DoD) Criteria
+Status
+Remarks
+Sprint 1
+User Registration & Login Module
+IS-1, IS-2
+Code completed - Unit tested - Integrated with DB - Documentation updated
+Done
+Basic authentication working
+Sprint 1
+Database Schema Setup
+F-1
+- Schema created - Tables normalized - Tested with sample data
+Done
+
+
+Ready for integration
+
+Sprint 2
+Product Catalog Module
+IS-3, IS-4
+- UI designed - CRUD operations functional - Tested on staging
+In Progress
+Pending UI review
+Sprint 2
+Shopping Cart
+F-4
+- Add/remove items working - Cart persists in session - Unit tested
+In Progress
+Needs integration with checkout
+Sprint 3
+Checkout & Payment Integration
+IS-5, F-5
+- Payment gateway connected - Security tested (SSL) - Error handling in place
+Planned
+To be developed in Sprint 3
+
+Table no. Increment
+
+
+
+3.5 Microservices Architecture
+orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+232138798300
+
+
+
+
+
+
+Figure no. 3 Microservices Diagram
+
+
+
+
+Figure no. 4 Communication Pattern for Microservices
+Here’s the communication pattern diagram for an e-commerce microservices system:
+		🔵 Blue solid lines → Synchronous (Request/Response) calls (e.g., login, product search, payment validation).
+		🟢 Green dashed lines → Asynchronous (Event-driven) interactions (e.g., order triggers stock updates, shipping, notifications).
+
+
+
+
+Dfd level 1
+Level 1 DFD (Context Diagram)
+This shows the entire e-commerce system as one process and how external entities interact with it.
+External Entity: Customer
+System (Process): E-commerce Microservices System
+Data Stores: Account DB, Inventory DB, Order DB, Payment DB
+Data Flows: Login, Browse Products, Place Order, Make Payment, Receive Notification, Shipping Info
+
+Figure no. 5 Data Flow Diagram for Microservices
+
+
+3.6 DevOps Implementation 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. 
+
+Figure no. 6 CI/CD Pipeline
+
+Figure no. 7 Infrastructure as a Code (IaC)
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+
+
+
+Figure no. 8 Monitoring and Alerting
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+
+
+3.7 Integration Approach for Information Systems
+The integration approach for the information systems developed Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+Figure no. 9 Business Process Architecture
+
+Figure no. 10 API Gateway
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+
+Figure no. 11 Data Flow Diagram
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+Figure no. 12 Use Case Diagram
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+
+Figure no. 13 Sequence Diagram
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+Figure no. 14 Flowchart
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+
+
+3.8 Introduction to TOGAF and the Four Architectural Domains 
+1. Business Architecture
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum
+2. Data Architecture
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+3. Application Architecture
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+4. Technology Architecture
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Chapter 4
+REQUIREMENTS ANALYSIS
+4.1. Stakeholder Identification				
+4.2. Requirements Gathering Techniques		
+4.3. User Stories and Use Cases				
+4.4. Functional Requirements for Integration	
+	
+5	Business Process Architecture
+5.1. Identification of Business Processes			
+5.2. Business Process Diagrams				
+5.3. Alignment of Integrated System with			
+Business Processes
+5.4. Business Process Improvements			
+
+6	Application Architecture					
+6.1. Components of Application Architecture		
+6.2. Application Architecture Diagrams			
+6.3. Integration of Software Modules			
+6.4. Communication and Interaction Patterns		
+
+
+7	Data Architecture						
+7.1. Data Sources and Types				
+7.2. Data Flow Diagrams					
+7.3. Data Storage and Management			
+7.4. Data Synchronization Across Systems		
+8	Technology Architecture					
+8.1 Technology Stack and Infrastructure			
+8.2 Software Technologies					
+8.3. Scalability and Performance Considerations	
+9	 Development Process					
+9.1. Agile Scrum Roles and Responsibilities		
+9.2. Sprint Planning and Backlog Management		
+9.3. Sprint Execution and Deliverables			
+9.4. Challenges Faced In the Development Process	
+10	Implementation						
+	10.1. Technical Implementation Details			
+	10.2. Tools and Technologies Used			
+	10.3. Code Integration and Interoperability		
+	10.4. Integration Testing and Debugging			
+11	Testing and Quality Assurance				
+11.1. Testing Strategies and Methodologies		
+11.2. Test Cases and Test Data				
+11.3. Test Results and Bug Reports			
+11.4. Quality Assurance Measures			
+12	Results and Evaluation					
+12.1. Project Outcomes and Deliverables		
+12.2. Alignment with Project Objectives			
+12.3 Stakeholder and User Feedback			
+12.4. Lessons Learned					
+
+Chapter 5
+CONCLUSION
+13.1. Key Takeaways and Summary			
+13.2. Project Achievements and Contributions		
+13.3. Future Work and Enhancements			
+13.4. Closing Remarks
+
+
+REFERENCES
+Sarker, I. H. (2021). Machine learning: Algorithms, real-world applications and research directions. SN Computer Science, 2(3), 160. https://doi.org/10.1007/s42979-021-00592-x
+
+Scikit-learn Developers. (2023). Anomaly detection. https://scikit-learn.org/stable/modules/outlier_detection.html
+
+W3Schools. (2024). Machine learning with JavaScript. https://www.w3schools.com/ai
+
+
+APPENDICES
+Appendix A : Detailed Technical Documentation XE "Appendix A \: Detailed Technical Documentation" 
+1. System Architecture
+2. Information Systems Integration
+3. Application Design and Development
+4. Database Schema and Data Management:
+5. Network Configuration
+6. Deployment and Infrastructure
+7. Security Measures:
+8. Testing and Quality Assurance
+9. System Monitoring and Maintenance:
+10. APIs and Integration Points:
+11. User Documentation: 
+12. Known Issues and Troubleshooting
+13. Version Control and Source Code Repository 
+14. DevOps and Continuous Integration/Continuous Deployment (CI/CD):
+15. Licensing and Open Source Libraries:
+16. Performance Metrics and Monitoring: 
+
+
+
+Appendix B : Documents/URLs
+1.Adviser Acceptance 
+
+This letter hereby certifies that the system entitled GOVERNMENT SERVICE MANAGEMENT SYSTEM: SMART REVENUE TRACKER WITH AI-BASED ANOMALY DETECTION USING ML.JS, together with its accompanying documentation, has been thoroughly reviewed and officially accepted.
+
+The proponents have satisfactorily complied with the academic standards, technical requirements, and research objectives prescribed for the course. The work presented demonstrates commendable effort in terms of technical implementation, documentation, and collaborative teamwork.
+
+This certification is issued to acknowledge the successful completion and acceptance of the system and research output.
+
+Issued this ______ day of ______, 20.
+
+RICHELYN A. VILLASOR Research Adviser
+2. Company Confirmation 
+Interview letter
+
+
+Project Acceptance Form
+Bestlink College of the Philippines
+College of Computer Studies
+Bachelor of Science in Information Technology
+1071 Brgy. Kaligayahan, Quirino Highway, Novaliches, Quezon City
+
+
+Project Details
+Project Title: [Insert Project Title]
+Project Description: [Brief description of the project, including its purpose and scope]
+Developed By: [Student Names and IDs]
+Academic Program: Bachelor of Science in Information Technology (BSIT)
+Capstone Adviser: [Adviser’s Name]
+Supervising Professor: [Professor's Name]
+Company Name: [Company Name]
+Company Representative: [Name of Company Representative]
+Date of Project Submission: [Insert Date]
+
+Acceptance and Agreement
+The undersigned, representing [Company Name], acknowledges the completion of the project titled [Project Title] developed by the students of [ University Name]. By signing this form, the company agrees to the following:
+Acceptance of the Project:
+The company accepts the project as developed by the students and acknowledges that it meets the agreed-upon requirements and specifications.
+Use of the Project:
+The company agrees to use the project for its intended purpose as outlined in the scope. The company may use, modify, or distribute the project as needed, subject to agreed-upon terms.
+Feedback and Evaluation:
+The company agrees to provide feedback on the project's performance, usability, and any areas for improvement. This feedback will be used for academic evaluation and potential future enhancements.
+Confidentiality and Intellectual Property:
+The company acknowledges that the project may contain confidential information and agrees to handle it responsibly. The agreement between the university and the company will govern any intellectual property rights.
+No Warranty:
+The project is provided "as is" without any warranties, express or implied. The university and the students are not liable for any issues arising from using the project.
+
+Signatures
+
+Company Representative:
+I, [Name of Company Representative], representing [Company Name], acknowledge the project's completion and agree to the terms outlined above.
+Signature: ___________________________
+Name: _______________________________
+Designation: _________________________
+Date: _______________________________
+
+
+University Representative:
+I, [Name of Supervising Professor], representing [ University Name], confirm that the students have completed the project as part of their academic requirements.
+Signature: ___________________________
+Name: _______________________________
+Designation: _________________________
+Date: _______________________________
+
+
+
+
+
+
+RATING/GRADE:			 	Maximum Points		Score Given
+1. Functionality:					20
+ - Completeness of features				10
+- Accuracy and reliability				10
+2. Usability						15
+- User interface design				8
+- User experience (UX)				7
+3. Technical Design and Architecture		15
+- System architecture and modularity			8
+- Code quality and organization			7
+4. Performance					15
+- Speed and responsiveness				8
+- Load handling and scalability			7
+5. Security						10
+- Data protection and privacy				6
+- System vulnerabilities				4
+6. Testing and Validation				10
+- Unit testing and bug fixing				5
+- User acceptance testing (UAT)			5
+7. Documentation					10
+- User manuals and guides				5
+- Technical documentation				5
+8. Innovation and Creativity				5
+- Novelty of the solution				5
+
+Feedback Section (Optional)
+The company is encouraged to provide feedback on the project to help improve its quality and usability.
+What aspects of the project do you find most useful?
+What improvements or additional features would you suggest?
+Overall satisfaction with the project (Rate from 1 to 5):
+☐ 1 (Poor) ☐ 2 (Fair) ☐ 3 (Good) ☐ 4 (Very Good) ☐ 5 (Excellent)
+Additional Comments:
+3.  Pilot Companies’ Background with proofs of interviews 
+
+Interview picture (short description)
+
+Formal picture with client (short description)
+
+
+Client navigating the system (short description)
+
+
+4. Link to codes (good for 3 years) 
+5. Link to documentation (good for 3 years) 
+6. Link to demo video guide (good for 3 years
+
+
+Appendix C: Certificate of Originality
+
+
+
+
+
+Appendix D: Certificate of Technical Adviser and Grammarian
+
+Appendix E	: Grammarian Curriculum Vitae
+
+Appendix F	: Technical Adviser Curriculum Vitae
+
+
+Appendix G: Research Adviser Curriculum Vitae
+
+Appendix H : Researcher’s Curriculum Vitae
+
+
+
+
+
+
+
+
+
+
+
+
+

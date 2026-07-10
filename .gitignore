@@ -30,7 +30,7 @@ test_gemini_api.php
 public/img/announcements/
 public/img/facilities/
 public/uploads/
-
+docs/diagrams/
 # IDE & editor
 .vscode/
 .idea/
