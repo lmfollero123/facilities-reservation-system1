@@ -753,7 +753,7 @@ function syncMaintenanceData() {
     btn.disabled = true;
     btn.textContent = '🔄 Syncing...';
 
-    fetch('<?= base_path(); ?>/scripts/sync_cimm_maintenance.php', {
+    fetch('<?= base_path(); ?>/public/api/sync-cimm-maintenance.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }

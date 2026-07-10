@@ -41,8 +41,8 @@ require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/maintenance_helper.php';
 require_once __DIR__ . '/../../config/audit.php';
 
-// API Key Validation
-$API_KEY = 'LGU_TO_FACILITIES_KEY_2025';
+// API Key Validation - from ENV
+$API_KEY = trim((string)(function_exists('env_value') ? env_value('LGU_WEBHOOK_KEY', '') : (getenv('LGU_WEBHOOK_KEY') ?: 'LGU_TO_FACILITIES_KEY_2025')));
 $headers = getallheaders();
 $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
 

@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/app.php';
 
-// API Key Validation
-$API_KEY = 'FACILITIES_SECURE_KEY_2025';
+// API Key Validation - from ENV
+$API_KEY = trim((string)(function_exists('env_value') ? env_value('FACILITIES_API_KEY', '') : (getenv('FACILITIES_API_KEY') ?: 'FACILITIES_SECURE_KEY_2025')));
 if (!isset($_GET['key']) || $_GET['key'] !== $API_KEY) {
     http_response_code(401);
     echo json_encode([
