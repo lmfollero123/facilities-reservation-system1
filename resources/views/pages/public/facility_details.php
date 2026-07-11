@@ -2,6 +2,7 @@
 $useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../services/uman_api.php';
 
 $base = base_path();
 $pdo = db();
@@ -24,6 +25,8 @@ if (!$facility) {
 }
 
 $pageTitle = htmlspecialchars($facility['name']) . ' | LGU Facilities Reservation';
+
+$facilityEquipment = frs_get_facility_equipment($pdo, (int)$facility['id']);
 
 // Build simple 14‑day availability snapshot using real reservations
 $calendar = [];
@@ -119,6 +122,25 @@ ob_start();
                     <p class="rate-text"><strong>Free of Charge</strong></p>
                     <p style="color:#4c5b7c; font-size:0.9rem; margin-top:0.5rem;">This facility is provided free of charge for public use by the LGU/Barangay.</p>
                 </section>
+
+                <?php if (!empty($facilityEquipment)): ?>
+                    <section class="facility-section">
+                        <h3>Equipment & Utilities</h3>
+                        <ul class="rules-list" style="list-style:disc; padding-left:1.25rem;">
+                            <?php foreach ($facilityEquipment as $item): ?>
+                                <li>
+                                    <strong><?= htmlspecialchars($item['asset_name']); ?></strong>
+                                    <?php if (!empty($item['asset_type'])): ?>
+                                        <span style="color:#64748b;"> — <?= htmlspecialchars($item['asset_type']); ?></span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($item['uman_asset_code'])): ?>
+                                        <small style="color:#94a3b8;"> (<?= htmlspecialchars($item['uman_asset_code']); ?>)</small>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                <?php endif; ?>
 
                 <?php if (!empty($facility['amenities'])): ?>
                     <section class="facility-section">

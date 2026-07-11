@@ -29,6 +29,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/app.php';
 
+/**
+ * Build match keywords for CIMM facility linking.
+ *
+ * @return array<int,string>
+ */
+function frs_facility_share_keywords(string $name, string $location): array
+{
+    $keywords = [];
+    foreach ([$name, $location] as $source) {
+        if ($source === '') {
+            continue;
+        }
+        $keywords[] = strtolower($source);
+        $norm = strtolower(trim(preg_replace('/[^a-z0-9]+/', ' ', $source)));
+        if ($norm !== '') {
+            $keywords[] = $norm;
+        }
+        foreach (preg_split('/[\s,\/\-&]+/', strtolower($source)) as $token) {
+            $token = trim($token);
+            if (strlen($token) >= 3) {
+                $keywords[] = $token;
+            }
+        }
+    }
+
+    $aliasGroups = [
+        'cassanova' => ['cassanova', 'cassanova bldg', 'cassanova building', 'cassanova multi', 'cassanova multipurpose', 'nagkaisang nayon'],
+        'bernardo' => ['bernardo', 'bernardo court', 'bernardo covert', 'sitio mabilog', 'central ave', 'central avenue'],
+        'pael' => ['pael', 'pael multipurpose', 'pael multi', 'pael burial', 'cebu rd', 'cebu road'],
+        'sanville' => ['sanville', 'sanville covered', 'sanville court', 'sanville subdivision', 'cenacle', 'sanville multipurpose'],
+    ];
+
+    $nameNorm = strtolower(trim(preg_replace('/[^a-z0-9]+/', ' ', $name)));
+    foreach ($aliasGroups as $anchor => $aliases) {
+        if (str_contains($nameNorm, $anchor)) {
+            foreach ($aliases as $alias) {
+                $keywords[] = $alias;
+            }
+        }
+    }
+
+    return array_values(array_unique(array_filter($keywords, static fn($k) => $k !== '' && strlen($k) >= 3)));
+}
+
 // API Key Validation - from ENV
 $API_KEY = trim((string)(function_exists('env_value') ? env_value('FACILITIES_API_KEY', '') : (getenv('FACILITIES_API_KEY') ?: 'FACILITIES_SECURE_KEY_2025')));
 if (!isset($_GET['key']) || $_GET['key'] !== $API_KEY) {
@@ -43,7 +87,7 @@ if (!isset($_GET['key']) || $_GET['key'] !== $API_KEY) {
 try {
     $pdo = db();
     
-    // Get all active facilities with coordinates
+    // Get all facilities (including offline) for CIMM matching — coordinates optional
     $stmt = $pdo->prepare("
         SELECT 
             id,
@@ -59,7 +103,6 @@ try {
             created_at,
             updated_at
         FROM facilities
-        WHERE status IN ('available', 'maintenance')
         ORDER BY name ASC
     ");
     
@@ -69,10 +112,13 @@ try {
     // Format response
     $data = [];
     foreach ($facilities as $facility) {
+        $name = (string)$facility['name'];
+        $location = (string)($facility['location'] ?? '');
+        $keywords = frs_facility_share_keywords($name, $location);
         $data[] = [
             'facility_id' => (int)$facility['id'],
-            'name' => $facility['name'],
-            'location' => $facility['location'],
+            'name' => $name,
+            'location' => $location,
             'description' => $facility['description'] ?? '',
             'capacity' => $facility['capacity'] ?? '',
             'amenities' => $facility['amenities'] ?? '',
@@ -80,6 +126,8 @@ try {
             'longitude' => $facility['longitude'] ? (float)$facility['longitude'] : null,
             'operating_hours' => $facility['operating_hours'] ?? '',
             'current_status' => $facility['status'],
+            'keywords' => $keywords,
+            'aliases' => $keywords,
             'created_at' => $facility['created_at'],
             'updated_at' => $facility['updated_at']
         ];
@@ -88,6 +136,8 @@ try {
     echo json_encode([
         'success' => true,
         'count' => count($data),
+        'primary_key' => 'facility_id',
+        'match_mode' => 'Use facility_id for exact linking; coordinates are optional and not used for CIMM sync.',
         'generated_at' => date('Y-m-d H:i:s T'),
         'data' => $data
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

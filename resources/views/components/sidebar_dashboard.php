@@ -143,7 +143,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];
     }
     if (frs_can_read($role, 'utilities')) {
-        $integrationsGroup[] = ['label' => 'Utilities', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
+        $integrationsGroup[] = ['label' => 'UMAN Integration', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
     }
 
     // Reports - check permissions

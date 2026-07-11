@@ -62,20 +62,19 @@ try {
     $action = (string)$data['action'];
     $facilityIdInput = isset($data['facility_id']) ? (int)$data['facility_id'] : 0;
 
-    $facilitiesStmt = $pdo->query('SELECT id, name, location, status FROM facilities');
-    $facilities = $facilitiesStmt ? $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
-
     $facility = null;
     if ($facilityIdInput > 0) {
-        foreach ($facilities as $row) {
-            if ((int)$row['id'] === $facilityIdInput) {
-                $facility = $row;
-                break;
-            }
+        $facilityStmt = $pdo->prepare('SELECT id, name, location, status FROM facilities WHERE id = :id LIMIT 1');
+        $facilityStmt->execute(['id' => $facilityIdInput]);
+        $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$facility) {
+            throw new Exception("No facility found with facility_id: {$facilityIdInput}");
         }
     }
 
     if (!$facility) {
+        $facilitiesStmt = $pdo->query('SELECT id, name, location, status FROM facilities');
+        $facilities = $facilitiesStmt ? $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
         $matchedId = cimmMatchFacilityId($facilityNameInput, $facilities);
         if ($matchedId) {
             foreach ($facilities as $row) {

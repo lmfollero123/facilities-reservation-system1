@@ -51,7 +51,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         $dashboardSearchItems[] = ['label' => 'Infrastructure Projects', 'url' => $base . '/dashboard/infrastructure-projects', 'keywords' => 'infrastructure projects'];
     }
     if (frs_can_read($role, 'utilities')) {
-        $dashboardSearchItems[] = ['label' => 'Utilities', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'utilities integration'];
+        $dashboardSearchItems[] = ['label' => 'UMAN Integration', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'uman utilities integration equipment assets'];
     }
     if (frs_can_read($role, 'reports')) {
         $dashboardSearchItems[] = ['label' => 'Reports & Analytics', 'url' => $base . '/dashboard/reports', 'keywords' => 'reports analytics charts'];

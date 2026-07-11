@@ -145,6 +145,8 @@ function mapCIMMToCPRF(array $rawSchedules): array {
             'facility_name' => $matchedFacilityName !== '' ? $matchedFacilityName : $location,
             'matched_facility_name' => $matchedFacilityName,
             'cprf_facility_id' => $cprfFacilityId > 0 ? $cprfFacilityId : null,
+            'match_score' => isset($row['match_score']) ? (int)$row['match_score'] : null,
+            'match_method' => $row['match_method'] ?? null,
             'maintenance_type' => $row['task'] ?? '',
             'scheduled_start' => $row['starting_date'] ?? '',
             'scheduled_end' => $row['estimated_completion_date'] ?? '',
@@ -243,6 +245,8 @@ function cimmResolveScheduleFacilityId(array $schedule, array $facilities): ?int
         trim((string)($schedule['matched_facility_name'] ?? '')),
         trim((string)($schedule['facility_name'] ?? '')),
         trim((string)($schedule['location'] ?? '')),
+        trim((string)($schedule['task'] ?? '')),
+        trim((string)($schedule['maintenance_type'] ?? '')),
     ]);
 
     foreach ($candidates as $candidate) {
@@ -302,6 +306,25 @@ function cimmMatchFacilityId(string $cimmLocation, array $facilities): ?int
     $needle = cimmNormalizeText($cimmLocation);
     if ($needle === '') {
         return null;
+    }
+
+    $aliasGroups = [
+        'cassanova' => ['cassanova', 'cassanova bldg', 'cassanova building', 'cassanova multi', 'nagkaisang nayon'],
+        'bernardo' => ['bernardo', 'bernardo court', 'bernardo covert', 'sitio mabilog', 'central ave'],
+        'pael' => ['pael', 'pael multipurpose', 'pael multi', 'pael burial', 'cebu rd', 'cebu road'],
+        'sanville' => ['sanville', 'sanville covered', 'sanville court', 'cenacle', 'sanville multipurpose'],
+    ];
+    foreach ($aliasGroups as $anchor => $aliases) {
+        foreach ($aliases as $alias) {
+            if (str_contains($needle, cimmNormalizeText($alias))) {
+                foreach ($facilities as $facility) {
+                    $nameNorm = cimmNormalizeText((string)($facility['name'] ?? ''));
+                    if (str_contains($nameNorm, $anchor)) {
+                        return (int)$facility['id'];
+                    }
+                }
+            }
+        }
     }
 
     $bestId = null;

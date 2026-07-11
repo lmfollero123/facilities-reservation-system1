@@ -17,7 +17,16 @@ require_once __DIR__ . '/../../../../config/maintenance_helper.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
+require_once __DIR__ . '/../../../../services/uman_api.php';
 $pdo = db();
+$hasUmanEquipment = frs_uman_tables_exist($pdo);
+$umanAssetsCatalog = [];
+$umanAssetsIndexed = [];
+if ($hasUmanEquipment) {
+    $umanFetch = fetchUMANAssets(true);
+    $umanAssetsCatalog = $umanFetch['data'] ?? [];
+    $umanAssetsIndexed = frs_index_uman_assets($umanAssetsCatalog);
+}
 $pageTitle = 'Facility Management | LGU Facilities Reservation';
 $facilityStatusOptions = frs_lookup_values($pdo, 'facility_status');
 
@@ -271,6 +280,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 logAudit('Updated facility', 'Facility Management', $details);
+
+                if ($hasUmanEquipment) {
+                    $selectedEquipment = isset($_POST['equipment_ids']) && is_array($_POST['equipment_ids'])
+                        ? $_POST['equipment_ids']
+                        : [];
+                    frs_save_facility_equipment($pdo, $facilityId, $selectedEquipment, $umanAssetsIndexed);
+                }
             } else {
                 // Geocode location if coordinates not provided but location is
                 if (($latitude === null || $longitude === null) && !empty($location)) {
@@ -291,6 +307,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newFacilityId = (int)$pdo->lastInsertId();
                 if ($newFacilityId > 0 && $hasFacilityQr) {
                     frs_ensure_facility_checkin_token($pdo, $newFacilityId);
+                }
+
+                if ($newFacilityId > 0 && $hasUmanEquipment) {
+                    $selectedEquipment = isset($_POST['equipment_ids']) && is_array($_POST['equipment_ids'])
+                        ? $_POST['equipment_ids']
+                        : [];
+                    frs_save_facility_equipment($pdo, $newFacilityId, $selectedEquipment, $umanAssetsIndexed);
                 }
                 
                 $message = 'Facility added successfully.';
@@ -317,6 +340,20 @@ $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
 $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$equipmentByFacility = [];
+if ($hasUmanEquipment && $facilities !== []) {
+    $equipmentByFacility = frs_get_facility_equipment_map(
+        $pdo,
+        array_map(static fn($f) => (int)$f['id'], $facilities)
+    );
+    foreach ($facilities as &$facRow) {
+        $fid = (int)$facRow['id'];
+        $facRow['equipment'] = $equipmentByFacility[$fid] ?? [];
+        $facRow['equipment_ids'] = array_map(static fn($e) => (int)$e['uman_asset_id'], $facRow['equipment']);
+    }
+    unset($facRow);
+}
 
 $facilityQrById = [];
 if ($hasFacilityQr) {
@@ -411,6 +448,12 @@ ob_start();
                         </header>
                         <?php if ($facility['description']): ?>
                             <p style="margin:0.5rem 0 1rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
+                        <?php endif; ?>
+                        <?php if ($hasUmanEquipment && !empty($equipmentByFacility[(int)$facility['id']])): ?>
+                            <p style="margin:0 0 0.75rem; font-size:0.85rem; color:#0066cc;">
+                                <strong>UMAN equipment:</strong>
+                                <?= htmlspecialchars(implode(', ', array_map(static fn($e) => $e['asset_name'], $equipmentByFacility[(int)$facility['id']]))); ?>
+                            </p>
                         <?php endif; ?>
                         <div class="availability-toggle" style="display:flex; align-items:flex-start; gap:0.5rem;">
                             <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
@@ -591,9 +634,43 @@ ob_start();
                         </div>
                     </label>
                     <label>
-                        Amenities
-                        <textarea name="amenities" id="form-amenities" placeholder="e.g., Sound system, projector, chairs, air-conditioning"></textarea>
+                        Amenities <small style="color:#8b95b5; font-weight:400;">(general notes — not tracked in UMAN)</small>
+                        <textarea name="amenities" id="form-amenities" placeholder="e.g., Restrooms, parking area, wheelchair access"></textarea>
                     </label>
+                    <?php if ($hasUmanEquipment): ?>
+                    <div style="margin-top:1rem; padding:1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                        <label style="display:block; font-weight:600; margin-bottom:0.5rem;">
+                            UMAN Equipment / Utility Assets
+                            <?= frs_field_tip('Select assets from UMAN Utilities Management assigned to this facility. Request new assets via UMAN Integration.'); ?>
+                        </label>
+                        <?php if (empty($umanAssetsCatalog)): ?>
+                            <p style="color:#8b95b5; font-size:0.9rem; margin:0;">
+                                No assets loaded from UMAN. Configure <code>UMAN_API_KEY</code> or submit requests in
+                                <a href="<?= base_path(); ?>/dashboard/utilities-integration">UMAN Integration</a>.
+                            </p>
+                        <?php else: ?>
+                            <div id="equipment-checklist" style="max-height:220px; overflow-y:auto; display:grid; gap:0.5rem;">
+                                <?php foreach ($umanAssetsCatalog as $asset): ?>
+                                    <?php
+                                    $aid = (int)($asset['id'] ?? 0);
+                                    if ($aid <= 0) {
+                                        continue;
+                                    }
+                                    $code = (string)($asset['asset_code'] ?? '');
+                                    $type = (string)($asset['asset_type'] ?? '');
+                                    ?>
+                                    <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
+                                        <input type="checkbox" name="equipment_ids[]" value="<?= $aid; ?>" class="equipment-checkbox" style="margin-top:0.2rem;">
+                                        <span>
+                                            <strong><?= htmlspecialchars((string)($asset['name'] ?? '')); ?></strong>
+                                            <small style="color:#64748b; display:block;"><?= htmlspecialchars($code); ?> · <?= htmlspecialchars($type); ?> · <?= htmlspecialchars((string)($asset['condition_status'] ?? '')); ?></small>
+                                        </span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                     <label>
                         Rules / Guidelines
                         <textarea name="rules" id="form-rules" placeholder="Key house rules to show on the public page"></textarea>
@@ -865,6 +942,11 @@ function editFacility(payload) {
     document.getElementById('form-capacity').value = facility.capacity || '';
     document.getElementById('form-amenities').value = facility.amenities || '';
     document.getElementById('form-rules').value = facility.rules || '';
+
+    document.querySelectorAll('.equipment-checkbox').forEach(cb => {
+        cb.checked = Array.isArray(facility.equipment_ids) && facility.equipment_ids.includes(parseInt(cb.value, 10));
+    });
+
     document.getElementById('form-status').value = facility.status || 'available';
     document.getElementById('form-operating-hours').value = facility.operating_hours || '';
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
@@ -920,6 +1002,7 @@ function resetFacilityForm() {
     document.getElementById('form-capacity').value = '';
     document.getElementById('form-amenities').value = '';
     document.getElementById('form-rules').value = '';
+    document.querySelectorAll('.equipment-checkbox').forEach(cb => { cb.checked = false; });
     document.getElementById('form-image-citation').value = '';
     document.getElementById('form-status').value = 'available';
     document.getElementById('form-operating-hours').value = '';
