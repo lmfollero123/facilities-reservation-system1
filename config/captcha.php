@@ -7,6 +7,66 @@ function frs_captcha_enabled(): bool
     return $enabled === 'true' || $enabled === '1' || $enabled === 'yes';
 }
 
+/**
+ * Failed login attempts (per email) before Turnstile is shown on the login page.
+ */
+function frs_captcha_login_threshold(): int
+{
+    $value = (int)env_value('CAPTCHA_LOGIN_AFTER_FAILED', '2');
+    return max(1, min(10, $value));
+}
+
+/**
+ * Whether the login form should show/require Turnstile (after suspicious activity only).
+ */
+function frs_login_requires_captcha(?string $email = null, ?string $clientIp = null): bool
+{
+    if (!frs_captcha_enabled() || frs_turnstile_site_key() === '') {
+        return false;
+    }
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    if (!empty($_SESSION['login_captcha_required'])) {
+        return true;
+    }
+
+    require_once __DIR__ . '/security.php';
+
+    $threshold = frs_captcha_login_threshold();
+    $emailNorm = strtolower(trim((string)$email));
+    if ($emailNorm !== '') {
+        if (frs_rate_limit_count('login', $emailNorm) >= $threshold) {
+            return true;
+        }
+    }
+
+    $ip = trim((string)$clientIp);
+    if ($ip !== '' && frs_login_failed_attempts_by_ip($ip) >= $threshold) {
+        return true;
+    }
+
+    return false;
+}
+
+function frs_login_mark_captcha_required(): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['login_captcha_required'] = true;
+}
+
+function frs_login_clear_captcha_required(): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    unset($_SESSION['login_captcha_required']);
+}
+
 function frs_turnstile_site_key(): string
 {
     return trim((string)env_value('TURNSTILE_SITE_KEY', ''));
@@ -22,9 +82,9 @@ function frs_turnstile_secret_key(): string
  *
  * @return array{ok: bool, error: string}
  */
-function frs_verify_turnstile(?string $token, ?string $remoteIp = null): array
+function frs_verify_turnstile(?string $token, ?string $remoteIp = null, bool $required = true): array
 {
-    if (!frs_captcha_enabled()) {
+    if (!$required || !frs_captcha_enabled()) {
         return ['ok' => true, 'error' => ''];
     }
 

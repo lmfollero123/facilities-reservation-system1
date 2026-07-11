@@ -10,6 +10,8 @@ $pageTitle = 'Login | LGU Facilities Reservation';
 $error = '';
 $lockNotice = '';
 $next = '';
+$clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+$loginCaptchaRequired = frs_login_requires_captcha($_POST['email'] ?? null, (string)$clientIp);
 
 // Capture redirect target (same-origin relative paths only)
 if (isset($_GET['next'])) {
@@ -28,15 +30,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logSecurityEvent('csrf_validation_failed', 'Login form', 'warning');
     } else {
         $clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-        if (frs_captcha_enabled() && frs_turnstile_site_key() !== '') {
-            $captcha = frs_verify_turnstile($_POST['cf-turnstile-response'] ?? null, (string)$clientIp);
+        $emailInput = sanitizeInput($_POST['email'] ?? '', 'email');
+        $loginCaptchaRequired = frs_login_requires_captcha($emailInput, (string)$clientIp);
+        if ($loginCaptchaRequired) {
+            $captcha = frs_verify_turnstile($_POST['cf-turnstile-response'] ?? null, (string)$clientIp, true);
             if (!$captcha['ok']) {
                 $error = $captcha['error'];
-                logSecurityEvent('captcha_validation_failed', 'Login form', 'warning');
+                logSecurityEvent('captcha_validation_failed', 'Login form (suspicious activity)', 'warning');
             }
         }
         if ($error === '') {
-        $email = sanitizeInput($_POST['email'] ?? '', 'email');
+        $email = $emailInput;
         $password = $_POST['password'] ?? '';
         
         // Validate email
@@ -99,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                                 if (!frs_user_has_required_second_factor($user)) {
                                     frs_begin_pending_2fa_setup($user, $next !== '' ? $next : null);
+                                    frs_login_clear_captcha_required();
 
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
                                     $logStmt->execute([$email, getClientIP()]);
@@ -129,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // Log successful password stage
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
                                     $logStmt->execute([$email, getClientIP()]);
+                                    frs_login_clear_captcha_required();
 
                                     // Save pending OTP session
                                     session_regenerate_id(true);
@@ -146,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // Both email OTP and Google Authenticator are disabled -> log in directly
                                     $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_ip = ? WHERE id = ?");
                                     $updateStmt->execute([getClientIP(), $user['id']]);
+                                    frs_login_clear_captcha_required();
 
                                     // Log successful login
                                     $logStmt = $pdo->prepare("INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, 1)");
@@ -184,6 +191,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                                 
                                 recordLoginRateLimitFailure($email);
+                                frs_login_mark_captcha_required();
+                                $loginCaptchaRequired = true;
 
                                 // Update failed attempts
                                 $updateStmt = $pdo->prepare("UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?");
@@ -200,6 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // User not found - don't reveal this to prevent email enumeration
                         $error = 'Invalid email or password.';
                         recordLoginRateLimitFailure($email);
+                        frs_login_mark_captcha_required();
+                        $loginCaptchaRequired = true;
                         logSecurityEvent('login_attempt_invalid_email', "Login attempt with non-existent email: $email", 'info');
                     }
                 } catch (Exception $e) {
@@ -251,7 +262,10 @@ ob_start();
         
         <form method="POST" class="auth-form">
             <?= csrf_field(); ?>
-            <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
+            <?php if ($loginCaptchaRequired && frs_turnstile_site_key() !== ''): ?>
+                <div style="background: #fff8e6; border: 1px solid #f59e0b; color: #92400e; padding: 0.65rem 0.85rem; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.85rem;">
+                    For your security, please complete the verification below after multiple failed sign-in attempts.
+                </div>
                 <div style="margin: 0.25rem 0 0.5rem;">
                     <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
                 </div>

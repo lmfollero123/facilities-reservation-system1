@@ -176,6 +176,33 @@ function recordLoginRateLimitFailure(string $email): void
 }
 
 /**
+ * Count recent failed login attempts from an IP (login_attempts table).
+ */
+function frs_login_failed_attempts_by_ip(string $ip, int $windowSeconds = RATE_LIMIT_LOGIN_WINDOW): int
+{
+    $ip = trim($ip);
+    if ($ip === '') {
+        return 0;
+    }
+
+    try {
+        require_once __DIR__ . '/database.php';
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) AS attempts
+             FROM login_attempts
+             WHERE ip_address = ?
+               AND success = 0
+               AND attempted_at > DATE_SUB(NOW(), INTERVAL ? SECOND)'
+        );
+        $stmt->execute([$ip, max(60, $windowSeconds)]);
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['attempts'] ?? 0);
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
  * Email verification code brute-force protection (per pending user id).
  */
 function checkEmailVerifyRateLimit(int $userId): bool

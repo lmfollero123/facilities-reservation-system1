@@ -57,16 +57,28 @@ if ($isHomePage || $isPublicPage) {
     <?php
     $captchaEnabled = false;
     $turnstileSiteKey = '';
+    $loadTurnstileScript = false;
     try {
         require_once __DIR__ . '/../../../config/captcha.php';
         $captchaEnabled = frs_captcha_enabled();
         $turnstileSiteKey = frs_turnstile_site_key();
+        $isAuthLoginPage = strpos($requestPath, '/login') !== false
+            && strpos($requestPath, '/login-otp') === false
+            && strpos($requestPath, '/login-setup-2fa') === false;
+        if ($captchaEnabled && $turnstileSiteKey !== '') {
+            if ($isAuthLoginPage) {
+                $loadTurnstileScript = !empty($loginCaptchaRequired);
+            } else {
+                $loadTurnstileScript = true;
+            }
+        }
     } catch (Throwable $e) {
         $captchaEnabled = false;
         $turnstileSiteKey = '';
+        $loadTurnstileScript = false;
     }
     ?>
-    <?php if ($captchaEnabled && $turnstileSiteKey !== ''): ?>
+    <?php if ($loadTurnstileScript): ?>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=frsTurnstileOnLoad" async defer></script>
         <script>
         function frsTurnstileOnLoad() {
