@@ -6,6 +6,111 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';
 
+/** Reason prefix used by CIMM maintenance sync (see services/cimm_api.php). */
+const FRS_BLACKOUT_CIMM_PREFIX = 'CIMM Sync:';
+
+/**
+ * True when a blackout row was created by CIMM maintenance sync (not CPRF staff).
+ */
+function frs_blackout_is_cimm_sync(array $row): bool
+{
+    $reason = trim((string)($row['reason'] ?? ''));
+    return $reason !== '' && str_starts_with($reason, FRS_BLACKOUT_CIMM_PREFIX);
+}
+
+/**
+ * @return 'cimm'|'manual'
+ */
+function frs_blackout_source_type(array $row): string
+{
+    return frs_blackout_is_cimm_sync($row) ? 'cimm' : 'manual';
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function frs_blackout_enrich_row(array $row): array
+{
+    $isCimm = frs_blackout_is_cimm_sync($row);
+    $row['source_type'] = $isCimm ? 'cimm' : 'manual';
+    $row['source_label'] = $isCimm ? 'CIMM maintenance' : 'CPRF blackout';
+    $row['is_removable'] = !$isCimm;
+    if ($isCimm) {
+        $reason = trim((string)($row['reason'] ?? ''));
+        $row['display_reason'] = $reason !== ''
+            ? trim(substr($reason, strlen(FRS_BLACKOUT_CIMM_PREFIX)))
+            : 'Scheduled maintenance';
+        if ($row['display_reason'] === '') {
+            $row['display_reason'] = 'Scheduled maintenance';
+        }
+    } else {
+        $row['display_reason'] = trim((string)($row['reason'] ?? '')) ?: 'Facility unavailable';
+    }
+    return $row;
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return list<array<string, mixed>>
+ */
+function frs_blackout_enrich_rows(array $rows): array
+{
+    return array_map('frs_blackout_enrich_row', $rows);
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return array{manual: int, cimm: int}
+ */
+function frs_blackout_count_by_source(array $rows): array
+{
+    $counts = ['manual' => 0, 'cimm' => 0];
+    foreach ($rows as $row) {
+        $key = frs_blackout_source_type($row);
+        $counts[$key]++;
+    }
+    return $counts;
+}
+
+/**
+ * @return array{manual: int, cimm: int, total: int}
+ */
+function frs_count_blackout_dates_by_source(PDO $pdo, int $year, ?int $facilityId = null): array
+{
+    if (!frs_blackout_table_exists($pdo)) {
+        return ['manual' => 0, 'cimm' => 0, 'total' => 0];
+    }
+
+    $start = sprintf('%04d-01-01', $year);
+    $end = sprintf('%04d-12-31', $year);
+    $prefix = FRS_BLACKOUT_CIMM_PREFIX . '%';
+
+    $sql = 'SELECT
+                SUM(CASE WHEN reason LIKE :cimm_prefix THEN 1 ELSE 0 END) AS cimm,
+                SUM(CASE WHEN reason NOT LIKE :cimm_prefix2 OR reason IS NULL THEN 1 ELSE 0 END) AS manual
+            FROM facility_blackout_dates
+            WHERE blackout_date BETWEEN :start AND :end';
+    $params = [
+        'cimm_prefix' => $prefix,
+        'cimm_prefix2' => $prefix,
+        'start' => $start,
+        'end' => $end,
+    ];
+
+    if ($facilityId !== null && $facilityId > 0) {
+        $sql .= ' AND facility_id = :fid';
+        $params['fid'] = $facilityId;
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $manual = (int)($row['manual'] ?? 0);
+    $cimm = (int)($row['cimm'] ?? 0);
+
+    return ['manual' => $manual, 'cimm' => $cimm, 'total' => $manual + $cimm];
+}
+
 function frs_blackout_table_exists(PDO $pdo): bool
 {
     try {
@@ -259,6 +364,10 @@ function frs_add_blackout_date_range(
 function frs_delete_blackout_date(PDO $pdo, int $blackoutId): bool
 {
     if (!frs_blackout_table_exists($pdo) || $blackoutId <= 0) {
+        return false;
+    }
+    $row = frs_get_blackout_by_id($pdo, $blackoutId);
+    if ($row && frs_blackout_is_cimm_sync($row)) {
         return false;
     }
     $stmt = $pdo->prepare('DELETE FROM facility_blackout_dates WHERE id = ?');

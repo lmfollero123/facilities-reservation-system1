@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -111,6 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 );
                 $message = 'Blackout removed. That date is available for booking again.';
                 $messageType = 'success';
+            } elseif ($row && frs_blackout_is_cimm_sync($row)) {
+                $message = 'CIMM maintenance dates are managed automatically. Update or complete the schedule in CIMM, or use Maintenance Integration to sync.';
+                $messageType = 'error';
             } else {
                 $message = 'Could not remove blackout.';
                 $messageType = 'error';
@@ -148,6 +151,7 @@ $facilities = $pdo->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 
 $totalRows = $hasTable ? frs_count_blackout_dates($pdo, $filterYear, $filterFacility ?: null) : 0;
+$sourceCounts = $hasTable ? frs_count_blackout_dates_by_source($pdo, $filterYear, $filterFacility ?: null) : ['manual' => 0, 'cimm' => 0, 'total' => 0];
 
 $calMonthTs = mktime(0, 0, 0, $calMonth, 1, $filterYear);
 $calDaysInMonth = (int)date('t', $calMonthTs);
@@ -157,8 +161,10 @@ $calRangeStart = date('Y-m-01', $calMonthTs);
 $calRangeEnd = date('Y-m-t', $calMonthTs);
 
 $monthBlackouts = $hasTable
-    ? frs_list_blackout_dates_between($pdo, $calRangeStart, $calRangeEnd, $filterFacility ?: null)
+    ? frs_blackout_enrich_rows(frs_list_blackout_dates_between($pdo, $calRangeStart, $calRangeEnd, $filterFacility ?: null))
     : [];
+
+$monthSourceCounts = frs_blackout_count_by_source($monthBlackouts);
 
 $blackoutsByDate = [];
 foreach ($monthBlackouts as $row) {
@@ -223,9 +229,15 @@ ob_start();
                 </h1>
             </div>
             <?php if ($hasTable): ?>
-                <div class="frs-bo-year-total flex-shrink-0 rounded-xl bg-slate-100 px-4 py-2.5 text-sm">
-                    <span class="text-slate-500"><?= (int)$filterYear; ?> total</span>
-                    <span class="font-bold text-slate-900"><?= (int)$totalRows; ?></span>
+                <div class="frs-bo-year-total flex-shrink-0 rounded-xl bg-slate-100 px-4 py-2.5 text-sm flex flex-col gap-1">
+                    <div>
+                        <span class="text-slate-500"><?= (int)$filterYear; ?> CPRF blackouts</span>
+                        <span class="font-bold text-slate-900"><?= (int)$sourceCounts['manual']; ?></span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">CIMM maintenance</span>
+                        <span class="font-bold text-amber-800"><?= (int)$sourceCounts['cimm']; ?></span>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
@@ -252,7 +264,7 @@ ob_start();
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                 <div>
                     <h2 class="text-base font-semibold text-slate-900">Blackout calendar</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Click a highlighted date to view event details.</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Click a highlighted date to view details. Red = CPRF blackout · Amber = CIMM maintenance.</p>
                 </div>
                 <div class="flex flex-wrap items-end gap-3">
                     <button type="button" id="bo-add-modal-btn" class="btn-primary inline-flex items-center gap-2">
@@ -304,8 +316,9 @@ ob_start();
                         </a>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> Blacked out</span>
-                        <span><?= count($monthBlackouts); ?> in month &middot; <?= (int)$totalRows; ?> in <?= (int)$filterYear; ?></span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> CPRF blackout</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> CIMM maintenance</span>
+                        <span><?= (int)$monthSourceCounts['manual']; ?> blackout · <?= (int)$monthSourceCounts['cimm']; ?> maintenance this month</span>
                     </div>
                 </div>
             </div>
@@ -325,13 +338,28 @@ ob_start();
                         $dateStr = sprintf('%04d-%02d-%02d', $filterYear, $calMonth, $day);
                         $cellItems = $blackoutsByDate[$dateStr] ?? [];
                         $hasBlackout = !empty($cellItems);
+                        $cellManual = 0;
+                        $cellCimm = 0;
+                        foreach ($cellItems as $ci) {
+                            if (($ci['source_type'] ?? '') === 'cimm') {
+                                $cellCimm++;
+                            } else {
+                                $cellManual++;
+                            }
+                        }
                         $isToday = ($dateStr === $todayDate);
                         $cellUrl = $hasBlackout
                             ? blackout_filter_url($filterYear, $calMonth, $filterFacility, $dateStr)
                             : '';
                         $cellClasses = 'frs-bo-cal-cell';
                         if ($hasBlackout) {
-                            $cellClasses .= ' is-blocked';
+                            if ($cellManual > 0 && $cellCimm > 0) {
+                                $cellClasses .= ' is-mixed';
+                            } elseif ($cellCimm > 0) {
+                                $cellClasses .= ' is-cimm';
+                            } else {
+                                $cellClasses .= ' is-blocked';
+                            }
                         }
                         if ($isToday) {
                             $cellClasses .= ' is-today';
@@ -343,7 +371,17 @@ ob_start();
                                 $fname = (string)$cellItems[0]['facility_name'];
                                 $chipText = strlen($fname) > 12 ? substr($fname, 0, 11) . '...' : $fname;
                             } else {
-                                $chipText = $n . ' blocked';
+                                $parts = [];
+                                if ($cellManual > 0) {
+                                    $parts[] = $cellManual . ' blackout';
+                                }
+                                if ($cellCimm > 0) {
+                                    $parts[] = $cellCimm . ' maint.';
+                                }
+                                $chipText = implode(' · ', $parts);
+                            }
+                            if ($n === 1 && ($cellItems[0]['source_type'] ?? '') === 'cimm') {
+                                $chipText = 'Maint.';
                             }
                         }
                     ?>
@@ -527,16 +565,33 @@ ob_start();
                     <?php elseif (empty($dayBlackouts)): ?>
                         <p class="text-sm text-slate-500">No blackouts on this date for the current filter.</p>
                     <?php else: ?>
-                        <?php foreach ($dayBlackouts as $b): ?>
-                            <article class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                                <p class="font-semibold text-slate-900"><?= htmlspecialchars($b['facility_name']); ?></p>
-                                <p class="text-sm text-slate-700 mt-2"><?= htmlspecialchars($b['reason'] ?? '—'); ?></p>
-                                <?php if (!empty($b['created_by_name'])): ?>
+                        <?php foreach ($dayBlackouts as $b):
+                            $b = frs_blackout_enrich_row($b);
+                            $isCimm = ($b['source_type'] ?? '') === 'cimm';
+                        ?>
+                            <article class="rounded-xl border p-4 <?= $isCimm
+                                ? 'border-amber-200 bg-amber-50/60'
+                                : 'border-slate-200 bg-slate-50/50'; ?>">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <p class="font-semibold text-slate-900"><?= htmlspecialchars($b['facility_name']); ?></p>
+                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <?= $isCimm
+                                        ? 'bg-amber-200 text-amber-900'
+                                        : 'bg-red-100 text-red-800'; ?>">
+                                        <?= htmlspecialchars($b['source_label']); ?>
+                                    </span>
+                                </div>
+                                <p class="text-sm text-slate-700 mt-1"><?= htmlspecialchars($b['display_reason'] ?? '—'); ?></p>
+                                <?php if ($isCimm): ?>
+                                    <p class="text-xs text-amber-800/80 mt-2">
+                                        Synced from CIMM. Completing or cancelling the maintenance schedule in CIMM removes this automatically.
+                                    </p>
+                                <?php elseif (!empty($b['created_by_name'])): ?>
                                     <p class="text-xs text-slate-400 mt-2">Added by <?= htmlspecialchars($b['created_by_name']); ?></p>
                                 <?php endif; ?>
                                 <?php if (!empty($b['created_at'])): ?>
                                     <p class="text-xs text-slate-400">Recorded <?= htmlspecialchars(date('M j, Y g:i A', strtotime($b['created_at']))); ?></p>
                                 <?php endif; ?>
+                                <?php if (!empty($b['is_removable'])): ?>
                                 <form method="POST" class="mt-3" onsubmit="return confirm('Remove this blackout?');">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="delete">
@@ -549,6 +604,12 @@ ob_start();
                                         Remove blackout
                                     </button>
                                 </form>
+                                <?php else: ?>
+                                <a href="<?= htmlspecialchars($base . '/dashboard/maintenance-integration'); ?>"
+                                   class="inline-flex items-center mt-3 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50">
+                                    View in Maintenance Integration
+                                </a>
+                                <?php endif; ?>
                             </article>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -557,10 +618,13 @@ ob_start();
         </div>
 
         <p class="mt-4 text-xs text-slate-500 leading-relaxed">
-            Blackouts appear on the
+            <strong class="text-slate-600">CPRF blackouts</strong> are events or closures you add here (red on the calendar).
+            <strong class="text-amber-800">CIMM maintenance</strong> dates are synced automatically from the maintenance system (amber) and cannot be removed manually.
+            Both block bookings on the
             <a href="<?= htmlspecialchars($base . '/dashboard/book-facility'); ?>" class="text-blue-600 hover:underline font-medium">Book a Facility</a>
-            calendar. Maintenance sync may add dates via
-            <a href="<?= htmlspecialchars($base . '/dashboard/maintenance-integration'); ?>" class="text-blue-600 hover:underline font-medium">Maintenance</a>.
+            calendar.
+            Manage CIMM sync on
+            <a href="<?= htmlspecialchars($base . '/dashboard/maintenance-integration'); ?>" class="text-blue-600 hover:underline font-medium">Maintenance Integration</a>.
         </p>
     <?php endif; ?>
 </div>
@@ -618,6 +682,23 @@ ob_start();
 }
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-blocked:hover {
     background: var(--bo-cell-blocked-hover, #fee2e2);
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-cimm {
+    background: var(--bo-cell-cimm-bg, #fffbeb);
+    border-color: var(--bo-cell-cimm-border, #fcd34d);
+    cursor: pointer;
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-cimm:hover {
+    background: var(--bo-cell-cimm-hover, #fef3c7);
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-mixed {
+    background: linear-gradient(135deg, #fef2f2 50%, #fffbeb 50%);
+    border-color: #f59e0b;
+    cursor: pointer;
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-cimm .frs-bo-cal-chip {
+    background: var(--bo-chip-cimm-bg, rgba(251, 191, 36, 0.35));
+    color: var(--bo-chip-cimm-fg, #92400e);
 }
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-today {
     box-shadow: 0 0 0 2px var(--bo-today-ring, #3b82f6);

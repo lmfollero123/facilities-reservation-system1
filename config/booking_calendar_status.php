@@ -6,6 +6,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/time_helpers.php';
+require_once __DIR__ . '/blackout_dates.php';
 
 /**
  * Parse "HH:MM - HH:MM" from reservations.time_slot.
@@ -100,7 +101,7 @@ function frs_calendar_active_booking_condition(PDO $pdo): string
 /**
  * One-shot month matrix for a facility: blackout + facility status + booking density.
  *
- * @return array<string,string> date Y-m-d => tone: maintenance|offline|blackout|green|yellow|red
+ * @return array<string,string> date Y-m-d => tone: maintenance|offline|blackout|cimm_maintenance|green|yellow|red
  */
 function frs_facility_calendar_matrix(PDO $pdo, int $facilityId, int $year, int $month): array
 {
@@ -128,15 +129,16 @@ function frs_facility_calendar_matrix(PDO $pdo, int $facilityId, int $year, int 
 
     $tone = [];
 
-    // Blackouts for facility in range
+    // Blackouts for facility in range (CPRF vs CIMM maintenance)
     $blackSet = [];
     try {
         $b = $pdo->prepare(
-            'SELECT blackout_date FROM facility_blackout_dates WHERE facility_id = ? AND blackout_date BETWEEN ? AND ?'
+            'SELECT blackout_date, reason FROM facility_blackout_dates WHERE facility_id = ? AND blackout_date BETWEEN ? AND ?'
         );
         $b->execute([$facilityId, $first, $last]);
         while ($row = $b->fetch(PDO::FETCH_ASSOC)) {
-            $blackSet[(string)$row['blackout_date']] = true;
+            $d = (string)$row['blackout_date'];
+            $blackSet[$d] = frs_blackout_is_cimm_sync($row) ? 'cimm_maintenance' : 'blackout';
         }
     } catch (Throwable $e) {
         // table may not exist in minimal installs
@@ -172,7 +174,7 @@ function frs_facility_calendar_matrix(PDO $pdo, int $facilityId, int $year, int 
         $dStr = $iter->format('Y-m-d');
 
         if (isset($blackSet[$dStr])) {
-            $tone[$dStr] = 'blackout';
+            $tone[$dStr] = $blackSet[$dStr];
         } elseif ($dStr < $today) {
             $tone[$dStr] = 'past';
         } else {

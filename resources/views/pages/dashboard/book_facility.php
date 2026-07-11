@@ -18,6 +18,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
+require_once __DIR__ . '/../../../../config/blackout_dates.php';
 require_once __DIR__ . '/../../../../services/PredictionService.php';
 require_once __DIR__ . '/../../../../services/HolidayService.php';
 
@@ -410,9 +411,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             ]);
             $blackout = $blackoutStmt->fetch(PDO::FETCH_ASSOC);
             if ($blackout) {
-                $reason = trim((string)($blackout['reason'] ?? 'Facility maintenance'));
-                $error = '⚠️ This facility is unavailable on the selected date.'
-                    . ($reason !== '' ? (' Reason: ' . $reason . '.') : '');
+                $enriched = frs_blackout_enrich_row($blackout);
+                if (($enriched['source_type'] ?? '') === 'cimm') {
+                    $error = '⚠️ This facility has scheduled CIMM maintenance on the selected date'
+                        . (' (' . ($enriched['display_reason'] ?? 'maintenance') . ').')
+                        . ' Please choose another date or facility.';
+                } else {
+                    $error = '⚠️ This facility is blacked out on the selected date'
+                        . (' (' . ($enriched['display_reason'] ?? 'unavailable') . ').')
+                        . ' Please choose another date or facility.';
+                }
             }
         }
     }
@@ -1176,7 +1184,8 @@ $bookCalQuery = static function (array $extra): string {
 .bcf-tone-green { background: #dcfce7; border-color: #86efac; color: #14532d; }
 .bcf-tone-yellow { background: #fef9c3; border-color: #fde047; color: #713f12; }
 .bcf-tone-red { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
-.bcf-tone-blackout { background: #e2e8f0; border-color: #94a3b8; color: #1e293b; }
+.bcf-tone-blackout { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+.bcf-tone-cimm_maintenance { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
 .bcf-tone-maintenance, .bcf-tone-offline { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 .bcf-tone-muted { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; cursor: default; }
 .bcf-sq { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 3px; margin-right: 0.25rem; vertical-align: middle; }
@@ -1662,9 +1671,14 @@ ul.bcf-scroll-select-menu {
 }
 
 .status-blackout {
-    background: #94a3b8 !important;
-    color: #1e293b !important;
-    border-color: #64748b !important;
+    background: #fecaca !important;
+    color: #7f1d1d !important;
+    border-color: #f87171 !important;
+}
+.status-cimm-maintenance {
+    background: #fde68a !important;
+    color: #92400e !important;
+    border-color: #fbbf24 !important;
 }
 </style>
 <div class="page-header">
@@ -1822,9 +1836,15 @@ ul.bcf-scroll-select-menu {
                                 } elseif ($tone === 'red') {
                                     $dayStatusClass = ' status-denied';
                                     $chipLabel = 'Full';
-                                } elseif ($tone === 'blackout' || $tone === 'maintenance' || $tone === 'offline') {
-                                    $dayStatusClass = ' status-blackout';
-                                    $chipLabel = ($tone === 'blackout') ? 'Blackout' : 'N/A';
+                                } elseif ($tone === 'blackout' || $tone === 'cimm_maintenance' || $tone === 'maintenance' || $tone === 'offline') {
+                                    $dayStatusClass = $tone === 'cimm_maintenance' ? ' status-cimm-maintenance' : ' status-blackout';
+                                    if ($tone === 'blackout') {
+                                        $chipLabel = 'Blackout';
+                                    } elseif ($tone === 'cimm_maintenance') {
+                                        $chipLabel = 'Maint.';
+                                    } else {
+                                        $chipLabel = 'N/A';
+                                    }
                                 } elseif ($tone === 'muted') {
                                     $chipLabel = '—';
                                 } elseif ($tone === 'past') {
