@@ -506,6 +506,20 @@ function frs_cimm_run_sync(PDO $pdo): array
 
     $mappedSchedules = mapCIMMToCPRF($rawSchedules);
     $syncSummary = syncFacilitiesFromCIMM($pdo, $mappedSchedules);
+
+    $announcementSummary = ['created' => 0, 'skipped' => 0, 'errors' => [], 'created_titles' => []];
+    $announcementHelper = dirname(__DIR__) . '/config/cimm_maintenance_announcements.php';
+    if (is_file($announcementHelper)) {
+        require_once $announcementHelper;
+        $announcementSummary = frs_sync_cimm_maintenance_announcements($pdo, $mappedSchedules);
+        $syncSummary['announcements_created'] = $announcementSummary['created'];
+        $syncSummary['announcements_skipped'] = $announcementSummary['skipped'];
+        $syncSummary['announcement_errors'] = $announcementSummary['errors'];
+        if (!empty($announcementSummary['created_titles'])) {
+            $syncSummary['announcement_titles'] = $announcementSummary['created_titles'];
+        }
+    }
+
     frs_cimm_save_sync_state($syncSummary);
 
     return [

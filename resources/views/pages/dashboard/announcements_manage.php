@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/upload_helper.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
+require_once __DIR__ . '/../../../../config/cimm_maintenance_announcements.php';
 
 $pdo = db();
 $base = base_path();
@@ -22,6 +23,8 @@ $pageTitle = 'Announcements Management | LGU Facilities Reservation';
 
 $message = '';
 $messageType = '';
+$cimmAutoAnnouncementsEnabled = frs_cimm_auto_announcements_enabled();
+$cimmAnnouncementState = frs_cimm_load_maintenance_announcement_state();
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
@@ -140,6 +143,15 @@ ob_start();
         <i class="bi bi-<?= $messageType === 'error' ? 'exclamation-circle' : 'check-circle'; ?>"></i>
         <?= htmlspecialchars($message); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if ($cimmAutoAnnouncementsEnabled): ?>
+    <div class="alert alert-info" role="status">
+        <i class="bi bi-robot"></i>
+        <strong>CIMM + Gemini auto-announcements are enabled.</strong>
+        When CIMM sync finds a new upcoming maintenance schedule (e.g. Pael), the system can automatically publish a public announcement with AI-written copy and the facility photo.
+        <?= count($cimmAnnouncementState) > 0 ? ' (' . count($cimmAnnouncementState) . ' CIMM schedule(s) already announced.)' : ''; ?>
     </div>
 <?php endif; ?>
 

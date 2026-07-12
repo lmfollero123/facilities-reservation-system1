@@ -74,6 +74,17 @@ $syncSummary = [
 
 if (empty($apiError)) {
     $syncSummary = syncFacilitiesFromCIMM($pdo, $maintenanceSchedules);
+    $announcementHelper = __DIR__ . '/../../../../config/cimm_maintenance_announcements.php';
+    if (is_file($announcementHelper)) {
+        require_once $announcementHelper;
+        $announcementSummary = frs_sync_cimm_maintenance_announcements($pdo, $maintenanceSchedules);
+        $syncSummary['announcements_created'] = $announcementSummary['created'];
+        $syncSummary['announcements_skipped'] = $announcementSummary['skipped'];
+        $syncSummary['announcement_errors'] = $announcementSummary['errors'];
+        if (!empty($announcementSummary['created_titles'])) {
+            $syncSummary['announcement_titles'] = $announcementSummary['created_titles'];
+        }
+    }
     frs_cimm_save_sync_state($syncSummary);
 }
 
@@ -226,6 +237,7 @@ ob_start();
         <li>The facility badge stays <strong>Available</strong> until maintenance actually starts (e.g. Pael on Jul 12 remains bookable for Jul 12–21).</li>
         <li>Future maintenance dates are blocked on the Book Facility calendar immediately via <strong>CIMM Sync</strong> blackout dates (e.g. Jul 22 onward cannot be reserved in advance).</li>
         <li>Residents see an upcoming-maintenance notice when they select a facility that has a scheduled CIMM window.</li>
+        <li>When <strong>GEMINI_API_KEY</strong> is set, new matched schedules can auto-publish a public announcement (with the facility photo) on the homepage and <a href="<?= htmlspecialchars($base); ?>/announcements">Announcements</a> page. Disable with <code>CIMM_AUTO_ANNOUNCEMENTS=false</code> in <code>.env</code>.</li>
     </ul>
     <?php if (!empty($apiError)): ?>
         <p class="mi-sync-warn">CIMM API unavailable: <?= htmlspecialchars((string)$apiError); ?></p>
@@ -235,6 +247,9 @@ ob_start();
             <?= (int)($syncSummary['blackouts_added'] ?? 0); ?> blackout day(s) added,
             <?= (int)($syncSummary['blackouts_removed'] ?? 0); ?> removed,
             <?= (int)($syncSummary['matched_schedule_count'] ?? 0); ?> schedule(s) matched to facilities
+            <?php if ((int)($syncSummary['announcements_created'] ?? 0) > 0): ?>
+                · <strong><?= (int)$syncSummary['announcements_created']; ?> AI announcement(s) published</strong>
+            <?php endif; ?>
             <?php if ((int)($syncSummary['unmatched_schedule_count'] ?? 0) > 0): ?>
                 · <strong><?= (int)$syncSummary['unmatched_schedule_count']; ?> unmatched</strong> (verify facility names in CIMM vs CPRF)
             <?php endif; ?>
@@ -242,6 +257,11 @@ ob_start();
                 · Last saved sync: <?= htmlspecialchars((string)$lastSyncAt); ?>
             <?php endif; ?>
         </p>
+        <?php if (!empty($syncSummary['announcement_titles'])): ?>
+            <p class="mi-sync-meta" style="margin-top:0.35rem;">
+                New announcements: <?= htmlspecialchars(implode('; ', array_map('strval', $syncSummary['announcement_titles']))); ?>
+            </p>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 <?php endif; ?>
