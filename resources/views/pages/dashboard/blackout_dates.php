@@ -67,6 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 if ($r['affected_reservations'] > 0) {
                     $message .= " {$r['affected_reservations']} existing reservation(s) were auto-postponed.";
                 }
+                if (!empty($r['announcement']['published'])) {
+                    $message .= ' A public announcement was auto-published'
+                        . (!empty($r['announcement']['title']) ? ': "' . $r['announcement']['title'] . '".' : '.');
+                }
                 $messageType = 'success';
             } else {
                 $message = 'That date is already blacked out for this facility.';
@@ -94,6 +98,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                     . ($r['skipped'] > 0 ? " {$r['skipped']} day(s) were already blocked." : '');
                 if ($r['affected_reservations'] > 0) {
                     $message .= " {$r['affected_reservations']} existing reservation(s) were auto-postponed.";
+                }
+                if (!empty($r['announcement']['published'])) {
+                    $message .= ' A public announcement was auto-published'
+                        . (!empty($r['announcement']['title']) ? ': "' . $r['announcement']['title'] . '".' : '.');
                 }
                 $messageType = $r['added'] > 0 ? 'success' : 'error';
             }

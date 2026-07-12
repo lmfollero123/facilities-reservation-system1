@@ -7,6 +7,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/blackout_dates.php';
 require_once __DIR__ . '/gemini_maintenance_announcements.php';
+require_once __DIR__ . '/public_facility_announcements.php';
 
 if (!function_exists('cimmResolveScheduleFacilityId')) {
     require_once __DIR__ . '/../services/cimm_api.php';
@@ -66,48 +67,7 @@ function frs_cimm_save_maintenance_announcement_state(array $state): void
 
 function frs_cimm_auto_announcements_enabled(): bool
 {
-    $flag = function_exists('env_value')
-        ? strtolower(trim((string)env_value('CIMM_AUTO_ANNOUNCEMENTS', '')))
-        : strtolower(trim((string)(getenv('CIMM_AUTO_ANNOUNCEMENTS') ?: '')));
-
-    if (in_array($flag, ['0', 'false', 'no', 'off'], true)) {
-        return false;
-    }
-    if (in_array($flag, ['1', 'true', 'yes', 'on'], true)) {
-        return true;
-    }
-
-    // Default: on when Gemini is configured (user opted in by setting the API key).
-    return defined('GEMINI_API_KEY')
-        && GEMINI_API_KEY !== ''
-        && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE';
-}
-
-function frs_notifications_supports_image_path(PDO $pdo): bool
-{
-    static $cached = null;
-    if ($cached !== null) {
-        return $cached;
-    }
-    try {
-        $stmt = $pdo->query("SHOW COLUMNS FROM notifications LIKE 'image_path'");
-        $cached = (bool)($stmt && $stmt->fetch(PDO::FETCH_ASSOC));
-    } catch (Throwable $e) {
-        $cached = false;
-    }
-    return $cached;
-}
-
-function frs_facility_announcement_image_path(?string $imagePath): ?string
-{
-    if ($imagePath === null || trim($imagePath) === '') {
-        return null;
-    }
-    $path = trim($imagePath);
-    if (!str_starts_with($path, '/')) {
-        $path = '/' . $path;
-    }
-    return $path;
+    return frs_env_flag_enabled('CIMM_AUTO_ANNOUNCEMENTS', true);
 }
 
 /**
@@ -163,8 +123,6 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
     }
 
     $state = frs_cimm_load_maintenance_announcement_state();
-    $supportsImage = frs_notifications_supports_image_path($pdo);
-    $base = function_exists('base_path') ? base_path() : '';
     $now = time();
 
     foreach ($mappedSchedules as $schedule) {
@@ -228,37 +186,15 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
             continue;
         }
 
-        $imagePath = frs_facility_announcement_image_path($facility['image_path'] ?? null);
-        $link = '/facility-details?id=' . $facilityId;
-
         try {
-            if ($supportsImage) {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO notifications (user_id, type, title, message, link, image_path, created_at)
-                     VALUES (NULL, :type, :title, :message, :link, :image_path, NOW())'
-                );
-                $stmt->execute([
-                    'type' => 'system',
-                    'title' => $title,
-                    'message' => $message,
-                    'link' => $link,
-                    'image_path' => $imagePath,
-                ]);
-            } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO notifications (user_id, type, title, message, link, created_at)
-                     VALUES (NULL, :type, :title, :message, :link, NOW())'
-                );
-                $stmt->execute([
-                    'type' => 'system',
-                    'title' => $title,
-                    'message' => $message,
-                    'link' => $link,
-                ]);
-            }
-
-            $notificationId = (int)$pdo->lastInsertId();
-            if ($notificationId <= 0) {
+            $notificationId = frs_insert_public_facility_announcement(
+                $pdo,
+                $title,
+                $message,
+                $facilityId,
+                $facility['image_path'] ?? null
+            );
+            if ($notificationId === null) {
                 $result['errors'][] = "Failed to save announcement for {$cimmId}";
                 continue;
             }

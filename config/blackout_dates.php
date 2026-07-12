@@ -19,6 +19,18 @@ function frs_blackout_is_cimm_sync(array $row): bool
 }
 
 /**
+ * True for staff-created blackouts (not CIMM sync).
+ */
+function frs_blackout_reason_is_cprf_manual(string $reason): bool
+{
+    $reason = trim($reason);
+    if ($reason === '') {
+        return true;
+    }
+    return !str_starts_with($reason, FRS_BLACKOUT_CIMM_PREFIX);
+}
+
+/**
  * @return 'cimm'|'manual'
  */
 function frs_blackout_source_type(array $row): string
@@ -219,14 +231,15 @@ function frs_count_blackout_dates(PDO $pdo, int $year, ?int $facilityId = null):
 }
 
 /**
- * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int}
+ * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int, announcement?: array{published: bool, title: ?string}}
  */
 function frs_add_blackout_date(
     PDO $pdo,
     int $facilityId,
     string $date,
     string $reason,
-    ?int $createdBy = null
+    ?int $createdBy = null,
+    bool $deferAnnouncement = false
 ): array {
     $result = ['added' => 0, 'skipped' => 0, 'errors' => [], 'affected_reservations' => 0];
 
@@ -304,6 +317,20 @@ function frs_add_blackout_date(
         }
 
         $pdo->commit();
+
+        if (!$deferAnnouncement && $result['added'] > 0 && frs_blackout_reason_is_cprf_manual($reason)) {
+            $announcementHelper = __DIR__ . '/blackout_announcements.php';
+            if (is_file($announcementHelper)) {
+                require_once $announcementHelper;
+                $announcement = frs_publish_cprf_blackout_announcement($pdo, $facilityId, $date, $date, $reason);
+                if (!empty($announcement['published'])) {
+                    $result['announcement'] = [
+                        'published' => true,
+                        'title' => $announcement['title'] ?? null,
+                    ];
+                }
+            }
+        }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -315,7 +342,7 @@ function frs_add_blackout_date(
 }
 
 /**
- * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int}
+ * @return array{added: int, skipped: int, errors: list<string>, affected_reservations: int, announcement?: array{published: bool, title: ?string}}
  */
 function frs_add_blackout_date_range(
     PDO $pdo,
@@ -347,7 +374,7 @@ function frs_add_blackout_date_range(
 
     $cursor = clone $start;
     while ($cursor <= $end) {
-        $r = frs_add_blackout_date($pdo, $facilityId, $cursor->format('Y-m-d'), $reason, $createdBy);
+        $r = frs_add_blackout_date($pdo, $facilityId, $cursor->format('Y-m-d'), $reason, $createdBy, true);
         $total['added'] += $r['added'];
         $total['skipped'] += $r['skipped'];
         $total['affected_reservations'] += $r['affected_reservations'];
@@ -358,6 +385,27 @@ function frs_add_blackout_date_range(
     }
 
     $total['errors'] = array_values(array_unique($total['errors']));
+
+    if ($total['added'] > 0 && frs_blackout_reason_is_cprf_manual($reason)) {
+        $announcementHelper = __DIR__ . '/blackout_announcements.php';
+        if (is_file($announcementHelper)) {
+            require_once $announcementHelper;
+            $announcement = frs_publish_cprf_blackout_announcement(
+                $pdo,
+                $facilityId,
+                $startDate,
+                $endDate,
+                $reason
+            );
+            if (!empty($announcement['published'])) {
+                $total['announcement'] = [
+                    'published' => true,
+                    'title' => $announcement['title'] ?? null,
+                ];
+            }
+        }
+    }
+
     return $total;
 }
 

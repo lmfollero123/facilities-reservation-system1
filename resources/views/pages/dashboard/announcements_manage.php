@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/upload_helper.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/cimm_maintenance_announcements.php';
+require_once __DIR__ . '/../../../../config/blackout_announcements.php';
 
 $pdo = db();
 $base = base_path();
@@ -24,7 +25,9 @@ $pageTitle = 'Announcements Management | LGU Facilities Reservation';
 $message = '';
 $messageType = '';
 $cimmAutoAnnouncementsEnabled = frs_cimm_auto_announcements_enabled();
+$cprfAutoAnnouncementsEnabled = frs_cprf_auto_announcements_enabled();
 $cimmAnnouncementState = frs_cimm_load_maintenance_announcement_state();
+$cprfAnnouncementState = frs_cprf_load_blackout_announcement_state();
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
@@ -146,12 +149,22 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<?php if ($cimmAutoAnnouncementsEnabled): ?>
+<?php if ($cimmAutoAnnouncementsEnabled || $cprfAutoAnnouncementsEnabled): ?>
     <div class="alert alert-info" role="status">
         <i class="bi bi-robot"></i>
-        <strong>CIMM + Gemini auto-announcements are enabled.</strong>
-        When CIMM sync finds a new upcoming maintenance schedule (e.g. Pael), the system can automatically publish a public announcement with AI-written copy and the facility photo.
-        <?= count($cimmAnnouncementState) > 0 ? ' (' . count($cimmAnnouncementState) . ' CIMM schedule(s) already announced.)' : ''; ?>
+        <strong>Gemini auto-announcements are enabled.</strong>
+        <?php if ($cimmAutoAnnouncementsEnabled): ?>
+            CIMM maintenance schedules can auto-publish announcements with AI-written copy and the facility photo.
+        <?php endif; ?>
+        <?php if ($cprfAutoAnnouncementsEnabled): ?>
+            <?= $cimmAutoAnnouncementsEnabled ? ' ' : ''; ?>CPRF staff blackouts can also auto-publish one announcement per date range.
+        <?php endif; ?>
+        <?php
+        $autoCount = count($cimmAnnouncementState) + count($cprfAnnouncementState);
+        if ($autoCount > 0) {
+            echo ' (' . $autoCount . ' auto-published item(s) tracked.)';
+        }
+        ?>
     </div>
 <?php endif; ?>
 
