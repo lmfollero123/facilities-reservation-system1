@@ -23,6 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
         exit;
     }
 
+    require_once __DIR__ . '/../../../../config/ai_demo_scenarios.php';
+    if (!frs_ai_dev_tools_visible()) {
+        http_response_code(404);
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Not found']);
+        exit;
+    }
+
     require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
     
     // Suppress any output before JSON
@@ -254,9 +262,16 @@ if (!$frsAiTestIsAdmin) {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/ai_demo_scenarios.php';
+if (!frs_ai_dev_tools_visible()) {
+    header('Location: ' . base_path() . '/dashboard');
+    exit;
+}
+
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 
-$pageTitle = 'AI Models Testing | LGU Facilities Reservation';
+$pageTitle = 'AI Model Lab | LGU Facilities Reservation';
+$frsAiLabApiUrl = base_path() . '/dashboard/ai-model-lab';
 $pdo = db();
 $userId = (int)($_SESSION['user_id'] ?? 0);
 
@@ -356,11 +371,54 @@ pre {
 </style>
 
 <div class="test-container">
-    <?= frs_page_title('AI Models Testing & Status', 'Developer page: checks Python ML service health and which models are wired into booking, chatbot, and reports.'); ?>
+    <?= frs_page_title('AI Model Lab', 'Train and verify ML models, run integration tests, and launch capstone demo booking scenarios.'); ?>
+
+    <div class="test-section">
+        <h2>Demo package</h2>
+        <p style="margin-top:0;color:#475569;font-size:0.9rem;">
+            Prepare demo data and models once, then use the booking scenarios during your defense presentation.
+        </p>
+        <div class="model-info">
+            <div class="model-card">
+                <h3>1. Prepare environment</h3>
+                <p style="font-size:0.85rem;color:#64748b;margin:0.5rem 0;">
+                    From the project root (Windows):
+                </p>
+                <pre style="margin:0;font-size:0.8rem;">.\scripts\prepare_ai_demo.ps1</pre>
+                <p style="font-size:0.8rem;color:#64748b;margin:0.75rem 0 0;">
+                    Seeds reservations, demo users/violations, trains all models, and verifies <code>.pkl</code> files.
+                </p>
+            </div>
+            <div class="model-card">
+                <h3>2. Demo logins</h3>
+                <p style="font-size:0.85rem;color:#64748b;margin:0.5rem 0;">
+                    Password for all: <strong>Demo2026!</strong>
+                </p>
+                <ul style="font-size:0.82rem;color:#475569;margin:0;padding-left:1.1rem;">
+                    <li><code>demo.low@culiat.test</code> — verified, clean history</li>
+                    <li><code>demo.high@culiat.test</code> — unverified + violations</li>
+                    <li><code>demo.scheduler@culiat.test</code> — repeat bookings</li>
+                </ul>
+            </div>
+            <div class="model-card">
+                <h3>3. Load booking scenarios</h3>
+                <p style="font-size:0.85rem;color:#64748b;margin:0.5rem 0;">Open Book a Facility with prefilled demo cases:</p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">
+                    <?php foreach (frs_ai_demo_list_scenarios($pdo) as $demo): ?>
+                        <a href="<?= htmlspecialchars(frs_ai_demo_booking_url((string)$demo['key'])); ?>"
+                           style="font-size:0.78rem;padding:0.35rem 0.55rem;border-radius:6px;background:#eef2ff;color:#3730a3;text-decoration:none;border:1px solid #c7d2fe;">
+                            <?= htmlspecialchars((string)$demo['label']); ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <?php
     // Get model status
     $modelStatus = checkMLModelsStatus();
+    $frsPythonRuntime = frsGetPythonRuntimeStatus();
     
     // Define integration status
     $integrationStatus = [
@@ -373,6 +431,35 @@ pre {
         'demand_forecasting' => true,  // Integrated (API available, can be used in scheduling pages)
     ];
     ?>
+
+    <div class="test-section">
+        <h2>Python runtime</h2>
+        <p style="margin-top:0;font-size:0.9rem;color:#475569;">
+            Model files can exist while live predictions fail if PHP cannot run Python.
+            Error <strong>9009</strong> on Windows means the Microsoft Store <code>python</code> alias was used instead of a real install.
+        </p>
+        <div class="model-card" style="margin-top:0.75rem;">
+            <p style="margin:0.35rem 0;font-size:0.85rem;">
+                <strong>Resolved path:</strong>
+                <code><?= htmlspecialchars($frsPythonRuntime['path']); ?></code>
+            </p>
+            <?php if (!empty($frsPythonRuntime['version'])): ?>
+                <p style="margin:0.35rem 0;font-size:0.85rem;">
+                    <strong>Version:</strong> <?= htmlspecialchars($frsPythonRuntime['version']); ?>
+                </p>
+            <?php endif; ?>
+            <p style="margin:0.35rem 0;">
+                <span class="status-badge <?= $frsPythonRuntime['usable'] ? 'status-available' : 'status-unavailable' ?>">
+                    <?= $frsPythonRuntime['usable'] ? 'Python callable from PHP' : 'Python NOT callable from PHP' ?>
+                </span>
+            </p>
+            <?php if (!$frsPythonRuntime['usable'] && !empty($frsPythonRuntime['hint'])): ?>
+                <p style="margin:0.5rem 0 0;font-size:0.82rem;color:#991b1b;">
+                    <?= htmlspecialchars($frsPythonRuntime['hint']); ?>
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
 
     <!-- Model Status Overview -->
     <div class="test-section">
@@ -543,7 +630,7 @@ function testConflictDetection() {
     const resultDiv = document.getElementById('conflict-result');
     resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=conflict', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=conflict', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -570,7 +657,7 @@ function testRiskAssessment() {
     const resultDiv = document.getElementById('risk-result');
     resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=risk', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=risk', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -604,7 +691,7 @@ function testChatbotIntent() {
         'What are the booking policies?'
     ];
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=chatbot', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=chatbot', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({messages: testMessages})
@@ -633,7 +720,7 @@ function testPurposeCategory() {
         'Private Party'
     ];
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=purpose_category', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=purpose_category', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({purposes: testPurposes})
@@ -662,7 +749,7 @@ function testPurposeUnclear() {
         'Community health seminar and workshop'
     ];
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=purpose_unclear', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=purpose_unclear', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({purposes: testPurposes})
@@ -682,7 +769,7 @@ function testFacilityRecommendation() {
     const resultDiv = document.getElementById('facility-recommendation-result');
     resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=facility_recommendation', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=facility_recommendation', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -708,7 +795,7 @@ function testDemandForecasting() {
     const resultDiv = document.getElementById('demand-forecasting-result');
     resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
     
-    fetch('<?= base_path(); ?>/resources/views/pages/dashboard/test_ai_models.php?test=demand_forecasting', {
+    fetch('<?= $frsAiLabApiUrl; ?>?test=demand_forecasting', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({

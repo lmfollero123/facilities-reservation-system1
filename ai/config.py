@@ -9,14 +9,35 @@ from pathlib import Path
 # Base directory
 BASE_DIR = Path(__file__).parent
 
+# Load project .env (and optional private/cprf.env) for DB + Python tooling
+try:
+    from dotenv import load_dotenv
+
+    _project_root = BASE_DIR.parent
+    load_dotenv(_project_root / '.env')
+    _private = os.getenv('CPRF_PRIVATE_ENV')
+    if _private:
+        load_dotenv(_private, override=True)
+    else:
+        _home = os.path.expanduser('~')
+        for _candidate in (
+            Path(_home) / 'private' / 'cprf.env',
+            _project_root / 'private' / 'cprf.env',
+        ):
+            if _candidate.is_file():
+                load_dotenv(_candidate, override=True)
+                break
+except ImportError:
+    pass
+
 # Database configuration
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',  # Update with your MySQL username
-    'password': '',  # Update with your MySQL password
-    'database': 'facilities_reservation',
-    'charset': 'utf8mb4'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '3306')),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASS', os.getenv('DB_PASSWORD', '')),
+    'database': os.getenv('DB_NAME', 'facilities_reservation'),
+    'charset': 'utf8mb4',
 }
 
 # Model storage directory

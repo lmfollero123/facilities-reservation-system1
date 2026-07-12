@@ -1,0 +1,28 @@
+{
+  "generated_at": "2026-07-12T17:03:59.686081",
+  "demo_users": {
+    "low_risk": {
+      "email": "demo.low@culiat.test",
+      "password": "Demo2026!"
+    },
+    "high_risk": {
+      "email": "demo.high@culiat.test",
+      "password": "Demo2026!"
+    },
+    "scheduler": {
+      "email": "demo.scheduler@culiat.test",
+      "password": "Demo2026!"
+    }
+  },
+  "peak_demand": {
+    "facility_id": 1,
+    "reservation_date": "2026-08-08"
+  },
+  "booking_scenarios": [
+    "low",
+    "medium",
+    "high",
+    "unclear",
+    "demand"
+  ]
+}

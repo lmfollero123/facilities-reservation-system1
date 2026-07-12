@@ -180,8 +180,19 @@ if (!function_exists('base_url')) {
      */
     function base_url(): string
     {
+        $appEnv = strtolower(trim((string)env_value('APP_ENV', 'production')));
+        $isLocalEnv = in_array($appEnv, ['local', 'development', 'dev'], true);
+
+        // Optional explicit local override (e.g. ngrok tunnel for mobile/email testing)
+        if ($isLocalEnv) {
+            $localUrl = trim((string)env_value('APP_URL_LOCAL', ''));
+            if ($localUrl !== '') {
+                return rtrim($localUrl, '/');
+            }
+        }
+
         $configured = trim((string)env_value('APP_URL', ''));
-        if ($configured !== '') {
+        if ($configured !== '' && !$isLocalEnv) {
             return rtrim($configured, '/');
         }
 

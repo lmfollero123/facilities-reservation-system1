@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
+require_once __DIR__ . '/../../../../config/integration_status.php';
 
 $pdo = db();
 $pageTitle = 'System Settings | LGU Facilities Reservation';
@@ -26,16 +27,25 @@ try {
 } catch (Throwable $e) {
     $rolePermissionsTableReady = false;
 }
-$canShowSettingsLayout = $tablesReady || $rolePermissionsTableReady;
+$canShowSettingsLayout = true;
 $activeCategory = preg_replace('/[^a-z0-9_]/', '', (string)($_GET['category'] ?? '')) ?: '';
 if ($activeCategory === '') {
-    $activeCategory = $tablesReady ? 'facility_status' : ($rolePermissionsTableReady ? 'role_permissions' : 'facility_status');
+    $activeCategory = 'integrations';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
     $action = $_POST['action'] ?? '';
     try {
-        if ($action === 'update_permissions') {
+        if ($action === 'sync_uman_requests') {
+            require_once __DIR__ . '/../../../../services/uman_api.php';
+            $count = frs_sync_local_uman_requests($pdo);
+            $message = $count > 0
+                ? "Synced {$count} UMAN request status update(s)."
+                : 'UMAN request statuses are up to date (or API unavailable).';
+            $messageType = 'success';
+            logAudit('Synced UMAN requests', 'System Settings', (string)$count);
+            $activeCategory = 'integrations';
+        } elseif ($action === 'update_permissions') {
             if (!$rolePermissionsTableReady) {
                 $message = 'Role permissions table not installed. Run migration_add_role_permissions.sql.';
                 $messageType = 'error';
@@ -43,10 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
                 $role = trim($_POST['role'] ?? '');
                 $permissionKey = trim($_POST['permission_key'] ?? '');
                 $permissions = [
-                    'create' => isset($_POST['can_create']),
-                    'read' => isset($_POST['can_read']),
-                    'update' => isset($_POST['can_update']),
-                    'delete' => isset($_POST['can_delete']),
+                    'create' => ((int)($_POST['can_create'] ?? 0)) === 1,
+                    'read' => ((int)($_POST['can_read'] ?? 0)) === 1,
+                    'update' => ((int)($_POST['can_update'] ?? 0)) === 1,
+                    'delete' => ((int)($_POST['can_delete'] ?? 0)) === 1,
                 ];
                 $result = frs_update_permission($role, $permissionKey, $permissions);
                 $message = $result['message'];
@@ -104,6 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
 }
 
 $categories = frs_lookup_categories($pdo);
+array_unshift($categories, [
+    'id' => 0,
+    'slug' => 'integrations',
+    'name' => 'Integrations',
+    'description' => 'Monitor CIMM, UMAN, and Infrastructure connections. Run sync actions from one place.',
+]);
 if ($rolePermissionsTableReady && !in_array('role_permissions', array_column($categories, 'slug'), true)) {
     $categories[] = [
         'id' => 0,
@@ -123,6 +139,7 @@ $allPermissions = [];
 foreach ($roles as $role) {
     $allPermissions[$role] = frs_get_role_permissions($role);
 }
+$integrationCards = frs_integration_status_all($pdo);
 
 ob_start();
 ?>
@@ -130,7 +147,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Administration</span><span class="sep">/</span><span>System Settings</span>
     </div>
-    <?= frs_page_title('System Settings', 'Manage dropdown categories such as facility statuses without editing code.'); ?>
+    <?= frs_page_title('System Settings', 'Manage integrations, dropdown lookups, and role permissions.'); ?>
 </div>
 
 <?php if ($message): ?>
@@ -198,7 +215,66 @@ ob_start();
             <?php endif; ?>
         </div>
 
-        <?php if ($activeCategory === 'role_permissions'): ?>
+        <?php if ($activeCategory === 'integrations'): ?>
+        <div class="ss-integrations-grid">
+            <?php foreach ($integrationCards as $card): ?>
+                <article class="ss-integration-card">
+                    <div class="ss-integration-head">
+                        <div>
+                            <h2><?= htmlspecialchars((string)$card['name']); ?></h2>
+                            <p class="ss-page-description"><?= htmlspecialchars((string)$card['description']); ?></p>
+                        </div>
+                        <span class="status-badge <?= htmlspecialchars((string)($card['status_class'] ?? 'offline')); ?>">
+                            <?= htmlspecialchars((string)($card['status_label'] ?? 'Unknown')); ?>
+                        </span>
+                    </div>
+                    <?php if (!empty($card['preview'])): ?>
+                        <p class="ss-integration-note">Preview module — sample or disconnected data until an external API is configured.</p>
+                    <?php endif; ?>
+                    <div class="ss-integration-meta">
+                        <span>Last sync:
+                            <?= !empty($card['last_sync'])
+                                ? date('M d, Y H:i', strtotime((string)$card['last_sync']))
+                                : 'Never'; ?>
+                        </span>
+                        <?php if (!empty($card['manage_url'])): ?>
+                            <a href="<?= htmlspecialchars((string)$card['manage_url']); ?>">Open module →</a>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!empty($card['metrics']) && is_array($card['metrics'])): ?>
+                        <div class="ss-integration-metrics">
+                            <?php foreach ($card['metrics'] as $label => $value): ?>
+                                <span><strong><?= htmlspecialchars((string)$label); ?>:</strong> <?= htmlspecialchars((string)$value); ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($card['errors'])): ?>
+                        <div class="ss-integration-errors">
+                            <?php foreach ((array)$card['errors'] as $err): ?>
+                                <div><?= htmlspecialchars((string)$err); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <div class="ss-integration-actions">
+                        <?php if (($card['sync_type'] ?? '') === 'ajax' && !empty($card['can_sync'])): ?>
+                            <button type="button" class="ss-btn-primary" data-cimm-sync data-sync-url="<?= htmlspecialchars((string)$card['sync_url']); ?>">Sync Now</button>
+                        <?php elseif (($card['sync_type'] ?? '') === 'form' && !empty($card['can_sync'])): ?>
+                            <form method="POST" style="margin:0;">
+                                <?= csrf_field(); ?>
+                                <input type="hidden" name="action" value="sync_uman_requests">
+                                <button type="submit" class="ss-btn-primary">Sync Request Status</button>
+                            </form>
+                        <?php else: ?>
+                            <button type="button" class="ss-btn-secondary" disabled>Sync unavailable</button>
+                        <?php endif; ?>
+                        <?php if (!empty($card['cron_hint'])): ?>
+                            <small class="ss-hint">Cron: <code><?= htmlspecialchars((string)$card['cron_hint']); ?></code></small>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+        <?php elseif ($activeCategory === 'role_permissions'): ?>
         <!-- Role Permissions Grid -->
         <div class="ss-permissions-card">
             <div class="ss-permissions-header">
@@ -233,18 +309,22 @@ ob_start();
                                     <input type="hidden" name="permission_key" value="<?= htmlspecialchars($key); ?>">
                                     <div class="ss-perm-checks">
                                         <label class="ss-perm-check">
+                                            <input type="hidden" name="can_create" value="0">
                                             <input type="checkbox" name="can_create" value="1" <?= $perms['create'] ? 'checked' : ''; ?> onchange="this.form.submit()">
                                             <span>Create</span>
                                         </label>
                                         <label class="ss-perm-check">
+                                            <input type="hidden" name="can_read" value="0">
                                             <input type="checkbox" name="can_read" value="1" <?= $perms['read'] ? 'checked' : ''; ?> onchange="this.form.submit()">
                                             <span>Read</span>
                                         </label>
                                         <label class="ss-perm-check">
+                                            <input type="hidden" name="can_update" value="0">
                                             <input type="checkbox" name="can_update" value="1" <?= $perms['update'] ? 'checked' : ''; ?> onchange="this.form.submit()">
                                             <span>Update</span>
                                         </label>
                                         <label class="ss-perm-check">
+                                            <input type="hidden" name="can_delete" value="0">
                                             <input type="checkbox" name="can_delete" value="1" <?= $perms['delete'] ? 'checked' : ''; ?> onchange="this.form.submit()">
                                             <span>Delete</span>
                                         </label>
@@ -370,11 +450,20 @@ ob_start();
                                     </td>
                                     <td>
                                         <div class="ss-action-buttons">
-                                            <button type="button" class="ss-btn-icon-btn ss-btn-edit" onclick="openEditModal(<?= (int)$val['id']; ?>, '<?= htmlspecialchars((string)$val['label']); ?>', '<?= htmlspecialchars((string)$val['slug']); ?>', <?= !empty($val['is_active']) ? 'true' : 'false'; ?>, <?= $blocks ? 'true' : 'false'; ?>)" title="Edit">
+                                            <button type="button" class="ss-btn-icon-btn ss-btn-edit"
+                                                data-edit-id="<?= (int)$val['id']; ?>"
+                                                data-edit-label="<?= htmlspecialchars((string)$val['label'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-edit-slug="<?= htmlspecialchars((string)$val['slug'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-edit-active="<?= !empty($val['is_active']) ? '1' : '0'; ?>"
+                                                data-edit-blocks="<?= $blocks ? '1' : '0'; ?>"
+                                                onclick="openEditFromRow(this)" title="Edit">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <?php if (empty($val['is_system'])): ?>
-                                            <button type="button" class="ss-btn-icon-btn ss-btn-delete" onclick="confirmDelete(<?= (int)$val['id']; ?>, '<?= htmlspecialchars((string)$val['label']); ?>')" title="Delete">
+                                            <button type="button" class="ss-btn-icon-btn ss-btn-delete"
+                                                data-delete-id="<?= (int)$val['id']; ?>"
+                                                data-delete-label="<?= htmlspecialchars((string)$val['label'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                onclick="confirmDeleteFromRow(this)" title="Delete">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                             <?php endif; ?>
@@ -489,6 +578,20 @@ ob_start();
 </div>
 
 <script>
+function openEditFromRow(btn) {
+    openEditModal(
+        btn.dataset.editId,
+        btn.dataset.editLabel || '',
+        btn.dataset.editSlug || '',
+        btn.dataset.editActive === '1',
+        btn.dataset.editBlocks === '1'
+    );
+}
+
+function confirmDeleteFromRow(btn) {
+    confirmDelete(btn.dataset.deleteId, btn.dataset.deleteLabel || '');
+}
+
 function openEditModal(id, label, slug, isActive, blocksBooking) {
     document.getElementById('edit-value-id').value = id;
     document.getElementById('edit-label').value = label;
@@ -507,13 +610,45 @@ function confirmDelete(id, name) {
 }
 
 function filterTable() {
-    const search = document.getElementById('ss-search').value.toLowerCase();
+    const searchInput = document.getElementById('ss-search');
+    if (!searchInput) return;
+    const search = searchInput.value.toLowerCase();
     const rows = document.querySelectorAll('#ss-values-table tbody tr');
     rows.forEach(row => {
-        const label = row.getAttribute('data-label');
+        const label = row.getAttribute('data-label') || '';
         row.style.display = label.includes(search) ? '' : 'none';
     });
 }
+
+document.querySelectorAll('[data-cimm-sync]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        const url = btn.getAttribute('data-sync-url');
+        if (!url) return;
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Syncing…';
+        fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(result) {
+            if (result.ok && result.data && result.data.success) {
+                window.location.href = window.location.pathname + '?category=integrations';
+                return;
+            }
+            alert((result.data && (result.data.message || result.data.error)) || 'Sync failed.');
+            btn.disabled = false;
+            btn.textContent = original;
+        })
+        .catch(function() {
+            alert('Sync request failed. Check server logs or cron configuration.');
+            btn.disabled = false;
+            btn.textContent = original;
+        });
+    });
+});
 
 // Close modals on overlay click
 document.querySelectorAll('.ss-modal-overlay').forEach(modal => {
@@ -738,6 +873,20 @@ html[data-theme="dark"] .ss-perm-check { color: var(--text-secondary, #cbd5e1); 
 html[data-theme="dark"] .ss-perm-check input[type="checkbox"]:checked + span { color: var(--text-primary, #f1f5f9); }
 html[data-theme="dark"] .ss-permissions-legend { background: var(--bg-tertiary, #0f172a); border-color: var(--border-color, #334155); }
 html[data-theme="dark"] .ss-legend-item { color: var(--text-secondary, #94a3b8); }
+
+.ss-integrations-grid { display:grid; gap:1rem; }
+.ss-integration-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:1.25rem; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+.ss-integration-head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; margin-bottom:0.75rem; }
+.ss-integration-head h2 { margin:0 0 0.35rem; font-size:1.15rem; }
+.ss-integration-note { margin:0 0 0.75rem; padding:0.65rem 0.75rem; background:#fef3c7; color:#92400e; border-radius:8px; font-size:0.85rem; }
+.ss-integration-meta { display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; font-size:0.85rem; color:#64748b; margin-bottom:0.75rem; }
+.ss-integration-meta a { color:#2563eb; text-decoration:none; font-weight:600; }
+.ss-integration-metrics { display:flex; flex-wrap:wrap; gap:0.65rem 1rem; font-size:0.82rem; color:#475569; margin-bottom:0.75rem; }
+.ss-integration-errors { background:#fee2e2; color:#991b1b; border-radius:8px; padding:0.65rem 0.75rem; font-size:0.82rem; margin-bottom:0.75rem; }
+.ss-integration-actions { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; }
+html[data-theme="dark"] .ss-integration-card { background:var(--card-bg,#1e293b); border-color:var(--border-color,#334155); }
+html[data-theme="dark"] .ss-integration-head h2 { color:var(--text-primary,#f1f5f9); }
+html[data-theme="dark"] .ss-integration-metrics { color:var(--text-secondary,#cbd5e1); }
 </style>
 <?php
 $content = ob_get_clean();

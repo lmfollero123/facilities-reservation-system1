@@ -441,6 +441,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 }
 
 // Get filter parameters
+$umView = trim((string)($_GET['view'] ?? $_POST['view'] ?? 'all'));
+if (!in_array($umView, ['all', 'id_pending'], true)) {
+    $umView = 'all';
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verify') {
+    $umView = in_array($_POST['view'] ?? '', ['all', 'id_pending'], true) ? (string)$_POST['view'] : 'id_pending';
+}
+
 $filterRole = $_GET['role'] ?? '';
 $filterStatus = $_GET['status'] ?? '';
 $searchQuery = trim($_GET['q'] ?? '');
@@ -448,31 +456,48 @@ $searchQuery = trim($_GET['q'] ?? '');
 // Build query with filters
 $whereConditions = [];
 $params = [];
+$usersFrom = 'users';
+$usersOrderBy = 'created_at DESC';
 
-if ($filterRole && $filterRole !== 'all') {
-    $whereConditions[] = 'role = :role';
-    $params['role'] = $filterRole;
-}
+if ($umView === 'id_pending') {
+    $usersFrom = 'users u';
+    $whereConditions[] = 'u.role = "Resident"';
+    $whereConditions[] = 'COALESCE(u.is_verified, 0) = 0';
+    $whereConditions[] = 'u.status = "active"';
+    $whereConditions[] = 'EXISTS (SELECT 1 FROM user_documents d WHERE d.user_id = u.id AND d.document_type = "valid_id" AND d.is_archived = 0)';
+    $usersOrderBy = '(SELECT MAX(d2.uploaded_at) FROM user_documents d2 WHERE d2.user_id = u.id AND d2.document_type = "valid_id" AND d2.is_archived = 0) DESC, u.created_at DESC';
 
-if ($filterStatus && $filterStatus !== 'all') {
-    $statusMap = [
-        'active' => 'active',
-        'pending' => 'pending',
-        'locked' => 'locked',
-        'email_unverified' => 'email_unverified',
-    ];
-    if ($filterStatus === 'email_unverified') {
-        $whereConditions[] = '(email_verified = 0 OR email_verified IS NULL)';
-    } elseif (isset($statusMap[$filterStatus])) {
-        $whereConditions[] = 'status = :status';
-        $params['status'] = $statusMap[$filterStatus];
+    if ($searchQuery !== '') {
+        $whereConditions[] = '(u.name LIKE :search_name OR u.email LIKE :search_email)';
+        $params['search_name'] = '%' . $searchQuery . '%';
+        $params['search_email'] = '%' . $searchQuery . '%';
     }
-}
+} else {
+    if ($filterRole && $filterRole !== 'all') {
+        $whereConditions[] = 'role = :role';
+        $params['role'] = $filterRole;
+    }
 
-if ($searchQuery !== '') {
-    $whereConditions[] = '(name LIKE :search_name OR email LIKE :search_email)';
-    $params['search_name'] = '%' . $searchQuery . '%';
-    $params['search_email'] = '%' . $searchQuery . '%';
+    if ($filterStatus && $filterStatus !== 'all') {
+        $statusMap = [
+            'active' => 'active',
+            'pending' => 'pending',
+            'locked' => 'locked',
+            'email_unverified' => 'email_unverified',
+        ];
+        if ($filterStatus === 'email_unverified') {
+            $whereConditions[] = '(email_verified = 0 OR email_verified IS NULL)';
+        } elseif (isset($statusMap[$filterStatus])) {
+            $whereConditions[] = 'status = :status';
+            $params['status'] = $statusMap[$filterStatus];
+        }
+    }
+
+    if ($searchQuery !== '') {
+        $whereConditions[] = '(name LIKE :search_name OR email LIKE :search_email)';
+        $params['search_name'] = '%' . $searchQuery . '%';
+        $params['search_email'] = '%' . $searchQuery . '%';
+    }
 }
 
 $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
@@ -483,14 +508,20 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
 // Count total users
-$countSql = 'SELECT COUNT(*) FROM users ' . $whereClause;
+$countSql = 'SELECT COUNT(*) FROM ' . $usersFrom . ' ' . $whereClause;
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($params);
 $totalRows = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch users
-$sql = 'SELECT id, name, email, role, status, is_verified, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM users ' . $whereClause . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+if ($umView === 'id_pending') {
+    $sql = 'SELECT u.id, u.name, u.email, u.role, u.status, u.is_verified, COALESCE(u.email_verified, 0) AS email_verified, u.verified_at, u.created_at, u.updated_at,
+        (SELECT MAX(d2.uploaded_at) FROM user_documents d2 WHERE d2.user_id = u.id AND d2.document_type = "valid_id" AND d2.is_archived = 0) AS id_uploaded_at
+        FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
+} else {
+    $sql = 'SELECT id, name, email, role, status, is_verified, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
+}
 $stmt = $pdo->prepare($sql);
 foreach ($params as $key => $value) {
     $stmt->bindValue(':' . $key, $value);
@@ -529,6 +560,18 @@ $emailUnverifiedCount = (int)$emailUnverifiedStmt->fetchColumn();
 $lockedCountStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE status = "locked"');
 $lockedCount = (int)$lockedCountStmt->fetchColumn();
 
+$idPendingCountStmt = $pdo->query(
+    'SELECT COUNT(DISTINCT u.id)
+     FROM users u
+     INNER JOIN user_documents d ON d.user_id = u.id
+         AND d.document_type = "valid_id"
+         AND d.is_archived = 0
+     WHERE u.role = "Resident"
+       AND COALESCE(u.is_verified, 0) = 0
+       AND u.status = "active"'
+);
+$idPendingCount = (int)$idPendingCountStmt->fetchColumn();
+
 $totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users');
 $totalUsersCount = (int)$totalUsersStmt->fetchColumn();
 
@@ -540,6 +583,26 @@ $lastApproval = $lastApprovalStmt->fetchColumn();
 
 $retentionHours = (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24);
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+
+$umBuildQuery = static function (array $extra = []) use ($umView, $page, $filterRole, $filterStatus, $searchQuery): string {
+    $params = array_merge([
+        'view' => $umView,
+        'page' => $page,
+        'role' => $filterRole,
+        'status' => $filterStatus,
+        'q' => $searchQuery,
+    ], $extra);
+    $params = array_filter($params, static function ($value, $key) {
+        if ($value === null || $value === '') {
+            return false;
+        }
+        if (in_array($key, ['role', 'status'], true) && $value === 'all') {
+            return false;
+        }
+        return true;
+    }, ARRAY_FILTER_USE_BOTH);
+    return '?' . http_build_query($params);
+};
 
 ob_start();
 ?>
@@ -573,19 +636,58 @@ ob_start();
         <span class="um-stat-label">Locked</span>
         <strong class="um-stat-value"><?= $lockedCount; ?></strong>
     </div>
+    <div class="stat-card um-stat-card-highlight">
+        <span class="um-stat-label">ID pending review</span>
+        <strong class="um-stat-value"><?= $idPendingCount; ?></strong>
+    </div>
 </div>
 
 <div class="um-layout">
     <section class="booking-card um-main">
+        <nav class="um-view-tabs" aria-label="User management sections">
+            <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'all', 'page' => 1])); ?>"
+               class="um-view-tab<?= $umView === 'all' ? ' is-active' : ''; ?>"
+               <?= $umView === 'all' ? 'aria-current="page"' : ''; ?>>
+                All Accounts
+            </a>
+            <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'id_pending', 'page' => 1, 'role' => '', 'status' => ''])); ?>"
+               class="um-view-tab<?= $umView === 'id_pending' ? ' is-active' : ''; ?>"
+               <?= $umView === 'id_pending' ? 'aria-current="page"' : ''; ?>>
+                ID Verification
+                <span class="um-view-tab__count"><?= $idPendingCount; ?></span>
+            </a>
+        </nav>
+
         <div class="um-section-head um-section-head-row">
             <div>
-                <h2>Accounts Directory</h2>
-                <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
+                <?php if ($umView === 'id_pending'): ?>
+                    <h2>ID Verification Queue</h2>
+                    <p class="resource-meta">Residents who uploaded a valid ID and are waiting for staff review. Verify to enable auto-approval on bookings.</p>
+                <?php else: ?>
+                    <h2>Accounts Directory</h2>
+                    <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
+                <?php endif; ?>
             </div>
+            <?php if ($umView === 'all'): ?>
             <button type="button" class="btn-primary js-open-create-user-modal">Create account</button>
+            <?php endif; ?>
         </div>
 
+        <?php if ($umView === 'id_pending'): ?>
+        <form method="GET" class="um-toolbar um-toolbar-id-pending">
+            <input type="hidden" name="view" value="id_pending">
+            <label class="um-search um-search-wide">
+                <span class="sr-only">Search pending ID verifications</span>
+                <input type="search" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search name or email…">
+            </label>
+            <button type="submit" class="btn-primary um-filter-btn">Search</button>
+            <?php if ($searchQuery !== ''): ?>
+                <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'id_pending', 'q' => '', 'page' => 1])); ?>" class="btn-outline um-filter-btn">Clear</a>
+            <?php endif; ?>
+        </form>
+        <?php else: ?>
         <form method="GET" class="um-toolbar">
+            <input type="hidden" name="view" value="all">
             <label class="um-search">
                 <span class="sr-only">Search users</span>
                 <input type="search" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search name or email…">
@@ -611,9 +713,16 @@ ob_start();
             </label>
             <button type="submit" class="btn-primary um-filter-btn">Apply</button>
         </form>
+        <?php endif; ?>
 
         <?php if (empty($users)): ?>
-            <div class="um-empty">No users match your filters.</div>
+            <div class="um-empty">
+                <?php if ($umView === 'id_pending'): ?>
+                    No residents with pending ID verification<?= $searchQuery !== '' ? ' matching your search' : ''; ?>.
+                <?php else: ?>
+                    No users match your filters.
+                <?php endif; ?>
+            </div>
         <?php else: ?>
             <div class="um-user-list">
                 <?php foreach ($users as $user):
@@ -626,7 +735,7 @@ ob_start();
                     $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'pending' : 'locked');
                     $statusLabel = $user['status'] === 'pending' ? 'Pending approval' : ucfirst($user['status']);
                 ?>
-                <article class="um-user-card">
+                <article class="um-user-card<?= $umView === 'id_pending' ? ' um-user-card--id-pending' : ''; ?>">
                     <div class="um-user-main">
                         <div class="um-avatar" aria-hidden="true"><?= htmlspecialchars($initial); ?></div>
                         <div class="um-user-info">
@@ -649,7 +758,12 @@ ob_start();
                                     <span class="um-badge um-badge-muted">No ID on file</span>
                                 <?php endif; ?>
                             </div>
-                            <p class="um-meta">Registered <?= date('M j, Y', strtotime($user['created_at'])); ?></p>
+                            <p class="um-meta">
+                                Registered <?= date('M j, Y', strtotime($user['created_at'])); ?>
+                                <?php if ($umView === 'id_pending' && !empty($user['id_uploaded_at'])): ?>
+                                    · ID uploaded <?= date('M j, Y g:i A', strtotime((string)$user['id_uploaded_at'])); ?>
+                                <?php endif; ?>
+                            </p>
                             <?php
                             $uid = (int)$user['id'];
                             $vTotal = $violationCountsByUser[$uid]['total'] ?? 0;
@@ -699,7 +813,7 @@ ob_start();
                     </div>
 
                     <div class="um-user-side">
-                        <?php if ($isPageAdmin): ?>
+                        <?php if ($umView === 'all' && $isPageAdmin): ?>
                         <form method="POST" class="role-change-form um-role-form">
                             <?= csrf_field(); ?>
                             <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -713,7 +827,7 @@ ob_start();
                                 </select>
                             </label>
                         </form>
-                        <?php else: ?>
+                        <?php elseif ($umView === 'all'): ?>
                         <div class="um-role-readonly">
                             <span class="um-role-label">Role</span>
                             <span class="um-badge um-badge-role"><?= htmlspecialchars($user['role']); ?></span>
@@ -721,7 +835,7 @@ ob_start();
                         <?php endif; ?>
 
                         <?php if (!empty($docsByUser[$user['id']])): ?>
-                            <div class="um-docs">
+                            <div class="um-docs<?= $umView === 'id_pending' ? ' um-docs--prominent' : ''; ?>">
                                 <?php
                                 require_once __DIR__ . '/../../../../config/secure_documents.php';
                                 foreach ($docsByUser[$user['id']] as $doc):
@@ -737,15 +851,26 @@ ob_start();
                         <?php endif; ?>
 
                         <div class="um-actions">
+                            <?php if ($umView === 'id_pending' && !$isIdVerified && $hasValidIdDoc): ?>
+                                <form method="POST" class="um-inline-form">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="id_pending">
+                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                    <input type="hidden" name="action" value="verify">
+                                    <button type="submit" class="btn-primary um-btn-sm um-btn-verify confirm-action" data-message="Verify this resident's ID and enable auto-approval features?">Verify ID</button>
+                                </form>
+                            <?php else: ?>
                             <?php if ($user['status'] === 'pending'): ?>
                                 <form method="POST" class="um-inline-form">
                                     <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="approve">
                                     <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Approve this account?">Approve</button>
                                 </form>
                                 <form method="POST" class="um-inline-form">
                                     <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="deny">
                                     <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove this pending registration?">Deny</button>
@@ -755,6 +880,7 @@ ob_start();
                             <?php if (!$isIdVerified && $hasValidIdDoc): ?>
                                 <form method="POST" class="um-inline-form">
                                     <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="verify">
                                     <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Verify this user's ID and enable auto-approval features?">Verify ID</button>
@@ -766,6 +892,7 @@ ob_start();
                             <?php elseif ($user['status'] === 'locked' && !$isSelf): ?>
                                 <form method="POST" class="um-inline-form">
                                     <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="unlock">
                                     <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Unlock this account?">Unlock</button>
@@ -775,6 +902,7 @@ ob_start();
                             <?php if (in_array($user['status'], ['active', 'locked'], true) && !$isSelf): ?>
                                 <form method="POST" class="um-inline-form">
                                     <?= csrf_field(); ?>
+                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="reset_password">
                                     <button type="submit" class="btn-outline um-btn-sm um-btn-warn confirm-action" data-message="Reset password? New credentials will be emailed to the user.">Reset password</button>
@@ -784,6 +912,7 @@ ob_start();
                             <?php if ($isPageAdmin && !$isSelf): ?>
                                 <button type="button" class="btn-outline um-btn-sm um-btn-danger js-open-delete-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" data-user-email="<?= htmlspecialchars($user['email'], ENT_QUOTES); ?>">Delete account</button>
                             <?php endif; ?>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </article>
@@ -792,26 +921,12 @@ ob_start();
 
             <?php if ($totalPages > 1): ?>
                 <div class="pagination um-pagination">
-                    <?php
-                    $pageQuery = http_build_query(array_filter([
-                        'page' => max(1, $page - 1),
-                        'role' => $filterRole !== 'all' ? $filterRole : null,
-                        'status' => $filterStatus !== 'all' ? $filterStatus : null,
-                        'q' => $searchQuery !== '' ? $searchQuery : null,
-                    ]));
-                    $nextQuery = http_build_query(array_filter([
-                        'page' => min($totalPages, $page + 1),
-                        'role' => $filterRole !== 'all' ? $filterRole : null,
-                        'status' => $filterStatus !== 'all' ? $filterStatus : null,
-                        'q' => $searchQuery !== '' ? $searchQuery : null,
-                    ]));
-                    ?>
                     <?php if ($page > 1): ?>
-                        <a href="?<?= htmlspecialchars($pageQuery); ?>">&larr; Previous</a>
+                        <a href="<?= htmlspecialchars($umBuildQuery(['page' => $page - 1])); ?>">&larr; Previous</a>
                     <?php endif; ?>
                     <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                     <?php if ($page < $totalPages): ?>
-                        <a href="?<?= htmlspecialchars($nextQuery); ?>">Next &rarr;</a>
+                        <a href="<?= htmlspecialchars($umBuildQuery(['page' => $page + 1])); ?>">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -823,6 +938,7 @@ ob_start();
         <p class="resource-meta">Overview of registration and staff activity.</p>
         <ul class="audit-list um-aside-list">
             <li><strong><?= $pendingCount; ?></strong> <?= $pendingCount === 1 ? 'account' : 'accounts'; ?> awaiting approval.</li>
+            <li><strong><?= $idPendingCount; ?></strong> with valid ID awaiting verification.</li>
             <li><strong><?= $emailUnverifiedCount; ?></strong> with unverified email<?= $retentionHours ? ' (purged after ' . $retentionHours . 'h)' : ''; ?>.</li>
             <?php if ($lastApproval): ?>
                 <li>Last approval: <?= date('M j, Y', strtotime($lastApproval)); ?>.</li>
@@ -831,6 +947,9 @@ ob_start();
             <?php endif; ?>
             <li><strong><?= $activeStaffCount; ?></strong> active staff/admin <?= $activeStaffCount === 1 ? 'account' : 'accounts'; ?>.</li>
         </ul>
+        <?php if ($idPendingCount > 0): ?>
+        <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'id_pending', 'page' => 1, 'role' => '', 'status' => '', 'q' => ''])); ?>" class="btn-primary um-aside-cta">Review ID queue (<?= $idPendingCount; ?>)</a>
+        <?php endif; ?>
         <div class="um-policy-note">
             <strong>Deletion policy</strong>
             <p>Accounts with reservation history cannot be deleted — lock them instead. Deletion requires a reason and notifies the user by email.</p>
@@ -950,7 +1069,48 @@ ob_start();
 .um-alert { padding: 0.85rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: 0.95rem; }
 .um-alert-success { background: #e3f8ef; color: #0d7a43; border: 1px solid #b7ebd0; }
 .um-alert-error { background: #fdecee; color: #b23030; border: 1px solid #f5c2c7; }
-.um-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.um-stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.um-stat-card-highlight { border: 1px solid #fde68a; background: linear-gradient(180deg, #fffbeb 0%, #fff 100%); }
+.um-view-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 1.15rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+.um-view-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.75rem 1.1rem;
+    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.um-view-tab:hover { color: #1e3a5f; background: #f8fafc; }
+.um-view-tab.is-active { color: #1e3a5f; border-bottom-color: #1e3a5f; background: #fff; }
+.um-view-tab__count {
+    display: inline-flex;
+    min-width: 1.3rem;
+    justify-content: center;
+    padding: 0.08rem 0.42rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+.um-view-tab.is-active .um-view-tab__count { background: #dbeafe; color: #1e40af; }
+.um-toolbar-id-pending { grid-template-columns: 1fr auto auto; }
+.um-search-wide { grid-column: auto; }
+.um-user-card--id-pending { border-color: #fde68a; background: linear-gradient(180deg, #fffdf5 0%, #fff 100%); }
+.um-docs--prominent .um-doc-link { font-size: 0.85rem; padding: 0.4rem 0.75rem; background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: 600; }
+.um-btn-verify { padding: 0.5rem 1rem !important; font-size: 0.88rem !important; }
+.um-aside-cta { display: inline-block; margin-top: 0.85rem; padding: 0.55rem 0.9rem; text-decoration: none; font-size: 0.88rem; border-radius: 8px; }
 .um-stat-label { display: block; font-size: 0.82rem; color: #64748b; margin-bottom: 0.35rem; }
 .um-stat-value { font-size: 1.75rem; color: #1e293b; line-height: 1; }
 .um-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1.25rem; align-items: start; }

@@ -143,50 +143,6 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-card" style="margin-bottom: 1.5rem; border-left: 4px solid <?= $connected ? '#28a745' : '#f59e0b'; ?>;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h2 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Integration Status</h2>
-            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                <span class="status-badge <?= $connected ? 'active' : 'offline'; ?>" style="font-size: 0.9rem;">
-                    <?= $connected ? 'Connected to UMAN' : 'Not Connected'; ?>
-                </span>
-                <?php if ($connected): ?>
-                    <span style="background: #d4edda; color: #155724; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                        <?= (int)$integrationStatus['asset_count']; ?> asset(s) available
-                    </span>
-                <?php else: ?>
-                    <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                        Set UMAN_API_KEY in .env
-                    </span>
-                <?php endif; ?>
-            </div>
-        </div>
-        <?php if ($hasUmanTables): ?>
-        <form method="POST" style="margin:0;">
-            <?= csrf_field(); ?>
-            <input type="hidden" name="action" value="sync_requests">
-            <button class="btn-outline" type="submit" style="padding: 0.5rem 1rem;" <?= $connected ? '' : 'disabled title="Connect UMAN API first"'; ?>>
-                Sync Request Status
-            </button>
-        </form>
-        <?php endif; ?>
-    </div>
-    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-        <small style="color: #8b95b5;">
-            <strong>UMAN</strong> (<?= htmlspecialchars(uman_api_base_url()); ?>) manages utility assets and equipment inventory.
-            CPRF requests assets here; assign approved items per facility in
-            <a href="<?= base_path(); ?>/dashboard/facility-management">Facility Management</a>.
-            <?php if (!$hasUmanTables): ?>
-                <br><strong>Note:</strong> Run <code>database/migration_add_uman_equipment.sql</code> to enable local equipment tracking.
-            <?php endif; ?>
-            <?php if ($apiError): ?>
-                <br><span style="color:#b23030;">API: <?= htmlspecialchars($apiError); ?></span>
-            <?php endif; ?>
-        </small>
-    </div>
-</div>
-
 <div class="booking-wrapper">
     <section class="booking-card">
         <h2>Request Asset from UMAN</h2>

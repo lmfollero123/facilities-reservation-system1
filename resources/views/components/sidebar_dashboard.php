@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/database.php';
 require_once __DIR__ . '/../../../config/permissions.php';
+require_once __DIR__ . '/../../../config/ai_demo_scenarios.php';
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     $pdo = db();
 }
@@ -105,6 +106,9 @@ $aiToolsGroup = [];
 if (frs_can_read($role, 'ai_tools')) {
     $aiToolsGroup[] = ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
 }
+if ($role === 'Admin' && frs_ai_dev_tools_visible()) {
+    $aiToolsGroup[] = ['label' => 'AI Model Lab', 'href' => $base . '/dashboard/ai-model-lab', 'icon' => 'robot', 'page' => 'ai_model_lab'];
+}
 
 $reservationsFacilitiesGroup = [];
 $communicationsGroup = [];
@@ -138,7 +142,6 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $integrationsGroup = [];
     if (frs_can_read($role, 'maintenance')) {
         $integrationsGroup[] = ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
-        $integrationsGroup[] = ['label' => 'Maintenance Insights', 'href' => $base . '/dashboard/maintenance-insights', 'icon' => 'chart-bar', 'page' => 'predictive_maintenance'];
     }
     if (frs_can_read($role, 'infrastructure')) {
         $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];

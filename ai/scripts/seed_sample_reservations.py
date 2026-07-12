@@ -123,14 +123,14 @@ def generate_sample_reservations(count: int = 50, approved_ratio: float = 0.6):
         user_rows = cursor.fetchall()
         user_ids = [row['id'] for row in user_rows]
         if not user_ids:
-            print("❌ Error: No active users found. Please create at least one user account first.")
+            print("[ERROR] No active users found. Please create at least one user account first.")
             return
         
         # Get existing facilities
         cursor.execute("SELECT id, capacity FROM facilities WHERE status = 'available'")
         facilities = cursor.fetchall()
         if not facilities:
-            print("❌ Error: No available facilities found. Please create facilities first.")
+            print("[ERROR] No available facilities found. Please create facilities first.")
             return
         
         facility_ids = [f['id'] for f in facilities]
@@ -245,29 +245,29 @@ def generate_sample_reservations(count: int = 50, approved_ratio: float = 0.6):
         cursor.execute("SELECT COUNT(*) as count FROM reservations WHERE status = 'approved'")
         approved_count = cursor.fetchone()['count']
         
-        print(f"\n✅ Successfully inserted {inserted_count} reservations!")
+        print(f"\n[OK] Successfully inserted {inserted_count} reservations!")
         print(f"\nStatus distribution:")
         for status, count in status_counts.items():
             print(f"  {status}: {count}")
         print(f"\nApproved reservations: {approved_count}")
         
         if approved_count >= 5:
-            print("\n✅ Enough approved reservations for Facility Recommendation model!")
+            print("\n[OK] Enough approved reservations for Facility Recommendation model!")
         else:
-            print(f"\n⚠️  Need {5 - approved_count} more approved reservations for Facility Recommendation model")
+            print(f"\n[WARN] Need {5 - approved_count} more approved reservations for Facility Recommendation model")
         
         total_count = sum(status_counts.values())
         if total_count >= 30:
-            print("\n✅ Enough reservations for Demand Forecasting model!")
+            print("\n[OK] Enough reservations for Demand Forecasting model!")
         else:
-            print(f"\n⚠️  Need {30 - total_count} more reservations for Demand Forecasting model")
+            print(f"\n[WARN] Need {30 - total_count} more reservations for Demand Forecasting model")
         
-        print("\n💡 You can now train the models:")
+        print("\nNext: train the models:")
         print("   python scripts/train_facility_recommendation.py")
         print("   python scripts/train_demand_forecasting.py")
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] {e}")
         import traceback
         traceback.print_exc()
         if loader.connection:
@@ -283,16 +283,16 @@ def main():
     parser = argparse.ArgumentParser(description='Seed sample reservations for testing')
     parser.add_argument('--count', type=int, default=50, help='Number of reservations to generate (default: 50)')
     parser.add_argument('--approved-ratio', type=float, default=0.6, help='Ratio of approved reservations (default: 0.6)')
+    parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation prompt')
     
     args = parser.parse_args()
     
-    # Safety check
-    print(f"\n⚠️  WARNING: This will insert {args.count} sample reservations into your database.")
-    response = input("Continue? (yes/no): ")
-    
-    if response.lower() not in ['yes', 'y']:
-        print("Cancelled.")
-        return
+    if not args.yes:
+        print(f"\n[WARNING] This will insert {args.count} sample reservations into your database.")
+        response = input("Continue? (yes/no): ")
+        if response.lower() not in ['yes', 'y']:
+            print("Cancelled.")
+            return
     
     generate_sample_reservations(count=args.count, approved_ratio=args.approved_ratio)
 

@@ -99,35 +99,6 @@ ob_start();
     <?= frs_page_title('Infrastructure Projects Integration', 'Preview module: projects that may reduce capacity or block dates when synced from the external system.'); ?>
 </div>
 
-<!-- Integration Status Card -->
-<div class="booking-card" style="margin-bottom: 1.5rem; border-left: 4px solid #f59e0b;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h2 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Integration Status</h2>
-            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                <span class="status-badge offline" style="font-size: 0.9rem;">
-                    Preview — Not Connected
-                </span>
-                <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                    Sample data only
-                </span>
-                <span style="background: #e0f2fe; color: #075985; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                    <?= (int)$integrationStatus['active_projects']; ?> sample project(s)
-                </span>
-            </div>
-        </div>
-        <button class="btn-outline" type="button" disabled title="External API not connected yet" style="padding: 0.5rem 1rem; opacity: 0.6; cursor: not-allowed;">
-            Sync unavailable (preview)
-        </button>
-    </div>
-    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-        <small style="color: #8b95b5;">
-            <strong>Preview module:</strong> Tables below show mock project data for UI planning only.
-            No external Infrastructure Management API is connected. Facilities are not blocked automatically.
-        </small>
-    </div>
-</div>
-
 <div class="booking-wrapper">
     <!-- Active Projects -->
     <section class="booking-card">

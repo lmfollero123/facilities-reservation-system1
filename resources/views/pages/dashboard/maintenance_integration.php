@@ -14,9 +14,43 @@ if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'mainten
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../services/cimm_api.php';
+require_once __DIR__ . '/../../../../config/predictive_maintenance.php';
+require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/integration_status.php';
 
 $pdo = db();
+$base = base_path();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
+$canSubmit = frs_can_create($role, 'maintenance') || frs_can_update($role, 'maintenance');
+
+$activeTab = preg_replace('/[^a-z_]/', '', (string)($_GET['tab'] ?? 'schedules'));
+if (!in_array($activeTab, ['schedules', 'insights'], true)) {
+    $activeTab = 'schedules';
+}
+
+$filterBand = strtolower(trim((string)($_GET['band'] ?? 'all')));
+if (!in_array($filterBand, ['all', 'high', 'medium', 'low'], true)) {
+    $filterBand = 'all';
+}
+
+$predictiveRows = frs_compute_predictive_maintenance_rows($pdo);
+$recentRequests = frs_fetch_recent_maintenance_requests($pdo, 10);
+$highCount = count(array_filter($predictiveRows, static fn($r) => ($r['risk_band'] ?? '') === 'High'));
+$mediumCount = count(array_filter($predictiveRows, static fn($r) => ($r['risk_band'] ?? '') === 'Medium'));
+$actionableCount = count(array_filter($predictiveRows, static fn($r) => !empty($r['show_request_action'])));
+$pendingSent = count(array_filter($recentRequests, static fn($r) => in_array($r['status'] ?? '', ['pending', 'sent', 'acknowledged'], true)));
+$displayRows = $predictiveRows;
+if ($filterBand !== 'all') {
+    $displayRows = array_values(array_filter(
+        $predictiveRows,
+        static fn($r) => strtolower((string)($r['risk_band'] ?? '')) === $filterBand
+    ));
+}
+
+if ($activeTab === 'insights' && ($_GET['export'] ?? '') === 'csv') {
+    frs_export_maintenance_insights_csv($displayRows);
+    exit;
+}
 
 // Action feedback (reserved for future maintenance-integration actions)
 $success = '';
@@ -97,94 +131,75 @@ try {
 
 // Integration status (API read + last persisted sync run)
 $lastSyncAt = $cimmSyncState['last_sync_at'] ?? null;
-$integrationStatus = [
-    'connected' => !empty($rawSchedules) && empty($apiError),
-    'last_sync' => $lastSyncAt ?: null,
-    'sync_status' => empty($apiError) && !empty($rawSchedules) ? 'success' : (empty($apiError) ? 'no_data' : 'failed'),
-    'pending_updates' => (int)($syncSummary['unmatched_schedule_count'] ?? 0),
-    'error' => $apiError,
-];
 
 ob_start();
 ?>
+<style>
+.mi-tabs { display:flex; gap:0.35rem; border-bottom:2px solid #e8ecf4; margin-bottom:1.25rem; flex-wrap:wrap; }
+.mi-tab {
+    display:inline-block; padding:0.55rem 1rem; border-radius:8px 8px 0 0;
+    text-decoration:none; color:#4c5b7c; font-weight:700; font-size:0.9rem;
+    border:1px solid transparent; margin-bottom:-2px;
+}
+.mi-tab.active { color:#0369a1; background:#fff; border-color:#e8ecf4; border-bottom-color:#fff; }
+.mi-tab-pane { display:none; }
+.mi-tab-pane.active { display:block; }
+.pm-panel .pm-intro { margin-bottom:1rem; color:#475569; font-size:0.92rem; line-height:1.55; }
+.pm-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.75rem; margin-bottom:1rem; }
+.pm-stat { background:#fff; border:1px solid #e8ecf4; border-radius:12px; padding:0.85rem 1rem; }
+.pm-stat-label { font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; }
+.pm-stat-value { font-size:1.5rem; font-weight:800; color:#0f172a; margin-top:0.15rem; }
+.pm-stat-value.danger { color:#dc2626; } .pm-stat-value.warn { color:#d97706; } .pm-stat-value.ok { color:#16a34a; }
+.pm-toolbar { display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center; }
+.pm-filters { display:flex; gap:0.4rem; flex-wrap:wrap; }
+.pm-filter-btn { border:1px solid #dbe2ef; background:#fff; color:#475569; padding:0.35rem 0.75rem; border-radius:999px; font-size:0.8rem; font-weight:700; text-decoration:none; }
+.pm-filter-btn.active, .pm-filter-btn:hover { background:#0ea5e9; border-color:#0ea5e9; color:#fff; }
+.pm-export-btn { padding:0.4rem 0.85rem; font-size:0.82rem; font-weight:700; border-radius:8px; }
+.pm-layout { display:grid; grid-template-columns:1fr 300px; gap:1rem; align-items:start; }
+@media (max-width:1000px){ .pm-layout { grid-template-columns:1fr; } }
+.pm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem; }
+.pm-card { background:#fff; border:1px solid #e8ecf4; border-radius:14px; overflow:hidden; box-shadow:0 1px 4px rgba(15,23,42,0.04); }
+.pm-card-media { height:110px; background-size:cover; background-position:center; position:relative; background-color:#e2e8f0; }
+.pm-risk-pill { position:absolute; top:0.5rem; right:0.5rem; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.7rem; font-weight:800; }
+.pm-card-body { padding:0.85rem 1rem 1rem; }
+.pm-card-title { margin:0; font-size:1rem; font-weight:800; color:#0f172a; }
+.pm-card-meta { margin:0.2rem 0 0.65rem; font-size:0.78rem; color:#64748b; }
+.pm-risk-bar { height:7px; border-radius:999px; background:#f1f5f9; overflow:hidden; margin-top:0.25rem; }
+.pm-risk-bar > span { display:block; height:100%; border-radius:999px; }
+.pm-risk-bar-label { display:flex; justify-content:space-between; font-size:0.72rem; color:#64748b; font-weight:600; }
+.pm-metrics { display:grid; grid-template-columns:1fr 1fr; gap:0.45rem; margin:0.65rem 0; }
+.pm-metric { background:#f8fafc; border-radius:8px; padding:0.45rem 0.55rem; font-size:0.75rem; color:#64748b; }
+.pm-metric strong { display:block; color:#0f172a; font-size:0.9rem; margin-top:0.1rem; }
+.pm-window { font-size:0.8rem; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:0.45rem 0.55rem; margin-bottom:0.65rem; }
+.pm-btn-request { width:100%; border:none; border-radius:8px; padding:0.5rem; font-weight:800; font-size:0.8rem; cursor:pointer; background:linear-gradient(135deg,#0284c7,#0369a1); color:#fff; }
+.pm-btn-request.is-sent { background:#e2e8f0; color:#64748b; cursor:not-allowed; }
+.pm-side-panel { background:#fff; border:1px solid #e8ecf4; border-radius:12px; padding:0.85rem 1rem; }
+.pm-side-panel h3 { margin:0 0 0.65rem; font-size:0.95rem; }
+.pm-request-list { list-style:none; margin:0; padding:0; display:grid; gap:0.55rem; }
+.pm-request-item { border:1px solid #eef2f7; border-radius:10px; padding:0.55rem 0.65rem; font-size:0.78rem; }
+.pm-status { display:inline-block; margin-top:0.25rem; padding:0.12rem 0.4rem; border-radius:999px; font-size:0.65rem; font-weight:800; text-transform:uppercase; }
+.pm-status.sent { background:#dbeafe; color:#1d4ed8; } .pm-status.pending { background:#fef3c7; color:#b45309; }
+.pm-status.failed { background:#fee2e2; color:#b91c1c; } .pm-status.acknowledged { background:#dcfce7; color:#166534; }
+.pm-empty { text-align:center; padding:2rem; color:#94a3b8; border:1px dashed #dbe2ef; border-radius:12px; }
+.pm-muted { color:#94a3b8; font-size:0.82rem; }
+.pm-modal-backdrop { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1200; align-items:center; justify-content:center; padding:1rem; }
+.pm-modal-backdrop.open { display:flex; }
+.pm-modal { background:#fff; border-radius:14px; width:min(460px,100%); padding:1.15rem 1.25rem; }
+.pm-modal textarea { width:100%; min-height:84px; border:1px solid #dbe2ef; border-radius:8px; padding:0.55rem; }
+.pm-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem; }
+.pm-modal-actions .primary { background:#0284c7; color:#fff; border:none; border-radius:8px; padding:0.45rem 0.85rem; font-weight:700; cursor:pointer; }
+</style>
 <div class="page-header">
     <div class="breadcrumb">
-        <span>Operations</span><span class="sep">/</span><span>Maintenance Integration</span>
+        <span>Operations</span><span class="sep">/</span><span>Maintenance</span>
     </div>
-    <?= frs_page_title('Maintenance Integration', 'Syncs maintenance windows from CIMM. Scheduled work can set facilities to maintenance and add blackout dates.'); ?>
+    <?= frs_page_title('Maintenance', 'CIMM schedules, calendar, and predictive maintenance requests.'); ?>
 </div>
 
-<!-- Integration Status Card -->
-<div class="booking-card" style="margin-bottom: 1.5rem;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <?= frs_heading_with_tip('Integration Status', 'Pulls maintenance schedules from CIMM when connected. Sync updates facility status and blackout dates.', 'h2'); ?>
-            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                <span class="status-badge <?= $integrationStatus['connected'] ? 'active' : 'offline'; ?>" style="font-size: 0.9rem;">
-                    <?= $integrationStatus['connected'] ? '✓ Connected' : '✗ Disconnected'; ?>
-                </span>
-                <small style="color: #8b95b5;">
-                    Last sync: <?= $integrationStatus['last_sync']
-                        ? date('M d, Y H:i', strtotime($integrationStatus['last_sync']))
-                        : 'Never (run cron or Sync Now)'; ?>
-                </small>
-                <?php if ($integrationStatus['pending_updates'] > 0): ?>
-                    <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
-                        <?= $integrationStatus['pending_updates']; ?> pending update(s)
-                    </span>
-                <?php endif; ?>
-            </div>
-            <?php if (!empty($integrationStatus['error'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #dc2626; border-radius: 4px;">
-                    <strong style="color: #dc2626; display: block; margin-bottom: 0.25rem;">Connection Error:</strong>
-                    <small style="color: #991b1b;"><?= htmlspecialchars($integrationStatus['error']); ?></small>
-                    <div style="margin-top: 0.5rem;">
-                        <small style="color: #991b1b;">
-                            <strong>Solution:</strong> Ensure CIMM has set up their API endpoint at 
-                            <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 2px;">https://cimm.infragovservices.com/api/maintenance-schedules.php</code>
-                            <br>See <code>docs/CIMM_API_INTEGRATION.md</code> for setup instructions.
-                        </small>
-                    </div>
-                </div>
-            <?php elseif (empty($rawSchedules) && empty($integrationStatus['error'])): ?>
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                    <small style="color: #92400e;">
-                        <strong>Note:</strong> Connected successfully but no maintenance schedules found. 
-                        CIMM may not have any scheduled maintenance yet.
-                    </small>
-                </div>
-            <?php endif; ?>
-        </div>
-        <button class="btn-outline" onclick="syncMaintenanceData()" style="padding: 0.5rem 1rem;">
-            🔄 Sync Now
-        </button>
-    </div>
-    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-        <?php if (!empty($integrationStatus['last_sync'])): ?>
-            <div style="margin-top:0.65rem; color:#4b5563; font-size:0.85rem; display:flex; gap:0.8rem; flex-wrap:wrap;">
-                <span>🔁 Updated to maintenance: <strong><?= (int)($syncSummary['updated_to_maintenance'] ?? 0); ?></strong></span>
-                <span>✅ Updated to available: <strong><?= (int)($syncSummary['updated_to_available'] ?? 0); ?></strong></span>
-                <span>📅 Blackouts added: <strong><?= (int)($syncSummary['blackouts_added'] ?? 0); ?></strong></span>
-                <span>🗑️ Blackouts removed: <strong><?= (int)($syncSummary['blackouts_removed'] ?? 0); ?></strong></span>
-                <span>🎯 Matched schedules: <strong><?= (int)($syncSummary['matched_schedule_count'] ?? 0); ?></strong></span>
-                <span>⚠️ Unmatched schedules: <strong><?= (int)($syncSummary['unmatched_schedule_count'] ?? 0); ?></strong></span>
-            </div>
-            <?php if (!empty($syncSummary['errors'])): ?>
-                <div style="margin-top: 0.5rem; padding: 0.55rem 0.7rem; background: #fee2e2; border-left: 4px solid #dc2626; border-radius: 4px; color:#991b1b; font-size:0.83rem;">
-                    <strong>Sync warnings:</strong> <?= htmlspecialchars(implode(' | ', (array)$syncSummary['errors'])); ?>
-                </div>
-            <?php endif; ?>
-            <small style="color:#8b95b5; display:block; margin-top:0.5rem;">
-                Facility status and blackout dates sync automatically when this page loads or when you click Sync Now.
-                Cron (<code>php scripts/sync_cimm_maintenance.php</code>) is optional for background updates.
-            </small>
-        <?php else: ?>
-            <small style="color:#8b95b5;">
-                No sync has run yet. Open this page while CIMM is connected, click Sync Now, or schedule <code>php scripts/sync_cimm_maintenance.php</code> in cron.
-            </small>
-        <?php endif; ?>
-    </div>
-</div>
+<nav class="mi-tabs" aria-label="Maintenance sections">
+    <a class="mi-tab <?= $activeTab === 'schedules' ? 'active' : ''; ?>" href="?tab=schedules">Schedules &amp; Calendar</a>
+    <a class="mi-tab <?= $activeTab === 'insights' ? 'active' : ''; ?>" href="?tab=insights">Maintenance Insights</a>
+</nav>
 
 <?php if ($success): ?>
     <div class="message success" style="background:#e3f8ef;color:#0d7a43;padding:0.85rem 1rem;border-radius:10px;margin-bottom:1rem;border:1px solid rgba(16,185,129,0.25);">
@@ -196,20 +211,7 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd;">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-        <div>
-            <h2 style="margin:0 0 0.35rem; font-size:1.1rem; color:#0c4a6e;">Maintenance Insights</h2>
-            <p style="margin:0; color:#0369a1; font-size:0.9rem; max-width:40rem;">
-                Predictive usage analysis and <strong>Request for Maintenance</strong> to CIMM live on a dedicated page — CPRF no longer applies blackouts from predictions.
-            </p>
-        </div>
-        <a href="<?= htmlspecialchars(base_path()); ?>/dashboard/maintenance-insights" class="btn-outline" style="padding:0.5rem 1rem; font-weight:800; border-radius:10px; white-space:nowrap;">
-            Open Maintenance Insights →
-        </a>
-    </div>
-</div>
-
+<div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
 <div class="booking-wrapper">
     <!-- Upcoming Maintenance Schedules -->
     <section class="booking-card">
@@ -479,6 +481,11 @@ ob_start();
         </div>
     <?php endif; ?>
 </section>
+</div><!-- /mi-tab-schedules -->
+
+<div class="mi-tab-pane <?= $activeTab === 'insights' ? 'active' : ''; ?>" id="mi-tab-insights">
+    <?php include __DIR__ . '/partials/maintenance_insights_panel.php'; ?>
+</div>
 
 <!-- Maintenance Details Modal (will be implemented with JavaScript) -->
 <div id="maintenanceModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
@@ -494,42 +501,9 @@ ob_start();
 </div>
 
 <script>
-function syncMaintenanceData() {
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '🔄 Syncing...';
-
-    fetch('<?= base_path(); ?>/public/api/sync-cimm-maintenance.php', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }
-    })
-    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
-    .then(function (result) {
-        if (result.ok && result.data && result.data.success) {
-            window.location.reload();
-            return;
-        }
-        const msg = (result.data && (result.data.message || result.data.error)) ? (result.data.message || result.data.error) : 'Sync failed.';
-        alert(msg);
-        btn.disabled = false;
-        btn.textContent = originalText;
-    })
-    .catch(function () {
-        alert('Sync request failed. Check server logs or run: php scripts/sync_cimm_maintenance.php');
-        btn.disabled = false;
-        btn.textContent = originalText;
-    });
-}
-
-// Test CIMM connection (for debugging)
-function testCIMMConnection() {
-    alert('To test CIMM connection, run: php test_cimm_connection.php\n\nOr check the error message displayed in the Integration Status card.');
-}
-
 function applyMaintenanceFilters() {
     var params = new URLSearchParams(window.location.search);
+    params.set('tab', 'schedules');
     params.set('status', document.getElementById('filterStatus').value);
     params.set('priority', document.getElementById('filterPriority').value);
     params.set('page', '1');

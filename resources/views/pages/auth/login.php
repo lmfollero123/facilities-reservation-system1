@@ -112,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     header('Location: ' . base_path() . '/login-setup-2fa');
                                     exit;
                                 } elseif (frs_login_requires_second_factor($user)) {
+                                    unset($_SESSION['login_otp_recovery_mode']);
                                     $_SESSION['login_otp_email_sent'] = false;
 
                                     if ($enableOtp) {

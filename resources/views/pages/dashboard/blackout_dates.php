@@ -185,6 +185,8 @@ $calPrevYear = (int)date('Y', $calPrevTs);
 $calPrevMonth = (int)date('m', $calPrevTs);
 $calNextYear = (int)date('Y', $calNextTs);
 $calNextMonth = (int)date('m', $calNextTs);
+$boYearMin = (int)date('Y') - 5;
+$boYearMax = (int)date('Y') + 5;
 
 $reasonPresets = [
     'LGU event / program',
@@ -272,12 +274,22 @@ ob_start();
                     </button>
                     <form method="GET" action="<?= htmlspecialchars($base . '/dashboard/blackout-dates'); ?>"
                         class="flex flex-wrap items-end gap-3">
-                    <input type="hidden" name="month" value="<?= (int)$calMonth; ?>">
+                    <div>
+                        <label for="filter-month" class="block text-xs font-semibold text-slate-500 mb-1">Month</label>
+                        <select id="filter-month" name="month" onchange="this.form.submit()"
+                            class="min-w-[8.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?= $m; ?>" <?= $calMonth === $m ? 'selected' : ''; ?>>
+                                    <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
                     <div>
                         <label for="filter-year" class="block text-xs font-semibold text-slate-500 mb-1">Year</label>
                         <select id="filter-year" name="year" onchange="this.form.submit()"
                             class="min-w-[5.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
-                            <?php for ($y = (int)date('Y') + 1; $y >= (int)date('Y') - 2; $y--): ?>
+                            <?php for ($y = $boYearMax; $y >= $boYearMin; $y--): ?>
                                 <option value="<?= $y; ?>" <?= $filterYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
                             <?php endfor; ?>
                         </select>
@@ -305,12 +317,29 @@ ob_start();
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                             &larr; Prev
                         </a>
-                        <strong class="text-base font-semibold text-slate-900 min-w-[10rem] text-center"><?= htmlspecialchars($calMonthLabel); ?></strong>
+                        <form method="GET" action="<?= htmlspecialchars($base . '/dashboard/blackout-dates'); ?>"
+                            class="inline-flex flex-wrap items-center gap-2">
+                            <input type="hidden" name="facility_id" value="<?= (int)$filterFacility; ?>">
+                            <select name="month" aria-label="Select month" onchange="this.form.submit()"
+                                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                <?php for ($m = 1; $m <= 12; $m++): ?>
+                                    <option value="<?= $m; ?>" <?= $calMonth === $m ? 'selected' : ''; ?>>
+                                        <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                            <select name="year" aria-label="Select year" onchange="this.form.submit()"
+                                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                <?php for ($y = $boYearMax; $y >= $boYearMin; $y--): ?>
+                                    <option value="<?= $y; ?>" <?= $filterYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </form>
                         <a href="<?= htmlspecialchars(blackout_filter_url($calNextYear, $calNextMonth, $filterFacility)); ?>"
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                             Next &rarr;
                         </a>
-                        <a href="<?= htmlspecialchars(blackout_filter_url((int)date('Y'), (int)date('m'), $filterFacility)); ?>"
+                        <a href="<?= htmlspecialchars(blackout_filter_url((int)date('Y'), (int)date('n'), $filterFacility)); ?>"
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                             Today
                         </a>

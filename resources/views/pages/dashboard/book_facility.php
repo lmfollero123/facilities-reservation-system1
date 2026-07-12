@@ -179,6 +179,24 @@ $frsCsrfOk = frs_csrf_ok();
 $frsCsrfError = 'Your session expired or the form is invalid. Please refresh and try again.';
 require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';
 require_once __DIR__ . '/../../../../config/reservation_documents.php';
+require_once __DIR__ . '/../../../../config/ai_demo_scenarios.php';
+
+// Expand ?demo_scenario=low|medium|high into full booking prefill params
+if (
+    $_SERVER['REQUEST_METHOD'] !== 'POST'
+    && !empty($_GET['demo_scenario'])
+    && empty($_GET['demo_loaded'])
+    && frs_ai_demo_can_load_scenarios($role)
+) {
+    $demoKey = trim((string)$_GET['demo_scenario']);
+    $demoResolved = frs_ai_demo_resolve_scenario($pdo, $demoKey);
+    if ($demoResolved) {
+        $demoParams = array_merge($_GET, $demoResolved['params']);
+        unset($demoParams['demo_scenario']);
+        header('Location: ' . base_path() . '/dashboard/book-facility?' . http_build_query($demoParams));
+        exit;
+    }
+}
 
 // Check if pre-filled from Smart Scheduler (for showing notification)
 $prefillFacilityId = isset($_GET['facility_id']) ? (int)$_GET['facility_id'] : null;
@@ -1739,6 +1757,7 @@ ul.bcf-scroll-select-menu {
     </div>
 
     <div id="booking-pane-book" style="display: <?= !$reservationsHubMine ? 'block' : 'none'; ?>;">
+        <?php require __DIR__ . '/partials/ai_demo_scenario_panel.php'; ?>
         <div class="booking-hub-grid">
             <div class="booking-card booking-calendar-myres-panel">
                 <h2 class="bcf-label-row" style="margin-top:0;">
@@ -3972,6 +3991,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const prefillAttendeesEl = document.getElementById('expected-attendees');
     if (prePurpose && prefillPurposeEl) prefillPurposeEl.value = prePurpose;
     if (preAttendees && prefillAttendeesEl) prefillAttendeesEl.value = preAttendees;
+    const prefillPurposePreview = document.getElementById('bcf-purpose-preview');
+    const prefillAttendeesPreview = document.getElementById('bcf-purpose-attendees-preview');
+    if (prePurpose && prefillPurposePreview) prefillPurposePreview.value = prePurpose;
+    if (preAttendees && prefillAttendeesPreview) prefillAttendeesPreview.value = preAttendees;
 
     setTimeout(function () {
         if (typeof syncAiRecommendationsGate === 'function') syncAiRecommendationsGate();

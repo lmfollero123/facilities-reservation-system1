@@ -164,6 +164,45 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     height:10px;
     border-radius:999px;
 }
+.mine-cal-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+.mine-cal-jump-form {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+}
+.mine-cal-month-select,
+.mine-cal-year-select {
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border-color, #dbe3ef);
+    border-radius: 8px;
+    background: var(--bg-secondary, #fff);
+    font-size: 0.88rem;
+    color: var(--text-primary, #1e293b);
+    cursor: pointer;
+}
+.mine-cal-month-select:hover,
+.mine-cal-year-select:hover {
+    border-color: #94a3b8;
+}
+.mine-cal-month-select:focus,
+.mine-cal-year-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.mine-cal-nav-btn {
+    text-decoration: none;
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    white-space: nowrap;
+}
 @media (max-width: 640px) {
     .my-reservations-calendar-grid {
         gap: 0.2rem;
@@ -260,6 +299,8 @@ $mineTabPrevYear = (int)date('Y', $mineTabPrevMonthTs);
 $mineTabPrevMonthNum = (int)date('m', $mineTabPrevMonthTs);
 $mineTabNextYear = (int)date('Y', $mineTabNextMonthTs);
 $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
+$mineTabYearMin = (int)date('Y') - 5;
+$mineTabYearMax = (int)date('Y') + 5;
 ?>
 
 <div class="my-reservations-calendar">
@@ -274,11 +315,28 @@ $mineTabNextMonthNum = (int)date('m', $mineTabNextMonthTs);
             </a>
             <?php endif; ?>
         </div>
-        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-            <a class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabPrevYear, 'month' => $mineTabPrevMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">&larr; Prev</a>
-            <strong style="font-size:1.05rem;"><?= htmlspecialchars($mineTabMonthLabel); ?></strong>
-            <a class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabNextYear, 'month' => $mineTabNextMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">Next &rarr;</a>
-            <a class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => (int)date('Y'), 'month' => (int)date('m')]), ENT_QUOTES, 'UTF-8'); ?>">Today</a>
+        <div class="mine-cal-nav-row">
+            <form method="get" action="<?= htmlspecialchars($__mineCalPath, ENT_QUOTES, 'UTF-8'); ?>" class="mine-cal-jump-form">
+                <?php if ($__frsMineOnBookHub): ?>
+                    <input type="hidden" name="module" value="mine">
+                <?php endif; ?>
+                <input type="hidden" name="scope" value="<?= htmlspecialchars($calendarScope, ENT_QUOTES, 'UTF-8'); ?>">
+                <select name="month" class="mine-cal-month-select" aria-label="Select month" onchange="this.form.submit()">
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <option value="<?= $m; ?>" <?= $mineTabCalMonth === $m ? 'selected' : ''; ?>>
+                            <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
+                        </option>
+                    <?php endfor; ?>
+                </select>
+                <select name="year" class="mine-cal-year-select" aria-label="Select year" onchange="this.form.submit()">
+                    <?php for ($y = $mineTabYearMax; $y >= $mineTabYearMin; $y--): ?>
+                        <option value="<?= $y; ?>" <?= $mineTabCalYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
+                    <?php endfor; ?>
+                </select>
+            </form>
+            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabPrevYear, 'month' => $mineTabPrevMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">&larr; Prev</a>
+            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabNextYear, 'month' => $mineTabNextMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">Next &rarr;</a>
+            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => (int)date('Y'), 'month' => (int)date('n')]), ENT_QUOTES, 'UTF-8'); ?>">Today</a>
         </div>
         <div class="my-reservations-legend">
             <div class="my-reservations-legend-item">

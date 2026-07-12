@@ -330,6 +330,11 @@ $pendingPerPage = 10;
 $pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
 $pendingOffset = ($pendingPage - 1) * $pendingPerPage;
 $pendingSearch = trim($_GET['pending_search'] ?? '');
+$pendingFilter = trim($_GET['pending_filter'] ?? 'all');
+$allowedPendingFilters = ['all', 'pending', 'postponed', 'priority'];
+if (!in_array($pendingFilter, $allowedPendingFilters, true)) {
+    $pendingFilter = 'all';
+}
 
 // Build pending query with filters - use lookup values for non-final statuses
 $pendingStatuses = [];
@@ -346,6 +351,14 @@ if (frs_lookups_table_ready($pdo)) {
 }
 $pendingWhere = ['r.status IN ("' . implode('", "', $pendingStatuses) . '")'];
 $pendingParams = [];
+
+if ($pendingFilter === 'pending') {
+    $pendingWhere[] = 'r.status = "pending"';
+} elseif ($pendingFilter === 'postponed') {
+    $pendingWhere[] = 'r.status = "postponed"';
+} elseif ($pendingFilter === 'priority') {
+    $pendingWhere[] = 'r.postponed_priority = 1';
+}
 
 if (!empty($pendingSearch)) {
     $pendingWhere[] = '(u.name LIKE :pending_search_name OR f.name LIKE :pending_search_facility OR r.purpose LIKE :pending_search_purpose)';
@@ -382,6 +395,25 @@ $pendingStmt->bindValue(':pending_limit', $pendingPerPage, PDO::PARAM_INT);
 $pendingStmt->bindValue(':pending_offset', $pendingOffset, PDO::PARAM_INT);
 $pendingStmt->execute();
 $pendingReservations = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Counts for filter tabs (same search scope, no status sub-filter)
+$pendingBaseWhere = ['r.status IN ("' . implode('", "', $pendingStatuses) . '")'];
+$pendingBaseParams = [];
+if (!empty($pendingSearch)) {
+    $pendingBaseWhere[] = '(u.name LIKE :pending_search_name OR f.name LIKE :pending_search_facility OR r.purpose LIKE :pending_search_purpose)';
+    $pendingBaseParams['pending_search_name'] = '%' . $pendingSearch . '%';
+    $pendingBaseParams['pending_search_facility'] = '%' . $pendingSearch . '%';
+    $pendingBaseParams['pending_search_purpose'] = '%' . $pendingSearch . '%';
+}
+$pendingFilterCounts = ['all' => $pendingTotal, 'pending' => 0, 'postponed' => 0, 'priority' => 0];
+foreach (['pending' => 'r.status = "pending"', 'postponed' => 'r.status = "postponed"', 'priority' => 'r.postponed_priority = 1'] as $filterKey => $filterSql) {
+    $countWhere = $pendingBaseWhere;
+    $countWhere[] = $filterSql;
+    $countSql = 'SELECT COUNT(*) FROM reservations r JOIN facilities f ON r.facility_id = f.id JOIN users u ON r.user_id = u.id WHERE ' . implode(' AND ', $countWhere);
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($pendingBaseParams);
+    $pendingFilterCounts[$filterKey] = (int)$countStmt->fetchColumn();
+}
 
 // Get approved reservations for management (only upcoming dates) with pagination and filtering
 $currentDate = date('Y-m-d');
@@ -449,8 +481,33 @@ $approvedStmt->bindValue(':approved_offset', $approvedOffset, PDO::PARAM_INT);
 $approvedStmt->execute();
 $approvedReservations = $approvedStmt->fetchAll(PDO::FETCH_ASSOC);
 
+$approvalsView = trim((string)($_GET['view'] ?? $_POST['view'] ?? 'pending'));
+if (!in_array($approvalsView, ['pending', 'approved'], true)) {
+    $approvalsView = 'pending';
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && !isset($_GET['view']) && !isset($_POST['view'])) {
+    $postViewAction = (string)$_POST['action'];
+    if (in_array($postViewAction, ['modify', 'postpone', 'cancelled'], true)) {
+        $approvalsView = 'approved';
+    }
+}
+
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
+
+$raBuildPendingQuery = static function (array $extra = []) use ($pendingPage, $pendingSearch, $pendingFilter, $approvedPage, $approvedSearch, $page, $approvalsView): string {
+    $params = array_merge([
+        'view' => $approvalsView,
+        'pending_page' => $pendingPage,
+        'pending_search' => $pendingSearch,
+        'pending_filter' => $pendingFilter,
+        'approved_page' => $approvedPage,
+        'approved_search' => $approvedSearch,
+        'page' => $page,
+    ], $extra);
+    return '?' . http_build_query($params);
+};
+
 $offset = ($page - 1) * $perPage;
 
 $totalStmt = $pdo->query('SELECT COUNT(*) FROM reservations');
@@ -519,7 +576,7 @@ ob_start();
     </div>
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
         <div style="flex: 1;">
-            <?= frs_page_title('Reservation Approvals', 'Approve, deny, or cancel requests. Use filters and “All Reservations” for the full list.'); ?>
+            <?= frs_page_title('Reservation Approvals', 'Review pending requests or manage upcoming approved bookings using the tabs below.'); ?>
         </div>
         <button type="button" onclick="openAllReservationsModal()" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap;">
             All Reservations
@@ -549,21 +606,71 @@ ob_start();
             <p class="ra-legend-note">Approve and Deny open a review step first. Postponed + priority items are reviewed first.</p>
         </details>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
-            <h2 style="margin: 0;">Pending Requests</h2>
-            <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 250px; max-width: 400px;">
-                <input type="text" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>" placeholder="Search by name, facility, or purpose..." style="flex: 1; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Search</button>
-                <?php if (!empty($pendingSearch)): ?>
-                    <a href="?" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none;">Clear</a>
-                <?php endif; ?>
+        <nav class="ra-view-tabs" aria-label="Approval sections">
+            <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => 1])); ?>"
+               class="ra-view-tab<?= $approvalsView === 'pending' ? ' is-active' : ''; ?>"
+               <?= $approvalsView === 'pending' ? 'aria-current="page"' : ''; ?>>
+                Pending Requests
+                <span class="ra-view-tab__count"><?= (int)$pendingTotal; ?></span>
+            </a>
+            <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => 1])); ?>"
+               class="ra-view-tab<?= $approvalsView === 'approved' ? ' is-active' : ''; ?>"
+               <?= $approvalsView === 'approved' ? 'aria-current="page"' : ''; ?>>
+                Approved
+                <span class="ra-view-tab__count"><?= (int)$approvedTotal; ?></span>
+            </a>
+        </nav>
+
+        <?php if ($approvalsView === 'pending'): ?>
+        <div class="ra-view-panel" id="ra-panel-pending">
+        <div class="ra-queue-header">
+            <div class="ra-queue-header__title-row">
+                <h2 class="ra-queue-title">Pending Requests</h2>
+                <span class="ra-queue-count"><?= (int)$pendingTotal; ?> total</span>
+            </div>
+            <p class="ra-queue-subtitle">Approve and deny open a review step first. Priority and postponed items are sorted to the top.</p>
+        </div>
+
+        <div class="ra-queue-toolbar">
+            <nav class="ra-filter-tabs" aria-label="Filter pending requests">
+                <?php
+                $raFilterTabs = [
+                    'all' => 'All',
+                    'pending' => 'Pending',
+                    'postponed' => 'Postponed',
+                    'priority' => 'Priority',
+                ];
+                foreach ($raFilterTabs as $filterKey => $filterLabel):
+                    $isActive = $pendingFilter === $filterKey;
+                    $filterHref = $raBuildPendingQuery(['view' => 'pending', 'pending_filter' => $filterKey, 'pending_page' => 1]);
+                ?>
+                    <a href="<?= htmlspecialchars($filterHref); ?>"
+                       class="ra-filter-tab<?= $isActive ? ' is-active' : ''; ?>">
+                        <?= htmlspecialchars($filterLabel); ?>
+                        <span class="ra-filter-tab__count"><?= (int)($pendingFilterCounts[$filterKey] ?? 0); ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+            <form method="GET" class="ra-search-form">
+                <input type="hidden" name="view" value="pending">
+                <input type="hidden" name="pending_filter" value="<?= htmlspecialchars($pendingFilter); ?>">
                 <input type="hidden" name="approved_page" value="<?= $approvedPage; ?>">
                 <input type="hidden" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>">
                 <input type="hidden" name="page" value="<?= $page; ?>">
+                <div class="ra-search-field">
+                    <input type="search" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>" placeholder="Search requester, facility, purpose…" class="ra-search-input" aria-label="Search pending requests">
+                    <button type="submit" class="btn-primary ra-search-btn">Search</button>
+                    <?php if ($pendingSearch !== ''): ?>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_search' => '', 'pending_page' => 1])); ?>" class="btn-outline ra-search-btn">Clear</a>
+                    <?php endif; ?>
+                </div>
             </form>
         </div>
+
         <?php if (empty($pendingReservations)): ?>
-            <p class="ra-empty-state">No reservations awaiting approval<?= !empty($pendingSearch) ? ' matching your search.' : '.'; ?></p>
+            <div class="ra-empty-panel">
+                <p>No reservations awaiting approval<?= $pendingSearch !== '' ? ' matching your search' : ''; ?>.</p>
+            </div>
         <?php else: ?>
             <?php
             $pendingReviewData = [];
@@ -600,138 +707,170 @@ ob_start();
                 ];
             }
             ?>
-            <p class="ra-section-hint">Review each request before approving or denying. Approve and Deny open a details review step so nothing is missed.</p>
-            <div class="ra-pending-list">
-                <?php foreach ($pendingReservations as $reservation): ?>
-                    <?php
-                    $canReview = in_array($reservation['status'], ['pending', 'postponed'], true);
-                    $scheduleLabel = !empty($reservation['reservation_date'])
-                        ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
-                        : '—';
-                    $attendeesLabel = isset($reservation['expected_attendees']) && $reservation['expected_attendees'] !== null && $reservation['expected_attendees'] !== ''
-                        ? (int)$reservation['expected_attendees']
-                        : null;
-                    ?>
-                    <article class="ra-pending-card">
-                        <div class="ra-pending-card__header">
-                            <div>
-                                <h3 class="ra-pending-card__title"><?= htmlspecialchars($reservation['facility']); ?></h3>
-                                <p class="ra-pending-card__requester">
-                                    Requested by <?= htmlspecialchars($reservation['requester']); ?>
+            <div class="ra-table-scroll">
+                <table class="ra-queue-table">
+                    <thead>
+                        <tr>
+                            <th>Facility</th>
+                            <th>Requester</th>
+                            <th>Schedule</th>
+                            <th>Purpose</th>
+                            <th class="ra-col-narrow">Guests</th>
+                            <th class="ra-col-narrow">Status</th>
+                            <th class="ra-col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($pendingReservations as $reservation): ?>
+                            <?php
+                            $canReview = in_array($reservation['status'], ['pending', 'postponed'], true);
+                            $scheduleLabel = !empty($reservation['reservation_date'])
+                                ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
+                                : '—';
+                            $submittedLabel = !empty($reservation['created_at'])
+                                ? date('M j, g:i A', strtotime((string)$reservation['created_at']))
+                                : '';
+                            $attendeesLabel = isset($reservation['expected_attendees']) && $reservation['expected_attendees'] !== null && $reservation['expected_attendees'] !== ''
+                                ? (int)$reservation['expected_attendees']
+                                : null;
+                            $purposeRaw = (string)$reservation['purpose'];
+                            $purposeShort = mb_strlen($purposeRaw) > 72
+                                ? mb_substr($purposeRaw, 0, 72) . '…'
+                                : $purposeRaw;
+                            $statusLabel = $reservation['status'] === 'pending_payment'
+                                ? 'Awaiting Payment'
+                                : ucfirst((string)$reservation['status']);
+                            ?>
+                            <tr class="ra-queue-row<?= !empty($reservation['postponed_priority']) ? ' ra-queue-row--priority' : ''; ?>">
+                                <td data-label="Facility">
+                                    <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['facility']); ?></span>
                                     <?php if ($reservation['status'] === 'postponed' && !empty($reservation['postponed_priority'])): ?>
                                         <span class="ra-priority-badge">Priority</span>
                                     <?php endif; ?>
-                                </p>
-                            </div>
-                            <span class="status-badge <?= htmlspecialchars($reservation['status']); ?>">
-                                <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
-                            </span>
-                        </div>
-
-                        <div class="ra-pending-card__grid">
-                            <div class="ra-detail-item">
-                                <span class="ra-detail-label">Date</span>
-                                <span class="ra-detail-value"><?= htmlspecialchars($scheduleLabel); ?></span>
-                            </div>
-                            <div class="ra-detail-item">
-                                <span class="ra-detail-label">Time</span>
-                                <span class="ra-detail-value"><?= htmlspecialchars($reservation['time_slot']); ?></span>
-                            </div>
-                            <div class="ra-detail-item ra-detail-item--wide">
-                                <span class="ra-detail-label">Purpose</span>
-                                <span class="ra-detail-value"><?= htmlspecialchars($reservation['purpose']); ?></span>
-                            </div>
-                            <?php if ($attendeesLabel !== null): ?>
-                                <div class="ra-detail-item">
-                                    <span class="ra-detail-label">Attendees</span>
-                                    <span class="ra-detail-value"><?= $attendeesLabel; ?></span>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="ra-pending-card__actions">
-                            <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-btn-sm">Open full details</a>
-                            <?php if ($canReview): ?>
-                                <button type="button" class="btn-primary ra-btn-sm" data-review-action="approved" data-review-id="<?= (int)$reservation['id']; ?>">Approve</button>
-                                <button type="button" class="btn-outline ra-btn-sm ra-btn-danger" data-review-action="denied" data-review-id="<?= (int)$reservation['id']; ?>">Deny</button>
-                            <?php elseif ($reservation['status'] === 'pending_payment'): ?>
-                                <span class="ra-payment-note">User must complete payment before this reservation is finalized.</span>
-                            <?php endif; ?>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
+                                </td>
+                                <td data-label="Requester">
+                                    <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                    <?php if ($submittedLabel !== ''): ?>
+                                        <span class="ra-cell-meta">Submitted <?= htmlspecialchars($submittedLabel); ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Schedule">
+                                    <span class="ra-cell-primary"><?= htmlspecialchars($scheduleLabel); ?></span>
+                                    <span class="ra-cell-meta"><?= htmlspecialchars((string)$reservation['time_slot']); ?></span>
+                                </td>
+                                <td data-label="Purpose">
+                                    <span class="ra-cell-purpose" title="<?= htmlspecialchars($purposeRaw); ?>"><?= htmlspecialchars($purposeShort); ?></span>
+                                </td>
+                                <td data-label="Guests" class="ra-col-narrow">
+                                    <?= $attendeesLabel !== null ? $attendeesLabel : '—'; ?>
+                                </td>
+                                <td data-label="Status" class="ra-col-narrow">
+                                    <span class="status-badge status-badge--cell <?= htmlspecialchars((string)$reservation['status']); ?>"><?= htmlspecialchars($statusLabel); ?></span>
+                                </td>
+                                <td data-label="Actions" class="ra-col-actions">
+                                    <div class="ra-action-group">
+                                        <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-action-btn" title="Open full details">Details</a>
+                                        <?php if ($canReview): ?>
+                                            <button type="button" class="btn-primary ra-action-btn" data-review-action="approved" data-review-id="<?= (int)$reservation['id']; ?>">Approve</button>
+                                            <button type="button" class="btn-outline ra-action-btn ra-action-btn--deny" data-review-action="denied" data-review-id="<?= (int)$reservation['id']; ?>">Deny</button>
+                                        <?php elseif ($reservation['status'] === 'pending_payment'): ?>
+                                            <span class="ra-payment-note">Awaiting payment</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
             <?php if (!empty($pendingReviewData)): ?>
                 <script type="application/json" id="pendingReviewData"><?= json_encode($pendingReviewData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
             <?php endif; ?>
             <?php if ($pendingTotalPages > 1): ?>
-                <div class="pagination" style="margin-top: 1rem;">
+                <div class="ra-pagination">
                     <?php if ($pendingPage > 1): ?>
-                        <a href="?pending_page=<?= $pendingPage - 1; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>&page=<?= $page; ?>">&larr; Prev</a>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage - 1])); ?>" class="ra-page-btn">&larr; Prev</a>
                     <?php endif; ?>
-                    <span class="current">Page <?= $pendingPage; ?> of <?= $pendingTotalPages; ?> (<?= $pendingTotal; ?> total)</span>
+                    <span class="ra-page-info">Page <?= $pendingPage; ?> of <?= $pendingTotalPages; ?> &middot; <?= $pendingTotal; ?> requests</span>
                     <?php if ($pendingPage < $pendingTotalPages): ?>
-                        <a href="?pending_page=<?= $pendingPage + 1; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>&page=<?= $page; ?>">Next &rarr;</a>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage + 1])); ?>" class="ra-page-btn">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
-    </section>
-</div>
-
-<!-- Approved Reservations Management Section -->
-<div class="booking-card" style="margin-top: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h2 style="margin: 0 0 0.5rem 0;">Approved Reservations Management</h2>
-            <p style="color: #8b95b5; margin: 0; font-size: 0.9rem;">
-                Manage upcoming approved reservations in case of emergencies or schedule conflicts. Only future reservations can be modified, postponed, or cancelled.
-            </p>
         </div>
+        <?php else: ?>
+        <div class="ra-view-panel" id="ra-panel-approved">
+    <div class="ra-queue-header">
+        <div class="ra-queue-header__title-row">
+            <h2 class="ra-queue-title">Approved Reservations</h2>
+            <span class="ra-queue-count"><?= (int)$approvedTotal; ?> upcoming</span>
+        </div>
+        <p class="ra-queue-subtitle">Modify, postpone, or cancel future approved bookings when schedules change.</p>
     </div>
-    <form method="GET" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
-        <input type="text" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>" placeholder="Search by name, facility, purpose, or email..." style="flex: 1; min-width: 250px; max-width: 400px; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-        <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem;">Search</button>
-        <?php if (!empty($approvedSearch)): ?>
-            <a href="?" class="btn-outline" style="padding: 0.5rem 1rem; text-decoration: none;">Clear</a>
-        <?php endif; ?>
+    <form method="GET" class="ra-search-form ra-search-form--standalone">
+        <input type="hidden" name="view" value="approved">
         <input type="hidden" name="pending_page" value="<?= $pendingPage; ?>">
         <input type="hidden" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>">
+        <input type="hidden" name="pending_filter" value="<?= htmlspecialchars($pendingFilter); ?>">
         <input type="hidden" name="page" value="<?= $page; ?>">
+        <div class="ra-search-field">
+            <input type="search" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>" placeholder="Search requester, facility, purpose, email…" class="ra-search-input" aria-label="Search approved reservations">
+            <button type="submit" class="btn-primary ra-search-btn">Search</button>
+            <?php if ($approvedSearch !== ''): ?>
+                <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_search' => '', 'approved_page' => 1])); ?>" class="btn-outline ra-search-btn">Clear</a>
+            <?php endif; ?>
+        </div>
     </form>
     
     <?php if (empty($approvedReservations)): ?>
-        <p style="color: #8b95b5; text-align: center; padding: 2rem;">No approved reservations at this time<?= !empty($approvedSearch) ? ' matching your search.' : '.'; ?></p>
+        <div class="ra-empty-panel">
+            <p>No approved reservations at this time<?= $approvedSearch !== '' ? ' matching your search' : ''; ?>.</p>
+        </div>
     <?php else: ?>
-        <div class="table-responsive">
-            <table class="table">
+        <div class="ra-table-scroll">
+            <table class="ra-queue-table ra-queue-table--approved">
                 <thead>
                     <tr>
                         <th>Requester</th>
                         <th>Facility</th>
                         <th>Schedule</th>
                         <th>Purpose</th>
-                        <th>Actions</th>
+                        <th class="ra-col-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($approvedReservations as $reservation): ?>
-                        <tr>
-                            <td>
-                                <?= htmlspecialchars($reservation['requester']); ?><br>
-                                <small style="color: #8b95b5;"><?= htmlspecialchars($reservation['requester_email']); ?></small>
+                        <?php
+                        $approvedPurpose = (string)($reservation['purpose'] ?? '');
+                        $approvedPurposeShort = mb_strlen($approvedPurpose) > 72
+                            ? mb_substr($approvedPurpose, 0, 72) . '…'
+                            : $approvedPurpose;
+                        $approvedDateLabel = !empty($reservation['reservation_date'])
+                            ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
+                            : (string)$reservation['reservation_date'];
+                        ?>
+                        <tr class="ra-queue-row">
+                            <td data-label="Requester">
+                                <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                <span class="ra-cell-meta"><?= htmlspecialchars((string)$reservation['requester_email']); ?></span>
                             </td>
-                            <td><?= htmlspecialchars($reservation['facility']); ?></td>
-                            <td>
-                                <?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?>
+                            <td data-label="Facility">
+                                <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['facility']); ?></span>
                             </td>
-                            <td><?= htmlspecialchars($reservation['purpose']); ?></td>
-                            <td>
-                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $reservation['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
-                                    <button class="btn-outline" onclick="openModifyModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars($reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars($reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars($reservation['facility'], ENT_QUOTES, 'UTF-8'); ?>" data-purpose="<?= htmlspecialchars($reservation['purpose'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Modify</button>
-                                    <button class="btn-outline" onclick="openPostponeModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>', '<?= htmlspecialchars($reservation['facility']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem;">Postpone</button>
-                                    <button class="btn-outline" onclick="openCancelModal(<?= $reservation['id']; ?>, '<?= htmlspecialchars($reservation['facility']); ?>', '<?= htmlspecialchars($reservation['reservation_date']); ?>', '<?= htmlspecialchars($reservation['time_slot']); ?>')" style="padding:0.4rem 0.75rem; font-size:0.9rem; color: #dc3545;">Cancel</button>
+                            <td data-label="Schedule">
+                                <span class="ra-cell-primary"><?= htmlspecialchars($approvedDateLabel); ?></span>
+                                <span class="ra-cell-meta"><?= htmlspecialchars((string)$reservation['time_slot']); ?></span>
+                            </td>
+                            <td data-label="Purpose">
+                                <span class="ra-cell-purpose" title="<?= htmlspecialchars($approvedPurpose); ?>"><?= htmlspecialchars($approvedPurposeShort); ?></span>
+                            </td>
+                            <td data-label="Actions" class="ra-col-actions">
+                                <div class="ra-action-group">
+                                    <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-action-btn">Details</a>
+                                    <button type="button" class="btn-outline ra-action-btn" onclick="openModifyModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars((string)$reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars((string)$reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars((string)$reservation['facility'], ENT_QUOTES, 'UTF-8'); ?>" data-purpose="<?= htmlspecialchars($approvedPurpose, ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>">Modify</button>
+                                    <button type="button" class="btn-outline ra-action-btn" onclick="openPostponeModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars((string)$reservation['reservation_date']); ?>', '<?= htmlspecialchars((string)$reservation['time_slot']); ?>', '<?= htmlspecialchars((string)$reservation['facility']); ?>')">Postpone</button>
+                                    <button type="button" class="btn-outline ra-action-btn ra-action-btn--deny" onclick="openCancelModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars((string)$reservation['facility']); ?>', '<?= htmlspecialchars((string)$reservation['reservation_date']); ?>', '<?= htmlspecialchars((string)$reservation['time_slot']); ?>')">Cancel</button>
                                 </div>
                             </td>
                         </tr>
@@ -740,17 +879,20 @@ ob_start();
             </table>
         </div>
         <?php if ($approvedTotalPages > 1): ?>
-            <div class="pagination" style="margin-top: 1rem;">
+            <div class="ra-pagination">
                 <?php if ($approvedPage > 1): ?>
-                    <a href="?approved_page=<?= $approvedPage - 1; ?>&approved_search=<?= urlencode($approvedSearch); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&page=<?= $page; ?>">&larr; Prev</a>
+                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage - 1])); ?>" class="ra-page-btn">&larr; Prev</a>
                 <?php endif; ?>
-                <span class="current">Page <?= $approvedPage; ?> of <?= $approvedTotalPages; ?> (<?= $approvedTotal; ?> total)</span>
+                <span class="ra-page-info">Page <?= $approvedPage; ?> of <?= $approvedTotalPages; ?> &middot; <?= $approvedTotal; ?> reservations</span>
                 <?php if ($approvedPage < $approvedTotalPages): ?>
-                    <a href="?approved_page=<?= $approvedPage + 1; ?>&approved_search=<?= urlencode($approvedSearch); ?>&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&page=<?= $page; ?>">Next &rarr;</a>
+                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage + 1])); ?>" class="ra-page-btn">Next &rarr;</a>
                 <?php endif; ?>
             </div>
         <?php endif; ?>
     <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </section>
 </div>
 
 <!-- Review & Decide Modal (mandatory before approve/deny) -->
@@ -775,6 +917,7 @@ ob_start();
 
             <form method="POST" id="reviewDecisionForm" action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>">
                 <?= csrf_field(); ?>
+                <input type="hidden" name="view" value="pending">
                 <input type="hidden" name="reservation_id" id="review_reservation_id" value="">
                 <input type="hidden" name="action" id="review_action" value="">
                 <label class="ra-review-note-label" for="review_note">Staff remarks <span id="reviewNoteRequiredMark" class="ra-required-mark" hidden>(required for denial)</span></label>
@@ -799,6 +942,7 @@ ob_start();
         </div>
         <form method="POST" id="modifyForm">
             <?= csrf_field(); ?>
+            <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
             <input type="hidden" name="action" value="modify">
             <input type="hidden" id="modify_facility_id" value="">
@@ -864,6 +1008,7 @@ ob_start();
         </div>
         <form method="POST" id="postponeForm">
             <?= csrf_field(); ?>
+            <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
             
@@ -914,6 +1059,7 @@ ob_start();
         </div>
         <form method="POST" id="cancelForm">
             <?= csrf_field(); ?>
+            <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
             <input type="hidden" name="action" value="cancelled">
             
@@ -1404,6 +1550,53 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 .ra-approvals-main {
     width: 100%;
 }
+.ra-view-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 1.25rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+.ra-view-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.2rem;
+    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
+    color: #64748b;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ra-view-tab:hover {
+    color: #1e3a5f;
+    background: #f8fafc;
+}
+.ra-view-tab.is-active {
+    color: #1e3a5f;
+    border-bottom-color: #1e3a5f;
+    background: #fff;
+}
+.ra-view-tab__count {
+    display: inline-flex;
+    min-width: 1.35rem;
+    justify-content: center;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.ra-view-tab.is-active .ra-view-tab__count {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.ra-view-panel {
+    width: 100%;
+}
 .ra-legend-details {
     margin-bottom: 1rem;
     border: 1px solid #e5e7eb;
@@ -1442,61 +1635,275 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     color: #64748b;
     line-height: 1.45;
 }
-.ra-section-hint {
-    margin: 0 0 1rem;
-    color: #64748b;
-    font-size: 0.92rem;
-    line-height: 1.5;
-}
-.ra-empty-state {
-    margin: 0;
-    color: #64748b;
-}
-.ra-pending-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-.ra-pending-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 1.15rem 1.25rem;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-.ra-pending-card__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
+.ra-queue-header {
     margin-bottom: 1rem;
 }
-.ra-pending-card__title {
-    margin: 0 0 0.25rem;
-    font-size: 1.05rem;
-    color: #1e3a5f;
+.ra-queue-header__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
 }
-.ra-pending-card__requester {
+.ra-queue-title {
     margin: 0;
+    font-size: 1.15rem;
+    color: #1e3a5f;
+    font-weight: 700;
+}
+.ra-queue-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.ra-queue-subtitle {
+    margin: 0.35rem 0 0;
     color: #64748b;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+.ra-queue-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.ra-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.ra-filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #dbe3ef;
+    background: #fff;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ra-filter-tab:hover {
+    border-color: #94a3b8;
+    color: #1e293b;
+}
+.ra-filter-tab.is-active {
+    background: #1e3a5f;
+    border-color: #1e3a5f;
+    color: #fff;
+}
+.ra-filter-tab__count {
+    display: inline-flex;
+    min-width: 1.25rem;
+    justify-content: center;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.ra-filter-tab.is-active .ra-filter-tab__count {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+.ra-search-form {
+    flex: 1;
+    min-width: min(100%, 280px);
+    max-width: 420px;
+    margin: 0;
+}
+.ra-search-form--standalone {
+    max-width: 480px;
+    margin-bottom: 1rem;
+}
+.ra-search-field {
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.ra-search-input {
+    flex: 1;
+    min-width: 160px;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    background: #fff;
+}
+.ra-search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.ra-search-btn {
+    padding: 0.5rem 0.85rem !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.ra-empty-panel {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+}
+.ra-empty-panel p {
+    margin: 0;
+}
+.ra-table-scroll {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+}
+.ra-queue-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.ra-queue-table thead {
+    background: #f1f5f9;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.ra-queue-table th {
+    padding: 0.65rem 0.85rem;
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.ra-queue-table td {
+    padding: 0.75rem 0.85rem;
+    vertical-align: top;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+}
+.ra-queue-row:hover td {
+    background: #f8fafc;
+}
+.ra-queue-row--priority td:first-child {
+    box-shadow: inset 3px 0 0 #1e40af;
+}
+.ra-cell-primary {
+    display: block;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.35;
+}
+.ra-cell-meta {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+.ra-cell-purpose {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    color: #475569;
+    max-width: 280px;
+}
+.ra-col-narrow {
+    white-space: nowrap;
+    width: 1%;
+}
+.ra-col-actions {
+    width: 1%;
+    min-width: 200px;
+}
+.ra-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+.ra-action-btn {
+    padding: 0.35rem 0.65rem !important;
+    font-size: 0.8rem !important;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.ra-action-btn--deny {
+    color: #b91c1c !important;
+    border-color: #fecaca !important;
+}
+.ra-action-btn--deny:hover {
+    background: #fef2f2 !important;
 }
 .ra-priority-badge {
     display: inline-block;
     margin-left: 0.35rem;
-    background: #1e3a8a;
+    background: #1e40af;
     color: #fff;
-    padding: 0.12rem 0.45rem;
+    padding: 0.1rem 0.4rem;
     border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: 0.68rem;
+    font-weight: 700;
     vertical-align: middle;
 }
-.ra-pending-card__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.85rem 1.25rem;
-    margin-bottom: 1rem;
+.ra-payment-note {
+    font-size: 0.78rem;
+    color: #9a3412;
+    background: #ffedd5;
+    border: 1px solid #fdba74;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.ra-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #eef2f7;
+}
+.ra-page-btn {
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid #dbe3ef;
+    background: #fff;
+    color: #334155;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.ra-page-btn:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+.ra-page-info {
+    font-size: 0.85rem;
+    color: #64748b;
 }
 .ra-detail-item {
     display: flex;
@@ -1519,33 +1926,12 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     line-height: 1.45;
     word-break: break-word;
 }
-.ra-pending-card__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    padding-top: 0.85rem;
-    border-top: 1px solid #eef2f7;
-}
-.ra-btn-sm {
-    padding: 0.45rem 0.85rem !important;
-    font-size: 0.88rem !important;
-    text-decoration: none;
-}
 .ra-btn-danger {
     color: #b91c1c !important;
     border-color: #fecaca !important;
 }
 .ra-btn-danger:hover {
     background: #fef2f2 !important;
-}
-.ra-payment-note {
-    font-size: 0.85rem;
-    color: #9a3412;
-    background: #ffedd5;
-    border: 1px solid #fdba74;
-    padding: 0.35rem 0.65rem;
-    border-radius: 6px;
 }
 .ra-review-modal {
     position: fixed;
@@ -1675,6 +2061,52 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     }
     .ra-review-modal__footer {
         flex-wrap: wrap;
+    }
+}
+@media (max-width: 900px) {
+    .ra-queue-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ra-search-form {
+        max-width: none;
+    }
+    .ra-queue-table thead {
+        display: none;
+    }
+    .ra-queue-table tr {
+        display: block;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .ra-queue-table td {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.4rem 0.85rem;
+        border: none;
+    }
+    .ra-queue-table td::before {
+        content: attr(data-label);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #94a3b8;
+        flex-shrink: 0;
+    }
+    .ra-queue-table td.ra-col-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ra-queue-table td.ra-col-actions::before {
+        margin-bottom: 0.25rem;
+    }
+    .ra-action-group {
+        justify-content: flex-end;
+    }
+    .ra-cell-purpose {
+        max-width: none;
+        text-align: right;
     }
 }
 

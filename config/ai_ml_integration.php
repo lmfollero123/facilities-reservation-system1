@@ -10,6 +10,84 @@
 require_once __DIR__ . '/app.php';
 
 /**
+ * Whether a Python executable responds to --version (and is not the Windows Store stub).
+ */
+function frsPythonExecutableLooksValid(string $path): bool
+{
+    if ($path === '' || stripos($path, 'WindowsApps') !== false) {
+        return false;
+    }
+    if ($path !== 'python' && $path !== 'python3' && !is_file($path)) {
+        return false;
+    }
+
+    $output = [];
+    $returnVar = 0;
+    @exec(escapeshellarg($path) . ' --version 2>&1', $output, $returnVar);
+    if ($returnVar !== 0 || $output === []) {
+        return false;
+    }
+
+    return stripos(implode(' ', $output), 'Python') !== false;
+}
+
+/**
+ * Discover user-installed Python on Windows (Python310, Python311, etc.).
+ *
+ * @return list<string>
+ */
+function frsDiscoverWindowsPythonInstalls(): array
+{
+    $found = [];
+    $localApp = getenv('LOCALAPPDATA');
+    if (!is_string($localApp) || $localApp === '') {
+        return $found;
+    }
+
+    $pattern = $localApp . DIRECTORY_SEPARATOR . 'Programs' . DIRECTORY_SEPARATOR . 'Python'
+        . DIRECTORY_SEPARATOR . 'Python*' . DIRECTORY_SEPARATOR . 'python.exe';
+    $matches = glob($pattern);
+    if (!is_array($matches)) {
+        return $found;
+    }
+
+    rsort($matches);
+    foreach ($matches as $exe) {
+        if (frsPythonExecutableLooksValid($exe)) {
+            $found[] = $exe;
+        }
+    }
+
+    return $found;
+}
+
+/**
+ * Resolve `python` on PATH to a full path, skipping Windows Store aliases.
+ */
+function frsResolvePythonOnPath(string $command = 'python'): ?string
+{
+    if (stripos(PHP_OS, 'WIN') !== 0) {
+        return frsPythonExecutableLooksValid($command) ? $command : null;
+    }
+
+    $output = [];
+    $returnVar = 0;
+    @exec('where.exe ' . escapeshellarg($command) . ' 2>nul', $output, $returnVar);
+    if ($returnVar !== 0 || $output === []) {
+        return null;
+    }
+
+    foreach ($output as $line) {
+        $candidate = trim($line);
+        if (frsPythonExecutableLooksValid($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Get the path to Python executable
  * Checks virtual environment first, then common locations for Python
  */
@@ -20,8 +98,13 @@ function getPythonPath(): string {
     if (!is_string($envPy) || $envPy === '') {
         $envPy = getenv('PYTHON_EXECUTABLE');
     }
-    if (is_string($envPy) && $envPy !== '' && (file_exists($envPy) || $envPy === 'python' || $envPy === 'python3')) {
-        return $envPy;
+    if (is_string($envPy) && $envPy !== '') {
+        if (frsPythonExecutableLooksValid($envPy)) {
+            return $envPy;
+        }
+        if (is_file($envPy)) {
+            return $envPy;
+        }
     }
     
     // Check for virtual environment first (common locations)
@@ -39,41 +122,68 @@ function getPythonPath(): string {
             return $venvPath;
         }
     }
+
+    if (stripos(PHP_OS, 'WIN') === 0) {
+        $windowsInstalls = frsDiscoverWindowsPythonInstalls();
+        if ($windowsInstalls !== []) {
+            return $windowsInstalls[0];
+        }
+    }
     
-    // If no venv found, check system Python
-    $possiblePaths = [
-        'python',           // If Python is in PATH
-        'python3',          // Python 3
-        '/usr/bin/python3', // Linux
-        'C:\\Python\\python.exe', // Windows
-        'C:\\Python3\\python.exe', // Windows
-    ];
-    
-    foreach ($possiblePaths as $path) {
-        $output = [];
-        $returnVar = 0;
-        @exec(escapeshellarg($path) . ' --version 2>&1', $output, $returnVar);
-        if ($returnVar === 0) {
-            return $path;
+    // System Python on PATH (skip Windows Store stub)
+    foreach (['python3', 'python'] as $path) {
+        $resolved = frsResolvePythonOnPath($path);
+        if ($resolved !== null) {
+            return $resolved;
         }
     }
 
-    if (stripos(PHP_OS, 'WIN') === 0) {
-        $localApp = getenv('LOCALAPPDATA');
-        if (is_string($localApp) && $localApp !== '') {
-            $storePy = $localApp . '\\Programs\\Python\\Python311\\python.exe';
-            if (file_exists($storePy)) {
-                return $storePy;
-            }
-            $storePy312 = $localApp . '\\Programs\\Python\\Python312\\python.exe';
-            if (file_exists($storePy312)) {
-                return $storePy312;
-            }
+    $possiblePaths = [
+        '/usr/bin/python3',
+        '/usr/local/bin/python3',
+        'C:\\Python\\python.exe',
+        'C:\\Python3\\python.exe',
+    ];
+    
+    foreach ($possiblePaths as $path) {
+        if (frsPythonExecutableLooksValid($path)) {
+            return $path;
         }
     }
     
-    // Default fallback
+    // Default fallback (may fail on Windows without FRS_PYTHON)
     return 'python';
+}
+
+/**
+ * Runtime check used by AI Model Lab and diagnostics.
+ *
+ * @return array{path: string, usable: bool, version: string|null, hint: string|null}
+ */
+function frsGetPythonRuntimeStatus(): array
+{
+    $path = getPythonPath();
+    $output = [];
+    $returnVar = 0;
+    @exec(escapeshellarg($path) . ' --version 2>&1', $output, $returnVar);
+    $usable = $returnVar === 0 && $output !== [];
+    $version = $usable ? trim(implode(' ', $output)) : null;
+    $hint = null;
+
+    if (!$usable) {
+        if (stripos(PHP_OS, 'WIN') === 0) {
+            $hint = 'Set FRS_PYTHON in .env to your python.exe (e.g. %LOCALAPPDATA%\\Programs\\Python\\Python310\\python.exe) or disable the Microsoft Store python alias.';
+        } else {
+            $hint = 'Set FRS_PYTHON or PYTHON_EXECUTABLE in .env to a valid python3 path.';
+        }
+    }
+
+    return [
+        'path' => $path,
+        'usable' => $usable,
+        'version' => $version,
+        'hint' => $hint,
+    ];
 }
 
 /**

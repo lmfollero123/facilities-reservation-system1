@@ -194,6 +194,8 @@ if ($path === 'announcements') {
         'contact-inquiries' => 'contact_inquiries.php',
         'sms-test' => 'sms_test.php',
         'system-settings' => 'system_settings.php',
+        'ai-model-lab' => 'test_ai_models.php',
+        'test-ai-models' => 'test_ai_models.php',
     ];
     
     // Extract dashboard path

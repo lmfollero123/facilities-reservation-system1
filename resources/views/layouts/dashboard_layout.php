@@ -34,6 +34,7 @@ if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
         'profile.php' => '/dashboard/profile',
         'calendar.php' => '/dashboard/book-facility?module=mine',
         'notifications.php' => '/dashboard/notifications',
+        'test_ai_models.php' => '/dashboard/ai-model-lab',
     ];
     
     foreach ($oldPathMap as $oldFile => $cleanUrl) {

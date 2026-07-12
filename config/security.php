@@ -571,6 +571,51 @@ function frs_user_totp_active(array $user): bool
 }
 
 /**
+ * Login OTP page: user chose "lost authenticator" and may use a one-time email code.
+ */
+function frs_login_otp_recovery_mode_active(): bool
+{
+    return !empty($_SESSION['login_otp_recovery_mode']);
+}
+
+/**
+ * Whether this account may request email OTP recovery at login (TOTP on, email OTP off).
+ */
+function frs_login_can_request_totp_recovery(array $user): bool
+{
+    return frs_user_totp_active($user) && !frs_user_email_otp_enabled($user);
+}
+
+/**
+ * Whether email OTP may be used to finish login (profile enabled or active recovery session).
+ */
+function frs_login_may_verify_email_otp(array $user): bool
+{
+    if (frs_user_email_otp_enabled($user)) {
+        return true;
+    }
+
+    return frs_login_otp_recovery_mode_active() && frs_login_can_request_totp_recovery($user);
+}
+
+/**
+ * Mask an email for display on recovery prompts (e.g. a***@example.com).
+ */
+function frs_mask_email_for_display(string $email): string
+{
+    $email = trim($email);
+    if ($email === '' || !str_contains($email, '@')) {
+        return $email;
+    }
+    [$local, $domain] = explode('@', $email, 2);
+    if ($local === '') {
+        return '***@' . $domain;
+    }
+    $visible = mb_substr($local, 0, 1);
+    return $visible . '***@' . $domain;
+}
+
+/**
  * Whether login must continue to a second-factor step after password.
  */
 function frs_login_requires_second_factor(array $user): bool
@@ -637,7 +682,8 @@ function frs_complete_authenticated_login(array $user): void
         $_SESSION['pending_otp_user_id'],
         $_SESSION['pending_otp_email'],
         $_SESSION['pending_otp_name'],
-        $_SESSION['login_otp_email_sent']
+        $_SESSION['login_otp_email_sent'],
+        $_SESSION['login_otp_recovery_mode']
     );
     frs_clear_pending_2fa_setup();
 
