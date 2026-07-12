@@ -1096,6 +1096,27 @@ $bookCalQuery = static function (array $extra): string {
 ?>
 <style>
 .book-facility-compact .booking-card { padding: 0.95rem; }
+.bcf-facility-image-wrap {
+    margin: -0.15rem 0 1.25rem;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #eef1f7;
+    border: 1px solid #e8ecf4;
+}
+.bcf-facility-image {
+    display: block;
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    object-position: center;
+}
+.bcf-facility-image-citation {
+    padding: 0.35rem 0.65rem;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
 .book-facility-compact .booking-form { display: grid; gap: 0.75rem; }
 .book-facility-compact .booking-form label { margin-bottom: 0; }
 .book-facility-compact .booking-form textarea { min-height: 74px; }
@@ -3109,6 +3130,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Build facility details HTML
             let html = '';
+
+            if (facility.image_url) {
+                html += '<div class="bcf-facility-image-wrap">';
+                html += '<img class="bcf-facility-image" src="' + escapeHtml(facility.image_url) + '" alt="' + escapeHtml(facility.name || 'Facility') + ' photo">';
+                if (facility.image_citation) {
+                    html += '<div class="bcf-facility-image-citation" title="Image source">📷 ' + escapeHtml(facility.image_citation) + '</div>';
+                }
+                html += '</div>';
+            }
             
             // Facility name and status
             html += '<div style="margin-bottom: 1.5rem;">';

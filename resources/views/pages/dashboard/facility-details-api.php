@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 
 header('Content-Type: application/json');
 
@@ -30,7 +31,7 @@ try {
     $pdo = db();
     
     // Fetch facility details
-    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, status FROM facilities WHERE id = :id LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, status, image_path, image_citation FROM facilities WHERE id = :id LIMIT 1');
     $stmt->execute(['id' => $facilityId]);
     $facility = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -39,6 +40,11 @@ try {
         echo json_encode(['error' => 'Facility not found']);
         exit;
     }
+
+    $facility['image_url'] = frs_facility_display_image_url(
+        isset($facility['image_path']) ? (string) $facility['image_path'] : null,
+        (int) $facility['id']
+    );
     
     echo json_encode($facility);
     

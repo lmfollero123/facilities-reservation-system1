@@ -704,3 +704,101 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
 
     return $summary;
 }
+
+/**
+ * Submit a maintenance work request from CPRF to CIMM.
+ *
+ * @param array<string, mixed> $payload
+ * @return array{success: bool, reference?: ?string, sched_id?: ?int, error?: string}
+ */
+function submitCIMMMaintenanceRequest(array $payload): array
+{
+    $defaultUrl = 'https://cimm.infragovservices.com/lgu-portal/public/api/maintenance-request.php';
+    $apiUrl = trim((string)(function_exists('env_value') ? env_value('CIMM_MAINTENANCE_REQUEST_URL', $defaultUrl) : (getenv('CIMM_MAINTENANCE_REQUEST_URL') ?: $defaultUrl)));
+    $apiKey = trim((string)(function_exists('env_value') ? env_value('CIMM_API_KEY', '') : (getenv('CIMM_API_KEY') ?: '')));
+
+    if ($apiKey === '') {
+        return ['success' => false, 'error' => 'CIMM API key is not configured (set CIMM_API_KEY in .env).'];
+    }
+
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($body === false) {
+        return ['success' => false, 'error' => 'Unable to encode maintenance request payload.'];
+    }
+
+    $url = $apiUrl . (str_contains($apiUrl, '?') ? '&' : '?') . 'key=' . urlencode($apiKey);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $body,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'User-Agent: CPRF-Facilities-Reservation/1.0',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $curlError !== '') {
+        $errorMsg = 'Connection failed: ' . ($curlError ?: 'Unable to reach CIMM maintenance request API');
+        error_log('CIMM maintenance request error: ' . $errorMsg);
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    $json = json_decode((string)$response, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $errorMsg = 'Invalid JSON from CIMM (HTTP ' . $httpCode . ')';
+        error_log('CIMM maintenance request JSON error: ' . json_last_error_msg());
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    if ($httpCode === 404) {
+        return [
+            'success' => false,
+            'error' => 'CIMM maintenance request endpoint not found. Deploy INTEGRATION/LGU/lgu-portal/public/api/maintenance-request.php on the CIMM server.',
+        ];
+    }
+
+    if ($httpCode === 401 || $httpCode === 403) {
+        return ['success' => false, 'error' => 'CIMM rejected the request (check CIMM_API_KEY).'];
+    }
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $apiError = is_array($json) ? (string)($json['error'] ?? $json['message'] ?? '') : '';
+        return [
+            'success' => false,
+            'error' => $apiError !== '' ? $apiError : ('CIMM returned HTTP ' . $httpCode),
+        ];
+    }
+
+    if (isset($json['error']) && $json['error']) {
+        return ['success' => false, 'error' => (string)$json['error']];
+    }
+
+    $schedId = isset($json['sched_id']) ? (int)$json['sched_id'] : null;
+    $reference = null;
+    if ($schedId) {
+        $reference = 'CIMM-S-' . $schedId;
+    } elseif (!empty($json['reference'])) {
+        $reference = (string)$json['reference'];
+    } elseif (!empty($json['request_id'])) {
+        $reference = 'CIMM-REQ-' . (string)$json['request_id'];
+    }
+
+    return [
+        'success' => !empty($json['success']),
+        'reference' => $reference,
+        'sched_id' => $schedId,
+        'error' => empty($json['success']) ? (string)($json['error'] ?? 'CIMM did not confirm the request.') : null,
+    ];
+}

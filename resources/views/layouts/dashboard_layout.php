@@ -23,6 +23,7 @@ if (strpos($currentPath, '/resources/views/pages/dashboard/') !== false) {
         'announcements_manage.php' => '/dashboard/announcements-manage',
         'facility_management.php' => '/dashboard/facility-management',
         'maintenance_integration.php' => '/dashboard/maintenance-integration',
+        'predictive_maintenance.php' => '/dashboard/maintenance-insights',
         'infrastructure_projects_integration.php' => '/dashboard/infrastructure-projects',
         'utilities_integration.php' => '/dashboard/utilities-integration',
         'reports.php' => '/dashboard/reports',

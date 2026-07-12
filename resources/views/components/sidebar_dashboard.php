@@ -138,6 +138,7 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $integrationsGroup = [];
     if (frs_can_read($role, 'maintenance')) {
         $integrationsGroup[] = ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
+        $integrationsGroup[] = ['label' => 'Maintenance Insights', 'href' => $base . '/dashboard/maintenance-insights', 'icon' => 'chart-bar', 'page' => 'predictive_maintenance'];
     }
     if (frs_can_read($role, 'infrastructure')) {
         $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];

@@ -18,57 +18,9 @@ require_once __DIR__ . '/../../../../services/cimm_api.php';
 $pdo = db();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
 
-// Action feedback
+// Action feedback (reserved for future maintenance-integration actions)
 $success = '';
 $error = '';
-
-// Apply blackout (manual / predictive maintenance action)
-$hasBlackoutTable = false;
-try {
-    $checkBlackout = $pdo->query("SHOW TABLES LIKE 'facility_blackout_dates'");
-    $hasBlackoutTable = (bool)$checkBlackout->fetchColumn();
-} catch (Throwable $e) {
-    $hasBlackoutTable = false;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'apply_blackout') {
-    if (!defined('CSRF_TOKEN_NAME') || !function_exists('verifyCSRFToken')) {
-        $error = 'Security configuration missing. Unable to apply blackout.';
-    } elseif (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-        $error = 'Invalid security token. Please refresh the page and try again.';
-    } elseif (!$hasBlackoutTable) {
-        $error = 'Blackout dates table is not available in the database. Please apply the blackout migration first.';
-    } else {
-        $facilityId = isset($_POST['facility_id']) ? (int)$_POST['facility_id'] : 0;
-        $blackoutDate = isset($_POST['blackout_date']) ? trim((string)$_POST['blackout_date']) : '';
-        $reason = isset($_POST['reason']) ? trim((string)$_POST['reason']) : 'Maintenance blackout';
-
-        if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $blackoutDate)) {
-            $error = 'Invalid blackout request.';
-        } else {
-            try {
-                $existsStmt = $pdo->prepare(
-                    'SELECT id FROM facility_blackout_dates WHERE facility_id = :facility_id AND blackout_date = :date LIMIT 1'
-                );
-                $existsStmt->execute(['facility_id' => $facilityId, 'date' => $blackoutDate]);
-                $exists = $existsStmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($exists) {
-                    $success = 'Blackout already exists for this facility and date.';
-                } else {
-                    // facility_blackout_dates schema varies by migration; try common columns
-                    $insertSql = 'INSERT INTO facility_blackout_dates (facility_id, blackout_date, reason, created_at) VALUES (:facility_id, :date, :reason, NOW())';
-                    $ins = $pdo->prepare($insertSql);
-                    $ins->execute(['facility_id' => $facilityId, 'date' => $blackoutDate, 'reason' => $reason]);
-                    $success = 'Blackout date applied successfully. Booking for this facility will be blocked on that date.';
-                }
-            } catch (Throwable $e) {
-                $error = 'Failed to apply blackout. Please try again.';
-                error_log('Apply blackout error: ' . $e->getMessage());
-            }
-        }
-    }
-}
 
 // Fetch maintenance schedules from CIMM API, then sync facility status + blackouts to the local DB.
 $apiResult = fetchCIMMMaintenanceSchedules();
@@ -141,106 +93,6 @@ try {
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     // Ignore error
-}
-
-// Predictive Maintenance (rule-based, data-driven)
-$predictiveMaintenanceRows = [];
-try {
-    $facilityUsageStmt = $pdo->query(
-        "SELECT
-            f.id,
-            f.name,
-            f.status,
-            SUM(CASE WHEN r.reservation_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS usage_90d,
-            SUM(CASE WHEN r.reservation_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS usage_30d
-         FROM facilities f
-         LEFT JOIN reservations r ON r.facility_id = f.id AND r.status IN ('approved','pending','pending_payment')
-         GROUP BY f.id, f.name, f.status
-         ORDER BY f.name ASC"
-    );
-    $facilityUsage = $facilityUsageStmt ? $facilityUsageStmt->fetchAll(PDO::FETCH_ASSOC) : [];
-
-    $dowStmt = $pdo->query(
-        "SELECT DAYOFWEEK(reservation_date) AS dow, COUNT(*) AS cnt
-         FROM reservations
-         WHERE reservation_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-           AND status IN ('approved','pending','pending_payment')
-         GROUP BY DAYOFWEEK(reservation_date)"
-    );
-    $dowCounts = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0, 7 => 0];
-    if ($dowStmt) {
-        foreach ($dowStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $dow = (int)($row['dow'] ?? 0);
-            if (isset($dowCounts[$dow])) {
-                $dowCounts[$dow] = (int)($row['cnt'] ?? 0);
-            }
-        }
-    }
-    asort($dowCounts);
-    $leastBusyDow = (int)array_key_first($dowCounts);
-    $dowNames = [1 => 'Sunday', 2 => 'Monday', 3 => 'Tuesday', 4 => 'Wednesday', 5 => 'Thursday', 6 => 'Friday', 7 => 'Saturday'];
-    $leastBusyName = $dowNames[$leastBusyDow] ?? 'Sunday';
-
-    foreach ($facilityUsage as $fRow) {
-        $facilityId = (int)($fRow['id'] ?? 0);
-        $usage90 = (int)($fRow['usage_90d'] ?? 0);
-        $usage30 = (int)($fRow['usage_30d'] ?? 0);
-        $status = strtolower((string)($fRow['status'] ?? 'available'));
-
-        // Simple explainable risk score (0-100) from usage pressure + growth + current status.
-        $usagePressure = min(60, (int)round($usage90 * 1.2));
-        $growthPressure = min(25, max(0, ($usage30 - (int)round($usage90 / 3))) * 2);
-        $statusPressure = ($status === 'maintenance') ? 15 : 0;
-        $riskScore = min(100, $usagePressure + $growthPressure + $statusPressure);
-
-        if ($riskScore >= 75) {
-            $riskBand = 'High';
-            $riskColor = '#b91c1c';
-            $riskBg = '#fee2e2';
-        } elseif ($riskScore >= 45) {
-            $riskBand = 'Medium';
-            $riskColor = '#b45309';
-            $riskBg = '#fef3c7';
-        } else {
-            $riskBand = 'Low';
-            $riskColor = '#166534';
-            $riskBg = '#dcfce7';
-        }
-
-        // Recommend next low-demand weekday in the coming 14 days.
-        $recommendedDate = null;
-        for ($i = 1; $i <= 14; $i++) {
-            $candidate = new DateTime('+' . $i . ' day');
-            $phpDow = (int)$candidate->format('w'); // 0..6
-            $mysqlDow = $phpDow === 0 ? 1 : $phpDow + 1; // 1..7
-            if ($mysqlDow === $leastBusyDow) {
-                $recommendedDate = $candidate->format('Y-m-d');
-                break;
-            }
-        }
-
-        $predictiveMaintenanceRows[] = [
-            'facility_id' => $facilityId,
-            'facility_name' => (string)($fRow['name'] ?? 'Facility'),
-            'status' => ucfirst($status),
-            'usage_90d' => $usage90,
-            'usage_30d' => $usage30,
-            'risk_score' => $riskScore,
-            'risk_band' => $riskBand,
-            'risk_color' => $riskColor,
-            'risk_bg' => $riskBg,
-            'recommended_date' => $recommendedDate,
-            'recommended_window_label' => $recommendedDate
-                ? (date('M d, Y', strtotime($recommendedDate)) . ' (' . $leastBusyName . ')')
-                : ('Next ' . $leastBusyName),
-        ];
-    }
-
-    usort($predictiveMaintenanceRows, static function (array $a, array $b): int {
-        return (int)$b['risk_score'] <=> (int)$a['risk_score'];
-    });
-} catch (Throwable $e) {
-    $predictiveMaintenanceRows = [];
 }
 
 // Integration status (API read + last persisted sync run)
@@ -344,132 +196,19 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<section class="booking-card" style="margin-bottom: 1.5rem;">
-    <h2>Predictive Maintenance (Recommendation)</h2>
-    <p style="color:#6b7280; margin:0.2rem 0 1rem;" class="predictive-maintenance-desc">
-        Rule-based forecast from recent booking pressure (last 90/30 days) to suggest low-demand maintenance windows.
-    </p>
-    <?php if (empty($predictiveMaintenanceRows)): ?>
-        <p style="color:#8b95b5; text-align:center; padding:1.2rem 0;" class="predictive-maintenance-empty">Not enough data yet to generate maintenance risk forecasts.</p>
-    <?php else: ?>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.75rem;" class="predictive-maintenance-grid">
-            <?php foreach (array_slice($predictiveMaintenanceRows, 0, 8) as $row): ?>
-                <div style="border:1px solid #e5e7eb; border-radius:12px; padding:0.8rem 0.9rem; background:#fff;" class="predictive-maintenance-card">
-                    <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:flex-start;">
-                        <div style="font-weight:800; color:#0f172a;" class="predictive-facility-name"><?= htmlspecialchars($row['facility_name']); ?></div>
-                        <span style="background:<?= htmlspecialchars($row['risk_bg']); ?>; color:<?= htmlspecialchars($row['risk_color']); ?>; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.78rem; font-weight:800;" class="predictive-risk-badge">
-                            <?= htmlspecialchars($row['risk_band']); ?> Risk
-                        </span>
-                    </div>
-                    <div style="margin-top:0.5rem; color:#475569; font-size:0.86rem;" class="predictive-maintenance-details">
-                        <div>Risk score: <strong><?= (int)$row['risk_score']; ?>/100</strong></div>
-                        <div>Usage (90d): <strong><?= (int)$row['usage_90d']; ?></strong> bookings</div>
-                        <div>Usage (30d): <strong><?= (int)$row['usage_30d']; ?></strong> bookings</div>
-                        <div>Status: <strong><?= htmlspecialchars($row['status']); ?></strong></div>
-                        <div style="margin-top:0.25rem;">Suggested maintenance window: <strong><?= htmlspecialchars($row['recommended_window_label']); ?></strong></div>
-                    </div>
-                    <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                        <?php if ($hasBlackoutTable && !empty($row['recommended_date']) && (int)($row['facility_id'] ?? 0) > 0): ?>
-                            <form method="POST" style="margin:0;">
-                                <?= function_exists('csrf_field') ? csrf_field() : '<input type="hidden" name="' . htmlspecialchars(CSRF_TOKEN_NAME, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') . '">' ?>
-                                <input type="hidden" name="action" value="apply_blackout">
-                                <input type="hidden" name="facility_id" value="<?= (int)$row['facility_id']; ?>">
-                                <input type="hidden" name="blackout_date" value="<?= htmlspecialchars((string)$row['recommended_date'], ENT_QUOTES, 'UTF-8'); ?>">
-                                <input type="hidden" name="reason" value="<?= htmlspecialchars('Predictive Maintenance: recommended low-demand window', ENT_QUOTES, 'UTF-8'); ?>">
-                                <button type="submit" class="btn-outline" style="padding:0.45rem 0.7rem; border-radius:10px; font-weight:800;">
-                                    Apply Blackout
-                                </button>
-                            </form>
-                        <?php else: ?>
-                            <span style="font-size:0.82rem; color:#6b7280;" class="predictive-maintenance-note">
-                                <?= $hasBlackoutTable ? 'No recommended date available.' : 'Blackout feature unavailable (missing table).' ?>
-                            </span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
+<div class="booking-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+        <div>
+            <h2 style="margin:0 0 0.35rem; font-size:1.1rem; color:#0c4a6e;">Maintenance Insights</h2>
+            <p style="margin:0; color:#0369a1; font-size:0.9rem; max-width:40rem;">
+                Predictive usage analysis and <strong>Request for Maintenance</strong> to CIMM live on a dedicated page — CPRF no longer applies blackouts from predictions.
+            </p>
         </div>
-    <?php endif; ?>
-</section>
-
-<style>
-/* Dark mode for Predictive Maintenance section */
-html[data-theme="dark"] section.booking-card {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-desc {
-    color: #cbd5e1 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-empty {
-    color: #94a3b8 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-card {
-    background: #1e293b !important;
-    border-color: #334155 !important;
-}
-
-html[data-theme="dark"] .predictive-facility-name {
-    color: #f1f5f9 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-details {
-    color: #cbd5e1 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-details strong {
-    color: #f1f5f9 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-details div {
-    color: #cbd5e1 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-note {
-    color: #94a3b8 !important;
-}
-
-/* Dark mode for the section header */
-html[data-theme="dark"] .booking-card h2 {
-    color: #f1f5f9 !important;
-}
-
-/* Dark mode for the Apply Blackout button */
-html[data-theme="dark"] .predictive-maintenance-card .btn-outline {
-    color: #f1f5f9 !important;
-    border-color: #475569 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-card .btn-outline:hover {
-    background: #334155 !important;
-    border-color: #64748b !important;
-}
-
-/* Dark mode for risk badge - ensure it remains visible */
-html[data-theme="dark"] .predictive-risk-badge {
-    color: #f1f5f9 !important;
-}
-
-/* Override inline styles for dark mode */
-html[data-theme="dark"] .predictive-maintenance-card [style*="color:#0f172a"] {
-    color: #f1f5f9 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-card [style*="color:#475569"] {
-    color: #cbd5e1 !important;
-}
-
-html[data-theme="dark"] .predictive-maintenance-card [style*="color:#6b7280"] {
-    color: #94a3b8 !important;
-}
-
-html[data-theme="dark"] section.booking-card [style*="color:#6b7280"] {
-    color: #cbd5e1 !important;
-}
-</style>
+        <a href="<?= htmlspecialchars(base_path()); ?>/dashboard/maintenance-insights" class="btn-outline" style="padding:0.5rem 1rem; font-weight:800; border-radius:10px; white-space:nowrap;">
+            Open Maintenance Insights →
+        </a>
+    </div>
+</div>
 
 <div class="booking-wrapper">
     <!-- Upcoming Maintenance Schedules -->
