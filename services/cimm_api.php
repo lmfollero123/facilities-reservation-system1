@@ -226,6 +226,28 @@ function cimmIsActiveMaintenanceSchedule(array $schedule, ?int $now = null): boo
 }
 
 /**
+ * True when a schedule is not completed/cancelled and its maintenance window starts in the future.
+ */
+function cimmIsFutureScheduledMaintenance(array $schedule, ?int $now = null): bool
+{
+    $now = $now ?? time();
+    $status = cimmNormalizeMaintenanceStatus((string)($schedule['status'] ?? ''));
+    if (in_array($status, ['completed', 'cancelled'], true)) {
+        return false;
+    }
+
+    $startTs = strtotime((string)($schedule['scheduled_start'] ?? ''));
+    if (!$startTs) {
+        return false;
+    }
+
+    $startDay = strtotime(date('Y-m-d', $startTs));
+    $today = strtotime(date('Y-m-d', $now));
+
+    return $today < $startDay;
+}
+
+/**
  * Resolve a mapped CIMM schedule to a local facilities.id.
  *
  * @param array<int,array<string,mixed>> $facilities
@@ -528,8 +550,10 @@ function cimmScheduleDateRange(array $schedule): array
  * Sync facility maintenance status and blackout dates from mapped CIMM schedules.
  *
  * Rules:
- * - Facility goes `maintenance` when there is an active CIMM maintenance now
- *   (`in_progress`/`delayed`, and current time within schedule window).
+ * - Facility goes `maintenance` when CIMM work is active now (in_progress/delayed, or scheduled
+ *   and today is inside the maintenance window). Until then the facility stays `available`.
+ * - All upcoming/active CIMM windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix)
+ *   so residents cannot book those dates in advance (e.g. Pael scheduled Jul 22 is blocked from Jul 12).
  * - Facility returns to `available` only if CIMM sync previously set it to maintenance
  *   (storage/cimm_managed_maintenance.json) and CIMM has no active window now.
  * - Future maintenance windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix).

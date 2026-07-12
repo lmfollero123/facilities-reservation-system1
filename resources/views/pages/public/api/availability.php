@@ -8,6 +8,7 @@ header('Content-Type: application/json');
 try {
     require_once __DIR__ . '/../../../../../config/database.php';
     require_once __DIR__ . '/../../../../../config/reservation_helpers.php';
+    require_once __DIR__ . '/../../../../../config/blackout_dates.php';
     
     // Set error reporting for API (don't display errors, just log them)
     error_reporting(E_ALL);
@@ -62,6 +63,26 @@ foreach ($facilities as $facility) {
         ];
         $response['facilities'][] = $facilityData;
         continue;
+    }
+
+    // CIMM / manual blackout dates
+    if (frs_blackout_table_exists($pdo)) {
+        $blackoutStmt = $pdo->prepare(
+            'SELECT reason FROM facility_blackout_dates WHERE facility_id = ? AND blackout_date = ? LIMIT 1'
+        );
+        $blackoutStmt->execute([(int)$facility['id'], $date]);
+        $blackoutRow = $blackoutStmt->fetch(PDO::FETCH_ASSOC);
+        if ($blackoutRow) {
+            $enriched = frs_blackout_enrich_row($blackoutRow);
+            $label = ($enriched['source_type'] ?? '') === 'cimm' ? 'SCHEDULED MAINTENANCE' : 'BLACKOUT';
+            $facilityData['timeline'][] = [
+                'type' => 'blocked',
+                'label' => $label,
+                'reason' => (string)($enriched['display_reason'] ?? ''),
+            ];
+            $response['facilities'][] = $facilityData;
+            continue;
+        }
     }
 
     // Fetch booked slots

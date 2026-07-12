@@ -390,3 +390,97 @@ function frs_get_blackout_by_id(PDO $pdo, int $blackoutId): ?array
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
 }
+
+/**
+ * Upcoming CIMM-synced maintenance window for one facility (today or later).
+ *
+ * @return array{start_date: string, end_date: string, day_count: int, display_reason: string}|null
+ */
+function frs_facility_upcoming_cimm_maintenance(PDO $pdo, int $facilityId): ?array
+{
+    if (!frs_blackout_table_exists($pdo) || $facilityId <= 0) {
+        return null;
+    }
+
+    $prefix = FRS_BLACKOUT_CIMM_PREFIX . '%';
+    $stmt = $pdo->prepare(
+        'SELECT MIN(blackout_date) AS start_date, MAX(blackout_date) AS end_date, COUNT(*) AS day_count,
+                MIN(reason) AS sample_reason
+         FROM facility_blackout_dates
+         WHERE facility_id = ? AND blackout_date >= CURDATE() AND reason LIKE ?'
+    );
+    $stmt->execute([$facilityId, $prefix]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || empty($row['start_date'])) {
+        return null;
+    }
+
+    $enriched = frs_blackout_enrich_row([
+        'reason' => (string)($row['sample_reason'] ?? ''),
+    ]);
+
+    return [
+        'start_date' => (string)$row['start_date'],
+        'end_date' => (string)$row['end_date'],
+        'day_count' => (int)($row['day_count'] ?? 0),
+        'display_reason' => (string)($enriched['display_reason'] ?? 'Scheduled maintenance'),
+    ];
+}
+
+/**
+ * @return array<int, array{start_date: string, end_date: string, day_count: int, display_reason: string}>
+ */
+function frs_facilities_upcoming_cimm_maintenance_map(PDO $pdo): array
+{
+    if (!frs_blackout_table_exists($pdo)) {
+        return [];
+    }
+
+    $prefix = FRS_BLACKOUT_CIMM_PREFIX . '%';
+    $stmt = $pdo->prepare(
+        'SELECT facility_id, MIN(blackout_date) AS start_date, MAX(blackout_date) AS end_date,
+                COUNT(*) AS day_count, MIN(reason) AS sample_reason
+         FROM facility_blackout_dates
+         WHERE blackout_date >= CURDATE() AND reason LIKE ?
+         GROUP BY facility_id'
+    );
+    $stmt->execute([$prefix]);
+
+    $map = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $fid = (int)($row['facility_id'] ?? 0);
+        if ($fid <= 0 || empty($row['start_date'])) {
+            continue;
+        }
+        $enriched = frs_blackout_enrich_row(['reason' => (string)($row['sample_reason'] ?? '')]);
+        $map[$fid] = [
+            'start_date' => (string)$row['start_date'],
+            'end_date' => (string)$row['end_date'],
+            'day_count' => (int)($row['day_count'] ?? 0),
+            'display_reason' => (string)($enriched['display_reason'] ?? 'Scheduled maintenance'),
+        ];
+    }
+
+    return $map;
+}
+
+/**
+ * Format upcoming CIMM maintenance for UI (e.g. "Jul 22 – Aug 8, 2026").
+ */
+function frs_format_cimm_maintenance_window(array $window): string
+{
+    $start = strtotime((string)($window['start_date'] ?? ''));
+    $end = strtotime((string)($window['end_date'] ?? ''));
+    if (!$start) {
+        return '';
+    }
+    $startFmt = date('M j', $start);
+    if (!$end || date('Y-m-d', $end) === date('Y-m-d', $start)) {
+        return $startFmt . ', ' . date('Y', $start);
+    }
+    $endFmt = date('M j', $end);
+    if (date('Y', $start) !== date('Y', $end)) {
+        $endFmt .= ', ' . date('Y', $end);
+    }
+    return $startFmt . ' – ' . $endFmt . ', ' . date('Y', $start);
+}

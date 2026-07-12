@@ -188,6 +188,14 @@ ob_start();
 .pm-modal textarea { width:100%; min-height:84px; border:1px solid #dbe2ef; border-radius:8px; padding:0.55rem; }
 .pm-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem; }
 .pm-modal-actions .primary { background:#0284c7; color:#fff; border:none; border-radius:8px; padding:0.45rem 0.85rem; font-weight:700; cursor:pointer; }
+.mi-cimm-info {
+    background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:0.85rem 1rem; margin-bottom:1rem;
+    font-size:0.88rem; color:#0c4a6e; line-height:1.5;
+}
+.mi-cimm-info ul { margin:0.45rem 0 0.65rem 1.1rem; padding:0; }
+.mi-cimm-info li { margin-bottom:0.25rem; }
+.mi-sync-meta { margin:0; font-size:0.82rem; color:#0369a1; }
+.mi-sync-warn { margin:0.35rem 0 0; color:#b45309; font-weight:600; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -209,6 +217,33 @@ ob_start();
     <div class="message error" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:10px;margin-bottom:1rem;border:1px solid rgba(239,68,68,0.25);">
         <?= htmlspecialchars($error); ?>
     </div>
+<?php endif; ?>
+
+<?php if ($activeTab === 'schedules'): ?>
+<div class="mi-cimm-info" role="note">
+    <strong>How CIMM affects resident booking</strong>
+    <ul>
+        <li>The facility badge stays <strong>Available</strong> until maintenance actually starts (e.g. Pael on Jul 12 remains bookable for Jul 12–21).</li>
+        <li>Future maintenance dates are blocked on the Book Facility calendar immediately via <strong>CIMM Sync</strong> blackout dates (e.g. Jul 22 onward cannot be reserved in advance).</li>
+        <li>Residents see an upcoming-maintenance notice when they select a facility that has a scheduled CIMM window.</li>
+    </ul>
+    <?php if (!empty($apiError)): ?>
+        <p class="mi-sync-warn">CIMM API unavailable: <?= htmlspecialchars((string)$apiError); ?></p>
+    <?php else: ?>
+        <p class="mi-sync-meta">
+            Sync on this page load:
+            <?= (int)($syncSummary['blackouts_added'] ?? 0); ?> blackout day(s) added,
+            <?= (int)($syncSummary['blackouts_removed'] ?? 0); ?> removed,
+            <?= (int)($syncSummary['matched_schedule_count'] ?? 0); ?> schedule(s) matched to facilities
+            <?php if ((int)($syncSummary['unmatched_schedule_count'] ?? 0) > 0): ?>
+                · <strong><?= (int)$syncSummary['unmatched_schedule_count']; ?> unmatched</strong> (verify facility names in CIMM vs CPRF)
+            <?php endif; ?>
+            <?php if ($lastSyncAt): ?>
+                · Last saved sync: <?= htmlspecialchars((string)$lastSyncAt); ?>
+            <?php endif; ?>
+        </p>
+    <?php endif; ?>
+</div>
 <?php endif; ?>
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">

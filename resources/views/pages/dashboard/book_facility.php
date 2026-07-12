@@ -116,8 +116,10 @@ if ($canBookOnBehalf && $bookingSubjectId !== $sessionActorId) {
 try {
     $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status, operating_hours FROM facilities ORDER BY name');
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+    $upcomingCimmByFacility = frs_facilities_upcoming_cimm_maintenance_map($pdo);
 } catch (Throwable $e) {
     $facilities = [];
+    $upcomingCimmByFacility = [];
     $error = 'Unable to load facilities right now.';
 }
 
@@ -1225,6 +1227,16 @@ $bookCalQuery = static function (array $extra): string {
 .bcf-tone-red { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
 .bcf-tone-blackout { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
 .bcf-tone-cimm_maintenance { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.bcf-upcoming-cimm-notice {
+    margin: 0.5rem 0 0;
+    padding: 0.65rem 0.85rem;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    color: #92400e;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
 .bcf-tone-maintenance, .bcf-tone-offline { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 .bcf-tone-muted { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; cursor: default; }
 .bcf-sq { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 3px; margin-right: 0.25rem; vertical-align: middle; }
@@ -1881,7 +1893,7 @@ ul.bcf-scroll-select-menu {
                                     if ($tone === 'blackout') {
                                         $chipLabel = 'Blackout';
                                     } elseif ($tone === 'cimm_maintenance') {
-                                        $chipLabel = 'Maint.';
+                                        $chipLabel = 'Sched. maint.';
                                     } else {
                                         $chipLabel = 'N/A';
                                     }
@@ -2001,15 +2013,22 @@ ul.bcf-scroll-select-menu {
                     <i class="bi bi-building input-icon"></i>
                     <select name="facility_id" id="facility-select" required>
                         <option value="">Select a facility...</option>
-                        <?php foreach ($facilities as $facility): ?>
+                        <?php foreach ($facilities as $facility):
+                            $fid = (int)$facility['id'];
+                            $upcomingCimm = $upcomingCimmByFacility[$fid] ?? null;
+                            $upcomingLabel = $upcomingCimm ? frs_format_cimm_maintenance_window($upcomingCimm) : '';
+                        ?>
                             <option value="<?= $facility['id']; ?>" 
                                     data-status="<?= htmlspecialchars($facility['status']); ?>"
-                                    data-operating-hours="<?= htmlspecialchars($facility['operating_hours'] ?? ''); ?>">
-                                <?= htmlspecialchars($facility['name']); ?>
+                                    data-operating-hours="<?= htmlspecialchars($facility['operating_hours'] ?? ''); ?>"
+                                    data-upcoming-cimm="<?= htmlspecialchars($upcomingLabel, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-upcoming-cimm-reason="<?= htmlspecialchars($upcomingCimm['display_reason'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                <?= htmlspecialchars($facility['name']); ?><?= $upcomingLabel !== '' ? ' — maintenance ' . $upcomingLabel : ''; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <p id="bcf-upcoming-cimm-notice" class="bcf-upcoming-cimm-notice" hidden role="status"></p>
             </label>
 
 
@@ -3656,10 +3675,36 @@ document.addEventListener('DOMContentLoaded', function() {
         conflictCheckTimeout = setTimeout(checkConflict, 500);
     }
 
+    function bcfUpdateUpcomingCimmNotice() {
+        const notice = document.getElementById('bcf-upcoming-cimm-notice');
+        if (!notice || !facilitySel) {
+            return;
+        }
+        const opt = facilitySel.options[facilitySel.selectedIndex];
+        if (!opt || !opt.value) {
+            notice.hidden = true;
+            notice.textContent = '';
+            return;
+        }
+        const windowLabel = (opt.getAttribute('data-upcoming-cimm') || '').trim();
+        const reason = (opt.getAttribute('data-upcoming-cimm-reason') || 'Scheduled maintenance').trim();
+        if (!windowLabel) {
+            notice.hidden = true;
+            notice.textContent = '';
+            return;
+        }
+        notice.hidden = false;
+        notice.textContent = 'Upcoming CIMM maintenance (' + windowLabel + '): ' + reason
+            + '. Those dates are blocked on the calendar below even while this facility still shows Available.';
+    }
+
     // Add event listeners for both 'change' and 'input' events
     // 'change' fires on blur, 'input' fires as user types/selects
     if (facilitySel) {
-        facilitySel.addEventListener('change', debouncedCheckConflict);
+        facilitySel.addEventListener('change', function () {
+            bcfUpdateUpcomingCimmNotice();
+            debouncedCheckConflict();
+        });
     }
     if (dateInput) {
         dateInput.addEventListener('change', debouncedCheckConflict);
@@ -3967,6 +4012,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Also filter on initial page load if facility is already selected
     if (facilitySel && facilitySel.value) {
         setTimeout(() => filterTimeSlotsByOperatingHours(), 100);
+        bcfUpdateUpcomingCimmNotice();
     }
     if (preDate && dateInput) {
         dateInput.value = preDate;
