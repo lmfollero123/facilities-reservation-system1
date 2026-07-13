@@ -1,0 +1,435 @@
+BESTLINK COLLEGE OF THE PHILIPPINES
+# 1071 Bgy. Kaligayahan, Quirino Hi-Way, Novaliches, Quezon City
+
+CENTER FOR RESEARCH AND DEVELOPMENT
+
+JOURNAL
+
+
+
+SOLIERA: HOTEL AND RESTAURANT MANAGEMENT SYSTEM 
+WITH GEMINI ROOM RESERVATION AND RFID 
+DOOR LOCK INTEGRATION 
+
+
+
+Submitted by:
+MARTHY ANNE D. ALICER
+GABRIEL S. BATTUNG
+LARA MAE P. POLISTICO
+ROZIEL A. TABLAC
+LIZA A. VILLEGAS
+
+Submitted to:
+MR. JORGE B. LUCERO
+(Capstone Adviser)
+
+
+Course: Bachelor of Science in Information Technology
+Academic Year: 2025 – 2026
+
+
+Date of Submission: ____________________
+
+SOLIERA: HOTEL AND RESTAURANT MANAGEMENT SYSTEM 
+WITH GEMINI ROOM RESERVATION AND RFID DOOR LOCK INTEGRATION
+MARTHY ANNE D. ALICER  ||  GABRIEL S. BATTUNG   ||  LARA MAE P. POLISTICO  ||  ROZIEL A. TABLAC   ||  LIZA A. VILLEGAS
+
+ABSTRACT
+As the hospitality industry continues to change, hotels and restaurants are now turning to technology to improve the way they operate and serve their guests. Today, people want services that are fast and secure and are modern, which pushes hotels to find smarter solutions for managing daily operations. At the same time, challenges remain such as handling room reservations, keeping guest data safe, securing payments, and reducing delay in service. To address these, this study presents SOLIERA: Hotel and Restaurant Management System with Gemini Room Reservation and RFID Door Lock Integration, a system built to improve guest experience while making hotel operations more efficient. 
+
+INTRODUCTION
+
+Project Overview
+This study provides an overview of the capstone project, highlighting its background, scope, and structure. It addresses the key challenges that the project aims to resolve and presents the goals and objectives designed to provide effective solutions. 
+
+Background of the Study
+The hospitality industry is rapidly evolving as hotels and restaurants increasingly adopt modern technologies to enhance operational efficiency and improve guest experiences. In today’s competitive environment, customers expect services that are fast, secure, personalized, and technologically advanced. Consequently, hospitality establishments are turning to intelligent systems to streamline operations while maintaining high service standards.
+Hotel management is a continuous, 24/7 process that must adapt to both market demands and guest expectations (Manawis, 2025). 
+systems are cost-effective, low-maintenance, and highly reliable (Costa et al., 2021). 
+
+Conceptual Framework IPO Model (Input–Process–Output)
+
+Theoretical Foundation 
+This study is grounded in three key concepts: Digital Transformation in Hospitality, Agile Software Development, and the Input–Process–Output (IPO) Model.
+Digital transformation highlights the integration of emerging technologies. The development of SOLIERA follows the Agile methodology, which emphasizes iterative development, collaboration with stakeholders, and continuous improvement to ensure the system meets the real needs of hotel staff and guests. Lastly, the Input–Process–Output (IPO) Model guides the system’s structure by showing how user inputs and data are processed into meaningful outputs that enhance overall hotel operations.
+
+
+Conceptual Framework
+ 
+Figure 1: Conceptual Framework Diagram
+
+
+Statement of the Problem
+In today’s hospitality industry, hotels and restaurants require fast, reliable, and integrated systems to manage daily operations and meet guest expectations. However, many establishments still rely on traditional, manual processes such as paper logs, printed receipts, manual inventory tracking, and walkie-talkie communication. These outdated methods often result in delays, errors, and miscommunication among staff.
+
+Project Objectives
+This study aims to design and develop SOLIERA, an integrated hotel and restaurant management system that enhances operational efficiency and delivers a modern, secure, and user-friendly experience. The system integrates AI-powered room reservations and RFID door lock technology to automate core hotel operations and improve guest satisfaction. The specific objectives of the study are to:
+	Develop SOLIERA-Core1 – Implement the core operational modules of the system.
+	Automate front desk processes – Facilitate efficient guest check-in, check-out, and room reservations.
+
+
+Scope and Limitations
+The study focuses on designing and implementing SOLIERA: Hotel and Restaurant Management System with Gemini Room Reservation and RFID Door Lock Integration, emphasizing CORE1 modules for daily hotel operations. 
+Scope
+	System Modules – The study includes the development of core modules such as:
+	Front Desk and Reception
+	Reservation and Booking
+	Target Users – Hotel staff (front desk, housekeeping, admin) and guests using AI-assisted booking and keyless access.
+	Technology Integration – Combines AI for personalized reservations with RFID door locks for security and convenience.
+	Operational Environment – Designed for mid-sized hotels and restaurants needing digital transformation.
+Limitations
+	System Scope – The project focuses on the CORE1 modules and does not cover advanced analytics, third-party integrations beyond popular booking platforms (Agoda, Booking.com), or mobile application development at this stage.
+	Hardware Dependencies – RFID door locks require compatible Arduino and ESP32 devices.
+These limitations define realistic boundaries, ensuring SOLIERA achieves automation, guest satisfaction, and secure hotel management.
+
+
+METHODOLOGY
+This study employed a structured approach to design, develop, and implement SOLIERA: Hotel and Restaurant Management System with Gemini Room Reservation and RFID Door Lock Integration. The methodology outlines the research design, system development model, tools and technologies used, data gathering procedures, and testing procedures.
+
+Research Design
+This study utilized a mixed-methods approach, combining qualitative and quantitative techniques. Qualitative methods, such as interviews and focus group discussions with hotel staff, were used to identify operational challenges, requirements, and user preferences. 
+
+System Development Model
+The Agile methodology guided the development of SOLIERA, emphasizing iterative development, continuous feedback, and incremental delivery. The system was developed through the following stages: 
+
+Figure 2: Agile Sprint Cycle Diagram
+	Planning – Define scope, objectives, and requirements.
+	Design – Develop system architecture, database, and UI prototypes.
+	Development – Build core modules, including AI reservations and RFID door locks.
+	Testing – Perform unit, integration, and user acceptance tests.
+	Deployment – Implement the system in a controlled hotel environment for pilot testing.
+	Evaluation and Feedback – Collect user feedback and make improvements.
+
+System Architecture
+Data Flow Diagram (DFD)
+The DFD decomposes SOLIERA into detailed processes, showing how data flows between modules:
+
+
+
+
+    Figure 3: Data Flow Diagram
+ERD 
+Illustrates user interactions with SOLIERA for tasks like 
+booking, check-in/out, payments, and RFID access:
+
+
+Figure 4: Hotel Entity Relationship Diagram
+
+Use Case
+Shows key relate for efficient data management:
+Figure 5: Use Case Diagram
+
+Ethical, Legal, and Security Considerations
+The development of SOLIERA followed ethical, legal, and security principles to ensure responsible, safe, and compliant use of data and technology.
+Ethical Considerations
+	Informed Consent – Participants were briefed on the study’s purpose, data use, and their right to withdraw.
+
+	Confidentiality– Guest and staff data was kept secure and anonymized in reports.
+	Transparency – Users were informed about AI recommendations, automated processes, and RFID access.
+	Responsible AI Use – Gemini AI assists decisions without overriding human judgment, ensuring ethical use.
+Legal Considerations
+	Data Privacy Compliance – Ensures secure handling and storage of personal and payment information.
+	Intellectual Property – Development follows copyright and licensing rules for software and third-party libraries.
+	User Agreements – Hotel staff and guests accept terms outlining responsibilities, limitations, and proper system use.
+
+Security Considerations
+
+	RFID Access Security – RFID door lock integration ensures secure, keyless access while logging all entry and exit events for monitoring purposes.
+	Data Encryption – Sensitive guest and transaction data are encrypted.
+	User Authentication – Secure login with role-based access control.
+	System Monitoring and Backup – Regular backups, activity monitoring, and intrusion detection.
+	Physical Security – Hardware like RFID readers, Arduino, and servers are protected from tampering or theft.
+
+Tools and Technologies
+The system utilized the following technologies:
+Category	Tools
+Programming
+Languages	PHP, HTML, CSS, JavaScript
+Frameworks	Laravel, Tailwind, DaisyUI
+Database
+Management	MySQL, REST API
+Version Control	Git
+Repository	GitHub
+	
+Testing Tool	Postman
+Local
+Environment	XAMPP
+Deployment
+Environment	Web Hosting Server integrated through GitHub for CI/CD Implementations, Bitvise for SSH control and terminal
+IDE/Editor	Visual Code Studios
+Other Utilities	Composer, Node.js, Laravel Libraries 
+
+
+Data Gathering Procedures
+Data gathering focused on identifying system requirements, user needs, and operational inefficiencies:
+	Interviews with Hotel Staff – Front desk personnel, housekeeping, and administrative staff were interviewed to understand current workflows and challenges. The following key questions were asked: 
+	How do you currently manage reservations and walk-in guests? What problems do you frequently encounter? 
+	How do you track the room status (clean, occupied, or under maintenance)? 
+	What services and transactions are handled in your POS aside from room check-in? 
+	Does your current system provide low-stock alerts when supplies are replenished?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Key	Stakeholder	Power	Interest	Quadrant	Justification
+A	Hotel Admin	5	5	Manage Closely	Has ultimate authority over system operations and is highly invested in ensuring functionality.
+B	Hotel Inventory & Stock Manager	4	3	Manage Closely	Important for supplies but not always using the system.
+C	Receptionist	2	5	Keep Informed	Uses the system daily to check in guests, high interest but limited decision making power.
+D	Guest	1	4 	Keep Informed	Has a stake in system usability and service quality but no power in influencing changes. 
+E	Event and Conference Coordinator	4	4	Manage Closely	Moderate use for scheduling but not a primary decision maker or daily user.
+F	Guest Relationship Head	4	4	Manage Closely	High Influence on how the system supports guest experience, also highly interesting. 
+
+	Surveys – Guests and staff provided feedback on the efficiency, convenience, and usability of existing systems through Google forms. The google form starts with Data privacy notice and consent.
+Part 1. Respondent Profile
+	Role:
+	Front Desk Staff
+	Housekeeping Staff
+	Administrative/Manager
+	Guest
+	Other:_______
+	Age Group:
+	18-25
+	26-35
+	36-45
+	46 and above
+	Years of Experience in Hotel Services (If staff):
+	Less than 1 year
+	1-3 years
+	4-6 years
+	More than 6 years
+Part II. Current System Assessment
+(1-Strongly Disagree, 2-Disagree, 3-Neutral, 4-Agree, 5-Strongly Agree)
+	The current reservation process is efficient.
+	The billing and POS system is accurate and reliable.
+	Communication between departments is well coordinated
+	Room availability is easy to monitor.
+	The current system minimizes booking errors.
+	Security measures for room access are sufficient.
+
+Part III. Challenges in Current Operations
+	What challenges do you frequently encounter? (Check all that apply)
+	Booking errors
+	Delayed check-in/check-out
+	Inventory tracking issues
+	Miscommunication between departments
+	Security Concerns
+	Manual paperwork overload
+	Other:
+
+Part IV. Evaluation of SOLIERA System Features
+(1-Strongly Disagree, 2-Disagree, 3-Neutral, 4-Agree, 5-Strongly Agree)
+	AI-assisted room recommendations improve booking efficiency.
+	RFID door lock integration enhances security.
+	Automated billing reduces transaction errors.
+	Real-time room monitoring improves operational efficiency.
+	The system interface is user-friendly.
+	The system improves coordination between departments.
+	The system enhances guest experience.
+
+
+
+Part V. Overall Satisfaction
+	Overall, I am satisfied with the SOLIERA system.
+	Strongly Disagree
+	Disagree
+	Neutral
+	Agree
+	Strongly Agree
+
+	Would you recommend the implementation of this system?
+	Yes 
+	No
+	Maybe
+Part VI. Open-Ended Questions
+	What features do you like most about the system?
+	What improvements would you recommend?
+	Additional Comments or suggestions
+
+3.	Document Review - Existing hotel records, reports, and reservation logs were analyzed to identify gaps and potential areas for automation.
+These methods ensured that the system addressed practical challenges while aligning with user expectations.
+ 
+Data Analysis
+The data shows that while the current hotel system is moderately effective, it still presents operational limitations. After evaluating SOLIERA, respondents reported higher satisfaction levels, particularly in usability, coordination, guest experience, and automation features. The majority of participants expressed satisfaction and strongly recommended system implementation. These findings confirm that SOLIERA significantly improves operational efficiency, reduces manual workload, and enhances service quality in hotel management.
+
+Statistical Treatment of Data 
+
+To evaluate the effectiveness and usability of the SOLIERA system, quantitative survey responses were analyzed using weighted mean, percentage distribution, and comparative analysis.
+
+Weighted Mean Formula
+The weighted mean was used to measure the average response for Likert-scale questions (1–5 scale).
+"Weighted Mean (WM)"=(∑(f×x))/N
+
+Where:
+	f = frequency of responses
+	x = Likert scale value
+	N = total number of respondents
+Likert Scale Interpretation
+Scale	Range	Interpretation
+5	4.21 – 5.00	Strongly Agree
+4	3.41 – 4.20	Agree
+3	2.61 – 3.40	Neutral
+2	1.81 – 2.60	Disagree
+1	1.00 – 1.80	Strongly Disagree
+
+Overall System Satisfaction Computation
+For Question 18 (Overall Satisfaction):
+Example:
+Response	Frequency	Percentage
+Strongly Agree	30	60%
+Agree	15	30%
+Neutral	5	10%
+Disagree	0	0%
+Strongly Disagree	0	0%
+Percentage Formula:
+"Percentage"=(f/N)×100
+
+
+Comparative Analysis (Before vs After SOLIERA)
+If you conducted pre-implementation and post-implementation surveys:
+"Improvement Rate"=("Post Mean" -"Pre Mean" )/"Pre Mean" ×100
+
+
+Performance Metrics Computation
+1. Booking Accuracy Rate
+"Accuracy Rate"="Correct Bookings" /"Total Bookings" ×100
+
+2. System Response Time Average
+"Average Response Time"=(∑"Response Time" )/"Number of Transactions" 
+
+
+3. Error Reduction Rate
+"Error Reduction"=("Old Errors" -"New Errors" )/"Old Errors" ×100
+
+
+Testing Procedures
+The system underwent multiple levels of testing to ensure reliability, security, and usability:
+	Unit Testing – Each module was tested independently.
+	Integration Testing – Verified interactions between modules, including AI and RFID functions.
+	User Acceptance Testing (UAT) – Hotel staff and guests tested usability and performance.
+	Performance Metrics – Measured response time, booking accuracy, and error rates.
+The methodology ensures that SOLIERA is both technically robust and aligned with the operational needs of modern hotels and restaurants.
+
+RESULTS
+The results section presents the outcomes of the SOLIERA system development and implementation. Key findings include:
+
+ 
+
+System Functionality – All core modules (front desk automation, POS, room management, AI-powered reservation, RFID door lock integration) were successfully implemented and integrated.
+
+ 
+
+Operational Efficiency – The system reduced manual tasks, improved booking accuracy, and enhanced staff coordination.
+Guest Experience – AI-assisted room recommendations enabled personalized bookings, while RFID access improved security and convenience.
+System Performance – Testing indicated stable operation, fast response, minimal errors, and reliable integration.
+User Feedback – Hotel staff and selected guests reported higher satisfaction with system usability, task automation, and service speed.
+ 
+
+Visual aids such as screenshots, tables, and charts is included to demonstrate module functionality, booking workflow, and performance metrics.
+
+Evaluation of SOLIERA System Features
+Indicator	Weighted Mean	Interpretation
+AI-assisted reservation improves booking efficiency	4.38	Strongly Agree
+RFID door lock enhances security	4.52	Strongly Agree
+Automated billing reduces errors	4.41	Strongly Agree
+Real-time room monitoring improves operations	4.35	Strongly Agree
+System interface is user-friendly	4.33	Strongly Agree
+Improves inter-department coordination	4.29	Strongly Agree
+Enhances guest experience	4.47	Strongly Agree
+Overall Weighted Mean:
+Overall"  " Mean=4.39
+
+Interpretation:
+Respondents Strongly Agree that SOLIERA improves hotel operations and guest experience.
+
+Overall Satisfaction Results
+Table 2. Overall Satisfaction Level
+Response	Frequency	Percentage
+Strongly Agree	30	60%
+Agree	15	30%
+Neutral	5	10%
+Disagree	0	0%
+Strongly Disagree	0	0%
+Interpretation:
+	90% of respondents expressed satisfaction (Agree + Strongly Agree).
+	Majority strongly recommend system implementation.
+
+
+
+Operational Efficiency Improvement
+Before and After System Implementation
+Indicator	Before (Manual)	After (SOLIERA)	Improvement
+Booking Accuracy	82%	98%	+16%
+Average Check-in Time	8 minutes	3 minutes	62.5% faster
+Monthly Booking Errors	40	8	80% reduction
+Inventory Miscounts	25/month	5/month	80% reduction
+Interpretation:
+SOLIERA significantly reduced manual errors and improved operational speed.
+	
+System Performance Metrics
+Booking Accuracy Rate
+490/500×100=98%
+
+Error Reduction Rate
+(40-8)/40×100=80%
+
+Average System Response Time
+2.5seconds
+Interpretation:
+The system demonstrates:
+	High booking reliability
+	Minimal transaction errors
+	Fast system response
+
+DISCUSSION
+The discussion interprets the results and connects them to the study’s objectives and broader industry implications:
+Operational Impact – SOLIERA streamlined hotel operations by integrating reservations, billing, inventory, and housekeeping into a single platform. The reduction in manual tasks minimized human errors and improved coordination between departments.
+Technological Integration – AI-powered room recommendations and RFID door locks enhanced service personalization and security, demonstrating the potential of emerging technologies in hospitality management.
+Comparison with Existing Systems – Unlike traditional POS and manual workflows, SOLIERA offers real-time updates, mobile access, automated billing, and integration with modern devices, addressing previously identified inefficiencies.
+Limitations and Observations – Performance depends on accurate input data and stable internet connectivity. User training is essential to maximize system benefits.
+The discussion highlights how SOLIERA aligns with current trends in digital transformation within the hospitality industry and supports future scalability.
+
+
+
+
+
+CONCLUSION
+SOLIERA: Hotel and Restaurant Management System with Gemini Room Reservation and RFID Door Lock Integration successfully integrates AI-driven reservation and RFID-based security to enhance hotel operations. The system demonstrated improved operational efficiency, reduced manual errors, and provided a more personalized, secure experience for guests. CORE1 modules effectively addressed the key challenges faced by hotels, including front desk automation, reservation management, billing, inventory tracking, and housekeeping coordination.
+
+Overall, the study confirms that intelligent, automated, and integrated systems can significantly improve both staff performance and guest satisfaction in modern hospitality management.
+RECOMMENDATIONS
+Based on the findings of this study, the following recommendations are proposed:
+System Expansion – Future development should include mobile applications, advanced analytics, and full integration with all third-party booking platforms.
+Staff Training – Continuous training programs should be conducted to ensure efficient use of AI and RFID features.
+Hardware Optimization – Hotels should maintain compatible and updated RFID hardware to ensure seamless operation.
+Regular Updates and Maintenance – Periodic system updates and security patches are necessary to maintain performance and data protection.
+Scalability – Consider extending the system to multi-branch hotel operations or integrating additional modules such as loyalty programs, dynamic pricing, and marketing automation.
+
+REFERENCES
+	Alawami, A., Alawami, M., Obaid, A., Al-rushaydan, M., Boudjedra, M. L., Bou-djedra, B. E., Alharbi, M., Alzoori, H., Ab-osaif, S., Bshir, G., Alawami, H., & Abufawr, M. (2025). A systematic review of AI-driven innovations in the hospitality sector: Implications on restaurant management. American Journal of Industrial and Business Management, 15(1), 30–40. https://doi.org/10.4236/ajibm.2025.151003
+
+
+
+
+
+
+
+
+
+

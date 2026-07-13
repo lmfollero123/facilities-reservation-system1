@@ -20,6 +20,7 @@ require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/user_admin.php';
 require_once __DIR__ . '/../../../../config/culiat_streets.php';
 require_once __DIR__ . '/../../../../config/violations.php';
+require_once __DIR__ . '/../../../../config/user_bulk_import.php';
 $pdo = db();
 $pageTitle = 'User Management | LGU Facilities Reservation';
 
@@ -91,6 +92,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     error_log('Failed to send admin-created account email: ' . $e->getMessage());
                     $message .= ' However, the welcome email could not be sent — please share the temporary password manually.';
                 }
+            }
+        }
+    }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_import_users') {
+    if (!frs_can_create($actorRole, 'users')) {
+        $message = 'You do not have permission to import users.';
+        $messageType = 'error';
+    } elseif (empty($_FILES['csv_file']['tmp_name'])) {
+        $message = 'Please choose a CSV file to upload.';
+        $messageType = 'error';
+    } else {
+        $ext = strtolower(pathinfo((string)($_FILES['csv_file']['name'] ?? ''), PATHINFO_EXTENSION));
+        if ($ext !== 'csv') {
+            $message = 'Only .csv files are accepted.';
+            $messageType = 'error';
+        } else {
+            $import = frs_bulk_import_users_from_csv(
+                $pdo,
+                (string)$_FILES['csv_file']['tmp_name'],
+                (int)($_SESSION['user_id'] ?? 0),
+                $isPageAdmin
+            );
+            $message = $import['message'];
+            if (!empty($import['errors'])) {
+                $message .= ' ' . implode(' ', array_slice($import['errors'], 0, 3));
+            }
+            $messageType = ($import['ok'] && $import['created'] > 0) ? 'success' : 'error';
+            if ($import['created'] > 0) {
+                logAudit('Bulk user CSV import', 'User Management', $import['created'] . ' accounts created');
             }
         }
     }
@@ -668,8 +698,11 @@ ob_start();
                     <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
                 <?php endif; ?>
             </div>
-            <?php if ($umView === 'all'): ?>
-            <button type="button" class="btn-primary js-open-create-user-modal">Create account</button>
+            <?php if ($umView === 'all' && frs_can_create($actorRole, 'users')): ?>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button type="button" class="btn-outline js-open-bulk-import-modal">Import CSV</button>
+                <button type="button" class="btn-primary js-open-create-user-modal">Create account</button>
+            </div>
             <?php endif; ?>
         </div>
 
@@ -1022,6 +1055,26 @@ ob_start();
     </div>
 </div>
 
+<div id="bulkImportModal" class="um-modal" aria-hidden="true">
+    <div class="um-modal-backdrop js-close-modal" data-target="bulkImportModal"></div>
+    <div class="um-modal-panel um-modal-panel-wide" role="dialog" aria-labelledby="bulkImportModalTitle" aria-modal="true">
+        <h3 id="bulkImportModalTitle">Bulk import users (CSV)</h3>
+        <p class="um-modal-sub">Columns: <code>name, email</code> required; optional <code>mobile, street, house_number, role</code> (Staff only for Admin).</p>
+        <form method="POST" enctype="multipart/form-data">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="bulk_import_users">
+            <label>
+                CSV file
+                <input type="file" name="csv_file" accept=".csv,text/csv" required>
+            </label>
+            <div class="um-modal-actions">
+                <button type="button" class="btn-outline js-close-modal" data-target="bulkImportModal">Cancel</button>
+                <button type="submit" class="btn-primary">Import</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="lockUserModal" class="um-modal" aria-hidden="true">
     <div class="um-modal-backdrop js-close-modal" data-target="lockUserModal"></div>
     <div class="um-modal-panel" role="dialog" aria-labelledby="lockModalTitle" aria-modal="true">
@@ -1297,6 +1350,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.js-open-create-user-modal').forEach(function(btn) {
         btn.addEventListener('click', function() {
             openModal('createUserModal');
+        });
+    });
+
+    document.querySelectorAll('.js-open-bulk-import-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openModal('bulkImportModal');
         });
     });
 

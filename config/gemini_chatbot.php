@@ -153,6 +153,10 @@ function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string
     }
 
     $today = date('Y-m-d');
+    if (!function_exists('frs_resident_booking_limits_policy_bullets')) {
+        require_once __DIR__ . '/reservation_helpers.php';
+    }
+    $bookingLimitsBullets = frs_resident_booking_limits_policy_bullets();
 
     return <<<PROMPT
 You are a helpful AI assistant for an LGU (Local Government Unit) Facilities Reservation System in Barangay Culiat.
@@ -171,9 +175,8 @@ When listing or describing facilities in your reply, use ONLY facility names and
 1. Operating hours: 8:00 AM - 9:00 PM (08:00 - 21:00)
 2. Minimum duration: 30 minutes. Maximum: 12 hours
 3. Only future dates allowed. Today or later.
-4. Maximum 1 booking per user per day
-5. Maximum 3 active (pending + approved) reservations per user within 30 days
-6. Bookings allowed up to 60 days in advance
+4. Resident booking limits (Staff/Admin exempt):
+{$bookingLimitsBullets}
 
 ## MEMORY
 Remember the full conversation. If the user mentioned a facility in an earlier message and now adds date/time/purpose, combine all details. Build on previous context.

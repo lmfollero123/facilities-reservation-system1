@@ -70,10 +70,7 @@ $bcfOpenBookingModal = false;
 $conflictWarning = null;
 $recommendations = [];
 
-$BOOKING_LIMIT_ACTIVE = 3; // max active (pending+approved) in window
-$BOOKING_LIMIT_WINDOW_DAYS = 30; // rolling window for active bookings
-$BOOKING_ADVANCE_MAX_DAYS = 60; // max days ahead
-$BOOKING_PER_DAY = 1; // max bookings per user per day (pending+approved)
+$BOOKING_ADVANCE_MAX_DAYS = frs_resident_booking_limit_config()['advance_max_days'];
 
 // Check if user is verified and if they have uploaded a valid ID
 // Note: Staff and Admin are automatically considered verified
@@ -336,7 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             $error = 'Invalid date format.';
         } elseif ($reservationDate < $today) {
             $error = 'Cannot book facilities for past dates. Please select today or a future date.';
-        } elseif (!$isAdminUser && $reservationDate > (clone $today)->modify('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days')) {
+        } elseif (frs_booking_limits_apply_to_user($pdo, $userId) && $reservationDate > (clone $today)->modify('+' . $BOOKING_ADVANCE_MAX_DAYS . ' days')) {
             $error = "Bookings are allowed only up to {$BOOKING_ADVANCE_MAX_DAYS} days in advance.";
         }
     }
@@ -366,47 +363,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
         }
     }
     
-    if (!$error && !$isAdminUser) {
-        // Active bookings cap in rolling window
-        $windowEnd = date('Y-m-d', strtotime('+' . ($BOOKING_LIMIT_WINDOW_DAYS - 1) . ' days'));
-        $activeCountStmt = $pdo->prepare(
-            'SELECT COUNT(*) FROM reservations
-             WHERE user_id = :uid
-               AND reservation_date BETWEEN :start AND :end
-               AND status IN (' . $activeBookingStatusesSql . ')'
-        );
-        // Note: postponed and on_hold reservations don't count as active bookings
-        $activeCountStmt->execute([
-            'uid' => $userId,
-            'start' => date('Y-m-d'),
-            'end' => $windowEnd,
-        ]);
-        $activeCount = (int)$activeCountStmt->fetchColumn();
-
-        if ($activeCount >= $BOOKING_LIMIT_ACTIVE) {
-            $error = "Limit reached: You can have up to {$BOOKING_LIMIT_ACTIVE} active reservations (pending/approved) within the next {$BOOKING_LIMIT_WINDOW_DAYS} days.";
-        } else {
-            // Per-day cap
-            $perDayStmt = $pdo->prepare(
-                'SELECT COUNT(*) FROM reservations
-                 WHERE user_id = :uid
-                   AND reservation_date = :date
-                   AND status IN (' . $activeBookingStatusesSql . ')'
-            );
-            // Note: postponed and on_hold reservations don't count toward daily limit
-            $perDayStmt->execute([
-                'uid' => $userId,
-                'date' => $date,
-            ]);
-            $perDayCount = (int)$perDayStmt->fetchColumn();
-
-            if ($perDayCount >= $BOOKING_PER_DAY) {
-                $error = "Limit reached: You can only have {$BOOKING_PER_DAY} booking on this date.";
-            }
+    if (!$error && frs_booking_limits_apply_to_user($pdo, $userId)) {
+        $limitCheck = frs_validate_resident_booking_limits($pdo, $userId, $date, $activeBookingStatusesSql);
+        if (!$limitCheck['ok']) {
+            $error = $limitCheck['message'];
         }
     }
 
-    if (!$error && !$isAdminUser) {
+    if (!$error) {
         // Check facility status - prevent booking if under maintenance or offline
         $facilityStatusStmt = $pdo->prepare('SELECT status, name FROM facilities WHERE id = :id');
         $facilityStatusStmt->execute(['id' => $facilityId]);

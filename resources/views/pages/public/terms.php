@@ -1,5 +1,9 @@
 <?php
 $pageTitle = 'Terms and Conditions | LGU Facilities Reservation';
+if (!function_exists('frs_resident_booking_limits_policy_bullets')) {
+    require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+}
+$residentBookingLimitsHtml = nl2br(htmlspecialchars(frs_resident_booking_limits_policy_bullets()));
 ob_start();
 ?>
 <section class="section legal-page-section">
@@ -11,7 +15,7 @@ ob_start();
         <h3>Reservation Policies</h3>
         <p>Users shall provide accurate contact information, submit complete supporting documents (Valid ID required), and settle applicable fees within the prescribed period. Non-compliance may result in cancellation without prejudice to future bookings.</p>
         <ul>
-            <li><strong>Booking Limits:</strong> Maximum 3 active reservations per user (within 30 days), 60-day advance booking window, and 1 reservation per user per day</li>
+            <li><strong>Booking Limits (residents):</strong><br><?= $residentBookingLimitsHtml ?></li>
             <li><strong>Rescheduling:</strong> Residents may reschedule their own reservations up to 3 days before the event, limited to one reschedule per reservation</li>
             <li><strong>Auto-Approval:</strong> Some reservations may be automatically approved if all conditions are met; staff can override any decision</li>
             <li><strong>Modifications:</strong> Approved reservations may be modified, postponed, or cancelled by staff with proper notification and reason</li>

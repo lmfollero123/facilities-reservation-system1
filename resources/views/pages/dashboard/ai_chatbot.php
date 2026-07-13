@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -249,12 +249,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          | BOOKING POLICY
          |------------------------------*/
         if (str_contains($msg, 'policy') || str_contains($msg, 'rule')) {
+            if (!function_exists('frs_resident_booking_limits_policy_bullets')) {
+                require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+            }
             $reply = "Booking Policies:\n\n" .
-                    "â€¢ All facilities are FREE for residents\n" .
-                    "â€¢ Maximum of 3 active reservations per user\n" .
-                    "â€¢ Bookings require administrator approval\n" .
-                    "â€¢ Only one booking per day is allowed\n" .
-                    "â€¢ Rescheduling is allowed up to 3 days before the event";
+                    "• All facilities are FREE for residents\n" .
+                    "• Resident limits:\n" . frs_resident_booking_limits_policy_bullets() . "\n" .
+                    "• Bookings require administrator approval\n" .
+                    "• Rescheduling is allowed up to 3 days before the event";
         }
 
         /* ------------------------------

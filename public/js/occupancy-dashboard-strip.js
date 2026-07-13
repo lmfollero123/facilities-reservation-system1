@@ -5,9 +5,10 @@
     'use strict';
 
     const BUSY_KEYS = new Set([
-        'staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending', 'staff_closed',
+        'staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending',
     ]);
     const AVAILABLE_KEYS = new Set(['available', 'staff_vacant']);
+    const UNAVAILABLE_KEYS = new Set(['maintenance', 'offline', 'closed', 'staff_closed']);
 
     function escapeHtml(str) {
         return String(str ?? '')
@@ -17,24 +18,18 @@
             .replace(/"/g, '&quot;');
     }
 
-    function pillMeta(fac) {
+    function statusBadgeHtml(fac) {
+        const d = fac.aggregate_display || {};
         const state = fac.aggregate_state || 'available';
-        const display = fac.aggregate_display || {};
-        const label = display.label || (BUSY_KEYS.has(state) ? 'Occupied' : 'Available');
-
-        if (state === 'booked') {
-            return { className: 'is-booked', label: label };
-        }
-        if (state === 'no_show_risk' || state === 'staff_event_ending') {
-            return { className: 'is-warn', label: label };
-        }
-        if (state === 'staff_closed') {
-            return { className: 'is-muted', label: label };
-        }
-        if (BUSY_KEYS.has(state)) {
-            return { className: 'is-busy', label: label };
-        }
-        return { className: 'is-available', label: label };
+        const label = d.label || (BUSY_KEYS.has(state) ? 'Occupied' : UNAVAILABLE_KEYS.has(state) ? 'Unavailable' : 'Available');
+        const bg = d.bg || '#ecfdf5';
+        const color = d.color || '#047857';
+        return (
+            '<span class="occ-dash-pill" style="background:' + escapeHtml(bg) +
+            ';color:' + escapeHtml(color) +
+            ';border:1px solid ' + escapeHtml(color) + '40;">' +
+            escapeHtml(label) + '</span>'
+        );
     }
 
     function activeSlotHint(fac) {
@@ -54,7 +49,6 @@
     }
 
     function renderHeroCard(fac) {
-        const pill = pillMeta(fac);
         const slot = activeSlotHint(fac);
         const img = fac.image_url || '';
         const name = escapeHtml(fac.facility_name || 'Facility');
@@ -66,7 +60,7 @@
                 '</div>' +
                 '<div class="occ-dash-hero__content">' +
                     '<h3 class="occ-dash-hero__name">' + name + '</h3>' +
-                    '<span class="occ-dash-pill ' + pill.className + '">' + escapeHtml(pill.label) + '</span>' +
+                    statusBadgeHtml(fac) +
                     (slot ? '<p class="occ-dash-hero__slot">' + escapeHtml(slot) + '</p>' : '') +
                 '</div>' +
             '</article>'
@@ -74,7 +68,6 @@
     }
 
     function renderModalRow(fac) {
-        const pill = pillMeta(fac);
         const img = fac.image_url || '';
         const name = escapeHtml(fac.facility_name || 'Facility');
         const slot = activeSlotHint(fac);
@@ -86,7 +79,7 @@
                     '<p class="occ-dash-modal-row__name">' + name + '</p>' +
                     (slot ? '<p class="occ-dash-modal-row__meta">' + escapeHtml(slot) + '</p>' : '') +
                 '</div>' +
-                '<span class="occ-dash-pill ' + pill.className + '">' + escapeHtml(pill.label) + '</span>' +
+                statusBadgeHtml(fac) +
             '</button>'
         );
     }

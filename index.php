@@ -34,12 +34,18 @@ if ($isApiRoute) {
     exit;
 }
 
+$isHealthApi = ($apiPath === 'api/health' || strpos($apiPath, 'api/health') === 0);
+if ($isHealthApi) {
+    require_once __DIR__ . '/resources/views/pages/public/api/health.php';
+    exit;
+}
+
 $isIntegrationsApi = (
     $apiPath === 'api/integrations' ||
     strpos($apiPath, 'api/integrations/') === 0
 );
 if ($isIntegrationsApi) {
-    require_once __DIR__ . '/resources/views/pages/public/api/integrations_not_implemented.php';
+    require_once __DIR__ . '/resources/views/pages/public/api/integrations.php';
     exit;
 }
 
@@ -177,6 +183,7 @@ if ($path === 'announcements') {
         'occupancy-live' => 'occupancy_live_api.php',
         'check-in' => 'check_in_gate.php',
         'facility-check-in' => 'facility_check_in_gate.php',
+        'checkin-waivers' => 'checkin_waivers.php',
         'facility-qr-print' => 'facility_qr_print.php',
         'blackout-dates' => 'blackout_dates.php',
         'ai-conflict-check' => 'ai_conflict_check.php',

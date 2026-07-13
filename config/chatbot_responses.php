@@ -148,20 +148,22 @@ function getNoFacilitiesResponses(): array {
  * Get booking rules responses
  */
 function getBookingRulesResponses(): array {
+    if (!function_exists('frs_resident_booking_limits_policy_bullets')) {
+        require_once __DIR__ . '/reservation_helpers.php';
+    }
+    $limits = frs_resident_booking_limits_policy_bullets();
     return [
         "Here are our booking policies:\n\n" .
         "✅ All facilities are FREE for residents\n" .
-        "📊 Maximum of 3 active reservations per user\n" .
+        "📊 Resident booking limits:\n" . $limits . "\n" .
         "⏱️ Bookings require administrator approval\n" .
-        "📅 Only one booking per day is allowed\n" .
         "🔄 Rescheduling is allowed up to 3 days before the event\n\n" .
         "Need clarification on any of these?",
         
         "Sure! Here's what you need to know:\n\n" .
         "💰 Cost: Completely free for residents!\n" .
-        "📈 Limits: Up to 3 active reservations\n" .
+        "📈 Resident limits:\n" . $limits . "\n" .
         "✅ Process: Requires admin approval\n" .
-        "📆 Daily Limit: One booking per day\n" .
         "🔄 Changes: Can reschedule up to 3 days before\n\n" .
         "Anything else you'd like to know?",
     ];

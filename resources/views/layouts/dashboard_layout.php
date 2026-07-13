@@ -4,6 +4,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/ui_helpers.php';
+require_once __DIR__ . '/../../../config/reservation_helpers.php';
+$frsBookingLimitsPolicyJs = json_encode(frs_resident_booking_limits_policy_bullets(), JSON_UNESCAPED_UNICODE);
 $isLoggedIn = $_SESSION['user_authenticated'] ?? false;
 if (!$isLoggedIn) {
     header('Location: ' . base_path() . '/login');
@@ -196,6 +198,7 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
                         placeholder="Type your message here..."
                         rows="1"
                     ></textarea>
+                    <button type="button" class="chatbot-voice-btn" id="chatbotWidgetVoiceBtn" aria-label="Voice input" title="Speak your message">🎤</button>
                 </div>
                 <button type="submit" class="btn-primary chatbot-send-btn" id="chatbotWidgetSendBtn">
                     <span>Send</span>
@@ -718,6 +721,36 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    const voiceBtn = document.getElementById('chatbotWidgetVoiceBtn');
+    if (voiceBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-PH';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        voiceBtn.addEventListener('click', function () {
+            try {
+                voiceBtn.disabled = true;
+                recognition.start();
+            } catch (err) {
+                voiceBtn.disabled = false;
+            }
+        });
+        recognition.addEventListener('result', function (event) {
+            const transcript = event.results[0][0].transcript;
+            input.value = (input.value ? input.value + ' ' : '') + transcript.trim();
+            input.focus();
+        });
+        recognition.addEventListener('end', function () {
+            voiceBtn.disabled = false;
+        });
+        recognition.addEventListener('error', function () {
+            voiceBtn.disabled = false;
+        });
+    } else if (voiceBtn) {
+        voiceBtn.style.display = 'none';
+    }
+
     function showTypingIndicator() {
         const id = 'typing-' + Date.now();
         const wrapper = document.createElement('div');
@@ -804,10 +837,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (lower.includes('policy') || lower.includes('rule') || lower.includes('booking')) {
             return (
                 'Here are the key booking policies:\n\n' +
-                '📋 Reservation Limits:\n' +
-                '• Maximum 3 active reservations (pending + approved) within 30 days\n' +
-                '• Bookings allowed up to 60 days in advance\n' +
-                '• Maximum 1 booking per user per day\n\n' +
+                '📋 Resident reservation limits:\n' +
+                <?= $frsBookingLimitsPolicyJs ?> + '\n\n' +
                 '📅 Rescheduling:\n' +
                 '• Allowed up to 3 days before the event\n' +
                 '• Only one reschedule per reservation\n' +

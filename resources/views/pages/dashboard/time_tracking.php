@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/time_helpers.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 require_once __DIR__ . '/../../../../config/attendance.php';
+require_once __DIR__ . '/../../../../config/checkin_waiver.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     header('Location: ' . base_path() . '/login');
@@ -83,8 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasAttendanceTable) {
         $action = $_POST['action'] ?? '';
         $reservationId = isset($_POST['reservation_id']) ? (int)$_POST['reservation_id'] : 0;
 
-        if (!in_array($action, ['time_in', 'time_out'], true) || $reservationId <= 0) {
+        if (!in_array($action, ['time_in', 'time_out', 'request_waiver'], true) || $reservationId <= 0) {
             $error = 'Invalid request.';
+        } elseif ($action === 'request_waiver') {
+            $reason = trim((string)($_POST['waiver_reason'] ?? ''));
+            $result = frs_request_checkin_waiver($pdo, $reservationId, $userId, $reason);
+            if ($result['ok']) {
+                $success = $result['message'];
+            } else {
+                $error = $result['message'];
+            }
         } elseif (empty($_FILES['proof'])) {
             $error = 'Please upload a photo proof.';
         } else {
@@ -110,20 +119,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasAttendanceTable) {
     }
 }
 
-// Fetch today's reservations for the user (approved + pending, but actions only on approved)
+// Fetch recent reservations eligible for check-in / waiver (today + past 2 days)
+$lookbackStart = date('Y-m-d', strtotime('-2 days'));
 $today = date('Y-m-d');
 $reservations = [];
 $attendanceByResId = [];
+$waiverByResId = [];
 
 try {
     $stmt = $pdo->prepare(
         "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
          FROM reservations r
          JOIN facilities f ON f.id = r.facility_id
-         WHERE r.user_id = ? AND r.reservation_date = ? AND r.status IN ('approved','pending')
-         ORDER BY r.time_slot ASC"
+         WHERE r.user_id = ? AND r.reservation_date BETWEEN ? AND ? AND r.status = 'approved'
+         ORDER BY r.reservation_date DESC, r.time_slot ASC"
     );
-    $stmt->execute([$userId, $today]);
+    $stmt->execute([$userId, $lookbackStart, $today]);
     $reservations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if ($hasAttendanceTable && !empty($reservations)) {
@@ -133,6 +144,12 @@ try {
         $attStmt->execute($ids);
         foreach ($attStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $attendanceByResId[(int)$row['reservation_id']] = $row;
+        }
+    }
+    foreach ($reservations as $r) {
+        $w = frs_get_checkin_waiver($pdo, (int)$r['id']);
+        if ($w) {
+            $waiverByResId[(int)$r['id']] = $w;
         }
     }
 } catch (Throwable $e) {
@@ -176,12 +193,14 @@ ob_start();
     <?php else: ?>
         <?php $now = new DateTime(); ?>
         <div class="booking-card time-tracking-card" style="padding:1rem;">
-            <h2 style="margin-top:0;">Today’s Reservations</h2>
+            <h2 style="margin-top:0;">Recent Approved Reservations</h2>
             <div style="display:grid;gap:1rem;">
                 <?php foreach ($reservations as $r): 
                     $rid = (int)$r['id'];
                     $att = $attendanceByResId[$rid] ?? null;
+                    $waiver = $waiverByResId[$rid] ?? null;
                     $isApproved = strtolower($r['status']) === 'approved';
+                    $isToday = ($r['reservation_date'] === $today);
                     $startDt = buildReservationDateTime($r['reservation_date'], $r['time_slot'], 'start');
                     $endDt = buildReservationDateTime($r['reservation_date'], $r['time_slot'], 'end');
 
@@ -191,10 +210,12 @@ ob_start();
                     $isHighlighted = $highlightResId > 0 && $highlightResId === $rid;
 
                     // Buttons only enabled when approved; card may still show pending state
-                    $canTimeIn = $hasAttendanceTable && $isApproved && $checkinOpen && ($now >= $checkinOpen)
+                    $canTimeIn = $hasAttendanceTable && $isApproved && $isToday && $checkinOpen && ($now >= $checkinOpen)
                         && $endDt && ($now <= $endDt) && (!$att || empty($att['time_in_at']));
-                    $canTimeOut = $hasAttendanceTable && $isApproved && $endDt && $att && !empty($att['time_in_at'])
+                    $canTimeOut = $hasAttendanceTable && $isApproved && $isToday && $endDt && $att && !empty($att['time_in_at'])
                         && empty($att['time_out_at']) && ($now >= $endDt);
+                    $canRequestWaiver = $isApproved && (!$att || empty($att['time_in_at'])) && !$waiver
+                        && (new DateTime($r['reservation_date'])) <= new DateTime('today');
                     $timedIn = $att && !empty($att['time_in_at']);
                     $timedOut = $att && !empty($att['time_out_at']);
                 ?>
@@ -212,12 +233,19 @@ ob_start();
                                         <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#e3f8ef;color:#0d7a43;font-weight:700;font-size:0.85rem;">Completed</span>
                                     <?php elseif ($timedIn): ?>
                                         <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:0.85rem;">Checked In</span>
+                                    <?php elseif ($waiver && ($waiver['status'] ?? '') === 'pending'): ?>
+                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#fef9c3;color:#854d0e;font-weight:700;font-size:0.85rem;">Waiver Pending</span>
+                                    <?php elseif ($waiver && ($waiver['status'] ?? '') === 'approved'): ?>
+                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#e0e7ff;color:#3730a3;font-weight:700;font-size:0.85rem;">Waiver Approved</span>
+                                    <?php elseif ($waiver && ($waiver['status'] ?? '') === 'denied'): ?>
+                                        <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;font-size:0.85rem;">Waiver Denied</span>
                                     <?php else: ?>
                                         <span style="display:inline-block;padding:0.25rem 0.6rem;border-radius:999px;background:#fff7ed;color:#9a3412;font-weight:700;font-size:0.85rem;">Not Checked In</span>
                                     <?php endif; ?>
                                 </div>
                             </div>
                             <div class="time-tracking-actions" style="min-width:280px;flex:1;display:flex;gap:0.75rem;align-items:flex-start;justify-content:flex-end;flex-wrap:wrap;">
+                                <?php if ($isToday): ?>
                                 <form method="POST" enctype="multipart/form-data" style="display:flex;gap:0.5rem;align-items:center;">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="time_in">
@@ -233,6 +261,16 @@ ob_start();
                                     <input type="file" name="proof" accept="image/*" <?= $canTimeOut ? 'required' : 'disabled'; ?> style="max-width:220px;">
                                     <button type="submit" class="btn btn-outline" <?= $canTimeOut ? '' : 'disabled'; ?>>Check Out</button>
                                 </form>
+                                <?php endif; ?>
+                                <?php if ($canRequestWaiver): ?>
+                                <form method="POST" style="display:grid;gap:0.35rem;min-width:240px;">
+                                    <?= csrf_field(); ?>
+                                    <input type="hidden" name="action" value="request_waiver">
+                                    <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
+                                    <textarea name="waiver_reason" rows="2" required placeholder="Why could you not check in?" style="width:100%;font-size:0.85rem;"></textarea>
+                                    <button type="submit" class="btn btn-outline">Request check-in waiver</button>
+                                </form>
+                                <?php endif; ?>
                             </div>
                         </div>
 

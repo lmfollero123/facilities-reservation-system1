@@ -170,22 +170,30 @@ saveDiagram('01_BPMN_Reservation_Approval.drawio', 'BPMN - Reservation and Appro
 
 // --- BPMN: CIMM Maintenance ---
 saveDiagram('02_BPMN_CIMM_Maintenance_Sync.drawio', 'BPMN - CIMM Maintenance Sync', function (DrawioBuilder $d) {
-    $start = $d->box('Start', 60, 260, 50, 50, 'bpmn_start');
-    $t1 = $d->box('CIMM sets facility\nunder maintenance', 150, 240, 170, 70, 'bpmn_task');
-    $t2 = $d->box('CIMM API / webhook\nsends update', 380, 240, 160, 70, 'bpmn_task');
-    $t3 = $d->box('FRS matches facility\n(Cassanova, etc.)', 600, 240, 170, 70, 'bpmn_task');
-    $t4 = $d->box('Update facilities.status\n= maintenance', 820, 240, 170, 70, 'bpmn_task');
-    $t5 = $d->box('Apply blackout dates\n+ block bookings', 1040, 240, 170, 70, 'bpmn_task');
-    $t6 = $d->box('Postpone/cancel\naffected reservations', 1260, 240, 170, 70, 'bpmn_task');
-    $end = $d->box('End', 1480, 255, 50, 50, 'bpmn_end');
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Cron or staff\nopens Maintenance', 120, 240, 150, 70, 'bpmn_task');
+    $t2 = $d->box('Fetch CIMM\nschedules API', 310, 240, 140, 70, 'bpmn_task');
+    $g1 = $d->box('OK?', 490, 255, 60, 60, 'bpmn_gateway');
+    $t3 = $d->box('Match CPRF\nfacilities', 590, 240, 140, 70, 'bpmn_task');
+    $t4 = $d->box('Update status\n+ blackout dates', 770, 240, 150, 70, 'bpmn_task');
+    $g2 = $d->box('New\nschedule?', 960, 255, 60, 60, 'bpmn_gateway');
+    $t5 = $d->box('Gemini auto-\nannouncement', 1060, 180, 140, 60, 'bpmn_task');
+    $t6 = $d->box('Postpone affected\nreservations', 1060, 320, 150, 70, 'bpmn_task');
+    $end = $d->box('End', 1260, 255, 50, 50, 'bpmn_end');
+    $terr = $d->box('Log API error', 490, 380, 120, 50, 'bpmn_task');
 
     $d->edge($start, $t1);
     $d->edge($t1, $t2);
-    $d->edge($t2, $t3);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $t3, 'Yes');
+    $d->edge($g1, $terr, 'No');
     $d->edge($t3, $t4);
-    $d->edge($t4, $t5);
-    $d->edge($t5, $t6);
+    $d->edge($t4, $g2);
+    $d->edge($g2, $t5, 'Yes');
+    $d->edge($g2, $t6, 'Always');
+    $d->edge($t5, $end);
     $d->edge($t6, $end);
+    $d->edge($terr, $end);
 });
 
 // --- BPMN: PayMongo ---
@@ -211,26 +219,34 @@ saveDiagram('03_BPMN_PayMongo_Payment.drawio', 'BPMN - PayMongo Payment (Demo)',
 
 // --- DFD Level 0 ---
 saveDiagram('04_DFD_Level0_Context.drawio', 'DFD Level 0 - Context', function (DrawioBuilder $d) {
-    $sys = $d->box('0.0 Facilities Reservation\nSystem (FRS)', 620, 340, 280, 120, 'system');
-    $resident = $d->box('Resident', 80, 320, 140, 70, 'external');
-    $staff = $d->box('Staff', 80, 480, 140, 70, 'external');
-    $admin = $d->box('Admin', 80, 160, 140, 70, 'external');
-    $cimm = $d->box('CIMM', 1180, 160, 140, 70, 'integration');
-    $pay = $d->box('PayMongo', 1180, 320, 140, 70, 'integration');
-    $gemini = $d->box('Google Gemini', 1180, 480, 140, 70, 'integration');
-    $smtp = $d->box('Email / SMS', 1180, 640, 140, 70, 'integration');
+    $sys = $d->box('0.0 CPRF\nFacilities Reservation', 580, 360, 300, 120, 'system');
+    $resident = $d->box('Resident', 60, 320, 130, 60, 'external');
+    $staff = $d->box('Staff', 60, 460, 130, 60, 'external');
+    $admin = $d->box('Admin', 60, 180, 130, 60, 'external');
+    $visitor = $d->box('Visitor', 60, 40, 130, 60, 'external');
+    $cimm = $d->box('CIMM\nMaintenance', 1180, 80, 150, 60, 'integration');
+    $infra = $d->box('QC Infrastructure\n(Brgy Culiat scope)', 1180, 200, 150, 70, 'integration');
+    $uman = $d->box('UMAN\nUtilities', 1180, 320, 130, 60, 'integration');
+    $pay = $d->box('PayMongo\n(optional)', 1180, 440, 130, 60, 'integration');
+    $gemini = $d->box('Google Gemini', 1180, 560, 130, 60, 'integration');
+    $smtp = $d->box('Email / SMS', 1180, 680, 130, 60, 'integration');
 
-    $d->edge($resident, $sys, 'Booking requests, profile');
+    $d->edge($resident, $sys, 'Bookings, profile');
     $d->edge($staff, $sys, 'Approvals, facilities');
-    $d->edge($admin, $sys, 'Configuration, reports');
+    $d->edge($admin, $sys, 'Config, reports');
+    $d->edge($visitor, $sys, 'Browse, contact');
     $d->edge($sys, $resident, 'Status, notifications');
-    $d->edge($sys, $staff, 'Queue, reports');
+    $d->edge($sys, $staff, 'Queues, reports');
+    $d->edge($sys, $visitor, 'Public pages');
     $d->edge($cimm, $sys, 'Maintenance schedules');
-    $d->edge($sys, $cimm, 'Facility share API');
+    $d->edge($sys, $cimm, 'Maintenance requests');
+    $d->edge($infra, $sys, 'Construction reports');
+    $d->edge($uman, $sys, 'Utility assets');
+    $d->edge($sys, $uman, 'Asset requests');
     $d->edge($pay, $sys, 'Payment webhook');
-    $d->edge($sys, $pay, 'Checkout redirect');
-    $d->edge($sys, $gemini, 'Chat prompts');
-    $d->edge($gemini, $sys, 'AI responses');
+    $d->edge($sys, $pay, 'Checkout');
+    $d->edge($sys, $gemini, 'Chat / announcements');
+    $d->edge($gemini, $sys, 'AI text');
     $d->edge($sys, $smtp, 'Email/SMS');
 });
 
@@ -323,14 +339,17 @@ saveDiagram('09_DFD_Level2_Payments.drawio', 'DFD Level 2 - Payments Module', fu
 });
 
 saveDiagram('17_DFD_Level2_Notifications.drawio', 'DFD Level 2 - Notifications', function (DrawioBuilder $d) {
-    $p91 = $d->box('9.1 In-app alert', 100, 100, 130, 60, 'process');
-    $p92 = $d->box('9.2 Email queue', 280, 100, 130, 60, 'process');
-    $p93 = $d->box('9.3 SMS (preview)', 460, 100, 130, 60, 'process');
-    $d5 = $d->box('D5 Notifications', 280, 240, 140, 50, 'datastore');
-    $smtp = $d->box('SMTP', 280, 360, 100, 50, 'integration');
+    $p91 = $d->box('9.1 In-app', 80, 100, 120, 60, 'process');
+    $p92 = $d->box('9.2 Email', 240, 100, 120, 60, 'process');
+    $p93 = $d->box('9.3 SMS', 400, 100, 120, 60, 'process');
+    $p94 = $d->box('9.4 Public\nannouncements', 560, 100, 130, 60, 'process');
+    $d5 = $d->box('D5 Notifications', 300, 240, 140, 50, 'datastore');
+    $smtp = $d->box('SMTP', 240, 360, 100, 50, 'integration');
+    $sms = $d->box('SMS Gateway', 400, 360, 110, 50, 'integration');
     $d->edge($p91, $d5, 'write');
-    $d->edge($p92, $d5, 'queue');
     $d->edge($p92, $smtp, 'send');
+    $d->edge($p93, $sms, 'send');
+    $d->edge($p94, $d5, 'public row');
 });
 
 saveDiagram('18_DFD_Level2_AI.drawio', 'DFD Level 2 - AI Services', function (DrawioBuilder $d) {
@@ -369,45 +388,55 @@ saveDiagram('20_DFD_Level2_Checkin.drawio', 'DFD Level 2 - Attendance Check-in',
 
 // --- BPA Level 0 ---
 saveDiagram('10_BPA_Level0_Integration.drawio', 'BPA Level 0 - With Integrations', function (DrawioBuilder $d) {
-    $core = $d->box('Barangay Culiat\nFacility Reservation\n(E2E)', 600, 300, 240, 100, 'system');
-    $r = $d->box('Residents', 80, 280, 120, 60, 'external');
-    $s = $d->box('Barangay Staff', 80, 420, 120, 60, 'external');
-    $a = $d->box('Admin', 80, 140, 120, 60, 'external');
-    $cimm = $d->box('CIMM', 1100, 140, 120, 60, 'integration');
-    $pay = $d->box('PayMongo', 1100, 300, 120, 60, 'integration');
-    $ai = $d->box('Gemini AI', 1100, 460, 120, 60, 'integration');
+    $core = $d->box('Barangay Culiat CPRF\n(Facility Reservation E2E)', 560, 320, 260, 100, 'system');
+    $r = $d->box('Residents', 60, 300, 120, 60, 'external');
+    $s = $d->box('Barangay Staff', 60, 440, 120, 60, 'external');
+    $a = $d->box('Admin', 60, 160, 120, 60, 'external');
+    $v = $d->box('Visitors', 60, 40, 120, 50, 'external');
+    $cimm = $d->box('CIMM', 1100, 80, 130, 60, 'integration');
+    $infra = $d->box('QC Infrastructure\n(Brgy Culiat)', 1100, 200, 150, 70, 'integration');
+    $uman = $d->box('UMAN', 1100, 320, 120, 60, 'integration');
+    $pay = $d->box('PayMongo', 1100, 440, 120, 60, 'integration');
+    $ai = $d->box('Gemini AI', 1100, 560, 120, 60, 'integration');
     $d->edge($r, $core, 'Book & track');
     $d->edge($s, $core, 'Approve & operate');
     $d->edge($a, $core, 'Govern');
-    $d->edge($cimm, $core, 'Maintenance status');
-    $d->edge($core, $cimm, 'Facility catalog');
-    $d->edge($pay, $core, 'Payment events');
-    $d->edge($core, $pay, 'Checkout');
-    $d->edge($ai, $core, 'AI responses');
-    $d->edge($core, $ai, 'Chat context');
+    $d->edge($v, $core, 'Browse');
+    $d->edge($cimm, $core, 'Maintenance');
+    $d->edge($infra, $core, 'Construction reports');
+    $d->edge($uman, $core, 'Assets');
+    $d->edge($pay, $core, 'Payments');
+    $d->edge($ai, $core, 'AI assist');
 });
 
 // --- BPA Level 1 ---
 saveDiagram('11_BPA_Level1_System.drawio', 'BPA Level 1 - Entire System', function (DrawioBuilder $d) {
-    $bp1 = $d->box('BP-01\nOnboarding', 100, 80, 130, 70, 'module');
-    $bp2 = $d->box('BP-02\nFacility Catalog', 280, 80, 130, 70, 'module');
-    $bp3 = $d->box('BP-03\nReservation', 460, 80, 130, 70, 'module');
-    $bp4 = $d->box('BP-04\nApproval', 640, 80, 130, 70, 'module');
-    $bp5 = $d->box('BP-05\nPayment', 820, 80, 130, 70, 'module');
-    $bp6 = $d->box('BP-06\nMaintenance Sync', 100, 240, 150, 70, 'module');
-    $bp7 = $d->box('BP-07\nCheck-in', 300, 240, 130, 70, 'module');
-    $bp8 = $d->box('BP-08\nReporting', 500, 240, 130, 70, 'module');
-    $bp9 = $d->box('BP-09\nNotifications', 700, 240, 140, 70, 'module');
-    $bp10 = $d->box('BP-10\nAI Assist', 900, 240, 120, 70, 'module');
+    $bp1 = $d->box('BP-01\nOnboarding', 80, 60, 120, 65, 'module');
+    $bp2 = $d->box('BP-02\nPublic Portal', 230, 60, 120, 65, 'module');
+    $bp3 = $d->box('BP-03\nReservation', 380, 60, 120, 65, 'module');
+    $bp4 = $d->box('BP-04\nApproval', 530, 60, 120, 65, 'module');
+    $bp5 = $d->box('BP-05\nPayment', 680, 60, 110, 65, 'module');
+    $bp6 = $d->box('BP-06\nMaintenance', 830, 60, 120, 65, 'module');
+    $bp7 = $d->box('BP-07\nAttendance', 980, 60, 120, 65, 'module');
+    $bp8 = $d->box('BP-08\nOccupancy', 80, 200, 120, 65, 'module');
+    $bp9 = $d->box('BP-09\nCommunications', 230, 200, 130, 65, 'module');
+    $bp10 = $d->box('BP-10\nIntegrations', 400, 200, 120, 65, 'module');
+    $bp11 = $d->box('BP-11\nReporting', 550, 200, 120, 65, 'module');
+    $bp12 = $d->box('BP-12\nAI Assist', 700, 200, 110, 65, 'module');
+    $bp13 = $d->box('BP-13\nCompliance', 850, 200, 120, 65, 'module');
 
-    $d->edge($bp1, $bp3, '');
-    $d->edge($bp2, $bp3, '');
-    $d->edge($bp3, $bp4, '');
-    $d->edge($bp3, $bp5, '');
-    $d->edge($bp6, $bp2, '');
-    $d->edge($bp4, $bp7, '');
-    $d->edge($bp4, $bp9, '');
-    $d->edge($bp8, $bp9, '');
+    $d->edge($bp1, $bp3);
+    $d->edge($bp2, $bp3);
+    $d->edge($bp3, $bp4);
+    $d->edge($bp3, $bp5);
+    $d->edge($bp6, $bp3);
+    $d->edge($bp10, $bp6);
+    $d->edge($bp4, $bp7);
+    $d->edge($bp7, $bp8);
+    $d->edge($bp4, $bp9);
+    $d->edge($bp9, $bp2);
+    $d->edge($bp11, $bp13);
+    $d->edge($bp12, $bp3);
 });
 
 // --- BPA Level 2 per module ---
@@ -488,78 +517,660 @@ foreach ($bpaL2 as $file => [$title, $steps]) {
     });
 }
 
+// --- Additional BPMN processes ---
+saveDiagram('25_BPMN_Registration.drawio', 'BPMN - User Registration', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Submit registration\n+ Valid ID', 120, 240, 150, 70, 'bpmn_task');
+    $t2 = $d->box('Accept Terms &\nPrivacy', 310, 240, 140, 70, 'bpmn_task');
+    $t3 = $d->box('Verify email', 490, 240, 120, 70, 'bpmn_task');
+    $g1 = $d->box('Staff\napproves?', 650, 255, 70, 70, 'bpmn_gateway');
+    $t4 = $d->box('Activate account', 780, 200, 130, 60, 'bpmn_task');
+    $t5 = $d->box('Deny / lock', 780, 340, 120, 60, 'bpmn_task');
+    $end = $d->box('End', 960, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $t3);
+    $d->edge($t3, $g1);
+    $d->edge($g1, $t4, 'Yes');
+    $d->edge($g1, $t5, 'No');
+    $d->edge($t4, $end);
+    $d->edge($t5, $end);
+});
+
+saveDiagram('26_BPMN_Blackout_Gemini_Announcement.drawio', 'BPMN - CPRF Blackout + Auto Announcement', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Staff adds\nblackout range', 120, 240, 140, 70, 'bpmn_task');
+    $t2 = $d->box('Insert blackout\nrows', 300, 240, 130, 70, 'bpmn_task');
+    $t3 = $d->box('Postpone conflicting\nreservations', 470, 240, 160, 70, 'bpmn_task');
+    $g1 = $d->box('CPRF\nmanual?', 670, 255, 70, 70, 'bpmn_gateway');
+    $t4 = $d->box('Gemini writes\nannouncement', 780, 180, 140, 60, 'bpmn_task');
+    $t5 = $d->box('Publish public\nannouncement', 960, 180, 140, 60, 'bpmn_task');
+    $end = $d->box('End', 1140, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $t3);
+    $d->edge($t3, $g1);
+    $d->edge($g1, $t4, 'Yes');
+    $d->edge($g1, $end, 'CIMM skip');
+    $d->edge($t4, $t5);
+    $d->edge($t5, $end);
+});
+
+saveDiagram('27_BPMN_Facility_QR_Checkin.drawio', 'BPMN - Facility QR Check-in', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Scan facility QR', 120, 240, 130, 70, 'bpmn_task');
+    $g1 = $d->box('Logged\nin?', 290, 255, 60, 60, 'bpmn_gateway');
+    $t2 = $d->box('Redirect login', 270, 380, 120, 50, 'bpmn_task');
+    $g2 = $d->box('Approved\nbooking today?', 400, 255, 70, 70, 'bpmn_gateway');
+    $g3 = $d->box('Already\nchecked in?', 560, 255, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Record check-in', 700, 200, 130, 60, 'bpmn_task');
+    $t4 = $d->box('Record check-out', 700, 320, 130, 60, 'bpmn_task');
+    $end = $d->box('End', 880, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $g1);
+    $d->edge($g1, $t2, 'No');
+    $d->edge($g1, $g2, 'Yes');
+    $d->edge($g2, $end, 'No');
+    $d->edge($g2, $g3, 'Yes');
+    $d->edge($g3, $t3, 'No');
+    $d->edge($g3, $t4, 'Yes');
+    $d->edge($t3, $end);
+    $d->edge($t4, $end);
+    $d->edge($t2, $end);
+});
+
+saveDiagram('28_BPMN_AI_Chatbot.drawio', 'BPMN - AI Chatbot', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('User sends\nmessage', 120, 240, 130, 70, 'bpmn_task');
+    $g1 = $d->box('Gemini\nkey set?', 290, 255, 60, 60, 'bpmn_gateway');
+    $t2 = $d->box('Call Gemini API', 400, 180, 130, 60, 'bpmn_task');
+    $t3 = $d->box('ML intent +\nrule fallback', 400, 340, 140, 60, 'bpmn_task');
+    $g2 = $d->box('Prefill\nbooking?', 580, 255, 70, 70, 'bpmn_gateway');
+    $t4 = $d->box('Populate booking\nform fields', 700, 200, 150, 60, 'bpmn_task');
+    $t5 = $d->box('Show reply', 700, 320, 120, 60, 'bpmn_task');
+    $end = $d->box('End', 880, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $g1);
+    $d->edge($g1, $t2, 'Yes');
+    $d->edge($g1, $t3, 'No');
+    $d->edge($t2, $g2);
+    $d->edge($t3, $g2);
+    $d->edge($g2, $t4, 'Yes');
+    $d->edge($g2, $t5, 'No');
+    $d->edge($t4, $end);
+    $d->edge($t5, $end);
+});
+
+saveDiagram('29_BPMN_Reschedule.drawio', 'BPMN - Resident Reschedule', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Request new\ndate/time', 120, 240, 130, 70, 'bpmn_task');
+    $g1 = $d->box('Rules OK?\n(≥3 days)', 290, 255, 70, 70, 'bpmn_gateway');
+    $t2 = $d->box('Show error', 270, 380, 110, 50, 'bpmn_task');
+    $g2 = $d->box('Was\napproved?', 410, 255, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Set pending\nre-approval', 540, 200, 140, 60, 'bpmn_task');
+    $t4 = $d->box('Update slot', 540, 320, 120, 60, 'bpmn_task');
+    $t5 = $d->box('Notify user', 700, 260, 120, 60, 'bpmn_task');
+    $end = $d->box('End', 860, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $g1);
+    $d->edge($g1, $t2, 'No');
+    $d->edge($g1, $g2, 'Yes');
+    $d->edge($g2, $t3, 'Yes');
+    $d->edge($g2, $t4, 'No');
+    $d->edge($t3, $t5);
+    $d->edge($t4, $t5);
+    $d->edge($t5, $end);
+    $d->edge($t2, $end);
+});
+
+saveDiagram('30_BPMN_Infrastructure_Ingest.drawio', 'BPMN - Infrastructure Report (Brgy Culiat)', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 260, 50, 50, 'bpmn_start');
+    $t1 = $d->box('QC Infrastructure\nplanned project', 120, 240, 160, 70, 'bpmn_task');
+    $t2 = $d->box('Filter to\nBarangay Culiat', 320, 240, 150, 70, 'bpmn_task');
+    $t3 = $d->box('CPRF receives\nconstruction report', 510, 240, 160, 70, 'bpmn_task');
+    $t4 = $d->box('Display on\nInfrastructure dashboard', 700, 240, 170, 70, 'bpmn_task');
+    $end = $d->box('End', 920, 255, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $t3);
+    $d->edge($t3, $t4);
+    $d->edge($t4, $end);
+});
+
+// --- WFD (Workflow) diagrams ---
+saveDiagram('31_WFD_Registration_to_Booking.drawio', 'WFD - Registration to First Booking', function (DrawioBuilder $d) {
+    $steps = [
+        ['Register online', 100, 120],
+        ['Verify email', 280, 120],
+        ['Staff approves', 460, 120],
+        ['Verify ID', 640, 120],
+        ['Login OTP/TOTP', 820, 120],
+        ['Book facility', 1000, 120],
+    ];
+    $prev = $d->box('Start', 40, 130, 40, 40, 'bpmn_start');
+    $x = 100;
+    foreach ($steps as $s) {
+        $id = $d->box($s[0], $x, 110, 140, 60, 'bpmn_task');
+        $d->edge($prev, $id);
+        $prev = $id;
+        $x += 180;
+    }
+    $end = $d->box('End', $x + 20, 125, 40, 40, 'bpmn_end');
+    $d->edge($prev, $end);
+});
+
+saveDiagram('32_WFD_Staff_Approval_Tabs.drawio', 'WFD - Staff Approval Tabs', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 40, 40, 'bpmn_start');
+    $t1 = $d->box('Open Reservations\nManage', 100, 180, 150, 70, 'bpmn_task');
+    $g1 = $d->box('Tab?', 290, 195, 60, 60, 'bpmn_gateway');
+    $t2 = $d->box('Pending queue\nfilter/search', 400, 120, 150, 60, 'bpmn_task');
+    $t3 = $d->box('Approved list\nmonitor', 400, 280, 150, 60, 'bpmn_task');
+    $t4 = $d->box('Review & act', 600, 200, 130, 60, 'bpmn_task');
+    $end = $d->box('End', 780, 205, 40, 40, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $g1);
+    $d->edge($g1, $t2, 'Pending');
+    $d->edge($g1, $t3, 'Approved');
+    $d->edge($t2, $t4);
+    $d->edge($t3, $t4);
+    $d->edge($t4, $end);
+});
+
+saveDiagram('33_WFD_Attendance_NoShow.drawio', 'WFD - Attendance & No-Show', function (DrawioBuilder $d) {
+    $steps = [
+        ['Send reminders', 100, 120],
+        ['Event day grace', 280, 120],
+        ['Checked in?', 460, 120],
+        ['Record violation', 640, 120],
+    ];
+    $prev = $d->box('Start', 40, 130, 40, 40, 'bpmn_start');
+    $x = 100;
+    foreach ($steps as $s) {
+        $id = $d->box($s[0], $x, 110, 140, 60, 'bpmn_task');
+        $d->edge($prev, $id);
+        $prev = $id;
+        $x += 180;
+    }
+    $end = $d->box('End', $x + 20, 125, 40, 40, 'bpmn_end');
+    $d->edge($prev, $end);
+});
+
+saveDiagram('34_WFD_Document_Archival.drawio', 'WFD - Document Archival Cron', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 40, 40, 'bpmn_start');
+    $t1 = $d->box('Cron runs\narchive job', 100, 180, 140, 60, 'bpmn_task');
+    $g1 = $d->box('Expired\ndocs?', 280, 195, 60, 60, 'bpmn_gateway');
+    $t2 = $d->box('Archive files', 400, 160, 120, 60, 'bpmn_task');
+    $t3 = $d->box('Write audit log', 560, 160, 130, 60, 'bpmn_task');
+    $end = $d->box('End', 740, 205, 40, 40, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $g1);
+    $d->edge($g1, $t2, 'Yes');
+    $d->edge($g1, $end, 'No');
+    $d->edge($t2, $t3);
+    $d->edge($t3, $end);
+});
+
+// --- Additional DFD Level 2 ---
+saveDiagram('35_DFD_Level2_Public_Portal.drawio', 'DFD Level 2 - Public Portal', function (DrawioBuilder $d) {
+    $p1 = $d->box('2.1 Browse\nfacilities', 80, 100, 130, 60, 'process');
+    $p2 = $d->box('2.2 Announcements', 260, 100, 130, 60, 'process');
+    $p3 = $d->box('2.3 Contact form', 440, 100, 120, 60, 'process');
+    $p4 = $d->box('2.4 Availability API', 600, 100, 130, 60, 'process');
+    $d2 = $d->box('D2 Facilities', 180, 260, 120, 50, 'datastore');
+    $d6 = $d->box('D6 Public Notif', 400, 260, 130, 50, 'datastore');
+    $d->edge($p1, $d2, 'read');
+    $d->edge($p2, $d6, 'read');
+    $d->edge($p3, $d6, 'write inquiry');
+});
+
+saveDiagram('36_DFD_Level2_Integrations.drawio', 'DFD Level 2 - Integrations Hub', function (DrawioBuilder $d) {
+    $p1 = $d->box('9.1 CIMM sync', 80, 100, 120, 60, 'process');
+    $p2 = $d->box('9.2 Infrastructure\nreports', 240, 100, 130, 60, 'process');
+    $p3 = $d->box('9.3 UMAN assets', 410, 100, 120, 60, 'process');
+    $d2 = $d->box('D2 Facilities', 200, 260, 120, 50, 'datastore');
+    $d5 = $d->box('D5 Blackouts', 380, 260, 120, 50, 'datastore');
+    $d8 = $d->box('D8 Sync state', 540, 260, 110, 50, 'datastore');
+    $cimm = $d->box('CIMM', 80, 380, 90, 50, 'integration');
+    $infra = $d->box('Infrastructure', 240, 380, 110, 50, 'integration');
+    $uman = $d->box('UMAN', 410, 380, 90, 50, 'integration');
+    $d->edge($cimm, $p1);
+    $d->edge($infra, $p2);
+    $d->edge($uman, $p3);
+    $d->edge($p1, $d2);
+    $d->edge($p1, $d5);
+    $d->edge($p1, $d8);
+});
+
+saveDiagram('37_DFD_Level2_Occupancy.drawio', 'DFD Level 2 - Live Occupancy', function (DrawioBuilder $d) {
+    $p1 = $d->box('5.1 Aggregate\nbookings', 100, 100, 130, 60, 'process');
+    $p2 = $d->box('5.2 Live API\npoll', 300, 100, 120, 60, 'process');
+    $p3 = $d->box('5.3 Staff\noverride', 500, 100, 120, 60, 'process');
+    $d3 = $d->box('D3 Reservations', 200, 260, 130, 50, 'datastore');
+    $d7 = $d->box('D7 Occupancy\ncache', 400, 260, 120, 50, 'datastore');
+    $d->edge($p1, $d3, 'read');
+    $d->edge($p2, $d7, 'R/W');
+    $d->edge($p3, $d7, 'override');
+});
+
+saveDiagram('38_DFD_Level2_Announcements.drawio', 'DFD Level 2 - Announcements', function (DrawioBuilder $d) {
+    $p1 = $d->box('7.1 Staff manual\npost', 80, 100, 130, 60, 'process');
+    $p2 = $d->box('7.2 CIMM auto\n(Gemini)', 260, 100, 130, 60, 'process');
+    $p3 = $d->box('7.3 Blackout auto\n(Gemini)', 440, 100, 140, 60, 'process');
+    $d6 = $d->box('D6 Public\nnotifications', 280, 260, 140, 50, 'datastore');
+    $gem = $d->box('Gemini', 440, 380, 100, 50, 'integration');
+    $d->edge($p1, $d6, 'insert');
+    $d->edge($gem, $p2);
+    $d->edge($gem, $p3);
+    $d->edge($p2, $d6);
+    $d->edge($p3, $d6);
+});
+
+saveDiagram('39_DFD_Level2_Calendar.drawio', 'DFD Level 2 - Calendar', function (DrawioBuilder $d) {
+    $p1 = $d->box('11.1 Month/week\nday views', 120, 100, 140, 60, 'process');
+    $p2 = $d->box('11.2 iCal export', 320, 100, 120, 60, 'process');
+    $d3 = $d->box('D3 Reservations', 200, 260, 130, 50, 'datastore');
+    $d5 = $d->box('D5 Blackouts', 380, 260, 120, 50, 'datastore');
+    $d->edge($p1, $d3, 'read');
+    $d->edge($p1, $d5, 'read');
+    $d->edge($p2, $d3, 'export');
+});
+
+saveDiagram('40_DFD_Level2_Documents.drawio', 'DFD Level 2 - Document Management', function (DrawioBuilder $d) {
+    $p1 = $d->box('12.1 Secure\nupload', 100, 100, 120, 60, 'process');
+    $p2 = $d->box('12.2 Archival\ncron', 280, 100, 120, 60, 'process');
+    $p3 = $d->box('12.3 Admin\nrestore', 460, 100, 120, 60, 'process');
+    $d2 = $d->box('D2 Documents', 280, 260, 130, 50, 'datastore');
+    $d7 = $d->box('D7 Audit', 460, 260, 100, 50, 'datastore');
+    $d->edge($p1, $d2, 'write');
+    $d->edge($p2, $d2, 'archive');
+    $d->edge($p3, $d2, 'restore');
+    $d->edge($p2, $d7, 'log');
+});
+
+// --- Additional BPA Level 2 ---
+$extraBpa = [
+    '41_BPA_Level2_Communications.drawio' => ['Communications', [
+        ['Compose announcement', 100, 120],
+        ['Gemini or manual copy', 280, 120],
+        ['Publish to portal', 460, 120],
+        ['Email/SMS notify', 640, 120],
+    ]],
+    '42_BPA_Level2_Integrations.drawio' => ['Integrations Hub', [
+        ['Poll CIMM API', 100, 120],
+        ['Receive infra report', 280, 120],
+        ['Sync UMAN assets', 460, 120],
+        ['Update dashboards', 640, 120],
+    ]],
+    '43_BPA_Level2_Occupancy.drawio' => ['Occupancy Monitor', [
+        ['Load today bookings', 100, 120],
+        ['Apply check-in state', 280, 120],
+        ['Compute live status', 460, 120],
+        ['Staff dashboard view', 640, 120],
+    ]],
+    '44_BPA_Level2_Blackout.drawio' => ['Blackout Management', [
+        ['Select facility/dates', 100, 120],
+        ['Save blackout rows', 280, 120],
+        ['Postpone reservations', 460, 120],
+        ['Optional auto announce', 640, 120],
+    ]],
+    '45_BPA_Level2_ID_Verification.drawio' => ['ID Verification', [
+        ['Open ID queue tab', 100, 120],
+        ['View uploaded ID', 280, 120],
+        ['Verify or request redo', 460, 120],
+        ['Update user flag', 640, 120],
+    ]],
+];
+foreach ($extraBpa as $file => [$title, $steps]) {
+    saveDiagram($file, "BPA Level 2 - $title", function (DrawioBuilder $d) use ($steps) {
+        $prev = $d->box('Start', 40, 130, 40, 40, 'bpmn_start');
+        $x = 100;
+        foreach ($steps as $step) {
+            $id = $d->box($step[0], $x, 110, 140, 60, 'bpmn_task');
+            $d->edge($prev, $id);
+            $prev = $id;
+            $x += 180;
+        }
+        $end = $d->box('End', $x + 20, 125, 40, 40, 'bpmn_end');
+        $d->edge($prev, $end);
+    });
+}
+
+// --- Additional DFD Level 2 (master doc gaps) ---
+saveDiagram('46_DFD_Level2_User_Management.drawio', 'DFD Level 2 - User Management', function (DrawioBuilder $d) {
+    $stf = $d->box('Staff/Admin', 40, 120, 110, 50, 'external');
+    $p21 = $d->box('2.1 Register\nreview', 200, 60, 120, 60, 'process');
+    $p22 = $d->box('2.2 ID\nverification', 200, 160, 120, 60, 'process');
+    $p23 = $d->box('2.3 Account\nactions', 380, 110, 120, 60, 'process');
+    $p7 = $d->box('7.0 Notify', 560, 110, 100, 50, 'process');
+    $d1 = $d->box('D1 Users', 320, 280, 110, 50, 'datastore');
+    $d2 = $d->box('D2 Documents', 200, 280, 120, 50, 'datastore');
+    $d7 = $d->box('D7 Audit', 440, 280, 100, 50, 'datastore');
+    $d->edge($stf, $p21);
+    $d->edge($stf, $p22);
+    $d->edge($stf, $p23);
+    $d->edge($p21, $d1, 'R/W');
+    $d->edge($p22, $d2, 'read');
+    $d->edge($p23, $d1, 'update');
+    $d->edge($p23, $d7, 'log');
+    $d->edge($p23, $p7, 'notify');
+});
+
+saveDiagram('47_DFD_Level2_System_Settings.drawio', 'DFD Level 2 - System Settings', function (DrawioBuilder $d) {
+    $adm = $d->box('Admin', 80, 120, 100, 50, 'external');
+    $p131 = $d->box('13.1 Integration\nhealth', 260, 110, 140, 60, 'process');
+    $d8 = $d->box('D8 Sync state', 260, 260, 120, 50, 'datastore');
+    $cimm = $d->box('CIMM API', 460, 200, 110, 50, 'integration');
+    $uman = $d->box('UMAN API', 460, 300, 110, 50, 'integration');
+    $d->edge($adm, $p131);
+    $d->edge($p131, $d8, 'read');
+    $d->edge($p131, $cimm, 'ping');
+    $d->edge($p131, $uman, 'ping');
+});
+
+// --- Additional WFD (master doc §4.3–4.5) ---
+saveDiagram('48_WFD_CIMM_Maintenance_Sync.drawio', 'WFD - CIMM Maintenance Sync', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Cron or staff\npage', 120, 190, 120, 60, 'bpmn_task');
+    $t2 = $d->box('Fetch CIMM\nschedules', 280, 190, 120, 60, 'bpmn_task');
+    $g1 = $d->box('API OK?', 440, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Log error', 430, 320, 100, 50, 'bpmn_task');
+    $t4 = $d->box('Map to CPRF\nfacilities', 560, 190, 130, 60, 'bpmn_task');
+    $t5 = $d->box('Update status\nif active', 730, 190, 130, 60, 'bpmn_task');
+    $t6 = $d->box('Sync blackout\ndates', 900, 190, 120, 60, 'bpmn_task');
+    $g2 = $d->box('New\nschedule?', 1060, 200, 70, 70, 'bpmn_gateway');
+    $t7 = $d->box('Gemini auto-\nannouncement', 1180, 120, 140, 60, 'bpmn_task');
+    $t8 = $d->box('Skip announce', 1180, 280, 110, 50, 'bpmn_task');
+    $end = $d->box('End', 1360, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $t3, 'No');
+    $d->edge($g1, $t4, 'Yes');
+    $d->edge($t4, $t5);
+    $d->edge($t5, $t6);
+    $d->edge($t6, $g2);
+    $d->edge($g2, $t7, 'Yes');
+    $d->edge($g2, $t8, 'No');
+    $d->edge($t7, $end);
+    $d->edge($t8, $end);
+    $d->edge($t3, $end);
+});
+
+saveDiagram('49_WFD_CPRF_Blackout_Announcement.drawio', 'WFD - CPRF Blackout + Auto Announcement', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Staff adds\nblackout', 120, 190, 120, 60, 'bpmn_task');
+    $t2 = $d->box('Validate dates\nand reason', 280, 190, 130, 60, 'bpmn_task');
+    $t3 = $d->box('Insert blackout\nrows', 450, 190, 120, 60, 'bpmn_task');
+    $t4 = $d->box('Postpone\nconflicting bookings', 600, 190, 150, 60, 'bpmn_task');
+    $g1 = $d->box('CPRF\nmanual?', 790, 200, 70, 70, 'bpmn_gateway');
+    $t5 = $d->box('Gemini\nannouncement', 900, 120, 120, 60, 'bpmn_task');
+    $t6 = $d->box('Skip — CIMM\nhandles', 900, 280, 120, 60, 'bpmn_task');
+    $t7 = $d->box('Publish to\npublic portal', 1060, 120, 130, 60, 'bpmn_task');
+    $end = $d->box('End', 1240, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $t3);
+    $d->edge($t3, $t4);
+    $d->edge($t4, $g1);
+    $d->edge($g1, $t5, 'Yes');
+    $d->edge($g1, $t6, 'CIMM');
+    $d->edge($t5, $t7);
+    $d->edge($t7, $end);
+    $d->edge($t6, $end);
+});
+
+saveDiagram('50_WFD_Facility_QR_Checkin.drawio', 'WFD - Facility QR Check-In', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('User scans\nfacility QR', 120, 190, 120, 60, 'bpmn_task');
+    $t2 = $d->box('Open check-in\ngate', 280, 190, 120, 60, 'bpmn_task');
+    $g1 = $d->box('Logged\nin?', 440, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Redirect\nlogin', 430, 320, 100, 50, 'bpmn_task');
+    $g2 = $d->box('Approved\nbooking today?', 580, 200, 80, 80, 'bpmn_gateway');
+    $t4 = $d->box('Show error', 570, 320, 100, 50, 'bpmn_task');
+    $g3 = $d->box('Already\nchecked in?', 740, 200, 80, 80, 'bpmn_gateway');
+    $t5 = $d->box('Check out', 900, 120, 100, 50, 'bpmn_task');
+    $t6 = $d->box('Check in +\ntimestamp', 900, 280, 120, 60, 'bpmn_task');
+    $end = $d->box('End', 1080, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $t3, 'No');
+    $d->edge($g1, $g2, 'Yes');
+    $d->edge($g2, $t4, 'No');
+    $d->edge($g2, $g3, 'Yes');
+    $d->edge($g3, $t5, 'Yes');
+    $d->edge($g3, $t6, 'No');
+    $d->edge($t3, $end);
+    $d->edge($t4, $end);
+    $d->edge($t5, $end);
+    $d->edge($t6, $end);
+});
+
+// --- Additional BPMN (master doc §6.3, 6.7–6.8, 6.10, 6.12) ---
+saveDiagram('51_BPMN_Staff_Approval.drawio', 'BPMN - Staff Reservation Approval', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Open pending\ntab', 120, 190, 120, 60, 'bpmn_task');
+    $t2 = $d->box('Review\nreservation', 280, 190, 120, 60, 'bpmn_task');
+    $g1 = $d->box('Decision', 440, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Update\napproved', 560, 100, 110, 50, 'bpmn_task');
+    $t4 = $d->box('Update\ndenied', 560, 190, 110, 50, 'bpmn_task');
+    $t5 = $d->box('Modify fields\n+ history', 560, 280, 120, 60, 'bpmn_task');
+    $t6 = $d->box('Audit log', 720, 190, 100, 50, 'bpmn_task');
+    $t7 = $d->box('Notify\nresident', 860, 190, 110, 50, 'bpmn_task');
+    $end = $d->box('End', 1020, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $t3, 'Approve');
+    $d->edge($g1, $t4, 'Deny');
+    $d->edge($g1, $t5, 'Modify');
+    $d->edge($t3, $t6);
+    $d->edge($t4, $t6);
+    $d->edge($t5, $t6);
+    $d->edge($t6, $t7);
+    $d->edge($t7, $end);
+});
+
+saveDiagram('52_BPMN_Attendance_NoShow.drawio', 'BPMN - Attendance and No-Show', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Send event-day\nreminders', 120, 190, 130, 60, 'bpmn_task');
+    $t2 = $d->box('Wait grace\nperiod', 290, 190, 110, 60, 'bpmn_task');
+    $g1 = $d->box('Checked\nin?', 440, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Mark no-show\nrisk', 560, 280, 120, 60, 'bpmn_task');
+    $t4 = $d->box('Record violation\n(optional)', 720, 280, 130, 60, 'bpmn_task');
+    $end = $d->box('End', 900, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $end, 'Yes');
+    $d->edge($g1, $t3, 'No');
+    $d->edge($t3, $t4);
+    $d->edge($t4, $end);
+});
+
+saveDiagram('53_BPMN_Announcement_Publishing.drawio', 'BPMN - Announcement Publishing', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $g1 = $d->box('Source', 140, 200, 70, 70, 'bpmn_gateway');
+    $t1 = $d->box('Staff manual\nform', 280, 80, 120, 60, 'bpmn_task');
+    $t2 = $d->box('CIMM sync +\nGemini', 280, 190, 120, 60, 'bpmn_task');
+    $t3 = $d->box('CPRF blackout +\nGemini', 280, 300, 130, 60, 'bpmn_task');
+    $t4 = $d->box('Insert public\nnotification', 480, 190, 140, 60, 'bpmn_task');
+    $t5 = $d->box('Show on home +\n/announcements', 680, 190, 150, 60, 'bpmn_task');
+    $end = $d->box('End', 880, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $g1);
+    $d->edge($g1, $t1, 'Manual');
+    $d->edge($g1, $t2, 'CIMM');
+    $d->edge($g1, $t3, 'Blackout');
+    $d->edge($t1, $t4);
+    $d->edge($t2, $t4);
+    $d->edge($t3, $t4);
+    $d->edge($t4, $t5);
+    $d->edge($t5, $end);
+});
+
+saveDiagram('54_BPMN_Document_Archival.drawio', 'BPMN - Document Archival', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Daily cron\nruns', 120, 190, 110, 60, 'bpmn_task');
+    $t2 = $d->box('Find expired\ndocuments', 270, 190, 120, 60, 'bpmn_task');
+    $g1 = $d->box('Any\nfound?', 430, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Move to\narchive', 560, 120, 110, 50, 'bpmn_task');
+    $t4 = $d->box('Log audit\nentry', 720, 120, 110, 50, 'bpmn_task');
+    $end = $d->box('End', 880, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $end, 'No');
+    $d->edge($g1, $t3, 'Yes');
+    $d->edge($t3, $t4);
+    $d->edge($t4, $end);
+});
+
+saveDiagram('55_BPMN_Reports_Export.drawio', 'BPMN - Reports Export', function (DrawioBuilder $d) {
+    $start = $d->box('Start', 40, 200, 50, 50, 'bpmn_start');
+    $t1 = $d->box('Staff applies\nfilters', 120, 190, 120, 60, 'bpmn_task');
+    $t2 = $d->box('Render\ncharts', 280, 190, 100, 60, 'bpmn_task');
+    $g1 = $d->box('Export\nformat', 420, 200, 70, 70, 'bpmn_gateway');
+    $t3 = $d->box('Download\nCSV', 560, 120, 100, 50, 'bpmn_task');
+    $t4 = $d->box('Print / PDF\nview', 560, 280, 110, 50, 'bpmn_task');
+    $end = $d->box('End', 720, 200, 50, 50, 'bpmn_end');
+    $d->edge($start, $t1);
+    $d->edge($t1, $t2);
+    $d->edge($t2, $g1);
+    $d->edge($g1, $t3, 'CSV');
+    $d->edge($g1, $t4, 'PDF');
+    $d->edge($t3, $end);
+    $d->edge($t4, $end);
+});
+
+// --- BPA Level 3 (master doc §5.3) ---
+saveDiagram('56_BPA_Level3_Auto_Approval.drawio', 'BPA Level 3 - Auto-Approval Rules', function (DrawioBuilder $d) {
+    $labels = [
+        '3.4.1 auto_approve flag',
+        '3.4.2 blackout / CIMM',
+        '3.4.3 duration & capacity',
+        '3.4.4 commercial check',
+        '3.4.5 AI conflict',
+        '3.4.6 user violations',
+        '3.4.7 advance window',
+        '3.4.8 approved or pending',
+        '3.4.9 notify all',
+    ];
+    $positions = [
+        [100, 120], [260, 120], [420, 120], [580, 120], [740, 120],
+        [100, 250], [260, 250], [420, 250], [580, 250],
+    ];
+    $prev = $d->box('Start', 40, 140, 40, 40, 'bpmn_start');
+    foreach ($labels as $i => $label) {
+        [$x, $y] = $positions[$i];
+        $id = $d->box($label, $x, $y, 130, 55, 'bpmn_task');
+        $d->edge($prev, $id);
+        $prev = $id;
+    }
+    $end = $d->box('End', 740, 250, 40, 40, 'bpmn_end');
+    $d->edge($prev, $end);
+});
+
+// --- PNG export ---
+$exportDir = $outDir . '/export';
+if (!is_dir($exportDir)) {
+    mkdir($exportDir, 0775, true);
+}
+$drawioFiles = glob($outDir . '/*.drawio') ?: [];
+$pngOk = 0;
+$pngFail = 0;
+foreach ($drawioFiles as $drawioPath) {
+    $base = basename($drawioPath, '.drawio');
+    $pngPath = $exportDir . '/' . $base . '.png';
+    $cmd = 'npx --yes draw.io-export ' . escapeshellarg($drawioPath) . ' -o ' . escapeshellarg($pngPath) . ' -F png 2>&1';
+    exec($cmd, $execOut, $code);
+    if ($code === 0 && is_file($pngPath)) {
+        echo "PNG: docs/diagrams/export/$base.png\n";
+        $pngOk++;
+    } else {
+        echo "PNG failed: $base (code $code)\n";
+        $pngFail++;
+    }
+}
+echo "PNG export: $pngOk ok, $pngFail failed\n";
+
 // README
 $readme = <<<'MD'
-# Thesis Diagrams (draw.io)
+# Thesis Diagrams (draw.io + PNG)
 
-Generated from the **Barangay Culiat Facilities Reservation System** codebase.
-
-## Files
-
-| File | Diagram type | Use in thesis |
-|------|----------------|---------------|
-| `01_BPMN_Reservation_Approval.drawio` | BPMN | §5.2 Business Process Diagrams |
-| `02_BPMN_CIMM_Maintenance_Sync.drawio` | BPMN | §5.2 / §7.4 CIMM sync |
-| `03_BPMN_PayMongo_Payment.drawio` | BPMN | §5.2 / §6.3 Payments |
-| `04_DFD_Level0_Context.drawio` | DFD Level 0 | §7.2 Data Flow (Context) |
-| `05_DFD_Level1_System.drawio` | DFD Level 1 | §7.2 Data Flow (System) |
-| `06_DFD_Level2_Auth.drawio` | DFD Level 2 | Auth module |
-| `07_DFD_Level2_Booking.drawio` | DFD Level 2 | Booking module |
-| `08_DFD_Level2_Facility_Maintenance.drawio` | DFD Level 2 | Facility + CIMM |
-| `09_DFD_Level2_Payments.drawio` | DFD Level 2 | PayMongo module |
-| `17-20_DFD_Level2_*.drawio` | DFD Level 2 | Notifications, AI, Admin, Check-in |
-| `10_BPA_Level0_Integration.drawio` | BPA Level 0 | §5 Business Process (integration view) |
-| `11_BPA_Level1_System.drawio` | BPA Level 1 | Entire system processes |
-| `12-16, 21-24_BPA_Level2_*.drawio` | BPA Level 2 | Per-module subprocesses |
-| `export/*.png` | PNG images | Ready to insert in Word |
-
-## How to open and export images
-
-### Option A — diagrams.net (recommended)
-1. Go to [https://app.diagrams.net](https://app.diagrams.net)
-2. **File → Open from → Device** → select any `.drawio` file in this folder
-3. Adjust layout if needed (colors match thesis: blue=external, yellow=process, green=system, purple=integration)
-4. **File → Export as → PNG** (300 DPI for Word) or **SVG**
-5. Insert PNG into Word: **Insert → Pictures**
-
-### Option B — draw.io Desktop
-1. Install [draw.io Desktop](https://github.com/jgraph/drawio-desktop/releases)
-2. Open `.drawio` files → Export PNG
-
-### Option C — Visio
-1. Open draw.io file in diagrams.net
-2. **File → Export as → VSDX** (Visio format)
-3. Open in Microsoft Visio and refine if required
-
-## Suggested figure captions (Word)
-
-- Figure X. BPMN — Facility Reservation and Approval Process
-- Figure X. BPMN — CIMM Maintenance Synchronization Process
-- Figure X. BPMN — PayMongo Payment Process (Capstone Demo)
-- Figure X. DFD Level 0 — Context Diagram with External Integrations
-- Figure X. DFD Level 1 — System Decomposition
-- Figure X. DFD Level 2 — Booking and Reservation Module
-- Figure X. BPA Level 0 — Business Process Architecture with Integrations
-- Figure X. BPA Level 1 — System Business Processes
-
-## Regenerate
+Generated from the **Barangay Culiat CPRF** codebase. Regenerate everything (`.drawio` + `export/*.png`):
 
 ```bash
 php scripts/generate_thesis_diagrams.php
 ```
 
-## Batch export PNG (optional)
+## Complete file list (56 diagrams)
 
-```powershell
-cd docs/diagrams
-mkdir export -Force
-Get-ChildItem *.drawio | ForEach-Object {
-  npx --yes draw.io-export $_.FullName -o "export\$($_.BaseName).png"
-}
-```
+### BPMN (01–03, 25–30, 51–55)
+| File | Topic |
+|------|--------|
+| `01_BPMN_Reservation_Approval` | Booking, auto-approve, staff queue |
+| `02_BPMN_CIMM_Maintenance_Sync` | CIMM pull, blackouts, Gemini announcement |
+| `03_BPMN_PayMongo_Payment` | Optional payment flow |
+| `25_BPMN_Registration` | Resident onboarding |
+| `26_BPMN_Blackout_Gemini_Announcement` | CPRF blackout + auto public post |
+| `27_BPMN_Facility_QR_Checkin` | QR scan check-in/out |
+| `28_BPMN_AI_Chatbot` | Gemini + fallback + prefill |
+| `29_BPMN_Reschedule` | Resident reschedule rules |
+| `30_BPMN_Infrastructure_Ingest` | QC Infrastructure → Brgy Culiat |
+| `51_BPMN_Staff_Approval` | Staff pending-tab decisions |
+| `52_BPMN_Attendance_NoShow` | Reminders → no-show → violations |
+| `53_BPMN_Announcement_Publishing` | Manual, CIMM, and blackout sources |
+| `54_BPMN_Document_Archival` | Cron archival job |
+| `55_BPMN_Reports_Export` | CSV / PDF export |
+
+### DFD (04–09, 17–20, 35–40, 46–47)
+| File | Level |
+|------|--------|
+| `04_DFD_Level0_Context` | Level 0 — all external entities |
+| `05_DFD_Level1_System` | Level 1 — system processes |
+| `06–09` | Level 2 — Auth, Booking, Facility/CIMM, Payments |
+| `17–20` | Level 2 — Notifications, AI, Admin, Check-in |
+| `35–40` | Level 2 — Public, Integrations, Occupancy, Announcements, Calendar, Documents |
+| `46–47` | Level 2 — User Management, System Settings |
+
+### BPA (10–16, 21–24, 41–45, 56)
+| File | Level |
+|------|--------|
+| `10_BPA_Level0_Integration` | Level 0 — E2E + integrations |
+| `11_BPA_Level1_System` | Level 1 — 13 business processes |
+| `12–16, 21–24` | Level 2 — Onboarding, Reservation, Maintenance, etc. |
+| `41–45` | Level 2 — Communications, Integrations, Occupancy, Blackout, ID Verification |
+| `56_BPA_Level3_Auto_Approval` | Level 3 — nine auto-approval rule steps |
+
+### WFD (31–34, 48–50)
+| File | Workflow |
+|------|----------|
+| `31_WFD_Registration_to_Booking` | Register → first booking |
+| `32_WFD_Staff_Approval_Tabs` | Pending / Approved tabs |
+| `33_WFD_Attendance_NoShow` | Reminders → no-show |
+| `34_WFD_Document_Archival` | Cron archival |
+| `48_WFD_CIMM_Maintenance_Sync` | CIMM cron/staff sync flow |
+| `49_WFD_CPRF_Blackout_Announcement` | Manual blackout + Gemini |
+| `50_WFD_Facility_QR_Checkin` | QR gate check-in/out |
+
+### PNG exports
+All matching PNGs are in **`export/`** (same base name, `.png`).
+
+## How to open / re-export
+
+1. [diagrams.net](https://app.diagrams.net) → Open `.drawio` file  
+2. Export PNG at 300 DPI for Word  
+3. Or run `php scripts/generate_thesis_diagrams.php` to refresh PNGs automatically
+
+## Color legend
+- **Blue** — External entity (resident, staff, visitor)
+- **Yellow** — Process / BPMN task
+- **Green** — System / start event
+- **Red** — Data store / end event
+- **Purple dashed** — External integration (CIMM, Infrastructure, Gemini)
 
 MD;
 
 file_put_contents($outDir . '/README.md', $readme);
 echo "Created: docs/diagrams/README.md\n";
-echo "Done. Open files in https://app.diagrams.net and export PNG for Word.\n";
+echo "Done. " . count($drawioFiles) . " draw.io files; PNGs in docs/diagrams/export/\n";

@@ -5,9 +5,10 @@
     'use strict';
 
     const OCCUPIED_KEYS = new Set([
-        'staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending', 'staff_closed',
+        'staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending',
     ]);
     const AVAILABLE_KEYS = new Set(['available', 'staff_vacant']);
+    const UNAVAILABLE_KEYS = new Set(['maintenance', 'offline', 'closed', 'staff_closed']);
 
     function escapeHtml(str) {
         return String(str ?? '')

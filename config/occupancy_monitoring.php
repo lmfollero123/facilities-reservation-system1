@@ -149,11 +149,92 @@ function frs_facility_aggregate_state_display(string $key): array
         'staff_vacant' => ['key' => 'staff_vacant', 'label' => 'Vacant (staff)', 'color' => '#047857', 'bg' => '#ecfdf5'],
         'staff_closed' => ['key' => 'staff_closed', 'label' => 'Closed (staff)', 'color' => '#475569', 'bg' => '#e2e8f0'],
         'staff_event_ending' => ['key' => 'staff_event_ending', 'label' => 'Ending soon (staff)', 'color' => '#92400e', 'bg' => '#fef3c7'],
+        'maintenance' => ['key' => 'maintenance', 'label' => 'Under maintenance', 'color' => '#9a3412', 'bg' => '#ffedd5'],
+        'offline' => ['key' => 'offline', 'label' => 'Offline', 'color' => '#991b1b', 'bg' => '#fee2e2'],
+        'closed' => ['key' => 'closed', 'label' => 'Closed', 'color' => '#475569', 'bg' => '#e2e8f0'],
         'checked_in' => ['key' => 'checked_in', 'label' => 'On-site (reported)', 'color' => '#14532d', 'bg' => '#dcfce7'],
         'booked' => ['key' => 'booked', 'label' => 'Booked (in slot)', 'color' => '#1d4ed8', 'bg' => '#eff6ff'],
         'no_show_risk' => ['key' => 'no_show_risk', 'label' => 'No-show risk', 'color' => '#92400e', 'bg' => '#fef3c7'],
         default => ['key' => 'available', 'label' => 'Available', 'color' => '#047857', 'bg' => '#ecfdf5'],
     };
+}
+
+/**
+ * Default facility hours when operating_hours is blank (matches booking UI default).
+ *
+ * @return array{start: string, end: string}
+ */
+function frs_default_operating_hours_bounds(): array
+{
+    return ['start' => '08:00', 'end' => '21:00'];
+}
+
+/**
+ * @return array{start: string, end: string}
+ */
+function frs_facility_operating_hours_bounds(?string $operatingHours): array
+{
+    $raw = trim((string)$operatingHours);
+    if ($raw !== '' && function_exists('parseOperatingHours')) {
+        $parsed = parseOperatingHours($raw);
+        if (is_array($parsed) && !empty($parsed['start']) && !empty($parsed['end'])) {
+            return ['start' => (string)$parsed['start'], 'end' => (string)$parsed['end']];
+        }
+    }
+    if ($raw !== '' && preg_match('/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/', $raw, $m)) {
+        return ['start' => $m[1], 'end' => $m[2]];
+    }
+    if ($raw !== '' && preg_match('/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i', $raw, $m)) {
+        $start = DateTime::createFromFormat('h:i A', strtoupper(trim($m[1])));
+        $end = DateTime::createFromFormat('h:i A', strtoupper(trim($m[2])));
+        if ($start && $end) {
+            return ['start' => $start->format('H:i'), 'end' => $end->format('H:i')];
+        }
+    }
+    return frs_default_operating_hours_bounds();
+}
+
+function frs_facility_is_within_operating_hours(?string $operatingHours, DateTimeInterface $now): bool
+{
+    $bounds = frs_facility_operating_hours_bounds($operatingHours);
+    $tz = frs_app_timezone();
+    $nowDt = $now instanceof DateTime
+        ? clone $now
+        : DateTime::createFromInterface($now);
+    $nowDt->setTimezone($tz);
+
+    $open = DateTime::createFromFormat('Y-m-d H:i', $nowDt->format('Y-m-d') . ' ' . $bounds['start'], $tz);
+    $close = DateTime::createFromFormat('Y-m-d H:i', $nowDt->format('Y-m-d') . ' ' . $bounds['end'], $tz);
+    if (!$open || !$close) {
+        return true;
+    }
+    return $nowDt >= $open && $nowDt <= $close;
+}
+
+/**
+ * Aggregate keys that reflect active on-site / in-slot use (not overridden by maintenance/closed).
+ *
+ * @return list<string>
+ */
+function frs_occupancy_active_use_aggregate_keys(): array
+{
+    return [
+        'checked_in',
+        'staff_in_use',
+        'staff_event_ending',
+        'no_show_risk',
+        'booked',
+    ];
+}
+
+/**
+ * Aggregate keys that are not bookable/open right now.
+ *
+ * @return list<string>
+ */
+function frs_occupancy_unavailable_aggregate_keys(): array
+{
+    return ['maintenance', 'offline', 'closed', 'staff_closed'];
 }
 
 /**
@@ -253,7 +334,7 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
     $hasLiveStatus = frs_occupancy_table_exists($pdo, 'facility_live_status');
 
     $facilitiesStmt = $pdo->query(
-        'SELECT id, name, status, image_path FROM facilities WHERE status != "deleted" ORDER BY name'
+        'SELECT id, name, status, image_path, operating_hours FROM facilities WHERE status != "deleted" ORDER BY name'
     );
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -297,6 +378,7 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
             'facility_id' => $fid,
             'facility_name' => (string)$f['name'],
             'facility_status' => (string)$f['status'],
+            'operating_hours' => (string)($f['operating_hours'] ?? ''),
             'image_url' => frs_facility_display_image_url($f['image_path'] ?? null, $facilityIndex),
             'staff_live' => $liveMap[$fid] ?? null,
             'aggregate_state' => 'available',
@@ -341,11 +423,15 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
         }
     }
 
-    $occupiedKeys = ['staff_in_use', 'checked_in', 'no_show_risk', 'booked'];
+    $occupiedKeys = ['staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending'];
+    $availableKeys = ['available', 'staff_vacant'];
+    $unavailableKeys = frs_occupancy_unavailable_aggregate_keys();
+    $activeUseKeys = frs_occupancy_active_use_aggregate_keys();
     $summary = [
         'total_facilities' => count($byFacility),
         'available' => 0,
         'occupied' => 0,
+        'unavailable' => 0,
         'no_show_risk' => 0,
         'checked_in' => 0,
     ];
@@ -353,6 +439,8 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
     foreach ($byFacility as $fid => &$fac) {
         $rawStaff = $fac['staff_live']['status'] ?? FRS_FACILITY_LIVE_AUTO;
         $staff = frs_effective_staff_live_status($fac['staff_live'], $fac, $now);
+        $facilityMasterStatus = strtolower((string)($fac['facility_status'] ?? 'available'));
+        $withinHours = frs_facility_is_within_operating_hours($fac['operating_hours'] ?? '', $now);
 
         if (
             $hasLiveStatus
@@ -383,13 +471,27 @@ function frs_build_operational_occupancy_snapshot(PDO $pdo, ?DateTimeInterface $
             $agg = 'booked';
         }
 
+        if (!in_array($agg, $activeUseKeys, true)) {
+            if ($facilityMasterStatus === 'maintenance') {
+                $agg = 'maintenance';
+            } elseif ($facilityMasterStatus === 'offline') {
+                $agg = 'offline';
+            } elseif (!$withinHours && in_array($agg, ['available', 'staff_vacant'], true)) {
+                $agg = 'closed';
+            }
+        }
+
         $fac['aggregate_state'] = $agg;
         $fac['aggregate_display'] = frs_facility_aggregate_state_display($agg);
+        $fac['is_within_operating_hours'] = $withinHours;
+        $fac['is_occupied'] = in_array($agg, $occupiedKeys, true);
 
-        if (in_array($agg, $occupiedKeys, true) && $agg !== 'staff_vacant') {
+        if (in_array($agg, $occupiedKeys, true)) {
             $summary['occupied']++;
-        } else {
+        } elseif (in_array($agg, $availableKeys, true)) {
             $summary['available']++;
+        } elseif (in_array($agg, $unavailableKeys, true)) {
+            $summary['unavailable']++;
         }
         $summary['no_show_risk'] += $fac['counts']['no_show_risk'];
         $summary['checked_in'] += $fac['counts']['checked_in'];
@@ -450,6 +552,7 @@ function frs_set_facility_live_status(
 function frs_process_operational_no_shows(PDO $pdo, ?DateTimeInterface $now = null): array
 {
     require_once __DIR__ . '/violations.php';
+    require_once __DIR__ . '/checkin_waiver.php';
 
     $now = $now instanceof DateTimeInterface
         ? DateTime::createFromInterface($now)
@@ -499,6 +602,10 @@ function frs_process_operational_no_shows(PDO $pdo, ?DateTimeInterface $now = nu
         }
 
         $resId = (int)$row['id'];
+        if (frs_reservation_has_approved_waiver($pdo, $resId)) {
+            $skipped++;
+            continue;
+        }
         $userId = (int)$row['user_id'];
         $date = (string)$row['reservation_date'];
         $slot = (string)$row['time_slot'];
@@ -555,8 +662,14 @@ function frs_ensure_checkin_token(PDO $pdo, int $reservationId): ?string
 /** Occupied/busy aggregate keys for filters */
 function frs_occupancy_aggregate_is_busy(string $aggregateState): bool
 {
-    $busy = ['staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending', 'staff_closed'];
+    $busy = ['staff_in_use', 'checked_in', 'no_show_risk', 'booked', 'staff_event_ending'];
     return in_array($aggregateState, $busy, true);
+}
+
+/** Whether aggregate state counts as open/available for filtering */
+function frs_occupancy_aggregate_is_available(string $aggregateState): bool
+{
+    return in_array($aggregateState, ['available', 'staff_vacant'], true);
 }
 
 /**

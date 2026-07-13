@@ -340,6 +340,188 @@ function autoDeclineExpiredReservations(): int {
 }
 
 /**
+ * Resident booking limit config (env-tunable). Staff/Admin are not subject to these limits.
+ *
+ * @return array<string, int>
+ */
+function frs_resident_booking_limit_config(): array
+{
+    static $cfg = null;
+    if ($cfg !== null) {
+        return $cfg;
+    }
+    $int = static function (string $key, int $default): int {
+        if (!function_exists('env_value')) {
+            return $default;
+        }
+        $v = (int)env_value($key, (string)$default);
+        return $v > 0 ? $v : $default;
+    };
+    $cfg = [
+        'per_day' => $int('BOOKING_MAX_PER_DAY', 1),
+        'per_week' => $int('BOOKING_MAX_PER_WEEK', 3),
+        'per_month' => $int('BOOKING_MAX_PER_MONTH', 8),
+        'per_year' => $int('BOOKING_MAX_PER_YEAR', 96),
+        'max_upcoming_active' => $int('BOOKING_MAX_UPCOMING_ACTIVE', 2),
+        'advance_max_days' => $int('BOOKING_ADVANCE_MAX_DAYS', 60),
+    ];
+    return $cfg;
+}
+
+/**
+ * Whether booking limits apply to this user (Residents only).
+ */
+function frs_booking_limits_apply_to_user(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $role = (string)($stmt->fetchColumn() ?: 'Resident');
+    return $role === 'Resident';
+}
+
+/**
+ * Validate resident booking limits before insert.
+ *
+ * @return array{ok: bool, message: string}
+ */
+function frs_validate_resident_booking_limits(
+    PDO $pdo,
+    int $userId,
+    string $reservationDate,
+    string $activeStatusesSql
+): array {
+    if (!frs_booking_limits_apply_to_user($pdo, $userId)) {
+        return ['ok' => true, 'message' => ''];
+    }
+
+    $cfg = frs_resident_booking_limit_config();
+    $today = date('Y-m-d');
+
+    // Max upcoming active reservations (pending + approved, today and future)
+    $upcomingStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid
+           AND reservation_date >= :today
+           AND status IN (' . $activeStatusesSql . ')'
+    );
+    $upcomingStmt->execute(['uid' => $userId, 'today' => $today]);
+    $upcoming = (int)$upcomingStmt->fetchColumn();
+    if ($upcoming >= $cfg['max_upcoming_active']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: You can have at most ' . $cfg['max_upcoming_active']
+                . ' active upcoming reservation(s) at a time.',
+        ];
+    }
+
+    // Per day — one active booking on the same calendar date
+    $perDayStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date = :date
+           AND status IN (' . $activeStatusesSql . ')'
+    );
+    $perDayStmt->execute(['uid' => $userId, 'date' => $reservationDate]);
+    if ((int)$perDayStmt->fetchColumn() >= $cfg['per_day']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Only ' . $cfg['per_day'] . ' active reservation per day is allowed.',
+        ];
+    }
+
+    // Per week — rolling 7 days including selected date
+    $weekStart = date('Y-m-d', strtotime($reservationDate . ' -6 days'));
+    $weekEnd = $reservationDate;
+    $weekStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')'
+    );
+    $weekStmt->execute(['uid' => $userId, 'start' => $weekStart, 'end' => $weekEnd]);
+    if ((int)$weekStmt->fetchColumn() >= $cfg['per_week']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_week'] . ' reservations per week.',
+        ];
+    }
+
+    // Per month — rolling 30 days
+    $monthStart = date('Y-m-d', strtotime($reservationDate . ' -29 days'));
+    $monthStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')'
+    );
+    $monthStmt->execute(['uid' => $userId, 'start' => $monthStart, 'end' => $reservationDate]);
+    if ((int)$monthStmt->fetchColumn() >= $cfg['per_month']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_month'] . ' reservations per month.',
+        ];
+    }
+
+    // Per year — calendar year of selected date
+    $yearStart = substr($reservationDate, 0, 4) . '-01-01';
+    $yearEnd = substr($reservationDate, 0, 4) . '-12-31';
+    $yearStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')'
+    );
+    $yearStmt->execute(['uid' => $userId, 'start' => $yearStart, 'end' => $yearEnd]);
+    if ((int)$yearStmt->fetchColumn() >= $cfg['per_year']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_year'] . ' reservations per year.',
+        ];
+    }
+
+    return ['ok' => true, 'message' => ''];
+}
+
+/**
+ * Human-readable summary of resident booking limits (for UI / chatbot).
+ */
+function frs_resident_booking_limits_summary(): string
+{
+    $c = frs_resident_booking_limit_config();
+    return sprintf(
+        '%d per day, %d per week, %d per month, %d per year, max %d upcoming active, book up to %d days ahead',
+        $c['per_day'],
+        $c['per_week'],
+        $c['per_month'],
+        $c['per_year'],
+        $c['max_upcoming_active'],
+        $c['advance_max_days']
+    );
+}
+
+/**
+ * Multi-line bullet text for policies / chatbot (residents only; staff/admin exempt).
+ */
+function frs_resident_booking_limits_policy_bullets(): string
+{
+    $c = frs_resident_booking_limit_config();
+    return sprintf(
+        "• %d active reservation per day\n" .
+        "• Up to %d reservations per week\n" .
+        "• Up to %d reservations per month\n" .
+        "• Up to %d reservations per year\n" .
+        "• Maximum %d upcoming active reservations\n" .
+        "• Book up to %d days in advance\n" .
+        "• Staff and Admin are not subject to these limits",
+        $c['per_day'],
+        $c['per_week'],
+        $c['per_month'],
+        $c['per_year'],
+        $c['max_upcoming_active'],
+        $c['advance_max_days']
+    );
+}
+
+/**
  * Apply staff approve / deny / cancel (or pending_payment) for a reservation row.
  *
  * @param array<string, mixed> $reservation Row with facility_name, facility_status, status, reservation_date, time_slot, requester_id, requester_email, requester_name; optional postponed_priority

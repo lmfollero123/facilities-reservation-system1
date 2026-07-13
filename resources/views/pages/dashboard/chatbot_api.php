@@ -16,6 +16,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 require_once __DIR__ . '/../../../../services/RecommendationService.php';
 
@@ -199,12 +200,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['question'])) {
             break;
             
         case 'booking_rules':
-            $response = "Booking Rules:\n\n";
-            $response .= "• Maximum 3 active reservations at a time\n";
-            $response .= "• Maximum 30 days of bookings in a 30-day period\n";
-            $response .= "• Maximum 1 reservation per day\n";
-            $response .= "• Reservations can be made up to 60 days in advance\n";
-            $response .= "• Commercial reservations require manual approval\n";
+            $response = "Booking Rules (residents):\n\n";
+            $response .= frs_resident_booking_limits_policy_bullets();
+            $response .= "\n\n• Commercial reservations require manual approval\n";
             $response .= "• Users must be verified to make reservations\n\n";
             $response .= "For more details, please check the terms and conditions.";
             break;
