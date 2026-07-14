@@ -428,6 +428,7 @@ ob_start();
             <span class="chevron">▼</span>
         </button>
         <div class="collapsible-body" id="facilities-list">
+            <div data-frs-partial-id="facility-list" data-frs-partial-root>
             <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
                     <p>No facilities added yet. Click "Add Facility" to add your first facility.</p>
@@ -491,15 +492,16 @@ ob_start();
                 <?php if ($totalPages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?page=<?= $page - 1; ?>">&larr; Prev</a>
+                            <a href="?page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
                         <?php endif; ?>
                         <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                         <?php if ($page < $totalPages): ?>
-                            <a href="?page=<?= $page + 1; ?>">Next &rarr;</a>
+                            <a href="?page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
+            </div>
         </div>
     </section>
 </div>
@@ -763,7 +765,7 @@ ob_start();
                                 Auto-Approve Max Hours (Optional)
                                 <div class="input-wrapper">
                                     <span class="input-icon">⏰</span>
-                                    <input type="number" step="0.5" name="extension_auto_approve_max_hours" id="form-extension-auto-approve" min="0. placeholder="e.g., 1.0">
+                                    <input type="number" step="0.5" name="extension_auto_approve_max_hours" id="form-extension-auto-approve" min="0" placeholder="e.g., 1.0">
                                 </div>
                                 <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
                                     Maximum extension hours for auto-approval. If extension is within this limit and payment is made, it will be auto-approved. Leave blank to disable auto-approval for extensions.
@@ -990,30 +992,37 @@ function editFacility(payload) {
 }
 
 function resetFacilityForm() {
+    const setVal = function (id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    const setChecked = function (id, on) {
+        const el = document.getElementById(id);
+        if (el) el.checked = on;
+    };
     document.getElementById('form-title').textContent = 'Add Facility';
-    document.getElementById('facility_id').value = '';
-    document.getElementById('form-name').value = '';
-    document.getElementById('form-rate').value = '';
-    document.getElementById('form-is-free').checked = true;
-    document.getElementById('form-description').value = '';
-    document.getElementById('form-location').value = '';
-    document.getElementById('form-latitude').value = '';
-    document.getElementById('form-longitude').value = '';
-    document.getElementById('form-capacity').value = '';
-    document.getElementById('form-amenities').value = '';
-    document.getElementById('form-rules').value = '';
+    setVal('facility_id', '');
+    setVal('form-name', '');
+    setVal('form-rate', '');
+    setChecked('form-is-free', true);
+    setVal('form-description', '');
+    setVal('form-location', '');
+    setVal('form-latitude', '');
+    setVal('form-longitude', '');
+    setVal('form-capacity', '');
+    setVal('form-amenities', '');
+    setVal('form-rules', '');
     document.querySelectorAll('.equipment-checkbox').forEach(cb => { cb.checked = false; });
-    document.getElementById('form-image-citation').value = '';
-    document.getElementById('form-status').value = 'available';
-    document.getElementById('form-operating-hours').value = '';
-    document.getElementById('form-auto-approve').checked = false;
-    document.getElementById('form-capacity-threshold').value = '';
-    document.getElementById('form-max-duration').value = '';
-    document.getElementById('form-extension-fee').value = '';
+    setVal('form-status', 'available');
+    setVal('form-operating-hours', '');
+    setChecked('form-auto-approve', false);
+    setVal('form-capacity-threshold', '');
+    setVal('form-max-duration', '');
+    setVal('form-extension-fee', '');
     updateExtensionFeeFromRate();
-    document.getElementById('form-extension-auto-approve').value = '';
-    document.getElementById('form-allow-same-day').checked = false;
-    document.getElementById('form-image').value = '';
+    setVal('form-extension-auto-approve', '');
+    setChecked('form-allow-same-day', false);
+    setVal('form-image', '');
 
     // Trigger rate input toggle based on checkbox state
     const isFreeCheckbox = document.getElementById('form-is-free');
@@ -1253,20 +1262,25 @@ function updateExtensionFeeFromRate() {
     }
 }
 
-// Add event listeners for auto-calculation
-document.addEventListener('DOMContentLoaded', function() {
+// Add event listeners for auto-calculation (works after soft nav too)
+(function initFacilityRateListeners() {
     const rateInput = document.getElementById('form-rate');
     const isFreeCheckbox = document.getElementById('form-is-free');
-    
-    if (rateInput) {
+
+    if (rateInput && rateInput.dataset.frsBound !== '1') {
+        rateInput.dataset.frsBound = '1';
         rateInput.addEventListener('input', updateExtensionFeeFromRate);
         rateInput.addEventListener('change', updateExtensionFeeFromRate);
     }
-    
-    if (isFreeCheckbox) {
+
+    if (isFreeCheckbox && isFreeCheckbox.dataset.frsBound !== '1') {
+        isFreeCheckbox.dataset.frsBound = '1';
         isFreeCheckbox.addEventListener('change', updateExtensionFeeFromRate);
     }
-});
+})();
+
+window.openFacilityModal = openFacilityModal;
+window.closeFacilityModal = closeFacilityModal;
 
 // Collapsible helper with localStorage persistence
 (function() {

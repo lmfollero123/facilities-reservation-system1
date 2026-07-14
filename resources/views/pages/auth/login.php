@@ -1,5 +1,6 @@
 <?php
 $useTailwind = true;
+$authSplitLayout = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
@@ -227,78 +228,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $base = base_path();
 ob_start();
 ?>
-<section class="auth-page-hero">
-    <div class="home-hero-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-    <div class="home-hero-overlay"></div>
-    <div class="relative z-10 w-full flex flex-col items-center justify-center flex-1">
-<div class="auth-container public-fade-in">
-    <div class="auth-card">
-        <div class="auth-header">
-            <img src="<?= base_path(); ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 64px; width: auto; display: block; margin: 0 auto 1.25rem; object-fit: contain;">
-            <?= frs_heading_with_tip('Welcome Back', 'Residents and staff sign in with email. You may be asked for a one-time passcode (OTP) after your password.', 'h1'); ?>
+<section class="auth-split auth-split-login">
+    <aside class="auth-split-brand" aria-hidden="false">
+        <div class="auth-split-brand-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+        <div class="auth-split-decor" aria-hidden="true"></div>
+        <div class="auth-split-brand-inner">
+            <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
+                <i class="bi bi-arrow-left"></i> Back to website
+            </a>
+            <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
+            <h2>Magandang Buhay! 👋</h2>
+            <p>Book public facilities online — reserve covered courts, halls, and community spaces without the long lines. Fast, simple, and made for our residents.</p>
+            <div class="auth-split-dots" aria-hidden="true">
+                <span class="is-active"></span>
+                <span></span>
+                <span></span>
+            </div>
+            <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
         </div>
-        
-        <?php if (isset($_GET['deactivated']) && $_GET['deactivated'] == '1'): ?>
-            <div style="background: #fff4e5; border: 2px solid #f59e0b; color: #92400e; padding: 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
-                <strong>⚠️ Account Deactivated</strong>
-                <p style="margin: 0.5rem 0 0; line-height: 1.6;">
-                    Your account has been successfully deactivated. You can no longer log in to the system.
-                    To restore access, please contact the LGU IT office.
-                </p>
+    </aside>
+
+    <div class="auth-split-form-panel">
+        <div class="auth-split-form-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+        <div class="auth-split-form-overlay" aria-hidden="true"></div>
+        <div class="auth-split-form-inner">
+            <div class="auth-split-form-top">
+                <div class="auth-split-logo-text">
+                    <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="">
+                    <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
+                </div>
+                <h1>Welcome Back!</h1>
+                <p class="auth-split-sub">Don&rsquo;t have an account? <a href="<?= htmlspecialchars($base); ?>/register">Create a new account now</a>, it&rsquo;s FREE! Takes less than a minute.</p>
             </div>
-        <?php endif; ?>
-        
-        <?php if ($error): ?>
-            <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
-                <?= htmlspecialchars($error); ?>
-            </div>
-            <?php if ($lockNotice): ?>
-                <div style="background: #fff4e5; color: #856404; padding: 0.7rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.88rem;">
-                    <?= htmlspecialchars($lockNotice); ?>
-                    <br>
-                    Need help? Contact the admin team to review and unlock your account.
+
+            <?php if (isset($_GET['deactivated']) && $_GET['deactivated'] == '1'): ?>
+                <div class="auth-split-alert is-warning" role="alert">
+                    <strong>Account Deactivated</strong>
+                    <p style="margin: 0.35rem 0 0;">Your account has been deactivated. Contact the LGU IT office to restore access.</p>
                 </div>
             <?php endif; ?>
-        <?php endif; ?>
-        
-        <form method="POST" class="auth-form">
-            <?= csrf_field(); ?>
-            <?php if ($loginCaptchaRequired && frs_turnstile_site_key() !== ''): ?>
-                <div style="background: #fff8e6; border: 1px solid #f59e0b; color: #92400e; padding: 0.65rem 0.85rem; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.85rem;">
-                    For your security, please complete the verification below after multiple failed sign-in attempts.
+
+            <?php if ($error): ?>
+                <div class="auth-split-alert is-error" role="alert">
+                    <?= htmlspecialchars($error); ?>
                 </div>
-                <div style="margin: 0.25rem 0 0.5rem;">
+                <?php if ($lockNotice): ?>
+                    <div class="auth-split-alert is-warning" role="alert">
+                        <?= htmlspecialchars($lockNotice); ?>
+                        Need help? Contact the admin team to review and unlock your account.
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <form method="POST" class="auth-split-form">
+                <?= csrf_field(); ?>
+                <?php if ($loginCaptchaRequired && frs_turnstile_site_key() !== ''): ?>
+                    <div class="auth-split-alert is-warning">
+                        For your security, please complete the verification below after multiple failed sign-in attempts.
+                    </div>
                     <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                <?php endif; ?>
+
+                <label>
+                    Email Address
+                    <div class="auth-split-field">
+                        <input name="email" type="email" placeholder="official@lgu.gov.ph" required autofocus value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                    </div>
+                </label>
+
+                <label>
+                    Password
+                    <div class="auth-split-field">
+                        <input name="password" type="password" placeholder="Enter your password" required>
+                    </div>
+                </label>
+
+                <div class="auth-split-forgot">
+                    <a href="<?= htmlspecialchars($base); ?>/forgot-password">Forgot password? Click here</a>
                 </div>
-            <?php endif; ?>
-            <label>
-                Email Address
-                <div class="input-wrapper">
-                    <input name="email" type="email" placeholder="official@lgu.gov.ph" required autofocus value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
-                </div>
-            </label>
-            
-            <label>
-                Password
-                <div class="input-wrapper">
-                    <input name="password" type="password" placeholder="Enter your password" required>
-                </div>
-            </label>
-            
-            <div style="text-align: right; margin-bottom: 1rem;">
-                <a href="<?= base_path(); ?>/forgot-password" style="color: #2864ef; font-size: 0.85rem; text-decoration: none;">
-                    Forgot Password?
-                </a>
-            </div>
-            
-            <button class="btn-primary" type="submit">Sign In</button>
-        </form>
-        
-        <div class="auth-footer">
-            Need an account? <a href="<?= base_path(); ?>/register">Register here</a>
+
+                <button class="btn-primary" type="submit">Login Now</button>
+            </form>
         </div>
-    </div>
-</div>
     </div>
 </section>
 <?php

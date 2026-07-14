@@ -205,9 +205,51 @@ function paymongoCheckoutSessionIsPaid(array $apiJson): bool
 }
 
 /**
+ * Extract a PayMongo Payment resource id (pay_...) from checkout/webhook JSON.
+ */
+function paymongoExtractPaymentId(array $apiJson): string
+{
+    $candidates = [];
+
+    $collect = static function ($node) use (&$collect, &$candidates): void {
+        if (!is_array($node)) {
+            return;
+        }
+        if (isset($node['id']) && is_string($node['id']) && str_starts_with($node['id'], 'pay_')) {
+            $candidates[] = $node['id'];
+        }
+        if (isset($node['payment_id']) && is_string($node['payment_id']) && str_starts_with($node['payment_id'], 'pay_')) {
+            $candidates[] = $node['payment_id'];
+        }
+        foreach ($node as $value) {
+            if (is_array($value)) {
+                $collect($value);
+            }
+        }
+    };
+
+    $collect($apiJson);
+
+    // Prefer payments nested under checkout session attributes.
+    $resource = paymongoCheckoutSessionResource($apiJson);
+    $attrs = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
+    foreach ($attrs['payments'] ?? [] as $payment) {
+        if (!is_array($payment)) {
+            continue;
+        }
+        $id = (string)($payment['id'] ?? '');
+        if (str_starts_with($id, 'pay_')) {
+            return $id;
+        }
+    }
+
+    return $candidates[0] ?? '';
+}
+
+/**
  * Parse PayMongo webhook payloads (legacy event resource + newer checkout v2 shapes).
  *
- * @return array{event_type: string, checkout_id: string, reservation_id: int, event_id: string}
+ * @return array{event_type: string, checkout_id: string, reservation_id: int, event_id: string, payment_id: string}
  */
 function paymongoParseWebhookPayload(array $payload): array
 {
@@ -250,11 +292,159 @@ function paymongoParseWebhookPayload(array $payload): array
         $eventType = 'checkout_session.payment.paid';
     }
 
+    $paymentId = paymongoExtractPaymentId(is_array($resource) ? $resource : []);
+    if ($paymentId === '') {
+        $paymentId = paymongoExtractPaymentId($payload);
+    }
+    if ($paymentId === '' && str_starts_with($eventId, 'pay_')) {
+        $paymentId = $eventId;
+    }
+
     return [
         'event_type' => $eventType,
         'checkout_id' => $checkoutId,
         'reservation_id' => (int)($metadata['reservation_id'] ?? 0),
         'event_id' => $eventId,
+        'payment_id' => $paymentId,
+    ];
+}
+
+/**
+ * Resolve the PayMongo payment id (pay_...) needed by the Refunds API.
+ * Older rows may store a webhook event id (evt_...) in provider_event_id — those are recovered via payload/checkout.
+ *
+ * @param array<string, mixed> $paymentRow Must include id; ideally provider_event_id, provider_checkout_id, payload_json
+ * @return array{ok: bool, payment_id: string, message: string}
+ */
+function frs_resolve_paymongo_payment_id(PDO $pdo, array $paymentRow, bool $backfill = true): array
+{
+    $stored = trim((string)($paymentRow['provider_event_id'] ?? ''));
+    if (str_starts_with($stored, 'pay_')) {
+        return ['ok' => true, 'payment_id' => $stored, 'message' => ''];
+    }
+
+    $payloadRaw = $paymentRow['payload_json'] ?? null;
+    if (is_string($payloadRaw) && $payloadRaw !== '') {
+        $decoded = json_decode($payloadRaw, true);
+        if (is_array($decoded)) {
+            $fromPayload = paymongoExtractPaymentId($decoded);
+            if ($fromPayload !== '') {
+                if ($backfill) {
+                    $upd = $pdo->prepare('UPDATE payments SET provider_event_id = :pid, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $upd->execute(['pid' => $fromPayload, 'id' => (int)$paymentRow['id']]);
+                }
+                return ['ok' => true, 'payment_id' => $fromPayload, 'message' => ''];
+            }
+        }
+    }
+
+    $checkoutId = trim((string)($paymentRow['provider_checkout_id'] ?? ''));
+    if ($checkoutId === '') {
+        // Re-fetch checkout id if the caller only selected a subset of columns.
+        $stmt = $pdo->prepare('SELECT provider_checkout_id, payload_json FROM payments WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => (int)$paymentRow['id']]);
+        $full = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $checkoutId = trim((string)($full['provider_checkout_id'] ?? ''));
+        if ($payloadRaw === null || $payloadRaw === '') {
+            $payloadRaw = $full['payload_json'] ?? null;
+            if (is_string($payloadRaw) && $payloadRaw !== '') {
+                $decoded = json_decode($payloadRaw, true);
+                if (is_array($decoded)) {
+                    $fromPayload = paymongoExtractPaymentId($decoded);
+                    if ($fromPayload !== '') {
+                        if ($backfill) {
+                            $upd = $pdo->prepare('UPDATE payments SET provider_event_id = :pid, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                            $upd->execute(['pid' => $fromPayload, 'id' => (int)$paymentRow['id']]);
+                        }
+                        return ['ok' => true, 'payment_id' => $fromPayload, 'message' => ''];
+                    }
+                }
+            }
+        }
+    }
+
+    if ($checkoutId !== '') {
+        $checkoutResp = paymongoRetrieveCheckoutSession($checkoutId);
+        if (!empty($checkoutResp['ok'])) {
+            $fromCheckout = paymongoExtractPaymentId($checkoutResp['data'] ?? []);
+            if ($fromCheckout !== '') {
+                if ($backfill) {
+                    $upd = $pdo->prepare(
+                        'UPDATE payments
+                         SET provider_event_id = :pid,
+                             payload_json = COALESCE(payload_json, :payload_json),
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = :id'
+                    );
+                    $upd->execute([
+                        'pid' => $fromCheckout,
+                        'payload_json' => json_encode($checkoutResp['data'] ?? []),
+                        'id' => (int)$paymentRow['id'],
+                    ]);
+                }
+                return ['ok' => true, 'payment_id' => $fromCheckout, 'message' => ''];
+            }
+        } else {
+            return [
+                'ok' => false,
+                'payment_id' => '',
+                'message' => 'Unable to look up PayMongo payment: ' . ($checkoutResp['error'] ?? 'checkout retrieve failed'),
+            ];
+        }
+    }
+
+    return [
+        'ok' => false,
+        'payment_id' => '',
+        'message' => 'No PayMongo payment ID (pay_…) found for this payment. Manual refund required.',
+    ];
+}
+
+/**
+ * Refund a paid payments row via PayMongo and mark it refunded on success.
+ *
+ * @param array<string, mixed> $paymentRow
+ * @return array{attempted: bool, refunded: bool, message: string, refund_id?: string}
+ */
+function frs_refund_payment_row(PDO $pdo, array $paymentRow, string $reason = 'requested_by_customer', string $notes = ''): array
+{
+    $amount = (float)($paymentRow['amount'] ?? 0);
+    if ($amount <= 0) {
+        return ['attempted' => false, 'refunded' => false, 'message' => 'Nothing to refund (zero amount).'];
+    }
+
+    $resolved = frs_resolve_paymongo_payment_id($pdo, $paymentRow, true);
+    if (empty($resolved['ok']) || ($resolved['payment_id'] ?? '') === '') {
+        return [
+            'attempted' => true,
+            'refunded' => false,
+            'message' => (string)($resolved['message'] ?? 'Unable to resolve PayMongo payment ID.'),
+        ];
+    }
+
+    $refundResult = frs_issue_refund((string)$resolved['payment_id'], $amount, $reason, $notes);
+    if (empty($refundResult['ok'])) {
+        return [
+            'attempted' => true,
+            'refunded' => false,
+            'message' => (string)($refundResult['message'] ?? 'Refund failed.'),
+        ];
+    }
+
+    $updatePaymentStmt = $pdo->prepare(
+        'UPDATE payments SET status = :status, provider_event_id = :pid, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
+    );
+    $updatePaymentStmt->execute([
+        'status' => 'refunded',
+        'pid' => (string)$resolved['payment_id'],
+        'id' => (int)$paymentRow['id'],
+    ]);
+
+    return [
+        'attempted' => true,
+        'refunded' => true,
+        'message' => 'Payment refunded via PayMongo.',
+        'refund_id' => (string)($refundResult['refund_id'] ?? ''),
     ];
 }
 
@@ -437,17 +627,35 @@ function frs_finalize_reservation_payment(
     $pdo->beginTransaction();
 
     try {
-        $updatePay = $pdo->prepare(
-            'UPDATE payments
-             SET status = "paid",
-                 paid_at = COALESCE(paid_at, NOW()),
-                 payload_json = :payload_json
-             WHERE id = :id'
-        );
-        $updatePay->execute([
-            'payload_json' => $checkoutResponse !== [] ? json_encode($checkoutResponse) : null,
-            'id' => (int)$latestPayment['id'],
-        ]);
+        $paymongoPaymentId = $checkoutResponse !== [] ? paymongoExtractPaymentId($checkoutResponse) : '';
+
+        if ($paymongoPaymentId !== '') {
+            $updatePay = $pdo->prepare(
+                'UPDATE payments
+                 SET status = "paid",
+                     paid_at = COALESCE(paid_at, NOW()),
+                     payload_json = :payload_json,
+                     provider_event_id = :pid
+                 WHERE id = :id'
+            );
+            $updatePay->execute([
+                'payload_json' => $checkoutResponse !== [] ? json_encode($checkoutResponse) : null,
+                'pid' => $paymongoPaymentId,
+                'id' => (int)$latestPayment['id'],
+            ]);
+        } else {
+            $updatePay = $pdo->prepare(
+                'UPDATE payments
+                 SET status = "paid",
+                     paid_at = COALESCE(paid_at, NOW()),
+                     payload_json = :payload_json
+                 WHERE id = :id'
+            );
+            $updatePay->execute([
+                'payload_json' => $checkoutResponse !== [] ? json_encode($checkoutResponse) : null,
+                'id' => (int)$latestPayment['id'],
+            ]);
+        }
 
         $updateReservation = $pdo->prepare(
             'UPDATE reservations
@@ -536,23 +744,40 @@ function paymongoVerifyWebhookSignature(string $rawPayload, string $signatureHea
  * @param string $notes Internal notes for the refund
  * @return array{ok: bool, message: string, refund_id?: string}
  */
-function frs_issue_refund(string $paymentId, float $amount, string $reason = 'others', string $notes = ''): array
+function frs_issue_refund(string $paymentId, float $amount, string $reason = 'requested_by_customer', string $notes = ''): array
 {
     if (!paymongoEnabled()) {
         return ['ok' => false, 'message' => 'PayMongo is not configured.'];
     }
 
+    $paymentId = trim($paymentId);
+    if (!str_starts_with($paymentId, 'pay_')) {
+        return ['ok' => false, 'message' => 'Invalid PayMongo payment ID. Expected id starting with pay_.'];
+    }
+
     // Convert amount to centavos (PayMongo expects amount in smallest currency unit)
     $amountInCentavos = (int)round($amount * 100);
+    if ($amountInCentavos < 100) {
+        return ['ok' => false, 'message' => 'Refund amount must be at least ₱1.00.'];
+    }
+
+    $allowedReasons = ['duplicate', 'fraudulent', 'requested_by_customer', 'others'];
+    if (!in_array($reason, $allowedReasons, true)) {
+        $reason = 'requested_by_customer';
+    }
+
+    $attributes = [
+        'amount' => $amountInCentavos,
+        'payment_id' => $paymentId,
+        'reason' => $reason,
+    ];
+    if (trim($notes) !== '') {
+        $attributes['notes'] = mb_substr(trim($notes), 0, 255);
+    }
 
     $payload = [
         'data' => [
-            'attributes' => [
-                'amount' => $amountInCentavos,
-                'payment_id' => $paymentId,
-                'reason' => $reason,
-                'notes' => $notes,
-            ],
+            'attributes' => $attributes,
         ],
     ];
 

@@ -47,7 +47,7 @@ if (!function_exists('frs_logout_form')) {
         $confirm = htmlspecialchars($confirmMessage, ENT_QUOTES, 'UTF-8');
         $csrf = csrf_field();
 
-        return '<form method="POST" action="' . $action . '" style="display:inline;margin:0;">'
+        return '<form method="POST" action="' . $action . '" style="display:inline;margin:0;" onsubmit="try{Object.keys(sessionStorage).forEach(function(k){if(k.indexOf(\'bcf_booking_purpose_\')===0)sessionStorage.removeItem(k);});}catch(e){}">'
             . $csrf
             . '<button type="submit" class="' . $btnClass . ' confirm-action" data-message="' . $confirm . '">'
             . $btnLabel

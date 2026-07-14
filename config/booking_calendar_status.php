@@ -116,9 +116,8 @@ function frs_facility_calendar_matrix(PDO $pdo, int $facilityId, int $year, int 
     if (!$fStatus) {
         return [];
     }
-    if ($fStatus === 'maintenance') {
-        return frs_calendar_month_fill_tone($year, $month, 'maintenance');
-    }
+    // Offline is indefinite — fill the month. Maintenance must NOT (CIMM uses
+    // dated blackouts Jul–Aug; painting the whole month ignores the end date).
     if ($fStatus === 'offline') {
         return frs_calendar_month_fill_tone($year, $month, 'offline');
     }
@@ -142,6 +141,22 @@ function frs_facility_calendar_matrix(PDO $pdo, int $facilityId, int $year, int 
         }
     } catch (Throwable $e) {
         // table may not exist in minimal installs
+    }
+
+    // Staff flipped facility to "maintenance" with no dated blackouts → block whole month.
+    // CIMM always writes per-day blackouts; do not whole-month-fill when those exist.
+    if ($fStatus === 'maintenance' && $blackSet === []) {
+        $hasAnyBlackout = false;
+        try {
+            $any = $pdo->prepare('SELECT 1 FROM facility_blackout_dates WHERE facility_id = ? LIMIT 1');
+            $any->execute([$facilityId]);
+            $hasAnyBlackout = (bool)$any->fetchColumn();
+        } catch (Throwable $e) {
+            $hasAnyBlackout = false;
+        }
+        if (!$hasAnyBlackout) {
+            return frs_calendar_month_fill_tone($year, $month, 'maintenance');
+        }
     }
 
     $act = frs_calendar_active_booking_condition($pdo);

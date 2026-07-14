@@ -682,6 +682,79 @@ function getReservationRescheduledEmailTemplate($userName, $facilityName, $oldDa
 }
 
 /**
+ * Staff reschedule of a postponed+priority booking (auto-confirmed).
+ * Includes apology for inconvenience from facility maintenance / blackout.
+ */
+function getStaffPriorityRescheduleEmailTemplate(
+    $userName,
+    $facilityName,
+    $oldDate,
+    $oldTimeSlot,
+    $newDate,
+    $newTimeSlot,
+    $reason,
+    $requiresPayment = false
+) {
+    $header = getEmailHeader('Reservation Rescheduled & Confirmed');
+    $footer = getEmailFooter();
+    $dashboardUrl = $requiresPayment
+        ? (base_url() . '/dashboard/my-reservations')
+        : (base_url() . '/dashboard/book-facility?module=mine');
+
+    $paymentNote = '';
+    if ($requiresPayment) {
+        $paymentNote = getEmailInfoBox('
+            <p style="margin: 0; color: #856404;">
+                <strong>Next step:</strong> Please complete payment to finalize this confirmed schedule.
+            </p>
+        ', '#fff4e5', '#ffc107');
+    } else {
+        $paymentNote = getEmailInfoBox('
+            <p style="margin: 0; color: #0d7a43;">
+                <strong>✓ Confirmed:</strong> Your reservation is approved on the new schedule. No further approval is required.
+            </p>
+        ', '#e3f8ef', '#0d7a43');
+    }
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">📅 Reservation Rescheduled</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            We apologize for the inconvenience. Your priority postponed reservation for
+            <strong>' . htmlspecialchars($facilityName) . '</strong> has been rescheduled by our staff
+            to a new available date and is now confirmed.
+        </p>
+
+        ' . getEmailInfoBox('
+            <h3 style="margin: 0 0 12px; color: #856404; font-size: 16px;">Previous Schedule</h3>
+            <p style="margin: 0; color: #856404; text-decoration: line-through;">
+                ' . htmlspecialchars(date('F j, Y', strtotime($oldDate))) . ' • ' . htmlspecialchars($oldTimeSlot) . '
+            </p>
+        ', '#fff4e5', '#ffc107') . '
+
+        ' . getEmailInfoBox('
+            <h3 style="margin: 0 0 12px; color: #0d7a43; font-size: 16px;">New Confirmed Schedule</h3>
+            <p style="margin: 0 0 10px; color: #0d7a43; font-size: 16px; font-weight: 600;">
+                ' . htmlspecialchars(date('F j, Y', strtotime($newDate))) . ' • ' . htmlspecialchars($newTimeSlot) . '
+            </p>
+            <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                <strong>Staff note:</strong> ' . htmlspecialchars($reason) . '
+            </p>
+        ', '#e3f8ef', '#0d7a43') . '
+
+        ' . $paymentNote . '
+
+        ' . getEmailButton($requiresPayment ? 'View My Reservations' : 'View My Reservations', $dashboardUrl, '#6384d2') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            Thank you for your patience. If you need a different time, please contact facility staff or update your booking from My Reservations.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Contact Form - Admin Notification Email Template
  */
 function getContactFormAdminEmailTemplate($senderName, $senderEmail, $subject, $message) {

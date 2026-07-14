@@ -541,16 +541,14 @@ function frs_staff_apply_status_decision(
 
     if ($action === 'approved') {
         $facilityStatus = strtolower((string)($reservation['facility_status'] ?? 'available'));
-        if ($facilityStatus === 'maintenance' || $facilityStatus === 'offline') {
-            $statusLabel = ucfirst($facilityStatus);
+        if ($facilityStatus === 'offline') {
             throw new Exception(
                 'Cannot approve reservation: The facility "' . htmlspecialchars((string)$reservation['facility_name'])
-                . '" is currently under ' . $statusLabel
-                . '. Please change the facility status to "Available" before approving reservations.'
+                . '" is currently Offline. Please change the facility status to "Available" before approving reservations.'
             );
         }
 
-        // Check if reservation date is blacked out
+        // Check if reservation date is blacked out (includes CIMM Sync window days)
         $reservationDate = (string)($reservation['reservation_date'] ?? '');
         $facilityId = (int)($reservation['facility_id'] ?? 0);
         if ($reservationDate !== '' && $facilityId > 0) {
@@ -562,6 +560,20 @@ function frs_staff_apply_status_decision(
                 throw new Exception(
                     'Cannot approve reservation: The date "' . htmlspecialchars($reservationDate)
                     . '" is blacked out for this facility. Please choose a different date or remove the blackout date.'
+                );
+            }
+        }
+
+        // Staff "maintenance" with no dated blackouts → still block approvals.
+        // CIMM facilities keep status=maintenance during the window but allow
+        // approving reservations on days outside the blackout range.
+        if ($facilityStatus === 'maintenance' && $facilityId > 0) {
+            $anyBo = $pdo->prepare('SELECT 1 FROM facility_blackout_dates WHERE facility_id = ? LIMIT 1');
+            $anyBo->execute([$facilityId]);
+            if (!$anyBo->fetchColumn()) {
+                throw new Exception(
+                    'Cannot approve reservation: The facility "' . htmlspecialchars((string)$reservation['facility_name'])
+                    . '" is currently under Maintenance. Please change the facility status to "Available" before approving reservations.'
                 );
             }
         }
@@ -615,7 +627,7 @@ function frs_staff_apply_status_decision(
             'id' => $reservationId,
         ]);
     } elseif ($finalAction === 'approved' && ($reservation['status'] ?? '') === 'postponed') {
-        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, postponed_priority = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
         $stmt->execute([
             'status' => $finalAction,
             'id' => $reservationId,
@@ -630,27 +642,31 @@ function frs_staff_apply_status_decision(
 
     // Handle refund for cancelled and denied reservations with payments
     if ($finalAction === 'cancelled' || $finalAction === 'denied') {
-        $paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, provider_event_id FROM payments WHERE reservation_id = :reservation_id AND status = :status LIMIT 1');
+        require_once __DIR__ . '/paymongo_helper.php';
+        $paymentStmt = $pdo->prepare(
+            'SELECT id, amount, reference_no, provider_event_id, provider_checkout_id, payload_json
+             FROM payments
+             WHERE reservation_id = :reservation_id AND status = :status
+             LIMIT 1'
+        );
         $paymentStmt->execute(['reservation_id' => $reservationId, 'status' => 'paid']);
         $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($payment) {
-            // Issue refund via PayMongo if provider_event_id exists
-            if (!empty($payment['provider_event_id'])) {
-                $refundResult = frs_issue_refund($payment['provider_event_id'], $payment['amount']);
-
-                if ($refundResult['ok']) {
-                    // Update payment status to refunded
-                    $updatePaymentStmt = $pdo->prepare('UPDATE payments SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                    $updatePaymentStmt->execute(['status' => 'refunded', 'id' => $payment['id']]);
-                    $finalNote = !empty($finalNote) ? ($finalNote . ' Payment refunded via PayMongo.') : 'Payment refunded via PayMongo.';
-                } else {
-                    $finalNote = !empty($finalNote) ? ($finalNote . ' Refund failed: ' . $refundResult['message']) : 'Refund failed: ' . $refundResult['message'];
-                }
+        if ($payment && (float)($payment['amount'] ?? 0) > 0) {
+            $refundOutcome = frs_refund_payment_row(
+                $pdo,
+                $payment,
+                'requested_by_customer',
+                'Reservation ' . $finalAction . ' — RES-' . $reservationId
+            );
+            if (!empty($refundOutcome['refunded'])) {
+                $finalNote = !empty($finalNote)
+                    ? ($finalNote . ' Payment refunded via PayMongo.')
+                    : 'Payment refunded via PayMongo.';
             } else {
-                // No provider_event_id - payment may not have been processed via webhook
-                // Don't auto-refund, keep payment as paid and note that manual refund is needed
-                $finalNote = !empty($finalNote) ? ($finalNote . ' Payment exists but requires manual refund (no PayMongo event ID).') : 'Payment exists but requires manual refund (no PayMongo event ID).';
+                $finalNote = !empty($finalNote)
+                    ? ($finalNote . ' Refund failed: ' . ($refundOutcome['message'] ?? 'unknown error'))
+                    : 'Refund failed: ' . ($refundOutcome['message'] ?? 'unknown error');
             }
         }
     }
@@ -754,5 +770,242 @@ function frs_staff_apply_status_decision(
         'message' => $finalAction === 'pending_payment'
             ? 'Reservation approved. User must complete payment to finalize the booking.'
             : (ucfirst($finalAction) . ' reservation successfully.'),
+    ];
+}
+
+/**
+ * Staff reschedule of a postponed+priority reservation onto a new slot, then auto-approve.
+ * Skips payment when the facility is free or the reservation already has a paid payment.
+ *
+ * @param array<string,mixed> $reservation Row with facility_name, facility_status, is_free, requester_*, etc.
+ * @return array{final_action:string,message:string,old_date:string,old_time:string,new_date:string,new_time:string}
+ */
+function frs_staff_reschedule_postponed_priority(
+    PDO $pdo,
+    int $reservationId,
+    array $reservation,
+    string $newDate,
+    string $newTimeSlot,
+    string $reason,
+    bool $approvalFirstThenPayment
+): array {
+    $status = strtolower((string)($reservation['status'] ?? ''));
+    $hasPriority = !empty($reservation['postponed_priority']);
+    if ($status !== 'postponed' || !$hasPriority) {
+        throw new Exception('Reschedule is only available for postponed reservations with priority.');
+    }
+
+    $oldDate = (string)($reservation['reservation_date'] ?? '');
+    $oldTime = (string)($reservation['time_slot'] ?? '');
+    $facilityId = (int)($reservation['facility_id'] ?? 0);
+    $facilityName = (string)($reservation['facility_name'] ?? 'Facility');
+    $facilityStatus = strtolower((string)($reservation['facility_status'] ?? 'available'));
+
+    if ($facilityId <= 0) {
+        throw new Exception('Invalid facility on this reservation.');
+    }
+    if ($facilityStatus === 'offline') {
+        throw new Exception(
+            'Cannot reschedule: The facility "' . htmlspecialchars($facilityName)
+            . '" is currently Offline.'
+        );
+    }
+
+    $newDate = trim($newDate);
+    $newTimeSlot = trim($newTimeSlot);
+    $reason = trim($reason);
+    if ($newDate === '' || $newTimeSlot === '') {
+        throw new Exception('New date and time are required.');
+    }
+    if ($reason === '') {
+        throw new Exception('A reason is required when rescheduling a postponed reservation.');
+    }
+
+    $newDateObj = DateTime::createFromFormat('Y-m-d', $newDate) ?: new DateTime($newDate);
+    $today = new DateTime('today');
+    if ($newDateObj < $today) {
+        throw new Exception('New reservation date cannot be in the past.');
+    }
+
+    if (!preg_match('/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/', $newTimeSlot)) {
+        throw new Exception('Invalid time slot format.');
+    }
+
+    if ($newDate === $oldDate && $newTimeSlot === $oldTime) {
+        throw new Exception('Please choose a different date or time from the current postponed schedule.');
+    }
+
+    if (frs_has_overlapping_booking($pdo, $facilityId, $newDate, $newTimeSlot, $reservationId)) {
+        throw new Exception('The selected date and time overlaps an existing booking. Please choose another time.');
+    }
+
+    $blackoutCheck = $pdo->prepare(
+        'SELECT id FROM facility_blackout_dates WHERE facility_id = ? AND blackout_date = ? LIMIT 1'
+    );
+    $blackoutCheck->execute([$facilityId, $newDate]);
+    if ($blackoutCheck->fetchColumn()) {
+        throw new Exception(
+            'Cannot reschedule to "' . htmlspecialchars($newDate)
+            . '": that date is blacked out or under scheduled maintenance. Choose another date.'
+        );
+    }
+
+    if ($facilityStatus === 'maintenance') {
+        $anyBo = $pdo->prepare('SELECT 1 FROM facility_blackout_dates WHERE facility_id = ? LIMIT 1');
+        $anyBo->execute([$facilityId]);
+        if (!$anyBo->fetchColumn()) {
+            throw new Exception(
+                'Cannot reschedule: The facility "' . htmlspecialchars($facilityName)
+                . '" is under maintenance with no dated window. Set it to Available first or pick a cleared date after sync.'
+            );
+        }
+    }
+
+    $facilityIsFree = !empty($reservation['is_free']);
+    if (!isset($reservation['is_free'])) {
+        $freeStmt = $pdo->prepare('SELECT is_free FROM facilities WHERE id = ?');
+        $freeStmt->execute([$facilityId]);
+        $facilityIsFree = (bool)$freeStmt->fetchColumn();
+    }
+
+    $hasPaidPayment = false;
+    $paymentCheck = $pdo->prepare(
+        'SELECT id FROM payments WHERE reservation_id = :reservation_id AND status = :status LIMIT 1'
+    );
+    $paymentCheck->execute(['reservation_id' => $reservationId, 'status' => 'paid']);
+    $hasPaidPayment = (bool)$paymentCheck->fetchColumn();
+
+    $finalAction = 'approved';
+    if ($approvalFirstThenPayment && !$facilityIsFree && !$hasPaidPayment) {
+        $finalAction = 'pending_payment';
+    }
+
+    if ($finalAction === 'pending_payment') {
+        $hold = frs_payment_hold_timestamps();
+        $stmt = $pdo->prepare(
+            'UPDATE reservations
+             SET reservation_date = :new_date,
+                 time_slot = :new_time,
+                 status = :status,
+                 postponed_at = NULL,
+                 postponed_priority = FALSE,
+                 payment_due_at = :payment_due_at,
+                 expires_at = :expires_at,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            'new_date' => $newDate,
+            'new_time' => $newTimeSlot,
+            'status' => $finalAction,
+            'payment_due_at' => $hold['payment_due_at'],
+            'expires_at' => $hold['expires_at'],
+            'id' => $reservationId,
+        ]);
+    } else {
+        $stmt = $pdo->prepare(
+            'UPDATE reservations
+             SET reservation_date = :new_date,
+                 time_slot = :new_time,
+                 status = :status,
+                 postponed_at = NULL,
+                 postponed_priority = FALSE,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            'new_date' => $newDate,
+            'new_time' => $newTimeSlot,
+            'status' => $finalAction,
+            'id' => $reservationId,
+        ]);
+    }
+
+    $histNote = 'Staff rescheduled priority postponement from '
+        . $oldDate . ' ' . $oldTime . ' to ' . $newDate . ' ' . $newTimeSlot
+        . '. Auto-' . ($finalAction === 'pending_payment' ? 'approved pending payment' : 'approved')
+        . '. Reason: ' . $reason;
+
+    $hist = $pdo->prepare(
+        'INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)'
+    );
+    $hist->execute([
+        'id' => $reservationId,
+        'status' => $finalAction,
+        'note' => $histNote,
+        'user' => $_SESSION['user_id'] ?? null,
+    ]);
+
+    logAudit(
+        'Staff rescheduled postponed reservation',
+        'Reservations',
+        'RES-' . $reservationId . ' – ' . $facilityName . ' – ' . $histNote
+    );
+
+    $requesterId = (int)($reservation['requester_id'] ?? 0);
+    if ($requesterId > 0) {
+        $notifTitle = $finalAction === 'pending_payment'
+            ? 'Reservation Rescheduled — Payment Required'
+            : 'Reservation Rescheduled & Confirmed';
+        $notifMessage = 'Your postponed reservation for ' . $facilityName
+            . ' was rescheduled from ' . date('F j, Y', strtotime($oldDate)) . ' (' . $oldTime . ')'
+            . ' to ' . date('F j, Y', strtotime($newDate)) . ' (' . $newTimeSlot . ').';
+        if ($finalAction === 'approved') {
+            $notifMessage .= ' It is confirmed (no re-approval needed).';
+        } else {
+            $notifMessage .= ' Please complete payment to finalize.';
+        }
+        $notifMessage .= ' Reason: ' . $reason;
+        $notifLink = $finalAction === 'pending_payment'
+            ? (base_path() . '/dashboard/pay-now?reservation_id=' . $reservationId)
+            : (base_path() . '/dashboard/my-reservations');
+        createNotification($requesterId, 'booking', $notifTitle, $notifMessage, $notifLink);
+
+        require_once __DIR__ . '/mail_helper.php';
+        require_once __DIR__ . '/email_templates.php';
+        require_once __DIR__ . '/sms_helper.php';
+        require_once __DIR__ . '/notification_preferences.php';
+
+        if (frs_user_wants_notification($requesterId, 'booking', 'email')
+            && !empty($reservation['requester_email'])
+            && !empty($reservation['requester_name'])) {
+            $emailBody = getStaffPriorityRescheduleEmailTemplate(
+                (string)$reservation['requester_name'],
+                $facilityName,
+                $oldDate,
+                $oldTime,
+                $newDate,
+                $newTimeSlot,
+                $reason,
+                $finalAction === 'pending_payment'
+            );
+            $subject = $finalAction === 'pending_payment'
+                ? 'Reservation Rescheduled — Payment Required'
+                : 'Reservation Rescheduled & Confirmed';
+            sendEmail(
+                (string)$reservation['requester_email'],
+                (string)$reservation['requester_name'],
+                $subject,
+                $emailBody
+            );
+        }
+
+        $reservation['user_id'] = $requesterId;
+        $reservation['reservation_date'] = $newDate;
+        $reservation['time_slot'] = $newTimeSlot;
+        if (function_exists('sendReservationStatusSms')) {
+            sendReservationStatusSms($reservation, $finalAction === 'pending_payment' ? 'pending_payment' : 'approved');
+        }
+    }
+
+    return [
+        'final_action' => $finalAction,
+        'old_date' => $oldDate,
+        'old_time' => $oldTime,
+        'new_date' => $newDate,
+        'new_time' => $newTimeSlot,
+        'message' => $finalAction === 'pending_payment'
+            ? 'Reservation rescheduled. Requester must complete payment to finalize.'
+            : 'Reservation rescheduled and auto-approved. The requester has been emailed.',
     ];
 }

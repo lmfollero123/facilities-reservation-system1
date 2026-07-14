@@ -276,16 +276,16 @@ ob_start();
                     <h2 class="text-base font-semibold text-slate-900">Blackout calendar</h2>
                     <p class="text-xs text-slate-500 mt-0.5">Click a highlighted date to view details. Red = CPRF blackout · Amber = CIMM maintenance.</p>
                 </div>
-                <div class="flex flex-wrap items-end gap-3">
-                    <button type="button" id="bo-add-modal-btn" class="btn-primary inline-flex items-center gap-2">
+                <div class="flex flex-wrap items-end gap-2 sm:gap-3 frs-bo-toolbar-filters">
+                    <button type="button" id="bo-add-modal-btn" class="btn-primary inline-flex items-center gap-2 w-full sm:w-auto justify-center">
                         <i class="bi bi-plus-lg"></i> Add Blackout
                     </button>
                     <form method="GET" action="<?= htmlspecialchars($base . '/dashboard/blackout-dates'); ?>"
-                        class="flex flex-wrap items-end gap-3">
-                    <div>
+                        class="flex flex-wrap items-end gap-2 sm:gap-3 w-full sm:w-auto frs-bo-filter-form" data-frs-partial="bo-calendar" data-frs-partial-auto>
+                    <div class="frs-bo-filter-field">
                         <label for="filter-month" class="block text-xs font-semibold text-slate-500 mb-1">Month</label>
-                        <select id="filter-month" name="month" onchange="this.form.submit()"
-                            class="min-w-[8.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <select id="filter-month" name="month"
+                            class="w-full min-w-0 sm:min-w-[8.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                             <?php for ($m = 1; $m <= 12; $m++): ?>
                                 <option value="<?= $m; ?>" <?= $calMonth === $m ? 'selected' : ''; ?>>
                                     <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
@@ -293,18 +293,18 @@ ob_start();
                             <?php endfor; ?>
                         </select>
                     </div>
-                    <div>
+                    <div class="frs-bo-filter-field">
                         <label for="filter-year" class="block text-xs font-semibold text-slate-500 mb-1">Year</label>
-                        <select id="filter-year" name="year" onchange="this.form.submit()"
-                            class="min-w-[5.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <select id="filter-year" name="year"
+                            class="w-full min-w-0 sm:min-w-[5.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                             <?php for ($y = $boYearMax; $y >= $boYearMin; $y--): ?>
                                 <option value="<?= $y; ?>" <?= $filterYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
                             <?php endfor; ?>
                         </select>
                     </div>
-                    <div class="flex-1 min-w-[12rem]">
+                    <div class="frs-bo-filter-field frs-bo-filter-facility flex-1 min-w-[10rem]">
                         <label for="filter-facility" class="block text-xs font-semibold text-slate-500 mb-1">Facility</label>
-                        <select id="filter-facility" name="facility_id" onchange="this.form.submit()"
+                        <select id="filter-facility" name="facility_id"
                             class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                             <option value="0">All facilities</option>
                             <?php foreach ($facilities as $f): ?>
@@ -318,17 +318,20 @@ ob_start();
                 </div>
             </div>
 
+            <div data-frs-partial-id="bo-calendar" data-frs-partial-root>
             <div class="px-4 sm:px-6 py-4 border-b border-slate-100">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2 frs-bo-cal-nav">
                         <a href="<?= htmlspecialchars(blackout_filter_url($calPrevYear, $calPrevMonth, $filterFacility)); ?>"
+                            data-frs-partial="bo-calendar"
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                            &larr; Prev
+                            &larr; <span class="frs-bo-nav-label">Prev</span>
                         </a>
+                        <span class="frs-bo-month-label lg:hidden text-sm font-semibold text-slate-900 px-1"><?= htmlspecialchars($calMonthLabel); ?></span>
                         <form method="GET" action="<?= htmlspecialchars($base . '/dashboard/blackout-dates'); ?>"
-                            class="inline-flex flex-wrap items-center gap-2">
+                            class="hidden lg:inline-flex flex-wrap items-center gap-2" data-frs-partial="bo-calendar" data-frs-partial-auto>
                             <input type="hidden" name="facility_id" value="<?= (int)$filterFacility; ?>">
-                            <select name="month" aria-label="Select month" onchange="this.form.submit()"
+                            <select name="month" aria-label="Select month"
                                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                                 <?php for ($m = 1; $m <= 12; $m++): ?>
                                     <option value="<?= $m; ?>" <?= $calMonth === $m ? 'selected' : ''; ?>>
@@ -336,7 +339,7 @@ ob_start();
                                     </option>
                                 <?php endfor; ?>
                             </select>
-                            <select name="year" aria-label="Select year" onchange="this.form.submit()"
+                            <select name="year" aria-label="Select year"
                                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                                 <?php for ($y = $boYearMax; $y >= $boYearMin; $y--): ?>
                                     <option value="<?= $y; ?>" <?= $filterYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
@@ -344,26 +347,35 @@ ob_start();
                             </select>
                         </form>
                         <a href="<?= htmlspecialchars(blackout_filter_url($calNextYear, $calNextMonth, $filterFacility)); ?>"
+                            data-frs-partial="bo-calendar"
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                            Next &rarr;
+                            <span class="frs-bo-nav-label">Next</span> &rarr;
                         </a>
                         <a href="<?= htmlspecialchars(blackout_filter_url((int)date('Y'), (int)date('n'), $filterFacility)); ?>"
+                            data-frs-partial="bo-calendar"
                             class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                             Today
                         </a>
                     </div>
-                    <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> CPRF blackout</span>
-                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> CIMM maintenance</span>
-                        <span><?= (int)$monthSourceCounts['manual']; ?> blackout · <?= (int)$monthSourceCounts['cimm']; ?> maintenance this month</span>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500 frs-bo-legend">
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> CPRF</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> CIMM</span>
+                        <span class="hidden sm:inline"><?= (int)$monthSourceCounts['manual']; ?> blackout · <?= (int)$monthSourceCounts['cimm']; ?> maintenance</span>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 sm:p-6">
+            <div class="p-3 sm:p-6 frs-bo-calendar-wrap">
                 <div class="frs-bo-calendar-grid frs-bo-calendar-head">
-                    <?php foreach (['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $dn): ?>
-                        <div class="frs-bo-calendar-dow"><?= $dn; ?></div>
+                    <?php
+                    $dowFull = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                    $dowShort = ['S','M','T','W','T','F','S'];
+                    foreach ($dowFull as $i => $dn):
+                    ?>
+                        <div class="frs-bo-calendar-dow">
+                            <span class="frs-bo-dow-full"><?= $dn; ?></span>
+                            <span class="frs-bo-dow-short"><?= $dowShort[$i]; ?></span>
+                        </div>
                     <?php endforeach; ?>
                 </div>
                 <div class="frs-bo-calendar-grid">
@@ -423,7 +435,7 @@ ob_start();
                         }
                     ?>
                         <?php if ($hasBlackout): ?>
-                        <a href="<?= htmlspecialchars($cellUrl); ?>" class="<?= $cellClasses; ?>">
+                        <a href="<?= htmlspecialchars($cellUrl); ?>" data-frs-partial="bo-calendar" class="<?= $cellClasses; ?>">
                         <?php else: ?>
                         <div class="<?= $cellClasses; ?>">
                         <?php endif; ?>
@@ -445,6 +457,84 @@ ob_start();
                     <p class="text-sm text-slate-500 py-4">No blackouts this month. Click "Add Blackout" to create one.</p>
                 </div>
             <?php endif; ?>
+
+            <div id="bo-day-modal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6<?= $selectedDate === '' ? ' hidden' : ''; ?>"
+                role="dialog" aria-modal="true" aria-labelledby="bo-day-modal-title"
+                data-close-url="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>">
+                <div class="absolute inset-0 bg-slate-900/50" data-bo-modal-close></div>
+                <div class="relative w-full max-w-lg max-h-[90vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+                    <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div>
+                            <h3 id="bo-day-modal-title" class="text-lg font-semibold text-slate-900">Blackout details</h3>
+                            <?php if ($selectedDate !== ''): ?>
+                            <p class="text-sm text-slate-500 mt-0.5"><?= htmlspecialchars($selectedDateLabel); ?></p>
+                            <?php endif; ?>
+                        </div>
+                        <a href="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>"
+                            data-frs-partial="bo-calendar"
+                            class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                            aria-label="Close">
+                            <i class="bi bi-x-lg"></i>
+                        </a>
+                    </div>
+                    <div class="px-5 py-4 space-y-3">
+                        <?php if ($selectedDate === ''): ?>
+                            <p class="text-sm text-slate-500">Select a highlighted date on the calendar.</p>
+                        <?php elseif (empty($dayBlackouts)): ?>
+                            <p class="text-sm text-slate-500">No blackouts on this date for the current filter.</p>
+                        <?php else: ?>
+                            <?php foreach ($dayBlackouts as $b):
+                                $b = frs_blackout_enrich_row($b);
+                                $isCimm = ($b['source_type'] ?? '') === 'cimm';
+                            ?>
+                                <article class="rounded-xl border p-4 <?= $isCimm
+                                    ? 'border-amber-200 bg-amber-50/60'
+                                    : 'border-slate-200 bg-slate-50/50'; ?>">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <p class="font-semibold text-slate-900"><?= htmlspecialchars($b['facility_name']); ?></p>
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <?= $isCimm
+                                            ? 'bg-amber-200 text-amber-900'
+                                            : 'bg-red-100 text-red-800'; ?>">
+                                            <?= htmlspecialchars($b['source_label']); ?>
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-slate-700 mt-1"><?= htmlspecialchars($b['display_reason'] ?? '—'); ?></p>
+                                    <?php if ($isCimm): ?>
+                                        <p class="text-xs text-amber-800/80 mt-2">
+                                            Synced from CIMM. Completing or cancelling the maintenance schedule in CIMM removes this automatically.
+                                        </p>
+                                    <?php elseif (!empty($b['created_by_name'])): ?>
+                                        <p class="text-xs text-slate-400 mt-2">Added by <?= htmlspecialchars($b['created_by_name']); ?></p>
+                                    <?php endif; ?>
+                                    <?php if (!empty($b['created_at'])): ?>
+                                        <p class="text-xs text-slate-400">Recorded <?= htmlspecialchars(date('M j, Y g:i A', strtotime($b['created_at']))); ?></p>
+                                    <?php endif; ?>
+                                    <?php if (!empty($b['is_removable'])): ?>
+                                    <form method="POST" class="mt-3" onsubmit="return confirm('Remove this blackout?');">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="blackout_id" value="<?= (int)$b['id']; ?>">
+                                        <input type="hidden" name="bo_year" value="<?= (int)$filterYear; ?>">
+                                        <input type="hidden" name="bo_month" value="<?= (int)$calMonth; ?>">
+                                        <input type="hidden" name="bo_facility_id" value="<?= (int)$filterFacility; ?>">
+                                        <button type="submit"
+                                            class="inline-flex items-center rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
+                                            Remove blackout
+                                        </button>
+                                    </form>
+                                    <?php else: ?>
+                                    <a href="<?= htmlspecialchars($base . '/dashboard/maintenance-integration'); ?>"
+                                       class="inline-flex items-center mt-3 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50">
+                                        View in Maintenance Integration
+                                    </a>
+                                    <?php endif; ?>
+                                </article>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            </div>
         </section>
 
         <!-- Add Blackout Modal -->
@@ -578,82 +668,6 @@ ob_start();
             </div>
         </div>
 
-        <div id="bo-day-modal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6<?= $selectedDate === '' ? ' hidden' : ''; ?>"
-            role="dialog" aria-modal="true" aria-labelledby="bo-day-modal-title"
-            data-close-url="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>">
-            <div class="absolute inset-0 bg-slate-900/50" data-bo-modal-close></div>
-            <div class="relative w-full max-w-lg max-h-[90vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
-                <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                    <div>
-                        <h3 id="bo-day-modal-title" class="text-lg font-semibold text-slate-900">Blackout details</h3>
-                        <?php if ($selectedDate !== ''): ?>
-                        <p class="text-sm text-slate-500 mt-0.5"><?= htmlspecialchars($selectedDateLabel); ?></p>
-                        <?php endif; ?>
-                    </div>
-                    <a href="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>"
-                        class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                        aria-label="Close">
-                        <i class="bi bi-x-lg"></i>
-                    </a>
-                </div>
-                <div class="px-5 py-4 space-y-3">
-                    <?php if ($selectedDate === ''): ?>
-                        <p class="text-sm text-slate-500">Select a highlighted date on the calendar.</p>
-                    <?php elseif (empty($dayBlackouts)): ?>
-                        <p class="text-sm text-slate-500">No blackouts on this date for the current filter.</p>
-                    <?php else: ?>
-                        <?php foreach ($dayBlackouts as $b):
-                            $b = frs_blackout_enrich_row($b);
-                            $isCimm = ($b['source_type'] ?? '') === 'cimm';
-                        ?>
-                            <article class="rounded-xl border p-4 <?= $isCimm
-                                ? 'border-amber-200 bg-amber-50/60'
-                                : 'border-slate-200 bg-slate-50/50'; ?>">
-                                <div class="flex flex-wrap items-center gap-2 mb-2">
-                                    <p class="font-semibold text-slate-900"><?= htmlspecialchars($b['facility_name']); ?></p>
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <?= $isCimm
-                                        ? 'bg-amber-200 text-amber-900'
-                                        : 'bg-red-100 text-red-800'; ?>">
-                                        <?= htmlspecialchars($b['source_label']); ?>
-                                    </span>
-                                </div>
-                                <p class="text-sm text-slate-700 mt-1"><?= htmlspecialchars($b['display_reason'] ?? '—'); ?></p>
-                                <?php if ($isCimm): ?>
-                                    <p class="text-xs text-amber-800/80 mt-2">
-                                        Synced from CIMM. Completing or cancelling the maintenance schedule in CIMM removes this automatically.
-                                    </p>
-                                <?php elseif (!empty($b['created_by_name'])): ?>
-                                    <p class="text-xs text-slate-400 mt-2">Added by <?= htmlspecialchars($b['created_by_name']); ?></p>
-                                <?php endif; ?>
-                                <?php if (!empty($b['created_at'])): ?>
-                                    <p class="text-xs text-slate-400">Recorded <?= htmlspecialchars(date('M j, Y g:i A', strtotime($b['created_at']))); ?></p>
-                                <?php endif; ?>
-                                <?php if (!empty($b['is_removable'])): ?>
-                                <form method="POST" class="mt-3" onsubmit="return confirm('Remove this blackout?');">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="blackout_id" value="<?= (int)$b['id']; ?>">
-                                    <input type="hidden" name="bo_year" value="<?= (int)$filterYear; ?>">
-                                    <input type="hidden" name="bo_month" value="<?= (int)$calMonth; ?>">
-                                    <input type="hidden" name="bo_facility_id" value="<?= (int)$filterFacility; ?>">
-                                    <button type="submit"
-                                        class="inline-flex items-center rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
-                                        Remove blackout
-                                    </button>
-                                </form>
-                                <?php else: ?>
-                                <a href="<?= htmlspecialchars($base . '/dashboard/maintenance-integration'); ?>"
-                                   class="inline-flex items-center mt-3 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50">
-                                    View in Maintenance Integration
-                                </a>
-                                <?php endif; ?>
-                            </article>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
         <p class="mt-4 text-xs text-slate-500 leading-relaxed">
             <strong class="text-slate-600">CPRF blackouts</strong> are events or closures you add here (red on the calendar).
             <strong class="text-amber-800">CIMM maintenance</strong> dates are synced automatically from the maintenance system (amber) and cannot be removed manually.
@@ -671,7 +685,79 @@ ob_start();
 .frs-blackout-page .book-facility-compact.frs-bo-form-grid.booking-form label { margin-bottom: 0; }
 .frs-blackout-page .book-facility-compact.frs-bo-form-grid.booking-form .input-wrapper { margin-top: 0.35rem; }
 .frs-blackout-page .frs-bo-tabs.calendar-tabs { margin-top: 0; margin-bottom: 0; }
-.frs-blackout-page .frs-bo-year-total { display: inline-flex; align-items: center; gap: 0.5rem; }
+.frs-blackout-page .frs-bo-year-total {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+.frs-blackout-page .frs-bo-filter-form {
+    flex: 1;
+    min-width: 0;
+}
+@media (max-width: 639px) {
+    .frs-blackout-page .frs-bo-filter-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        width: 100%;
+    }
+    .frs-blackout-page .frs-bo-filter-facility {
+        grid-column: 1 / -1;
+    }
+    .frs-blackout-page .frs-bo-toolbar-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+.frs-bo-dow-short { display: none; }
+@media (max-width: 639px) {
+    .frs-bo-dow-full { display: none; }
+    .frs-bo-dow-short { display: inline; }
+    .frs-bo-calendar-dow { font-size: 0.65rem; padding: 0.15rem 0; }
+    .frs-bo-calendar-grid .frs-bo-cal-cell {
+        min-height: 3.25rem;
+        padding: 0.2rem 0.25rem;
+        border-radius: 0.375rem;
+    }
+    .frs-bo-calendar-grid .frs-bo-cal-cell .bo-day-num {
+        font-size: 0.75rem;
+    }
+    .frs-bo-cal-chip {
+        font-size: 0.55rem;
+        padding: 0.1rem 0.3rem;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .frs-bo-cal-nav a {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    .frs-bo-month-label {
+        font-size: 0.85rem;
+        max-width: 7rem;
+        text-align: center;
+        line-height: 1.2;
+    }
+    .frs-bo-nav-label {
+        display: none;
+    }
+    .frs-blackout-page header h1 {
+        font-size: 1.35rem;
+    }
+}
+.frs-bo-calendar-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 639px) {
+    .frs-bo-calendar-grid {
+        min-width: 280px;
+        gap: 0.2rem;
+    }
+}
 .frs-blackout-page #bo-add-modal label {
     display: block;
     width: 100%;
@@ -769,11 +855,32 @@ ob_start();
 </style>
 <script>
 (function () {
-    const tabSingle = document.getElementById('bo-tab-single');
-    const tabRange = document.getElementById('bo-tab-range');
-    const panelSingle = document.getElementById('bo-panel-single');
-    const panelRange = document.getElementById('bo-panel-range');
-    if (tabSingle && tabRange && panelSingle && panelRange) {
+    function mountBoDayModal() {
+        const partialRoot = document.querySelector('[data-frs-partial-id="bo-calendar"]');
+        const inPartial = partialRoot ? partialRoot.querySelector('#bo-day-modal') : null;
+        document.querySelectorAll('#bo-day-modal').forEach(function (el) {
+            if (inPartial && el !== inPartial) {
+                el.remove();
+            }
+        });
+        const modal = inPartial || document.getElementById('bo-day-modal');
+        if (!modal) return null;
+        if (modal.parentNode !== document.body) {
+            document.body.appendChild(modal);
+        }
+        return modal;
+    }
+
+    function initBoTabs() {
+        const tabSingle = document.getElementById('bo-tab-single');
+        const tabRange = document.getElementById('bo-tab-range');
+        const panelSingle = document.getElementById('bo-panel-single');
+        const panelRange = document.getElementById('bo-panel-range');
+        if (!tabSingle || !tabRange || !panelSingle || !panelRange) return;
+        if (tabSingle.dataset.boBound === '1') return;
+        tabSingle.dataset.boBound = '1';
+        tabRange.dataset.boBound = '1';
+
         function setTab(active) {
             const isSingle = active === 'single';
             panelSingle.classList.toggle('hidden', !isSingle);
@@ -787,48 +894,110 @@ ob_start();
         tabRange.addEventListener('click', function () { setTab('range'); });
     }
 
-    // Add Blackout Modal
-    const addModalBtn = document.getElementById('bo-add-modal-btn');
-    const addModal = document.getElementById('bo-add-modal');
-    const addModalBackdrop = document.getElementById('bo-add-modal-backdrop');
-    const addModalClose = document.getElementById('bo-add-modal-close');
+    function initBoAddModal() {
+        const addModalBtn = document.getElementById('bo-add-modal-btn');
+        const addModal = document.getElementById('bo-add-modal');
+        const addModalBackdrop = document.getElementById('bo-add-modal-backdrop');
+        const addModalClose = document.getElementById('bo-add-modal-close');
+        if (!addModal) return;
 
-    if (addModalBtn && addModal) {
-        addModalBtn.addEventListener('click', function () {
-            addModal.classList.remove('hidden');
-        });
-    }
-
-    if (addModalClose && addModal) {
-        addModalClose.addEventListener('click', function () {
-            addModal.classList.add('hidden');
-        });
-    }
-
-    if (addModalBackdrop && addModal) {
-        addModalBackdrop.addEventListener('click', function () {
-            addModal.classList.add('hidden');
-        });
-    }
-
-    // Close modal on Escape key
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && addModal && !addModal.classList.contains('hidden')) {
-            addModal.classList.add('hidden');
+        if (addModal.parentNode !== document.body) {
+            document.body.appendChild(addModal);
         }
-    });
 
-    const modal = document.getElementById('bo-day-modal');
-    if (modal) {
-        modal.querySelectorAll('[data-bo-modal-close]').forEach(function (el) {
-            el.addEventListener('click', function () {
-                const closeUrl = modal.getAttribute('data-close-url');
-                if (closeUrl) {
-                    window.location.href = closeUrl;
+        if (addModalBtn && addModalBtn.dataset.boBound !== '1') {
+            addModalBtn.dataset.boBound = '1';
+            addModalBtn.addEventListener('click', function () {
+                const modal = document.getElementById('bo-add-modal');
+                if (modal) {
+                    if (modal.parentNode !== document.body) document.body.appendChild(modal);
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
                 }
             });
+        }
+        if (addModalClose && addModalClose.dataset.boBound !== '1') {
+            addModalClose.dataset.boBound = '1';
+            addModalClose.addEventListener('click', function () {
+                const modal = document.getElementById('bo-add-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+        if (addModalBackdrop && addModalBackdrop.dataset.boBound !== '1') {
+            addModalBackdrop.dataset.boBound = '1';
+            addModalBackdrop.addEventListener('click', function () {
+                const modal = document.getElementById('bo-add-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+    }
+
+    function initBoDayModal() {
+        mountBoDayModal();
+    }
+
+    window.frsInitBlackoutPage = function () {
+        initBoTabs();
+        initBoAddModal();
+        initBoDayModal();
+    };
+
+    if (!window.__boPageDelegationBound) {
+        window.__boPageDelegationBound = true;
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            const addModal = document.getElementById('bo-add-modal');
+            if (addModal && !addModal.classList.contains('hidden')) {
+                addModal.classList.add('hidden');
+                document.body.style.overflow = '';
+                return;
+            }
+            const dayModal = document.getElementById('bo-day-modal');
+            if (dayModal && !dayModal.classList.contains('hidden')) {
+                const closeUrl = dayModal.getAttribute('data-close-url');
+                if (closeUrl && typeof window.frsPartialLoad === 'function') {
+                    window.frsPartialLoad(closeUrl, 'bo-calendar');
+                } else if (closeUrl) {
+                    window.location.href = closeUrl;
+                }
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            const closeEl = e.target.closest('[data-bo-modal-close]');
+            if (!closeEl) return;
+            const dayModal = document.getElementById('bo-day-modal');
+            if (!dayModal) return;
+            e.preventDefault();
+            const closeUrl = closeEl.getAttribute('data-frs-partial-url')
+                || dayModal.getAttribute('data-close-url');
+            if (closeUrl && typeof window.frsPartialLoad === 'function') {
+                window.frsPartialLoad(closeUrl, 'bo-calendar');
+            } else if (closeUrl) {
+                window.location.href = closeUrl;
+            }
+        });
+
+        document.addEventListener('frs:partial-loaded', function (e) {
+            if (e.detail && e.detail.id === 'bo-calendar') {
+                mountBoDayModal();
+            }
+        });
+
+        document.addEventListener('frs:dashboard-page-loaded', function () {
+            if (typeof window.frsInitBlackoutPage === 'function') {
+                window.frsInitBlackoutPage();
+            }
         });
     }
+
+    window.frsInitBlackoutPage();
 })();
 </script>
 <?php

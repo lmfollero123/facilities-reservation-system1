@@ -230,7 +230,7 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<?php if ($activeTab === 'schedules'): ?>
+<!-- <?php if ($activeTab === 'schedules'): ?>
 <div class="mi-cimm-info" role="note">
     <strong>How CIMM affects resident booking</strong>
     <ul>
@@ -264,7 +264,7 @@ ob_start();
         <?php endif; ?>
     <?php endif; ?>
 </div>
-<?php endif; ?>
+<?php endif; ?> -->
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
 <div class="booking-wrapper">

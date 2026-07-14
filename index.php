@@ -192,6 +192,7 @@ if ($path === 'announcements') {
         'facility-details-api' => 'facility-details-api.php',
         'cimm-maintenance-request-api' => 'cimm-maintenance-request-api.php',
         'geocode-api' => 'geocode_api.php',
+        'walk-in-residents-api' => 'walk_in_residents_api.php',
         'chatbot-api' => 'chatbot_api.php',
         'ai-chatbot' => 'ai_chatbot.php',
         'export-audit-trail' => 'export_audit_trail.php',

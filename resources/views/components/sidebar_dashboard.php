@@ -77,7 +77,7 @@ function isLinkActive($link, $current) {
 function renderNavLink($link, $current, $iconPaths) {
     $active = isLinkActive($link, $current) ? 'active' : '';
     $icon = $iconPaths[$link['icon']] ?? '';
-    return '<a href="' . htmlspecialchars($link['href']) . '" class="' . $active . '" data-icon="' . htmlspecialchars($link['icon']) . '"><svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' . $icon . '</svg><span>' . htmlspecialchars($link['label']) . '</span></a>';
+    return '<a href="' . htmlspecialchars($link['href']) . '" class="sidebar-link ' . $active . '" data-icon="' . htmlspecialchars($link['icon']) . '"><svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' . $icon . '</svg><span>' . htmlspecialchars($link['label']) . '</span></a>';
 }
 
 function renderCollapsibleGroup($title, $targetId, $links, $current, $iconPaths, $defaultOpen = true) {

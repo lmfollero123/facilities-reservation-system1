@@ -244,30 +244,30 @@ ob_start();
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <div class="time-tracking-actions" style="min-width:280px;flex:1;display:flex;gap:0.75rem;align-items:flex-start;justify-content:flex-end;flex-wrap:wrap;">
+                            <div class="time-tracking-actions">
                                 <?php if ($isToday): ?>
-                                <form method="POST" enctype="multipart/form-data" style="display:flex;gap:0.5rem;align-items:center;">
+                                <form method="POST" enctype="multipart/form-data" class="time-tracking-action-form">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="time_in">
                                     <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
-                                    <input type="file" name="proof" accept="image/*" <?= $canTimeIn ? 'required' : 'disabled'; ?> style="max-width:220px;">
+                                    <input type="file" name="proof" accept="image/*" <?= $canTimeIn ? 'required' : 'disabled'; ?> class="time-tracking-proof-input">
                                     <button type="submit" class="btn btn-primary" <?= $canTimeIn ? '' : 'disabled'; ?>>Check In</button>
                                 </form>
 
-                                <form method="POST" enctype="multipart/form-data" style="display:flex;gap:0.5rem;align-items:center;">
+                                <form method="POST" enctype="multipart/form-data" class="time-tracking-action-form">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="time_out">
                                     <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
-                                    <input type="file" name="proof" accept="image/*" <?= $canTimeOut ? 'required' : 'disabled'; ?> style="max-width:220px;">
+                                    <input type="file" name="proof" accept="image/*" <?= $canTimeOut ? 'required' : 'disabled'; ?> class="time-tracking-proof-input">
                                     <button type="submit" class="btn btn-outline" <?= $canTimeOut ? '' : 'disabled'; ?>>Check Out</button>
                                 </form>
                                 <?php endif; ?>
                                 <?php if ($canRequestWaiver): ?>
-                                <form method="POST" style="display:grid;gap:0.35rem;min-width:240px;">
+                                <form method="POST" class="time-tracking-waiver-form">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="request_waiver">
                                     <input type="hidden" name="reservation_id" value="<?= $rid; ?>">
-                                    <textarea name="waiver_reason" rows="2" required placeholder="Why could you not check in?" style="width:100%;font-size:0.85rem;"></textarea>
+                                    <textarea name="waiver_reason" rows="2" required placeholder="Why could you not check in?" class="time-tracking-waiver-reason"></textarea>
                                     <button type="submit" class="btn btn-outline">Request check-in waiver</button>
                                 </form>
                                 <?php endif; ?>
@@ -306,12 +306,39 @@ ob_start();
         </div>
     <?php endif; ?>
 </div>
-<?php
-$content = ob_get_clean();
-include __DIR__ . '/../../layouts/dashboard_layout.php';
-
-?>
 <style>
+.time-tracking-actions {
+    flex: 1;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.time-tracking-action-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.time-tracking-proof-input {
+    max-width: 220px;
+    min-width: 0;
+}
+.time-tracking-waiver-form {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 220px;
+}
+.time-tracking-waiver-reason {
+    width: 100%;
+    font-size: 0.85rem;
+    box-sizing: border-box;
+}
+
 /* Visually gray-out disabled Check In/Out buttons */
 .time-tracking-card .time-tracking-actions button[disabled],
 .time-tracking-card .time-tracking-actions button[disabled]:hover {
@@ -320,6 +347,38 @@ include __DIR__ . '/../../layouts/dashboard_layout.php';
     border-color: #e5e7eb !important;
     cursor: not-allowed !important;
     box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+    .time-tracking-card,
+    .time-tracking-res-card {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    .time-tracking-actions {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+    .time-tracking-action-form {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+    .time-tracking-proof-input {
+        max-width: 100%;
+        width: 100%;
+    }
+    .time-tracking-action-form .btn,
+    .time-tracking-waiver-form .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+    .time-tracking-waiver-form {
+        width: 100%;
+        flex: 1 1 auto;
+    }
 }
 </style>
 <?php if ($highlightResId > 0): ?>
@@ -330,4 +389,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php endif; ?>
+<?php
+$content = ob_get_clean();
+include __DIR__ . '/../../layouts/dashboard_layout.php';
 

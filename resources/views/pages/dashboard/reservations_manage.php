@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'], $_POST['action'])) {
     $reservationId = (int)$_POST['reservation_id'];
     $action = $_POST['action'];
-    $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone'];
+    $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone', 'staff_reschedule'];
 
     if ($reservationId && in_array($action, $allowed, true)) {
         // Check permissions for each action
@@ -50,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             case 'denied':
             case 'modify':
             case 'postpone':
+            case 'staff_reschedule':
                 if (!frs_can_update($role, 'reservations')) {
                     $permissionError = true;
                 }
@@ -289,6 +290,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 
                 $message = 'Reservation postponed successfully. It now has postponed status with priority and requires re-approval.';
                 
+            } elseif ($action === 'staff_reschedule') {
+                if (empty($_POST['new_date']) || empty($_POST['start_time']) || empty($_POST['end_time'])) {
+                    throw new Exception('New date, start time, and end time are required for reschedule.');
+                }
+
+                $startTime = trim((string)$_POST['start_time']);
+                $endTime = trim((string)$_POST['end_time']);
+                $startTimeObj = DateTime::createFromFormat('H:i', $startTime);
+                $endTimeObj = DateTime::createFromFormat('H:i', $endTime);
+                if (!$startTimeObj || !$endTimeObj) {
+                    throw new Exception('Invalid time format. Please use valid time values.');
+                }
+                if ($endTimeObj <= $startTimeObj) {
+                    throw new Exception('End time must be after start time.');
+                }
+
+                $newTimeSlot = $startTime . ' - ' . $endTime;
+                $result = frs_staff_reschedule_postponed_priority(
+                    $pdo,
+                    $reservationId,
+                    $reservation,
+                    trim((string)$_POST['new_date']),
+                    $newTimeSlot,
+                    trim((string)($_POST['reason'] ?? '')),
+                    $approvalFirstThenPayment
+                );
+                $message = $result['message'];
+
             } else {
                 if ($action === 'cancelled' && $reservation['status'] === 'approved') {
                     if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
@@ -335,6 +364,30 @@ $allowedPendingFilters = ['all', 'pending', 'postponed', 'priority'];
 if (!in_array($pendingFilter, $allowedPendingFilters, true)) {
     $pendingFilter = 'all';
 }
+
+// Sort: default soonest reservation schedule first (priority postponed still pins to top)
+$pendingSort = trim((string)($_GET['pending_sort'] ?? 'schedule_asc'));
+$allowedPendingSorts = [
+    'schedule_asc' => 'Schedule (soonest first)',
+    'schedule_desc' => 'Schedule (latest first)',
+    'submitted_desc' => 'Date submitted (newest)',
+    'submitted_asc' => 'Date submitted (oldest)',
+    'facility_asc' => 'Facility (A–Z)',
+    'requester_asc' => 'Requester (A–Z)',
+];
+if (!isset($allowedPendingSorts[$pendingSort])) {
+    $pendingSort = 'schedule_asc';
+}
+
+$pendingSortSqlMap = [
+    'schedule_asc' => 'r.postponed_priority DESC, r.reservation_date ASC, SUBSTRING_INDEX(r.time_slot, " - ", 1) ASC, r.created_at ASC',
+    'schedule_desc' => 'r.postponed_priority DESC, r.reservation_date DESC, SUBSTRING_INDEX(r.time_slot, " - ", 1) DESC, r.created_at DESC',
+    'submitted_desc' => 'r.postponed_priority DESC, r.created_at DESC, r.reservation_date ASC',
+    'submitted_asc' => 'r.postponed_priority DESC, r.created_at ASC, r.reservation_date ASC',
+    'facility_asc' => 'r.postponed_priority DESC, f.name ASC, r.reservation_date ASC, SUBSTRING_INDEX(r.time_slot, " - ", 1) ASC',
+    'requester_asc' => 'r.postponed_priority DESC, u.name ASC, r.reservation_date ASC, SUBSTRING_INDEX(r.time_slot, " - ", 1) ASC',
+];
+$pendingOrderBy = $pendingSortSqlMap[$pendingSort];
 
 // Build pending query with filters - use lookup values for non-final statuses
 $pendingStatuses = [];
@@ -385,7 +438,7 @@ $pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
      ' . $pendingWhereClause . '
-     ORDER BY r.postponed_priority DESC, r.postponed_at ASC, r.created_at ASC
+     ORDER BY ' . $pendingOrderBy . '
      LIMIT :pending_limit OFFSET :pending_offset';
 $pendingStmt = $pdo->prepare($pendingSql);
 foreach ($pendingParams as $key => $value) {
@@ -405,7 +458,11 @@ if (!empty($pendingSearch)) {
     $pendingBaseParams['pending_search_facility'] = '%' . $pendingSearch . '%';
     $pendingBaseParams['pending_search_purpose'] = '%' . $pendingSearch . '%';
 }
-$pendingFilterCounts = ['all' => $pendingTotal, 'pending' => 0, 'postponed' => 0, 'priority' => 0];
+$pendingFilterCounts = ['all' => 0, 'pending' => 0, 'postponed' => 0, 'priority' => 0];
+$allCountSql = 'SELECT COUNT(*) FROM reservations r JOIN facilities f ON r.facility_id = f.id JOIN users u ON r.user_id = u.id WHERE ' . implode(' AND ', $pendingBaseWhere);
+$allCountStmt = $pdo->prepare($allCountSql);
+$allCountStmt->execute($pendingBaseParams);
+$pendingFilterCounts['all'] = (int)$allCountStmt->fetchColumn();
 foreach (['pending' => 'r.status = "pending"', 'postponed' => 'r.status = "postponed"', 'priority' => 'r.postponed_priority = 1'] as $filterKey => $filterSql) {
     $countWhere = $pendingBaseWhere;
     $countWhere[] = $filterSql;
@@ -422,6 +479,23 @@ $approvedPerPage = 10;
 $approvedPage = max(1, (int)($_GET['approved_page'] ?? 1));
 $approvedOffset = ($approvedPage - 1) * $approvedPerPage;
 $approvedSearch = trim($_GET['approved_search'] ?? '');
+$approvedSort = trim((string)($_GET['approved_sort'] ?? 'schedule_asc'));
+$allowedApprovedSorts = [
+    'schedule_asc' => 'Schedule (soonest first)',
+    'schedule_desc' => 'Schedule (latest first)',
+    'requester_asc' => 'Requester (A–Z)',
+    'facility_asc' => 'Facility (A–Z)',
+];
+if (!isset($allowedApprovedSorts[$approvedSort])) {
+    $approvedSort = 'schedule_asc';
+}
+$approvedSortSqlMap = [
+    'schedule_asc' => 'r.reservation_date ASC, SUBSTRING_INDEX(r.time_slot, " - ", 1) ASC',
+    'schedule_desc' => 'r.reservation_date DESC, SUBSTRING_INDEX(r.time_slot, " - ", 1) DESC',
+    'requester_asc' => 'u.name ASC, r.reservation_date ASC',
+    'facility_asc' => 'f.name ASC, r.reservation_date ASC',
+];
+$approvedOrderBy = $approvedSortSqlMap[$approvedSort];
 
 // Build approved query with filters
 // Use unique parameter names for each occurrence to avoid PDO binding issues
@@ -470,7 +544,7 @@ $approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expec
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
      ' . $approvedWhereClause . '
-     ORDER BY r.reservation_date ASC, r.time_slot ASC
+     ORDER BY ' . $approvedOrderBy . '
      LIMIT :approved_limit OFFSET :approved_offset';
 $approvedStmt = $pdo->prepare($approvedSql);
 foreach ($approvedParams as $key => $value) {
@@ -495,14 +569,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && !isset($
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
 
-$raBuildPendingQuery = static function (array $extra = []) use ($pendingPage, $pendingSearch, $pendingFilter, $approvedPage, $approvedSearch, $page, $approvalsView): string {
+$raBuildPendingQuery = static function (array $extra = []) use ($pendingPage, $pendingSearch, $pendingFilter, $pendingSort, $approvedPage, $approvedSearch, $approvedSort, $page, $approvalsView): string {
     $params = array_merge([
         'view' => $approvalsView,
         'pending_page' => $pendingPage,
         'pending_search' => $pendingSearch,
         'pending_filter' => $pendingFilter,
+        'pending_sort' => $pendingSort,
         'approved_page' => $approvedPage,
         'approved_search' => $approvedSearch,
+        'approved_sort' => $approvedSort,
         'page' => $page,
     ], $extra);
     return '?' . http_build_query($params);
@@ -603,18 +679,21 @@ ob_start();
                 <span class="ra-legend-item"><span class="status-badge postponed">Postponed</span> Re-approval</span>
                 <span class="ra-legend-item"><span class="status-badge on_hold">On Hold</span> Temporarily paused</span>
             </div>
-            <p class="ra-legend-note">Approve and Deny open a review step first. Postponed + priority items are reviewed first.</p>
+            <p class="ra-legend-note">Approve and Deny open a review step first. Postponed + priority items use <strong>Reschedule</strong> (auto-approves the new date). Lists default to soonest schedule first; priority postponed items stay pinned at the top. Use Sort to change order.</p>
         </details>
 
+        <div data-frs-partial-id="ra-approvals-main" data-frs-partial-root>
         <nav class="ra-view-tabs" aria-label="Approval sections">
             <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => 1])); ?>"
                class="ra-view-tab<?= $approvalsView === 'pending' ? ' is-active' : ''; ?>"
+               data-frs-partial="ra-approvals-main"
                <?= $approvalsView === 'pending' ? 'aria-current="page"' : ''; ?>>
                 Pending Requests
                 <span class="ra-view-tab__count"><?= (int)$pendingTotal; ?></span>
             </a>
             <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => 1])); ?>"
                class="ra-view-tab<?= $approvalsView === 'approved' ? ' is-active' : ''; ?>"
+               data-frs-partial="ra-approvals-main"
                <?= $approvalsView === 'approved' ? 'aria-current="page"' : ''; ?>>
                 Approved
                 <span class="ra-view-tab__count"><?= (int)$approvedTotal; ?></span>
@@ -628,7 +707,7 @@ ob_start();
                 <h2 class="ra-queue-title">Pending Requests</h2>
                 <span class="ra-queue-count"><?= (int)$pendingTotal; ?> total</span>
             </div>
-            <p class="ra-queue-subtitle">Approve and deny open a review step first. Priority and postponed items are sorted to the top.</p>
+            <p class="ra-queue-subtitle">Approve and deny open a review step first. Priority postponed items use Reschedule (pick a free date and auto-approve).</p>
         </div>
 
         <div class="ra-queue-toolbar">
@@ -645,24 +724,52 @@ ob_start();
                     $filterHref = $raBuildPendingQuery(['view' => 'pending', 'pending_filter' => $filterKey, 'pending_page' => 1]);
                 ?>
                     <a href="<?= htmlspecialchars($filterHref); ?>"
-                       class="ra-filter-tab<?= $isActive ? ' is-active' : ''; ?>">
+                       class="ra-filter-tab<?= $isActive ? ' is-active' : ''; ?>"
+                       data-frs-partial="ra-approvals-main">
                         <?= htmlspecialchars($filterLabel); ?>
                         <span class="ra-filter-tab__count"><?= (int)($pendingFilterCounts[$filterKey] ?? 0); ?></span>
                     </a>
                 <?php endforeach; ?>
             </nav>
-            <form method="GET" class="ra-search-form">
+            <form method="GET" class="ra-search-form" data-frs-partial="ra-approvals-main">
                 <input type="hidden" name="view" value="pending">
                 <input type="hidden" name="pending_filter" value="<?= htmlspecialchars($pendingFilter); ?>">
+                <input type="hidden" name="pending_sort" value="<?= htmlspecialchars($pendingSort); ?>">
                 <input type="hidden" name="approved_page" value="<?= $approvedPage; ?>">
                 <input type="hidden" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>">
+                <input type="hidden" name="approved_sort" value="<?= htmlspecialchars($approvedSort); ?>">
                 <input type="hidden" name="page" value="<?= $page; ?>">
-                <div class="ra-search-field">
-                    <input type="search" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>" placeholder="Search requester, facility, purpose…" class="ra-search-input" aria-label="Search pending requests">
-                    <button type="submit" class="btn-primary ra-search-btn">Search</button>
-                    <?php if ($pendingSearch !== ''): ?>
-                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_search' => '', 'pending_page' => 1])); ?>" class="btn-outline ra-search-btn">Clear</a>
-                    <?php endif; ?>
+                <input type="hidden" name="pending_page" value="1">
+                <div class="ra-toolbar-controls">
+                    <div class="ra-sort-menu" data-ra-sort-menu>
+                        <button type="button"
+                                class="ra-sort-trigger<?= $pendingSort !== 'schedule_asc' ? ' is-active' : ''; ?>"
+                                aria-expanded="false"
+                                aria-haspopup="listbox"
+                                aria-label="Sort pending requests"
+                                title="Sort: <?= htmlspecialchars($allowedPendingSorts[$pendingSort]); ?>">
+                            <i class="bi bi-sort-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="ra-sort-panel" role="listbox" hidden>
+                            <div class="ra-sort-panel__title">Sort by</div>
+                            <?php foreach ($allowedPendingSorts as $sortKey => $sortLabel): ?>
+                                <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_sort' => $sortKey, 'pending_page' => 1])); ?>"
+                                   class="ra-sort-option<?= $pendingSort === $sortKey ? ' is-selected' : ''; ?>"
+                                   role="option"
+                                   aria-selected="<?= $pendingSort === $sortKey ? 'true' : 'false'; ?>"
+                                   data-frs-partial="ra-approvals-main">
+                                    <?= htmlspecialchars($sortLabel); ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div class="ra-search-field">
+                        <input type="search" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>" placeholder="Search requester, facility, purpose…" class="ra-search-input" aria-label="Search pending requests">
+                        <button type="submit" class="btn-primary ra-search-btn">Search</button>
+                        <?php if ($pendingSearch !== ''): ?>
+                            <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_search' => '', 'pending_page' => 1])); ?>" class="btn-outline ra-search-btn" data-frs-partial="ra-approvals-main">Clear</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </form>
         </div>
@@ -724,6 +831,7 @@ ob_start();
                         <?php foreach ($pendingReservations as $reservation): ?>
                             <?php
                             $canReview = in_array($reservation['status'], ['pending', 'postponed'], true);
+                            $isPriorityPostponed = $reservation['status'] === 'postponed' && !empty($reservation['postponed_priority']);
                             $scheduleLabel = !empty($reservation['reservation_date'])
                                 ? date('M j, Y', strtotime((string)$reservation['reservation_date']))
                                 : '—';
@@ -770,7 +878,19 @@ ob_start();
                                 <td data-label="Actions" class="ra-col-actions">
                                     <div class="ra-action-group">
                                         <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-action-btn" title="Open full details">Details</a>
-                                        <?php if ($canReview): ?>
+                                        <?php if ($isPriorityPostponed): ?>
+                                            <button
+                                                type="button"
+                                                class="btn-primary ra-action-btn"
+                                                data-staff-reschedule
+                                                data-id="<?= (int)$reservation['id']; ?>"
+                                                data-facility-id="<?= (int)($reservation['facility_id'] ?? 0); ?>"
+                                                data-date="<?= htmlspecialchars((string)$reservation['reservation_date'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-time="<?= htmlspecialchars((string)$reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-facility="<?= htmlspecialchars((string)$reservation['facility'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                title="Pick a new date and auto-approve">Reschedule</button>
+                                            <button type="button" class="btn-outline ra-action-btn ra-action-btn--deny" data-review-action="denied" data-review-id="<?= (int)$reservation['id']; ?>">Deny</button>
+                                        <?php elseif ($canReview): ?>
                                             <button type="button" class="btn-primary ra-action-btn" data-review-action="approved" data-review-id="<?= (int)$reservation['id']; ?>">Approve</button>
                                             <button type="button" class="btn-outline ra-action-btn ra-action-btn--deny" data-review-action="denied" data-review-id="<?= (int)$reservation['id']; ?>">Deny</button>
                                         <?php elseif ($reservation['status'] === 'pending_payment'): ?>
@@ -789,11 +909,11 @@ ob_start();
             <?php if ($pendingTotalPages > 1): ?>
                 <div class="ra-pagination">
                     <?php if ($pendingPage > 1): ?>
-                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage - 1])); ?>" class="ra-page-btn">&larr; Prev</a>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage - 1])); ?>" class="ra-page-btn" data-frs-partial="ra-approvals-main">&larr; Prev</a>
                     <?php endif; ?>
                     <span class="ra-page-info">Page <?= $pendingPage; ?> of <?= $pendingTotalPages; ?> &middot; <?= $pendingTotal; ?> requests</span>
                     <?php if ($pendingPage < $pendingTotalPages): ?>
-                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage + 1])); ?>" class="ra-page-btn">Next &rarr;</a>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => $pendingPage + 1])); ?>" class="ra-page-btn" data-frs-partial="ra-approvals-main">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -808,18 +928,45 @@ ob_start();
         </div>
         <p class="ra-queue-subtitle">Modify, postpone, or cancel future approved bookings when schedules change.</p>
     </div>
-    <form method="GET" class="ra-search-form ra-search-form--standalone">
+    <form method="GET" class="ra-search-form ra-search-form--standalone" data-frs-partial="ra-approvals-main">
         <input type="hidden" name="view" value="approved">
         <input type="hidden" name="pending_page" value="<?= $pendingPage; ?>">
         <input type="hidden" name="pending_search" value="<?= htmlspecialchars($pendingSearch); ?>">
         <input type="hidden" name="pending_filter" value="<?= htmlspecialchars($pendingFilter); ?>">
+        <input type="hidden" name="pending_sort" value="<?= htmlspecialchars($pendingSort); ?>">
+        <input type="hidden" name="approved_sort" value="<?= htmlspecialchars($approvedSort); ?>">
         <input type="hidden" name="page" value="<?= $page; ?>">
-        <div class="ra-search-field">
-            <input type="search" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>" placeholder="Search requester, facility, purpose, email…" class="ra-search-input" aria-label="Search approved reservations">
-            <button type="submit" class="btn-primary ra-search-btn">Search</button>
-            <?php if ($approvedSearch !== ''): ?>
-                <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_search' => '', 'approved_page' => 1])); ?>" class="btn-outline ra-search-btn">Clear</a>
-            <?php endif; ?>
+        <input type="hidden" name="approved_page" value="1">
+        <div class="ra-toolbar-controls">
+            <div class="ra-sort-menu" data-ra-sort-menu>
+                <button type="button"
+                        class="ra-sort-trigger<?= $approvedSort !== 'schedule_asc' ? ' is-active' : ''; ?>"
+                        aria-expanded="false"
+                        aria-haspopup="listbox"
+                        aria-label="Sort approved reservations"
+                        title="Sort: <?= htmlspecialchars($allowedApprovedSorts[$approvedSort]); ?>">
+                    <i class="bi bi-sort-down" aria-hidden="true"></i>
+                </button>
+                <div class="ra-sort-panel" role="listbox" hidden>
+                    <div class="ra-sort-panel__title">Sort by</div>
+                    <?php foreach ($allowedApprovedSorts as $sortKey => $sortLabel): ?>
+                        <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_sort' => $sortKey, 'approved_page' => 1])); ?>"
+                           class="ra-sort-option<?= $approvedSort === $sortKey ? ' is-selected' : ''; ?>"
+                           role="option"
+                           aria-selected="<?= $approvedSort === $sortKey ? 'true' : 'false'; ?>"
+                           data-frs-partial="ra-approvals-main">
+                            <?= htmlspecialchars($sortLabel); ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="ra-search-field">
+                <input type="search" name="approved_search" value="<?= htmlspecialchars($approvedSearch); ?>" placeholder="Search requester, facility, purpose, email…" class="ra-search-input" aria-label="Search approved reservations">
+                <button type="submit" class="btn-primary ra-search-btn">Search</button>
+                <?php if ($approvedSearch !== ''): ?>
+                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_search' => '', 'approved_page' => 1])); ?>" class="btn-outline ra-search-btn" data-frs-partial="ra-approvals-main">Clear</a>
+                <?php endif; ?>
+            </div>
         </div>
     </form>
     
@@ -881,17 +1028,18 @@ ob_start();
         <?php if ($approvedTotalPages > 1): ?>
             <div class="ra-pagination">
                 <?php if ($approvedPage > 1): ?>
-                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage - 1])); ?>" class="ra-page-btn">&larr; Prev</a>
+                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage - 1])); ?>" class="ra-page-btn" data-frs-partial="ra-approvals-main">&larr; Prev</a>
                 <?php endif; ?>
                 <span class="ra-page-info">Page <?= $approvedPage; ?> of <?= $approvedTotalPages; ?> &middot; <?= $approvedTotal; ?> reservations</span>
                 <?php if ($approvedPage < $approvedTotalPages): ?>
-                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage + 1])); ?>" class="ra-page-btn">Next &rarr;</a>
+                    <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => $approvedPage + 1])); ?>" class="ra-page-btn" data-frs-partial="ra-approvals-main">Next &rarr;</a>
                 <?php endif; ?>
             </div>
         <?php endif; ?>
     <?php endif; ?>
         </div>
         <?php endif; ?>
+        </div>
     </section>
 </div>
 
@@ -1085,7 +1233,108 @@ ob_start();
     </div>
 </div>
 
+<!-- Staff Reschedule Modal (postponed + priority) -->
+<div id="staffRescheduleModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>Reschedule Priority Reservation</h3>
+            <button type="button" onclick="closeStaffRescheduleModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
+        </div>
+        <form method="POST" id="staffRescheduleForm">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="view" value="pending">
+            <input type="hidden" name="reservation_id" id="staff_reschedule_reservation_id">
+            <input type="hidden" name="action" value="staff_reschedule">
+            <input type="hidden" id="staff_reschedule_facility_id" value="">
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #eff6ff; border-radius: 6px; border-left: 4px solid #2563eb;">
+                <strong>Priority reschedule:</strong> Pick an available date. Confirming will <strong>auto-approve</strong> the booking.
+                Payment is skipped if the facility is free or already paid.
+            </div>
+
+            <div style="margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px;">
+                <strong>Current (postponed) schedule:</strong><br>
+                <span id="staff_reschedule_current_schedule"></span>
+            </div>
+
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                New Date <span style="color: #dc3545;">*</span>
+            </label>
+            <input type="date" name="new_date" id="staff_reschedule_new_date" required min="<?= date('Y-m-d'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                Start Time <span style="color: #dc3545;">*</span>
+            </label>
+            <input type="time" name="start_time" id="staff_reschedule_start_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
+
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                End Time <span style="color: #dc3545;">*</span>
+            </label>
+            <input type="time" name="end_time" id="staff_reschedule_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                Reason / note to requester <span style="color: #dc3545;">*</span>
+            </label>
+            <textarea name="reason" id="staff_reschedule_reason" required placeholder="e.g. Original date under CIMM maintenance; moved to next available slot. We apologize for the inconvenience." style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; min-height: 100px; font-family: inherit; resize: vertical;"></textarea>
+
+            <div id="staff-reschedule-conflict-warning" style="display:none; border-radius:8px; padding:1rem; margin-top:1rem; transition: all 0.3s ease;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <span id="staff-reschedule-conflict-icon" style="font-size:1.2rem;">⏳</span>
+                    <h4 id="staff-reschedule-conflict-title" style="margin:0; font-size:0.95rem;">Checking Availability...</h4>
+                </div>
+                <p id="staff-reschedule-conflict-message" style="margin:0 0 0.75rem; font-size:0.85rem;"></p>
+                <div id="staff-reschedule-conflict-alternatives" style="display:none;">
+                    <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Alternative time slots:</p>
+                    <ul id="staff-reschedule-alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn-outline" onclick="closeStaffRescheduleModal()" style="flex: 1;">Cancel</button>
+                <button type="submit" class="btn-primary confirm-action" data-message="Reschedule and auto-approve this priority reservation?" style="flex: 1;">Reschedule &amp; Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+(function () {
+    function closeAllRaSortMenus(exceptMenu) {
+        document.querySelectorAll('[data-ra-sort-menu]').forEach(function (menu) {
+            if (exceptMenu && menu === exceptMenu) return;
+            var btn = menu.querySelector('.ra-sort-trigger');
+            var panel = menu.querySelector('.ra-sort-panel');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            if (panel) panel.hidden = true;
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('.ra-sort-trigger');
+        if (trigger) {
+            e.preventDefault();
+            e.stopPropagation();
+            var menu = trigger.closest('[data-ra-sort-menu]');
+            var panel = menu ? menu.querySelector('.ra-sort-panel') : null;
+            var isOpen = trigger.getAttribute('aria-expanded') === 'true';
+            closeAllRaSortMenus();
+            if (!isOpen && panel) {
+                trigger.setAttribute('aria-expanded', 'true');
+                panel.hidden = false;
+            }
+            return;
+        }
+        if (!e.target.closest('[data-ra-sort-menu]')) {
+            closeAllRaSortMenus();
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAllRaSortMenus();
+    });
+})();
+
 let modifyConflictCheckTimeout = null;
 
 function openModifyModal(btn) {
@@ -1204,9 +1453,12 @@ async function checkModifyConflict() {
     }
 }
 
-document.getElementById('modify_new_date').addEventListener('change', debounceModifyConflict);
-document.getElementById('modify_start_time').addEventListener('change', debounceModifyConflict);
-document.getElementById('modify_end_time').addEventListener('change', debounceModifyConflict);
+['modify_new_date', 'modify_start_time', 'modify_end_time'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.frsConflictBound === '1') return;
+    el.dataset.frsConflictBound = '1';
+    el.addEventListener('change', debounceModifyConflict);
+});
 
 function closeModifyModal() {
     document.getElementById('modifyModal').style.display = 'none';
@@ -1243,6 +1495,147 @@ function openCancelModal(reservationId, facilityName, currentDate, currentTime) 
 
 function closeCancelModal() {
     document.getElementById('cancelModal').style.display = 'none';
+}
+
+let staffRescheduleConflictTimeout = null;
+
+function openStaffRescheduleModal(btn) {
+    const id = btn.getAttribute('data-id');
+    const facilityId = btn.getAttribute('data-facility-id') || '';
+    const date = btn.getAttribute('data-date') || '';
+    const time = btn.getAttribute('data-time') || '';
+    const facility = btn.getAttribute('data-facility') || '';
+
+    document.getElementById('staff_reschedule_reservation_id').value = id;
+    document.getElementById('staff_reschedule_facility_id').value = facilityId;
+    document.getElementById('staff_reschedule_current_schedule').textContent = facility + ' on ' + date + ' (' + time + ')';
+    document.getElementById('staff_reschedule_new_date').value = '';
+    document.getElementById('staff_reschedule_start_time').value = '';
+    document.getElementById('staff_reschedule_end_time').value = '';
+    document.getElementById('staff_reschedule_reason').value = 'Original schedule was postponed (facility unavailable / under maintenance). We apologize for the inconvenience.';
+
+    const timeMatch = time.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+        document.getElementById('staff_reschedule_start_time').value = timeMatch[1].padStart(2, '0') + ':' + timeMatch[2];
+        document.getElementById('staff_reschedule_end_time').value = timeMatch[3].padStart(2, '0') + ':' + timeMatch[4];
+    }
+
+    const modal = document.getElementById('staffRescheduleModal');
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeStaffRescheduleModal() {
+    const modal = document.getElementById('staffRescheduleModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+}
+
+function debounceStaffRescheduleConflict() {
+    if (staffRescheduleConflictTimeout) clearTimeout(staffRescheduleConflictTimeout);
+    staffRescheduleConflictTimeout = setTimeout(checkStaffRescheduleConflict, 500);
+}
+
+async function checkStaffRescheduleConflict() {
+    staffRescheduleConflictTimeout = null;
+    const fid = document.getElementById('staff_reschedule_facility_id')?.value;
+    const date = document.getElementById('staff_reschedule_new_date')?.value;
+    const startTime = document.getElementById('staff_reschedule_start_time')?.value;
+    const endTime = document.getElementById('staff_reschedule_end_time')?.value;
+    const excludeId = document.getElementById('staff_reschedule_reservation_id')?.value;
+    const msgBox = document.getElementById('staff-reschedule-conflict-warning');
+    const msgText = document.getElementById('staff-reschedule-conflict-message');
+    const altWrap = document.getElementById('staff-reschedule-conflict-alternatives');
+    const altList = document.getElementById('staff-reschedule-alternatives-list');
+    const conflictIcon = document.getElementById('staff-reschedule-conflict-icon');
+    const conflictTitle = document.getElementById('staff-reschedule-conflict-title');
+
+    if (!fid || !date || !startTime || !endTime) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    if (eh * 60 + em <= sh * 60 + sm) {
+        if (msgBox) msgBox.style.display = 'none';
+        return;
+    }
+    const timeSlot = startTime + ' - ' + endTime;
+
+    msgBox.style.display = 'block';
+    msgBox.style.background = '#f0f4ff';
+    msgBox.style.border = '2px solid #6366f1';
+    if (msgText) { msgText.style.color = '#4f46e5'; msgText.textContent = 'Checking availability and conflicts...'; }
+    if (conflictIcon) conflictIcon.textContent = '⏳';
+    if (conflictTitle) { conflictTitle.textContent = 'Checking Availability...'; conflictTitle.style.color = '#4f46e5'; }
+    if (altWrap) altWrap.style.display = 'none';
+
+    const basePath = <?= json_encode(base_path()); ?>;
+    try {
+        let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
+        if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        });
+        if (!resp.ok) { msgBox.style.display = 'none'; return; }
+        const data = await resp.json();
+        if (data.error) { msgBox.style.display = 'none'; return; }
+
+        if (data.has_conflict) {
+            msgBox.style.background = '#fdecee';
+            msgBox.style.border = '2px solid #b23030';
+            if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = data.message || 'This slot is already booked. Please select another time.'; }
+            if (conflictIcon) conflictIcon.textContent = '✗';
+            if (conflictTitle) { conflictTitle.textContent = 'Conflict Detected'; conflictTitle.style.color = '#b23030'; }
+        } else if (data.soft_conflicts && data.soft_conflicts.length > 0) {
+            const cnt = data.pending_count || data.soft_conflicts.length;
+            msgBox.style.background = '#fff4e5';
+            msgBox.style.border = '2px solid #ffc107';
+            if (msgText) { msgText.style.color = '#856404'; msgText.textContent = 'Warning: ' + cnt + ' pending reservation(s) exist for this slot.'; }
+            if (conflictIcon) conflictIcon.textContent = '⚠️';
+            if (conflictTitle) { conflictTitle.textContent = 'Warning - Pending Reservations'; conflictTitle.style.color = '#856404'; }
+        } else {
+            msgBox.style.background = '#e8f5e9';
+            msgBox.style.border = '2px solid #0d7a43';
+            if (msgText) { msgText.style.color = '#0d7a43'; msgText.textContent = '✓ This time slot is available for reschedule.'; }
+            if (conflictIcon) conflictIcon.textContent = '✓';
+            if (conflictTitle) { conflictTitle.textContent = 'Available'; conflictTitle.style.color = '#0d7a43'; }
+        }
+        if (data.alternatives && data.alternatives.length && altWrap && altList) {
+            altWrap.style.display = 'block';
+            altList.innerHTML = data.alternatives.filter(a => a.available !== false)
+                .map(a => '<li><strong>' + (a.display || a.time_slot || '') + '</strong> — ' + (a.recommendation || 'Available') + '</li>').join('');
+        }
+    } catch (e) {
+        msgBox.style.background = '#fdecee';
+        msgBox.style.border = '2px solid #b23030';
+        if (msgText) { msgText.style.color = '#b23030'; msgText.textContent = 'Error checking availability. Please try again.'; }
+    }
+}
+
+['staff_reschedule_new_date', 'staff_reschedule_start_time', 'staff_reschedule_end_time'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.frsConflictBound === '1') return;
+    el.dataset.frsConflictBound = '1';
+    el.addEventListener('change', debounceStaffRescheduleConflict);
+});
+
+if (!window.__raStaffRescheduleDelegationBound) {
+    window.__raStaffRescheduleDelegationBound = true;
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-staff-reschedule]');
+        if (btn) {
+            e.preventDefault();
+            openStaffRescheduleModal(btn);
+        }
+    });
 }
 
 // Time validation for modify and postpone modals
@@ -1291,47 +1684,46 @@ function validateTimeInputs(startInputId, endInputId) {
 // Initialize time validation for both modals
 validateTimeInputs('modify_start_time', 'modify_end_time');
 validateTimeInputs('postpone_start_time', 'postpone_end_time');
+validateTimeInputs('staff_reschedule_start_time', 'staff_reschedule_end_time');
 
 // Close modals when clicking outside
-document.getElementById('modifyModal').addEventListener('click', function(e) {
-    if (e.target === this) closeModifyModal();
+['modifyModal', 'postponeModal', 'cancelModal', 'staffRescheduleModal'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.frsOutsideBound === '1') return;
+    el.dataset.frsOutsideBound = '1';
+    el.addEventListener('click', function(e) {
+        if (e.target !== this) return;
+        if (id === 'modifyModal') closeModifyModal();
+        else if (id === 'postponeModal') closePostponeModal();
+        else if (id === 'cancelModal') closeCancelModal();
+        else if (id === 'staffRescheduleModal') closeStaffRescheduleModal();
+    });
 });
-document.getElementById('postponeModal').addEventListener('click', function(e) {
-    if (e.target === this) closePostponeModal();
-});
-document.getElementById('cancelModal').addEventListener('click', function(e) {
-    if (e.target === this) closeCancelModal();
-});
+
+window.openModifyModal = openModifyModal;
+window.closeModifyModal = closeModifyModal;
+window.openPostponeModal = openPostponeModal;
+window.closePostponeModal = closePostponeModal;
+window.closeCancelModal = closeCancelModal;
+window.openCancelModal = openCancelModal;
+window.openStaffRescheduleModal = openStaffRescheduleModal;
+window.closeStaffRescheduleModal = closeStaffRescheduleModal;
 </script>
 
 <script>
 (function() {
-    const modal = document.getElementById('reviewDecisionModal');
-    const dataEl = document.getElementById('pendingReviewData');
-    if (!modal || !dataEl) return;
-
-    let reviewData = {};
-    try {
-        reviewData = JSON.parse(dataEl.textContent || '{}');
-    } catch (e) {
-        reviewData = {};
+    function getReviewModal() {
+        return document.getElementById('reviewDecisionModal');
     }
 
-    const form = document.getElementById('reviewDecisionForm');
-    const titleEl = document.getElementById('reviewDecisionTitle');
-    const eyebrowEl = document.getElementById('reviewDecisionEyebrow');
-    const bannerEl = document.getElementById('reviewDecisionBanner');
-    const gridEl = document.getElementById('reviewDecisionGrid');
-    const purposeEl = document.getElementById('reviewDecisionPurpose');
-    const confirmBtn = document.getElementById('reviewConfirmBtn');
-    const noteInput = document.getElementById('review_note');
-    const noteRequiredMark = document.getElementById('reviewNoteRequiredMark');
-    const fullDetailsLink = document.getElementById('reviewOpenFullDetails');
-    const reservationIdInput = document.getElementById('review_reservation_id');
-    const actionInput = document.getElementById('review_action');
-
-    if (modal.parentNode !== document.body) {
-        document.body.appendChild(modal);
+    function readReviewData() {
+        const el = document.getElementById('pendingReviewData');
+        if (!el || !el.textContent) return {};
+        try {
+            return JSON.parse(el.textContent || '{}');
+        } catch (e) {
+            return {};
+        }
     }
 
     function escapeHtml(value) {
@@ -1347,34 +1739,61 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     }
 
     function closeReviewModal() {
+        const modal = getReviewModal();
+        if (!modal) return;
+        const form = document.getElementById('reviewDecisionForm');
         modal.classList.remove('show');
         modal.setAttribute('aria-hidden', 'true');
         modal.style.display = 'none';
         document.body.style.overflow = '';
         if (form) form.reset();
+        const bannerEl = document.getElementById('reviewDecisionBanner');
+        const gridEl = document.getElementById('reviewDecisionGrid');
+        const purposeEl = document.getElementById('reviewDecisionPurpose');
         if (bannerEl) bannerEl.innerHTML = '';
         if (gridEl) gridEl.innerHTML = '';
         if (purposeEl) purposeEl.textContent = '';
     }
 
     function openReviewModal(action, reservationId) {
+        const modal = getReviewModal();
+        if (!modal) return;
+        const reviewData = readReviewData();
         const data = reviewData[String(reservationId)] || reviewData[reservationId];
         if (!data) return;
+
+        const form = document.getElementById('reviewDecisionForm');
+        const titleEl = document.getElementById('reviewDecisionTitle');
+        const eyebrowEl = document.getElementById('reviewDecisionEyebrow');
+        const bannerEl = document.getElementById('reviewDecisionBanner');
+        const gridEl = document.getElementById('reviewDecisionGrid');
+        const purposeEl = document.getElementById('reviewDecisionPurpose');
+        const confirmBtn = document.getElementById('reviewConfirmBtn');
+        const noteInput = document.getElementById('review_note');
+        const noteRequiredMark = document.getElementById('reviewNoteRequiredMark');
+        const fullDetailsLink = document.getElementById('reviewOpenFullDetails');
+        const reservationIdInput = document.getElementById('review_reservation_id');
+        const actionInput = document.getElementById('review_action');
+        if (!reservationIdInput || !actionInput || !titleEl || !confirmBtn || !noteInput) return;
+
+        if (modal.parentNode !== document.body) {
+            document.body.appendChild(modal);
+        }
 
         reservationIdInput.value = String(data.id);
         actionInput.value = action;
 
         const isApprove = action === 'approved';
-        eyebrowEl.textContent = isApprove ? 'Review before approval' : 'Review before denial';
+        if (eyebrowEl) eyebrowEl.textContent = isApprove ? 'Review before approval' : 'Review before denial';
         titleEl.textContent = 'Reservation #' + data.id + ' — ' + data.facility;
         confirmBtn.textContent = isApprove ? 'Confirm approval' : 'Confirm denial';
         confirmBtn.className = isApprove ? 'btn-primary' : 'btn-outline ra-btn-danger';
-        noteRequiredMark.hidden = isApprove;
+        if (noteRequiredMark) noteRequiredMark.hidden = isApprove;
         noteInput.placeholder = isApprove
             ? 'Optional remarks for the requester (e.g., setup instructions).'
             : 'Explain why this request is being denied.';
         noteInput.required = !isApprove;
-        fullDetailsLink.href = data.detail_url || '#';
+        if (fullDetailsLink) fullDetailsLink.href = data.detail_url || '#';
 
         let bannerHtml = '';
         if (data.postponed_priority) {
@@ -1383,22 +1802,24 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
         if (data.expected_attendees !== null && data.capacity_threshold && data.expected_attendees > data.capacity_threshold) {
             bannerHtml += '<div class="ra-review-alert ra-review-alert--warn">Expected attendees (' + data.expected_attendees + ') exceed the facility threshold (' + data.capacity_threshold + ').</div>';
         }
-        bannerEl.innerHTML = bannerHtml;
+        if (bannerEl) bannerEl.innerHTML = bannerHtml;
 
-        gridEl.innerHTML = [
-            detailItem('Requester', data.requester),
-            detailItem('Email', data.requester_email || '—'),
-            detailItem('Mobile', data.requester_mobile || '—'),
-            detailItem('Facility', data.facility),
-            detailItem('Date', data.schedule_date),
-            detailItem('Time', data.time_slot),
-            detailItem('Attendees', data.expected_attendees !== null ? String(data.expected_attendees) : 'Not specified'),
-            detailItem('Commercial use', data.is_commercial ? 'Yes' : 'No'),
-            detailItem('Status', data.status.charAt(0).toUpperCase() + data.status.slice(1)),
-            detailItem('Submitted', data.submitted_at),
-        ].join('');
+        if (gridEl) {
+            gridEl.innerHTML = [
+                detailItem('Requester', data.requester),
+                detailItem('Email', data.requester_email || '—'),
+                detailItem('Mobile', data.requester_mobile || '—'),
+                detailItem('Facility', data.facility),
+                detailItem('Date', data.schedule_date),
+                detailItem('Time', data.time_slot),
+                detailItem('Attendees', data.expected_attendees !== null ? String(data.expected_attendees) : 'Not specified'),
+                detailItem('Commercial use', data.is_commercial ? 'Yes' : 'No'),
+                detailItem('Status', data.status.charAt(0).toUpperCase() + data.status.slice(1)),
+                detailItem('Submitted', data.submitted_at),
+            ].join('');
+        }
 
-        purposeEl.textContent = data.purpose || '—';
+        if (purposeEl) purposeEl.textContent = data.purpose || '—';
 
         modal.classList.add('show');
         modal.setAttribute('aria-hidden', 'false');
@@ -1407,29 +1828,44 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
         noteInput.focus();
     }
 
-    document.addEventListener('click', function(e) {
-        const trigger = e.target.closest('[data-review-action][data-review-id]');
-        if (trigger) {
-            e.preventDefault();
-            openReviewModal(trigger.getAttribute('data-review-action'), trigger.getAttribute('data-review-id'));
-            return;
-        }
-        if (e.target.closest('[data-close-review-modal]') || e.target === modal) {
-            e.preventDefault();
-            closeReviewModal();
-        }
-    });
+    window.openReviewModal = openReviewModal;
+    window.closeReviewModal = closeReviewModal;
 
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && modal.classList.contains('show')) {
-            closeReviewModal();
-        }
-    });
+    const modalBoot = getReviewModal();
+    if (modalBoot && modalBoot.parentNode !== document.body) {
+        document.body.appendChild(modalBoot);
+    }
 
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            const action = actionInput.value;
-            if (action === 'denied' && !noteInput.value.trim()) {
+    if (!window.__raReviewDelegationBound) {
+        window.__raReviewDelegationBound = true;
+        document.addEventListener('click', function(e) {
+            const trigger = e.target.closest('[data-review-action][data-review-id]');
+            if (trigger) {
+                e.preventDefault();
+                openReviewModal(trigger.getAttribute('data-review-action'), trigger.getAttribute('data-review-id'));
+                return;
+            }
+            const modal = getReviewModal();
+            if (modal && (e.target.closest('[data-close-review-modal]') || e.target === modal)) {
+                e.preventDefault();
+                closeReviewModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            const modal = getReviewModal();
+            if (e.key === 'Escape' && modal && modal.classList.contains('show')) {
+                closeReviewModal();
+            }
+        });
+
+        document.addEventListener('submit', function(e) {
+            const form = e.target.closest('#reviewDecisionForm');
+            if (!form) return;
+            const actionInput = document.getElementById('review_action');
+            const noteInput = document.getElementById('review_note');
+            if (!actionInput || !noteInput) return;
+            if (actionInput.value === 'denied' && !noteInput.value.trim()) {
                 e.preventDefault();
                 noteInput.focus();
                 noteInput.classList.add('ra-input-error');
@@ -1451,14 +1887,14 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
         
         <!-- Search and Filter Form -->
         <form method="GET" id="modalSearchForm" class="frs-all-reservations-modal__search">
-            <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
+            <div class="frs-all-reservations-modal__search-grid" style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151;">Search Reservations</label>
-                    <input type="text" name="modal_search" value="<?= htmlspecialchars($modalSearch); ?>" placeholder="Search by ID, requester name, email, or facility..." style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem;">
+                    <input type="text" name="modal_search" value="<?= htmlspecialchars($modalSearch); ?>" placeholder="Search by ID, requester name, email, or facility..." style="width: 100%; padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box;">
                 </div>
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151;">Status Filter</label>
-                    <select name="modal_status" style="padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem; min-width: 150px;">
+                    <select name="modal_status" style="padding: 0.75rem; border: 1px solid #e0e6ed; border-radius: 6px; font-size: 0.95rem; min-width: 150px; max-width: 100%; box-sizing: border-box;">
                         <option value="">All Statuses</option>
                         <option value="approved" <?= $modalStatus === 'approved' ? 'selected' : ''; ?>>Approved</option>
                         <option value="denied" <?= $modalStatus === 'denied' ? 'selected' : ''; ?>>Denied</option>
@@ -1468,7 +1904,7 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
                     </select>
                 </div>
             </div>
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <div class="frs-all-reservations-modal__search-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
                 <button type="submit" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Search</button>
                 <?php if (!empty($modalSearch) || !empty($modalStatus)): ?>
                     <a href="?open_modal=all_reservations&pending_page=<?= $pendingPage; ?>&pending_search=<?= urlencode($pendingSearch); ?>&approved_page=<?= $approvedPage; ?>&approved_search=<?= urlencode($approvedSearch); ?>" class="btn-outline" style="padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 6px;">Clear Filters</a>
@@ -1544,11 +1980,18 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 
 <style>
 /* Reservation Approvals — pending cards & review modal */
+.booking-wrapper.ra-approvals-layout {
+    display: block !important;
+    grid-template-columns: none !important;
+    width: 100%;
+    max-width: 100%;
+}
 .ra-approvals-layout {
-    display: block;
+    display: block !important;
 }
 .ra-approvals-main {
-    width: 100%;
+    width: 100% !important;
+    max-width: 100%;
 }
 .ra-view-tabs {
     display: flex;
@@ -1722,19 +2165,105 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 }
 .ra-search-form {
     flex: 1;
-    min-width: min(100%, 280px);
-    max-width: 420px;
+    min-width: min(100%, 220px);
+    max-width: 480px;
     margin: 0;
 }
 .ra-search-form--standalone {
-    max-width: 480px;
+    max-width: none;
     margin-bottom: 1rem;
+}
+.ra-toolbar-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: flex-end;
+}
+.ra-search-form--standalone .ra-toolbar-controls {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+.ra-sort-menu {
+    position: relative;
+    flex: 0 0 auto;
+}
+.ra-sort-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    padding: 0;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.ra-sort-trigger:hover,
+.ra-sort-trigger[aria-expanded="true"] {
+    border-color: var(--gov-blue, #1d4ed8);
+    color: var(--gov-blue-dark, #1e3a8a);
+    background: #eff6ff;
+}
+.ra-sort-trigger.is-active {
+    border-color: var(--gov-blue, #1d4ed8);
+    color: var(--gov-blue-dark, #1e3a8a);
+    background: #eff6ff;
+}
+.ra-sort-trigger i {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+.ra-sort-panel {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 40;
+    min-width: 13.5rem;
+    max-width: min(18rem, 80vw);
+    padding: 0.4rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+.ra-sort-panel__title {
+    padding: 0.35rem 0.65rem 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.ra-sort-option {
+    display: block;
+    padding: 0.5rem 0.65rem;
+    border-radius: 7px;
+    color: #334155;
+    font-size: 0.85rem;
+    text-decoration: none;
+    line-height: 1.3;
+}
+.ra-sort-option:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+.ra-sort-option.is-selected {
+    background: #eff6ff;
+    color: var(--gov-blue-dark, #1e3a8a);
+    font-weight: 600;
 }
 .ra-search-field {
     display: flex;
     gap: 0.45rem;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 .ra-search-input {
     flex: 1;
@@ -1835,13 +2364,28 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
 }
 .ra-col-actions {
     width: 1%;
-    min-width: 200px;
+    min-width: 220px;
+    white-space: nowrap;
+}
+@media (max-width: 900px) {
+    .ra-col-actions,
+    .ra-col-narrow {
+        width: 100% !important;
+        min-width: 0 !important;
+        white-space: normal !important;
+    }
 }
 .ra-action-group {
     display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     gap: 0.35rem;
     align-items: center;
+}
+@media (min-width: 901px) {
+    .ra-action-group {
+        flex-wrap: nowrap;
+    }
 }
 .ra-action-btn {
     padding: 0.35rem 0.65rem !important;
@@ -2062,6 +2606,111 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     .ra-review-modal__footer {
         flex-wrap: wrap;
     }
+    .ra-review-modal__footer .btn-primary,
+    .ra-review-modal__footer .btn-outline {
+        flex: 1 1 auto;
+        min-height: 44px;
+    }
+    .page-header .btn-primary {
+        width: 100%;
+        text-align: center;
+        min-height: 44px;
+    }
+    .ra-view-tabs {
+        display: flex;
+        width: 100%;
+    }
+    .ra-view-tab {
+        flex: 1 1 0;
+        text-align: center;
+        justify-content: center;
+        font-size: 0.82rem;
+        padding: 0.55rem 0.45rem;
+    }
+    .ra-queue-subtitle {
+        font-size: 0.82rem;
+    }
+    .ra-filter-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.35rem;
+        padding-bottom: 0.25rem;
+        scrollbar-width: thin;
+    }
+    .ra-filter-tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.55rem;
+    }
+    .ra-toolbar-controls {
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+    .ra-search-field {
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .ra-search-input {
+        min-width: 0;
+        width: 100%;
+        flex: 1 1 100%;
+    }
+    .ra-search-btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+        text-align: center;
+    }
+    .ra-action-group {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+    }
+    .ra-action-btn {
+        width: 100%;
+        min-height: 40px;
+        justify-content: center;
+        text-align: center;
+        box-sizing: border-box;
+    }
+    .ra-col-actions {
+        min-width: 0;
+        white-space: normal;
+    }
+    .ra-payment-note {
+        white-space: normal;
+    }
+    #allReservationsModal.modal-overlay {
+        padding: 0.5rem !important;
+        align-items: flex-end !important;
+    }
+    #allReservationsModal.frs-all-reservations-modal .frs-all-reservations-modal__panel {
+        max-width: 100%;
+        max-height: 94dvh !important;
+        border-radius: 14px 14px 0 0;
+        padding: 1rem;
+        margin: 0 !important;
+    }
+    .frs-all-reservations-modal__search-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .frs-all-reservations-modal__search select {
+        min-width: 0 !important;
+        width: 100%;
+    }
+    .frs-all-reservations-modal__search-actions {
+        flex-wrap: wrap;
+    }
+    .frs-all-reservations-modal__search-actions .btn-primary,
+    .frs-all-reservations-modal__search-actions .btn-outline {
+        flex: 1 1 auto;
+        text-align: center;
+        min-height: 44px;
+    }
 }
 @media (max-width: 900px) {
     .ra-queue-toolbar {
@@ -2070,43 +2719,108 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     }
     .ra-search-form {
         max-width: none;
+        min-width: 0;
+        width: 100%;
+    }
+    .ra-toolbar-controls {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+    .ra-search-input {
+        min-width: 0;
+    }
+    .ra-table-scroll {
+        overflow-x: visible;
+        width: 100%;
+        max-width: 100%;
+        border: none;
+        background: transparent;
+    }
+    .ra-queue-table,
+    .ra-queue-table thead,
+    .ra-queue-table tbody,
+    .ra-queue-table tr,
+    .ra-queue-table td {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
     .ra-queue-table thead {
         display: none;
     }
     .ra-queue-table tr {
-        display: block;
-        padding: 0.85rem 0;
-        border-bottom: 1px solid #e2e8f0;
+        margin: 0 0 0.85rem;
+        padding: 0.5rem 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
     }
     .ra-queue-table td {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.4rem 0.85rem;
+        padding: 0.45rem 0.85rem;
         border: none;
+        text-align: left;
+        overflow-wrap: anywhere;
+        word-break: normal;
     }
     .ra-queue-table td::before {
         content: attr(data-label);
+        display: block;
+        width: 100%;
+        max-width: none;
+        margin-bottom: 0.2rem;
+        white-space: normal;
         font-size: 0.72rem;
         font-weight: 700;
         text-transform: uppercase;
         color: #94a3b8;
-        flex-shrink: 0;
     }
-    .ra-queue-table td.ra-col-actions {
-        flex-direction: column;
-        align-items: stretch;
+    .ra-queue-table td > * {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        text-align: left;
     }
-    .ra-queue-table td.ra-col-actions::before {
-        margin-bottom: 0.25rem;
+    .ra-queue-table td.ra-col-actions,
+    .ra-queue-table td.ra-col-narrow {
+        width: 100% !important;
+        min-width: 0 !important;
+        white-space: normal !important;
     }
     .ra-action-group {
-        justify-content: flex-end;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        width: 100%;
+        gap: 0.45rem;
+    }
+    .ra-action-btn {
+        width: 100%;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 40px;
+        box-sizing: border-box;
+        white-space: normal;
+    }
+    .ra-priority-badge {
+        white-space: nowrap;
+        display: inline-block;
+    }
+    .ra-queue-table .status-badge,
+    .status-badge.status-badge--cell {
+        max-width: none;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: unset;
+        display: inline-block;
+        width: auto;
     }
     .ra-cell-purpose {
         max-width: none;
-        text-align: right;
+        text-align: left;
     }
 }
 
@@ -2117,10 +2831,11 @@ document.getElementById('cancelModal').addEventListener('click', function(e) {
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+    width: 100% !important;
+    height: 100% !important;
     margin: 0 !important;
     padding: 1.5rem !important;
+    box-sizing: border-box !important;
     background: rgba(0, 0, 0, 0.5) !important;
     backdrop-filter: blur(4px) !important;
     z-index: 99999 !important;
@@ -2243,73 +2958,72 @@ html[data-theme="dark"] .frs-all-reservations-modal__search select:focus {
 
 <script>
 (function() {
-    const modal = document.getElementById('allReservationsModal');
-    if (!modal) return;
-    
-    // Move modal to body so it's never inside a transformed parent (ensures position:fixed works)
-    if (modal.parentNode !== document.body) {
+    function getAllReservationsModal() {
+        return document.getElementById('allReservationsModal');
+    }
+
+    function openAllReservationsModal() {
+        const modal = getAllReservationsModal();
+        if (!modal) return;
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
+        const url = new URL(window.location.href);
+        url.searchParams.set('open_modal', 'all_reservations');
+        window.history.replaceState({}, '', url);
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeAllReservationsModal() {
+        const modal = getAllReservationsModal();
+        if (!modal) return;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('modal_search');
+        url.searchParams.delete('modal_status');
+        url.searchParams.delete('modal_page');
+        url.searchParams.delete('open_modal');
+        window.history.replaceState({}, '', url);
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    window.openAllReservationsModal = openAllReservationsModal;
+    window.closeAllReservationsModal = closeAllReservationsModal;
+
+    const modal = getAllReservationsModal();
+    if (modal && modal.parentNode !== document.body) {
         document.body.appendChild(modal);
     }
-    
-    // Auto-open when user paginates/filters inside the modal (full page reload)
+
     const params = new URLSearchParams(window.location.search);
     const shouldOpen = (params.get('open_modal') === 'all_reservations') ||
                        params.has('modal_search') || params.has('modal_status') || params.has('modal_page');
-    
-    function openAllReservationsModal() {
-        if (modal) {
-            if (modal.parentNode !== document.body) document.body.appendChild(modal);
-            const url = new URL(window.location.href);
-            url.searchParams.set('open_modal', 'all_reservations');
-            window.history.replaceState({}, '', url);
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-    
-    window.openAllReservationsModal = openAllReservationsModal;
-    
-    function closeAllReservationsModal() {
-        if (modal) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('modal_search');
-            url.searchParams.delete('modal_status');
-            url.searchParams.delete('modal_page');
-            url.searchParams.delete('open_modal');
-            window.history.replaceState({}, '', url);
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            document.body.style.overflow = '';
-        }
-    }
-    
-    window.closeAllReservationsModal = closeAllReservationsModal;
-
     if (shouldOpen) {
-        // Defer until after modal is moved to body
         setTimeout(openAllReservationsModal, 0);
     }
-    
-    // Use document-level delegation so close handlers always work (avoids stacking/blocking issues)
-    document.addEventListener('click', function(e) {
-        const m = document.getElementById('allReservationsModal');
-        if (!m || (m.style.display !== 'flex' && !m.classList.contains('show'))) return;
-        if (e.target.closest('[data-close-all-reservations-modal]') || e.target === m) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeAllReservationsModal();
-        }
-    }, true);  // capture phase - run before other handlers
-    
-    document.addEventListener('keydown', function(e) {
-        if (e.key !== 'Escape') return;
-        const m = document.getElementById('allReservationsModal');
-        if (m && (m.style.display === 'flex' || m.classList.contains('show'))) {
-            e.preventDefault();
-            closeAllReservationsModal();
-        }
-    }, true);
+
+    if (!window.__raAllReservationsDelegationBound) {
+        window.__raAllReservationsDelegationBound = true;
+        document.addEventListener('click', function(e) {
+            const m = getAllReservationsModal();
+            if (!m || (m.style.display !== 'flex' && !m.classList.contains('show'))) return;
+            if (e.target.closest('[data-close-all-reservations-modal]') || e.target === m) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeAllReservationsModal();
+            }
+        }, true);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            const m = getAllReservationsModal();
+            if (m && (m.style.display === 'flex' || m.classList.contains('show'))) {
+                e.preventDefault();
+                closeAllReservationsModal();
+            }
+        }, true);
+    }
 })();
 </script>
 <?php

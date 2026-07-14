@@ -78,14 +78,21 @@ $userId = $_SESSION['user_id'] ?? null;
 $sessionActorId = (int)$userId;
 $viewerRole = (string)($_SESSION['role'] ?? 'Resident');
 $canBookOnBehalf = in_array($viewerRole, ['Admin', 'Staff'], true);
-$walkInResidents = [];
+$walkInSelectedResident = null;
 $selectedBookForUserId = (int)($_POST['book_for_user_id'] ?? $_GET['book_for'] ?? 0);
-if ($canBookOnBehalf && $pdo) {
+if ($canBookOnBehalf && $pdo && $selectedBookForUserId > 0) {
     try {
-        $wr = $pdo->query("SELECT id, name, email FROM users WHERE role = 'Resident' AND status = 'active' ORDER BY name");
-        $walkInResidents = $wr ? $wr->fetchAll(PDO::FETCH_ASSOC) : [];
+        $wr = $pdo->prepare(
+            "SELECT id, name, email FROM users WHERE id = :id AND role = 'Resident' AND status = 'active' LIMIT 1"
+        );
+        $wr->execute(['id' => $selectedBookForUserId]);
+        $walkInSelectedResident = $wr->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$walkInSelectedResident) {
+            $selectedBookForUserId = 0;
+        }
     } catch (Throwable $e) {
-        $walkInResidents = [];
+        $walkInSelectedResident = null;
+        $selectedBookForUserId = 0;
     }
 }
 $bookingSubjectId = ($canBookOnBehalf && $selectedBookForUserId > 0) ? $selectedBookForUserId : $sessionActorId;
@@ -378,11 +385,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
         
         if (!$facilityStatus) {
             $error = 'Invalid facility selected. Please select a valid facility.';
-        } elseif ($facilityStatus['status'] === 'maintenance') {
-            $error = '⚠️ This facility is currently under maintenance and cannot be booked at this time. Please select a different facility or check back later.';
         } elseif ($facilityStatus['status'] === 'offline') {
             $error = '⚠️ This facility is currently offline and unavailable for booking. Please select a different facility.';
         }
+        // status === maintenance: do NOT blanket-reject. CIMM sets that status for the
+        // active window but dated blackouts define which days are blocked (e.g. Jul 12–Aug 9).
 
         // Block bookings on synced blackout dates (e.g., CIMM maintenance windows).
         if (!$error && !empty($date)) {
@@ -404,6 +411,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                     $error = '⚠️ This facility is blacked out on the selected date'
                         . (' (' . ($enriched['display_reason'] ?? 'unavailable') . ').')
                         . ' Please choose another date or facility.';
+                }
+            } elseif (($facilityStatus['status'] ?? '') === 'maintenance') {
+                // Staff set "maintenance" with no dated blackouts → still block everywhere.
+                // Facilities with CIMM Sync blackouts stay bookable on non-blackout days.
+                $anyBoStmt = $pdo->prepare('SELECT 1 FROM facility_blackout_dates WHERE facility_id = :facility_id LIMIT 1');
+                $anyBoStmt->execute(['facility_id' => $facilityId]);
+                if (!$anyBoStmt->fetchColumn()) {
+                    $error = '⚠️ This facility is currently under maintenance and cannot be booked at this time. Please select a different facility or check back later.';
                 }
             }
         }
@@ -924,7 +939,7 @@ $bookingFieldSelectors = [
     'booking_notes' => '#booking-notes',
     'expected_attendees' => '#expected-attendees',
     'doc_valid_id' => 'input[name="doc_valid_id"]',
-    'book_for_user_id' => '#book-for-user-id',
+    'book_for_user_id' => '#bcf-walkin-search',
 ];
 
 // Get facility recommendations - will be loaded via AJAX when user types in purpose field
@@ -1209,11 +1224,11 @@ $bookCalQuery = static function (array $extra): string {
 .bcf-modal-overlay {
     position: fixed !important;
     inset: 0 !important;
-    width: 100vw !important;
-    max-width: 100vw;
-    height: 100vh !important;
+    width: 100% !important;
+    max-width: 100%;
+    height: 100% !important;
     height: 100dvh !important;
-    min-height: 100vh !important;
+    min-height: 100% !important;
     margin: 0 !important;
     box-sizing: border-box;
     background: rgba(10, 24, 55, 0.55);
@@ -1314,12 +1329,110 @@ html[data-theme="dark"] .bcf-res-list-item-meta {
     color: var(--info-text, #1e40af);
     font-size: 1rem;
 }
+.bcf-walkin-combo {
+    position: relative;
+    margin-top: 0.35rem;
+}
+.bcf-walkin-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.bcf-walkin-search {
+    width: 100%;
+    padding: 0.55rem 2.25rem 0.55rem 0.75rem;
+    border-radius: 8px;
+    border: 2px solid #dbe3f5;
+    font-size: 0.95rem;
+    background: #fff;
+    color: #1e293b;
+}
+.bcf-walkin-search:focus {
+    outline: none;
+    border-color: #6384d2;
+    box-shadow: 0 0 0 3px rgba(99, 132, 210, 0.15);
+}
+.bcf-walkin-clear {
+    position: absolute;
+    right: 0.35rem;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+}
+.bcf-walkin-clear:hover {
+    color: #334155;
+    background: #f1f5f9;
+}
+.bcf-walkin-list {
+    position: absolute;
+    z-index: 50;
+    left: 0;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    margin: 0;
+    padding: 0.35rem 0;
+    list-style: none;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #dbe3f5;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+.bcf-walkin-option {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9rem;
+    color: #1e293b;
+    cursor: pointer;
+}
+.bcf-walkin-option:hover,
+.bcf-walkin-option.is-active {
+    background: #eff6ff;
+}
+.bcf-walkin-option-self {
+    color: #475569;
+    font-style: italic;
+    border-bottom: 1px solid #e2e8f0;
+}
+.bcf-walkin-more,
+.bcf-walkin-empty {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    color: #64748b;
+    pointer-events: none;
+}
+.bcf-walkin-hint {
+    margin: 0.35rem 0 0;
+    font-size: 0.78rem;
+    color: #64748b;
+}
+html[data-theme="dark"] .bcf-walkin-search {
+    background: #1e293b;
+    border-color: #475569;
+    color: #f1f5f9;
+}
+html[data-theme="dark"] .bcf-walkin-list {
+    background: #1e293b;
+    border-color: #475569;
+}
+html[data-theme="dark"] .bcf-walkin-option {
+    color: #f1f5f9;
+}
+html[data-theme="dark"] .bcf-walkin-option:hover,
+html[data-theme="dark"] .bcf-walkin-option.is-active {
+    background: #334155;
+}
 @media (max-width: 719px) {
     .bcf-modal-overlay { align-items: flex-end; padding: 0; justify-content: center; }
     .bcf-modal-dialog {
         width: 100%;
-        max-height: 90vh;
-        max-height: 90dvh;
+        max-height: 92vh;
+        max-height: 92dvh;
         border-radius: 16px 16px 0 0;
     }
 }
@@ -1695,6 +1808,224 @@ ul.bcf-scroll-select-menu {
     color: #92400e !important;
     border-color: #fbbf24 !important;
 }
+
+/* ---- Mobile Book Facility / hub chrome ---- */
+@media (max-width: 640px) {
+    .book-facility-compact.booking-wrapper,
+    .book-facility-compact .booking-card,
+    .book-facility-compact .my-reservations-calendar,
+    .book-facility-compact .bcf-cal-toolbar-wrap,
+    .book-facility-compact .bcf-purpose-first-card {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .book-facility-compact .my-reservations-calendar-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .book-facility-compact .my-reservations-calendar-cell {
+        min-width: 0 !important;
+        overflow: hidden;
+    }
+    .book-facility-compact .bcf-purpose-first-card textarea,
+    .book-facility-compact .bcf-cal-fac-select,
+    .book-facility-compact input,
+    .book-facility-compact select,
+    .book-facility-compact textarea {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .booking-hub-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 0.4rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-bottom: none;
+        margin-bottom: 0.85rem;
+        padding-bottom: 0.15rem;
+        scrollbar-width: thin;
+    }
+    .booking-hub-tab {
+        flex: 0 0 auto;
+        border-radius: 999px;
+        border: 1px solid #dbe3ef;
+        padding: 0.5rem 0.9rem;
+        margin-bottom: 0;
+        white-space: nowrap;
+        font-size: 0.88rem;
+    }
+    .booking-hub-tab.is-active {
+        margin-bottom: 0;
+        border-color: var(--gov-blue, #0047ab);
+        background: #eff6ff;
+        color: var(--gov-blue-dark, #1e3a5f);
+    }
+    .bcf-purpose-first-card {
+        padding: 0.7rem 0.75rem;
+    }
+    .bcf-purpose-first-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .bcf-cal-toolbar-grid {
+        flex-direction: column;
+        align-items: stretch;
+        max-width: none;
+        gap: 0.55rem;
+    }
+    .bcf-cal-fac-field {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: none;
+    }
+    .bcf-cal-nav-cluster {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem;
+    }
+    .bcf-cal-month-select,
+    .bcf-cal-year-select {
+        min-width: 0;
+        width: 100%;
+        font-size: 0.85rem;
+        padding: 0.45rem 0.5rem;
+    }
+    .bcf-cal-nav-cluster .bcf-cal-nav-btn {
+        min-width: 0;
+        width: 100%;
+        padding: 0.45rem 0.35rem;
+        font-size: 0.78rem;
+        grid-column: 1 / -1;
+    }
+    .book-facility-compact .my-reservations-calendar-cell .status-chip[data-chip-short],
+    .my-reservations-calendar-cell .status-chip[data-chip-short] {
+        font-size: 0;
+        line-height: 0;
+    }
+    .book-facility-compact .my-reservations-calendar-cell .status-chip[data-chip-short]::after,
+    .my-reservations-calendar-cell .status-chip[data-chip-short]::after {
+        content: attr(data-chip-short);
+        font-size: 0.55rem;
+        line-height: 1.15;
+        font-weight: 700;
+    }
+    .book-facility-compact .my-reservations-legend,
+    .my-reservations-legend {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        gap: 0.35rem 0.65rem;
+        padding-bottom: 0.25rem;
+        font-size: 0.72rem;
+        width: 100%;
+        max-width: 100%;
+    }
+    .my-reservations-legend-item {
+        flex: 0 1 auto;
+        min-width: 0;
+        white-space: normal;
+    }
+    .my-reservations-legend-item.my-reservations-legend-demand {
+        margin-left: 0 !important;
+        border-left: none !important;
+        padding-left: 0 !important;
+    }
+    .bcf-cal-month-heading {
+        font-size: 0.95rem;
+        text-align: center;
+    }
+    .book-facility-compact .my-reservations-calendar-cell,
+    .my-reservations-calendar-cell {
+        min-height: 44px !important;
+        min-width: 0 !important;
+    }
+    .my-reservations-calendar-grid {
+        min-width: 0 !important;
+        flex: 0 1 auto !important;
+        grid-auto-rows: minmax(44px, auto) !important;
+    }
+    .demand-strip {
+        height: 4px;
+        font-size: 0;
+        pointer-events: none;
+    }
+    .demand-strip .demand-score {
+        display: none;
+    }
+    .holiday-indicator {
+        font-size: 0.55rem;
+        top: 2px;
+        right: 2px;
+    }
+    .bcf-facility-image {
+        max-height: 140px;
+    }
+    .bcf-aside-col h2 {
+        font-size: 1.05rem;
+    }
+    .booking-hub-grid {
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 719px) {
+    .bcf-modal-overlay {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        align-items: flex-end;
+        padding: 0;
+        justify-content: center;
+    }
+    .bcf-modal-dialog {
+        width: 100%;
+        max-height: 92vh;
+        max-height: 92dvh;
+        border-radius: 16px 16px 0 0;
+        margin: 0;
+    }
+    .bcf-modal-body {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.75rem 0.85rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    }
+    .bcf-modal-sticky-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        margin-top: 1rem;
+        padding: 0.75rem 0 0.35rem;
+        background: linear-gradient(180deg, rgba(255,255,255,0) 0%, var(--bg-secondary, #fff) 28%);
+        border-top: 1px solid #e8ecf4;
+    }
+    .bcf-modal-sticky-actions .btn-primary,
+    .bcf-modal-sticky-actions .btn-outline {
+        width: 100%;
+        min-height: 46px;
+        justify-content: center;
+    }
+}
+
+.bcf-modal-sticky-actions {
+    margin-top: 1.25rem;
+}
+.bcf-modal-sticky-actions .btn-primary {
+    width: 100%;
+}
+
+/* Avoid 100vw scrollbar on all sizes */
+.bcf-modal-overlay {
+    width: 100% !important;
+    max-width: 100%;
+}
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -1753,27 +2084,16 @@ ul.bcf-scroll-select-menu {
                     </div>
                     <div id="bcf-smart-hints-bar" class="bcf-smart-hints-bar" role="status" aria-live="polite"></div>
                 </div>
-                <?php
-                    $bookCalNavPrevParams = array_merge($bookPaneQuery, [
-                        'year' => (int)$bookCalNavPrev->format('Y'),
-                        'month' => (int)$bookCalNavPrev->format('n'),
-                    ]);
-                    $bookCalNavNextParams = array_merge($bookPaneQuery, [
-                        'year' => (int)$bookCalNavNext->format('Y'),
-                        'month' => (int)$bookCalNavNext->format('n'),
-                    ]);
-                    ?>
+                <div data-frs-partial-id="bcf-calendar" data-frs-partial-root>
                 <div class="bcf-cal-toolbar-wrap">
                     <div class="bcf-cal-month-heading"><?= htmlspecialchars($bookCalMonthLabel); ?></div>
-                    <form method="get" action="<?= htmlspecialchars(base_path() . '/dashboard/book-facility'); ?>" class="bcf-cal-toolbar-form booking-cal-toolbar">
-                        <input type="hidden" name="year" value="<?= (int)$bookCalYear; ?>">
-                        <input type="hidden" name="month" value="<?= (int)$bookCalMonth; ?>">
+                    <form method="get" action="<?= htmlspecialchars(base_path() . '/dashboard/book-facility'); ?>" class="bcf-cal-toolbar-form booking-cal-toolbar" data-frs-partial="bcf-calendar" data-frs-partial-auto>
                         <div class="bcf-cal-toolbar-grid">
                             <div class="bcf-cal-fac-field">
                                 <label class="bcf-cal-fac-field-label" for="book-fac-cal-select">Facility</label>
                                 <div class="bcf-cal-shell">
                                     <i class="bi bi-building" aria-hidden="true"></i>
-                                    <select id="book-fac-cal-select" name="book_fac" class="bcf-cal-fac-select" onchange="this.form.submit()" aria-label="Choose facility for calendar">
+                                    <select id="book-fac-cal-select" name="book_fac" class="bcf-cal-fac-select" aria-label="Choose facility for calendar">
                                         <option value="0">Choose a facility…</option>
                                         <?php foreach ($facilities as $f): ?>
                                             <option value="<?= (int)$f['id']; ?>" <?= $bookFacilityPick === (int)$f['id'] ? 'selected' : ''; ?>>
@@ -1784,14 +2104,14 @@ ul.bcf-scroll-select-menu {
                                 </div>
                             </div>
                             <div class="bcf-cal-nav-cluster">
-                                <select name="month" onchange="this.form.submit()" class="bcf-cal-month-select" aria-label="Select month">
+                                <select name="month" class="bcf-cal-month-select" aria-label="Select month">
                                     <?php for ($m = 1; $m <= 12; $m++): ?>
                                         <option value="<?= $m; ?>" <?= $bookCalMonth === $m ? 'selected' : ''; ?>>
                                             <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
                                         </option>
                                     <?php endfor; ?>
                                 </select>
-                                <select name="year" onchange="this.form.submit()" class="bcf-cal-year-select" aria-label="Select year">
+                                <select name="year" class="bcf-cal-year-select" aria-label="Select year">
                                     <?php 
                                     $currentYear = (int)date('Y');
                                     for ($y = $currentYear; $y <= $currentYear + 2; $y++): ?>
@@ -1800,7 +2120,7 @@ ul.bcf-scroll-select-menu {
                                         </option>
                                     <?php endfor; ?>
                                 </select>
-                                <a class="btn-outline bcf-cal-nav-btn" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery(array_merge($bookPaneQuery, ['year' => (int)date('Y'), 'month' => (int)date('n')]))); ?>">Today</a>
+                                <a class="btn-outline bcf-cal-nav-btn" data-frs-partial="bcf-calendar" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery(array_merge($bookPaneQuery, ['year' => (int)date('Y'), 'month' => (int)date('n')]))); ?>">Today</a>
                             </div>
                         </div>
                     </form>
@@ -1813,7 +2133,7 @@ ul.bcf-scroll-select-menu {
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Fully booked</div>
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Blocked</div>
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="border:2px solid #7c3aed; background:transparent;"></span> AI-suggested day</div>
-                            <div class="my-reservations-legend-item" style="margin-left: 1rem; border-left: 1px solid #e2e8f0; padding-left: 1rem;">
+                            <div class="my-reservations-legend-item my-reservations-legend-demand" style="margin-left: 1rem; border-left: 1px solid #e2e8f0; padding-left: 1rem;">
                                 <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Demand:</span>
                             </div>
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#dcfce7;"></span> Low</div>
@@ -1838,31 +2158,46 @@ ul.bcf-scroll-select-menu {
                             }
                             $dayStatusClass = '';
                             $chipLabel = '';
+                            $chipShort = '';
                             if ($iso < $todayISO) {
                                 $chipLabel = '';
                             } elseif (!$bookFacilityPick) {
                                 $chipLabel = '—';
+                                $chipShort = '—';
                             } else {
                                 if ($tone === 'green') {
                                     $dayStatusClass = ' status-approved';
                                     $chipLabel = 'Open';
+                                    $chipShort = 'Open';
                                 } elseif ($tone === 'yellow') {
                                     $dayStatusClass = ' status-pending';
                                     $chipLabel = 'Busy';
+                                    $chipShort = 'Busy';
                                 } elseif ($tone === 'red') {
                                     $dayStatusClass = ' status-denied';
                                     $chipLabel = 'Full';
+                                    $chipShort = 'Full';
                                 } elseif ($tone === 'blackout' || $tone === 'cimm_maintenance' || $tone === 'maintenance' || $tone === 'offline') {
                                     $dayStatusClass = $tone === 'cimm_maintenance' ? ' status-cimm-maintenance' : ' status-blackout';
                                     if ($tone === 'blackout') {
                                         $chipLabel = 'Blackout';
+                                        $chipShort = 'Blk';
                                     } elseif ($tone === 'cimm_maintenance') {
                                         $chipLabel = 'Sched. maint.';
+                                        $chipShort = 'Maint';
+                                    } elseif ($tone === 'maintenance') {
+                                        $chipLabel = 'Maintenance';
+                                        $chipShort = 'Maint';
+                                    } elseif ($tone === 'offline') {
+                                        $chipLabel = 'Offline';
+                                        $chipShort = 'Off';
                                     } else {
                                         $chipLabel = 'N/A';
+                                        $chipShort = 'N/A';
                                     }
                                 } elseif ($tone === 'muted') {
                                     $chipLabel = '—';
+                                    $chipShort = '—';
                                 } elseif ($tone === 'past') {
                                     $chipLabel = '';
                                 } else {
@@ -1885,7 +2220,7 @@ ul.bcf-scroll-select-menu {
                             <div class="<?= htmlspecialchars($cellCls, ENT_QUOTES, 'UTF-8'); ?>" data-cal-date="<?= htmlspecialchars($iso, ENT_QUOTES, 'UTF-8'); ?>"<?= $bookPickable ? ' role="button" tabindex="0" data-bcf-date="' . htmlspecialchars($iso, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
                                 <div class="date-label"><?= (int)$bd; ?></div>
                                 <?php if ($chipLabel !== ''): ?>
-                                    <div class="status-chip"><?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <div class="status-chip" title="<?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?>"<?= $chipShort !== '' ? ' data-chip-short="' . htmlspecialchars($chipShort, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?></div>
                                 <?php endif; ?>
                                 <?php if (isset($holidayMatrix[$iso])): ?>
                                     <div class="holiday-indicator" title="<?= htmlspecialchars($holidayMatrix[$iso]['name']); ?> (<?= htmlspecialchars($holidayMatrix[$iso]['type']); ?>)">
@@ -1907,6 +2242,7 @@ ul.bcf-scroll-select-menu {
                             </div>
                         <?php endfor; ?>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -1952,22 +2288,32 @@ ul.bcf-scroll-select-menu {
         <?php endif; ?>
         <form id="main-booking-form" class="booking-form" method="POST" enctype="multipart/form-data">
             <?= csrf_field(); ?>
-            <?php if ($canBookOnBehalf && !empty($walkInResidents)): ?>
-            <div class="bcf-walkin-box">
+            <?php if ($canBookOnBehalf): ?>
+            <?php
+            $walkInSelectedLabel = $walkInSelectedResident
+                ? ($walkInSelectedResident['name'] . ' (' . $walkInSelectedResident['email'] . ')')
+                : '';
+            ?>
+            <div class="bcf-walkin-box" id="bcf-walkin-picker" data-selected-label="<?= htmlspecialchars($walkInSelectedLabel, ENT_QUOTES, 'UTF-8'); ?>">
                 <h4 class="bcf-label-row bcf-walkin-title">
                     Walk-in / assisted booking
-                    <?= frs_field_tip('Create a reservation on behalf of a resident (barangay counter service).'); ?>
+                    <?= frs_field_tip('Create a reservation on behalf of a resident (barangay counter service). Search by name or email — only the first 10 matches load at a time.'); ?>
                 </h4>
                 <label>
                     Resident
-                    <select name="book_for_user_id" id="book-for-user-id" style="width:100%; padding:0.55rem; border-radius:8px; border:2px solid #dbe3f5;">
-                        <option value="">— Book for myself (staff/admin) —</option>
-                        <?php foreach ($walkInResidents as $wr): ?>
-                            <option value="<?= (int)$wr['id']; ?>" <?= $selectedBookForUserId === (int)$wr['id'] ? 'selected' : ''; ?>>
-                                <?= htmlspecialchars($wr['name']); ?> (<?= htmlspecialchars($wr['email']); ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="bcf-walkin-combo">
+                        <input type="hidden" name="book_for_user_id" id="book-for-user-id" value="<?= $selectedBookForUserId > 0 ? (int)$selectedBookForUserId : ''; ?>">
+                        <div class="bcf-walkin-search-wrap">
+                            <input type="search" id="bcf-walkin-search" class="bcf-walkin-search"
+                                placeholder="Search resident by name or email…"
+                                value="<?= htmlspecialchars($walkInSelectedLabel, ENT_QUOTES, 'UTF-8'); ?>"
+                                autocomplete="off" autocapitalize="off" spellcheck="false"
+                                aria-autocomplete="list" aria-controls="bcf-walkin-list" aria-expanded="false">
+                            <button type="button" id="bcf-walkin-clear" class="bcf-walkin-clear" aria-label="Clear selection"<?= $selectedBookForUserId > 0 ? '' : ' hidden'; ?>>&times;</button>
+                        </div>
+                        <ul id="bcf-walkin-list" class="bcf-walkin-list" role="listbox" hidden></ul>
+                        <p class="bcf-walkin-hint" id="bcf-walkin-hint">Showing up to 10 residents. Type to search for others.</p>
+                    </div>
                 </label>
             </div>
             <?php endif; ?>
@@ -2146,7 +2492,9 @@ ul.bcf-scroll-select-menu {
             <?php endif; ?>
 
             <?php if ($canCreateReservations): ?>
-            <button class="btn-primary" type="button" id="bcf-submit-booking">Submit Booking Request</button>
+            <div class="bcf-modal-sticky-actions">
+                <button class="btn-primary" type="button" id="bcf-submit-booking">Submit Booking Request</button>
+            </div>
             <?php else: ?>
             <div style="padding:1rem; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; margin-top:1rem;">
                 <p style="margin:0; color:#856404; font-size:0.9rem; font-weight:600;">
@@ -2632,6 +2980,125 @@ document.addEventListener('DOMContentLoaded', function() {
     bcfBindCharCount(document.getElementById('purpose-input'), document.getElementById('purpose-char-count'), BCF_PURPOSE_MAX);
     bcfBindCharCount(document.getElementById('booking-notes'), document.getElementById('booking-notes-char-count'), BCF_NOTES_MAX);
 
+    (function initWalkInResidentPicker() {
+        const root = document.getElementById('bcf-walkin-picker');
+        if (!root) return;
+
+        const hidden = document.getElementById('book-for-user-id');
+        const search = document.getElementById('bcf-walkin-search');
+        const list = document.getElementById('bcf-walkin-list');
+        const hint = document.getElementById('bcf-walkin-hint');
+        const clearBtn = document.getElementById('bcf-walkin-clear');
+        const apiUrl = basePath + '/dashboard/walk-in-residents-api';
+        let debounceTimer = null;
+        let selectedLabel = root.dataset.selectedLabel || '';
+
+        function setSelection(id, label) {
+            hidden.value = id ? String(id) : '';
+            search.value = label || '';
+            selectedLabel = label || '';
+            if (clearBtn) clearBtn.hidden = !id;
+            list.hidden = true;
+            search.setAttribute('aria-expanded', 'false');
+        }
+
+        function renderResults(residents, hasMore, query) {
+            list.innerHTML = '';
+
+            const selfLi = document.createElement('li');
+            selfLi.className = 'bcf-walkin-option bcf-walkin-option-self';
+            selfLi.setAttribute('role', 'option');
+            selfLi.dataset.id = '';
+            selfLi.textContent = '— Book for myself (staff/admin) —';
+            selfLi.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                setSelection('', '');
+            });
+            list.appendChild(selfLi);
+
+            (residents || []).forEach(function (r) {
+                const label = r.name + ' (' + r.email + ')';
+                const li = document.createElement('li');
+                li.className = 'bcf-walkin-option';
+                li.setAttribute('role', 'option');
+                li.dataset.id = String(r.id);
+                li.textContent = label;
+                li.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    setSelection(r.id, label);
+                });
+                list.appendChild(li);
+            });
+
+            if (hasMore) {
+                const more = document.createElement('li');
+                more.className = 'bcf-walkin-more';
+                more.textContent = 'More residents available — refine your search.';
+                list.appendChild(more);
+            } else if (!residents.length && query) {
+                const empty = document.createElement('li');
+                empty.className = 'bcf-walkin-empty';
+                empty.textContent = 'No matching residents found.';
+                list.appendChild(empty);
+            }
+
+            list.hidden = false;
+            search.setAttribute('aria-expanded', 'true');
+
+            if (hint) {
+                hint.textContent = query
+                    ? (residents.length ? 'Search results (max ' + residents.length + ').' : 'No matches for that search.')
+                    : 'Showing first 10 residents alphabetically. Type to search others.';
+            }
+        }
+
+        function loadResidents(query) {
+            const params = new URLSearchParams({ limit: '10' });
+            if (query) params.set('q', query);
+            fetch(apiUrl + '?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'FRS-Dashboard' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data || !data.success) return;
+                    renderResults(data.residents || [], !!data.has_more, query);
+                })
+                .catch(function () { /* ignore */ });
+        }
+
+        search.addEventListener('focus', function () {
+            loadResidents(search.value.trim());
+        });
+
+        search.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            const q = search.value.trim();
+            if (q !== selectedLabel) {
+                hidden.value = '';
+                if (clearBtn) clearBtn.hidden = true;
+            }
+            debounceTimer = setTimeout(function () {
+                loadResidents(q);
+            }, 280);
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                setSelection('', '');
+                search.focus();
+                loadResidents('');
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            if (!root.contains(e.target)) {
+                list.hidden = true;
+                search.setAttribute('aria-expanded', 'false');
+            }
+        });
+    })();
+
     const bookingErr = document.querySelector('.booking-error[data-error-field]');
     if (bookingErr && bookingErr.dataset.errorField && window.frsFocusByFieldKey) {
         setTimeout(function () {
@@ -2644,6 +3111,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const bookCalFacilityId = <?= (int)$bookFacilityPick; ?>;
     const BCF_CAL_YEAR = <?= (int)$bookCalYear; ?>;
     const BCF_CAL_MONTH = <?= (int)$bookCalMonth; ?>;
+    window._bcfCalYear = BCF_CAL_YEAR;
+    window._bcfCalMonth = BCF_CAL_MONTH;
+
+    function bcfSyncCalFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const y = parseInt(params.get('year') || '', 10);
+        const m = parseInt(params.get('month') || '', 10);
+        if (!isNaN(y) && y >= 2020 && y <= 2100) window._bcfCalYear = y;
+        if (!isNaN(m) && m >= 1 && m <= 12) window._bcfCalMonth = m;
+    }
     const BCF_TODAY_ISO = <?= $frsJsonForInlineScript($todayISO); ?>;
     const BCF_EARLIEST_START_MIN = <?= (int)frs_earliest_bookable_start_minutes($bcfNowDt); ?>;
     window._bcfMaxFacilityCapacity = null;
@@ -2697,8 +3174,8 @@ document.addEventListener('DOMContentLoaded', function() {
             html += '<br><span style="font-size:0.82rem;opacity:.92">' + bcfHintEscape(payload.best_times_label) + '</span>';
         }
         if (payload.primary_facility_id) {
-            const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(BCF_CAL_YEAR)) + '&month=' + encodeURIComponent(String(BCF_CAL_MONTH)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
-            html += '<div class="bcf-smart-hints-actions"><a class="btn-outline bcf-smart-hints-link" href="' + u + '">Show this facility on the calendar</a></div>';
+            const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(window._bcfCalYear)) + '&month=' + encodeURIComponent(String(window._bcfCalMonth)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
+            html += '<div class="bcf-smart-hints-actions"><a class="btn-outline bcf-smart-hints-link" data-frs-partial="bcf-calendar" href="' + u + '">Show this facility on the calendar</a></div>';
         }
         bar.innerHTML = html;
         bar.classList.add('is-visible');
@@ -2714,8 +3191,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const attEl = document.getElementById('bcf-purpose-attendees-preview');
         let fd = new URLSearchParams();
         fd.append('purpose', purpose);
-        fd.append('year', String(BCF_CAL_YEAR));
-        fd.append('month', String(BCF_CAL_MONTH));
+        fd.append('year', String(window._bcfCalYear));
+        fd.append('month', String(window._bcfCalMonth));
         const attV = attEl ? attEl.value.trim() : '';
         if (attV !== '') fd.append('expected_attendees', attV);
         try {
@@ -2743,11 +3220,14 @@ document.addEventListener('DOMContentLoaded', function() {
         bcfSmartHintsTimer = setTimeout(bcfFetchBookingSmartHints, 550);
     }
 
+    const BCF_USER_ID = <?= (int)($_SESSION['user_id'] ?? 0); ?>;
+    const BCF_PURPOSE_KEY = 'bcf_booking_purpose_' + BCF_USER_ID;
+
     const bcfPurposePreview = document.getElementById('bcf-purpose-preview');
     const bcfPurposeAttPrev = document.getElementById('bcf-purpose-attendees-preview');
     if (bcfPurposePreview) {
         try {
-            const saved = sessionStorage.getItem('bcf_booking_purpose');
+            const saved = sessionStorage.getItem(BCF_PURPOSE_KEY);
             if (saved && !bcfPurposePreview.value) {
                 bcfPurposePreview.value = saved;
                 const pi0 = document.getElementById('purpose-input');
@@ -2755,7 +3235,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (e) { /* ignore */ }
         bcfPurposePreview.addEventListener('input', function () {
-            try { sessionStorage.setItem('bcf_booking_purpose', this.value); } catch (e) { /* ignore */ }
+            try { sessionStorage.setItem(BCF_PURPOSE_KEY, this.value); } catch (e) { /* ignore */ }
             const pi = document.getElementById('purpose-input');
             if (pi) pi.value = this.value;
             bcfDebouncedSmartHints();
@@ -3822,7 +4302,7 @@ document.addEventListener('DOMContentLoaded', function() {
     purposeInput?.addEventListener('input', function () {
         const pv = document.getElementById('bcf-purpose-preview');
         if (pv) pv.value = this.value;
-        try { sessionStorage.setItem('bcf_booking_purpose', this.value); } catch (e) { /* ignore */ }
+        try { sessionStorage.setItem(BCF_PURPOSE_KEY, this.value); } catch (e) { /* ignore */ }
         if (typeof bcfDebouncedSmartHints === 'function') {
             bcfDebouncedSmartHints();
         }
@@ -4137,30 +4617,54 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    document.querySelectorAll('.bcf-book-cal-cell').forEach(function (cell) {
-        function activateBookingCalDate() {
+    const bookPane = document.getElementById('booking-pane-book');
+    if (bookPane && !bookPane.dataset.bcfCalDelegated) {
+        bookPane.dataset.bcfCalDelegated = '1';
+        function activateBookingCalDate(cell) {
             const ds = cell.getAttribute('data-bcf-date');
             if (!ds || !dateInput || !facilitySel) return;
             dateInput.value = ds;
-            // Required so AI recommendations & other listeners see the new date (value alone does not fire handlers).
             dateInput.dispatchEvent(new Event('input', { bubbles: true }));
             dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-            if (bookCalFacilityId) {
-                facilitySel.value = String(bookCalFacilityId);
+            const calSel = document.getElementById('book-fac-cal-select');
+            if (calSel && calSel.value) {
+                facilitySel.value = calSel.value;
                 facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
             }
             openBookingFlowModal();
             debouncedRefillAvail();
             setTimeout(debouncedCheckConflict, 200);
         }
-        cell.addEventListener('click', activateBookingCalDate);
-        cell.addEventListener('keydown', function (ke) {
-            if (ke.key === 'Enter' || ke.key === ' ') {
-                ke.preventDefault();
-                activateBookingCalDate();
+        bookPane.addEventListener('click', function (e) {
+            const cell = e.target.closest('.bcf-book-cal-cell');
+            if (cell) activateBookingCalDate(cell);
+        });
+        bookPane.addEventListener('keydown', function (e) {
+            const cell = e.target.closest('.bcf-book-cal-cell');
+            if (!cell) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                activateBookingCalDate(cell);
             }
         });
-    });
+    }
+
+    window.frsOnPartialLoaded = function (partialId) {
+        if (partialId !== 'bcf-calendar') return;
+        bcfSyncCalFromUrl();
+        const params = new URLSearchParams(window.location.search);
+        const bookFac = params.get('book_fac');
+        const calSel = document.getElementById('book-fac-cal-select');
+        if (bookFac && calSel) {
+            calSel.value = bookFac;
+        }
+        if (calSel && calSel.value && typeof loadFacilityDetails === 'function') {
+            loadFacilityDetails(calSel.value);
+        }
+        if (typeof bcfDebouncedSmartHints === 'function') {
+            bcfDebouncedSmartHints();
+        }
+    };
 
     if (BCF_OPEN_ON_LOAD) {
         setTimeout(function () {

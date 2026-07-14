@@ -1,5 +1,6 @@
 <?php
 $useTailwind = true;
+$authSplitLayout = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/database.php';
@@ -250,135 +251,128 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $base = base_path();
 ob_start();
 ?>
-<section class="auth-page-hero">
-    <div class="home-hero-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-    <div class="home-hero-overlay"></div>
-    <div class="relative z-10 w-full flex flex-col items-center justify-center flex-1">
-<div class="auth-container public-fade-in">
-    <div class="auth-card auth-card-wide">
-        <div class="auth-header">
-            <div class="auth-logo-wrapper">
-                <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-logo">
+<section class="auth-split auth-split-register">
+    <aside class="auth-split-brand" aria-hidden="false">
+        <div class="auth-split-brand-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+        <div class="auth-split-decor" aria-hidden="true"></div>
+        <div class="auth-split-brand-inner">
+            <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
+                <i class="bi bi-arrow-left"></i> Back to website
+            </a>
+            <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
+            <h2>Reserving Spaces,<br>Serving Community.</h2>
+            <p>Join the Barangay Culiat Public Facilities Reservation System. Book courts, halls, and community spaces — made for Culiat residents.</p>
+            <div class="auth-split-dots" aria-hidden="true">
+                <span></span>
+                <span class="is-active"></span>
+                <span></span>
             </div>
-            <?= frs_heading_with_tip('Create Account', 'Barangay Culiat residents only. Verify your email to activate your account. Upload a valid ID now or later from your profile to enable auto-approval on bookings.', 'h1'); ?>
+            <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
         </div>
-        
-        <?php if ($message): ?>
-            <div style="background: <?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>; color: <?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
-                <?= htmlspecialchars($message); ?>
+    </aside>
+
+    <div class="auth-split-form-panel">
+        <div class="auth-split-form-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
+        <div class="auth-split-form-overlay" aria-hidden="true"></div>
+        <div class="auth-split-form-inner is-wide">
+            <div class="auth-split-form-top">
+                <div class="auth-split-logo-text">
+                    <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="">
+                    <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
+                </div>
+                <h1>Create an account</h1>
+                <p class="auth-split-sub">Already have an account? <a href="<?= htmlspecialchars($base); ?>/login">Log in</a></p>
             </div>
-        <?php endif; ?>
-        
-        <form method="POST" class="auth-form auth-form-horizontal" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap: 0.9rem; margin: 0;">
-            <?= csrf_field(); ?>
-            <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
-                <div style="margin: 0.25rem 0 0;">
-                    <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
+
+            <?php if ($message): ?>
+                <div class="auth-split-alert <?= $messageType === 'success' ? 'is-success' : ($messageType === 'warning' ? 'is-warning' : 'is-error'); ?>" role="alert">
+                    <?= htmlspecialchars($message); ?>
                 </div>
             <?php endif; ?>
 
-            <div class="auth-form-scroll" style="max-height: min(62vh, 560px); overflow:auto; padding-right: 0.35rem; margin-right:-0.35rem;">
-            <div class="auth-form-row">
-                <label>
-                    First Name *
-                    <div class="input-wrapper">
-                        <input name="first_name" type="text" placeholder="Juan" required autofocus value="<?= isset($_POST['first_name']) ? e($_POST['first_name']) : ''; ?>" minlength="2">
-                    </div>
-                </label>
-                
-                <label>
-                    Middle Name
-                    <div class="input-wrapper">
-                        <input name="middle_name" type="text" placeholder="Santos" value="<?= isset($_POST['middle_name']) ? e($_POST['middle_name']) : ''; ?>">
-                    </div>
-                </label>
-            </div>
+            <form method="POST" class="auth-split-form" enctype="multipart/form-data" id="registerForm">
+                <?= csrf_field(); ?>
+                <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
+                    <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                <?php endif; ?>
 
-            <div class="auth-form-row">
-                <label>
-                    Last Name *
-                    <div class="input-wrapper">
-                        <input name="last_name" type="text" placeholder="Dela Cruz" required value="<?= isset($_POST['last_name']) ? e($_POST['last_name']) : ''; ?>" minlength="2">
+                <div class="auth-split-form-scroll">
+                    <div class="auth-split-form-row">
+                        <label>
+                            First name *
+                            <input name="first_name" type="text" placeholder="Juan" required autofocus value="<?= isset($_POST['first_name']) ? e($_POST['first_name']) : ''; ?>" minlength="2">
+                        </label>
+                        <label>
+                            Last name *
+                            <input name="last_name" type="text" placeholder="Dela Cruz" required value="<?= isset($_POST['last_name']) ? e($_POST['last_name']) : ''; ?>" minlength="2">
+                        </label>
                     </div>
-                </label>
-                
-                <label>
-                    Suffix
-                    <div class="input-wrapper">
-                        <input name="suffix" type="text" placeholder="Jr., Sr., III" value="<?= isset($_POST['suffix']) ? e($_POST['suffix']) : ''; ?>" maxlength="10">
-                    </div>
-                </label>
-            </div>
 
-            <div class="auth-form-row">
-                <label>
-                    Email Address *
-                    <div class="input-wrapper">
+                    <div class="auth-split-form-row">
+                        <label>
+                            Middle name
+                            <input name="middle_name" type="text" placeholder="Santos" value="<?= isset($_POST['middle_name']) ? e($_POST['middle_name']) : ''; ?>">
+                        </label>
+                        <label>
+                            Suffix
+                            <input name="suffix" type="text" placeholder="Jr., Sr., III" value="<?= isset($_POST['suffix']) ? e($_POST['suffix']) : ''; ?>" maxlength="10">
+                        </label>
+                    </div>
+
+                    <label>
+                        Email address *
                         <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
-                    </div>
-                </label>
-                
-                <label>
-                    Mobile Number
-                    <div class="input-wrapper">
+                    </label>
+
+                    <label>
+                        Mobile number
                         <input name="mobile" type="tel" placeholder="+63 900 000 0000" value="<?= isset($_POST['mobile']) ? e($_POST['mobile']) : ''; ?>">
+                    </label>
+
+                    <div class="auth-split-form-row">
+                        <?php
+                        $streetFieldName = 'street';
+                        $houseFieldName = 'house_number';
+                        $selectedStreet = $_POST['street'] ?? '';
+                        $selectedHouseNumber = $_POST['house_number'] ?? '';
+                        $required = true;
+                        $showHint = true;
+                        $hintClass = 'auth-split-hint';
+                        include __DIR__ . '/../../components/culiat_street_fields.php';
+                        ?>
                     </div>
-                </label>
-            </div>
 
-            <div class="auth-form-row">
-                <?php
-                $streetFieldName = 'street';
-                $houseFieldName = 'house_number';
-                $selectedStreet = $_POST['street'] ?? '';
-                $selectedHouseNumber = $_POST['house_number'] ?? '';
-                $required = true;
-                $showHint = true;
-                $hintStyle = 'color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;';
-                $selectExtraAttrs = 'style="width: 100%; padding: 0.9rem 1rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; background: rgba(255,255,255,0.2); color: #1b1b1f; font-size: 1rem;"';
-                include __DIR__ . '/../../components/culiat_street_fields.php';
-                ?>
-            </div>
-            
-            <label>
-                Password
-                <div class="input-wrapper">
-                    <input name="password" type="password" placeholder="Create a strong password (min. 8 characters)" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
+                    <label>
+                        Password *
+                        <div class="auth-split-field">
+                            <input name="password" id="registerPassword" type="password" placeholder="Create a strong password" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
+                            <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <span class="auth-split-hint">At least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.</span>
+                    </label>
+
+                    <div class="auth-split-section">
+                        <p class="auth-split-section-title">Upload Valid ID (Optional)</p>
+                        <span class="auth-split-hint" style="display:block;margin-bottom:0.75rem;line-height:1.5;">
+                            Upload now or later from your profile to enable auto-approval on bookings. PDF, JPG, PNG. Max 5MB.
+                        </span>
+                        <label>
+                            Valid ID
+                            <input type="file" name="doc_valid_id" accept=".pdf,image/*">
+                        </label>
+                    </div>
+
+                    <label class="auth-split-terms">
+                        <input type="checkbox" name="accept_terms" required>
+                        <span>I agree to the <a href="#" id="termsLink">Terms &amp; Conditions</a> and <a href="#" id="privacyLink">Data Privacy Policy</a> of Barangay Culiat CPRFS, including compliance with the Data Privacy Act of 2012 (RA 10173).</span>
+                    </label>
                 </div>
-                <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-top:0.25rem; font-weight:500;">
-                    Must be at least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.
-                </small>
-            </label>
 
-            <div style="padding:0.75rem 0; border-top:1px solid rgba(255,255,255,0.2); margin-top:1rem;">
-                <p class="auth-card-label">Upload Valid ID (Optional)</p>
-                <small style="color:#4c5b7c; font-size:0.85rem; display:block; margin-bottom:0.75rem; font-weight:500; line-height:1.5;">
-                    Your account will be activated immediately. To enable auto-approval features for facility bookings, you can upload a valid ID now or later from your profile. Accepted: PDF, JPG, PNG. Max 5MB. Any government-issued ID (Birth Certificate, Barangay ID, Resident ID, Driver's License, etc.) is acceptable.
-                </small>
-
-                <label style="color:#fff;">Valid ID
-                    <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="margin-top:0.5rem; padding:0.9rem 1rem; border:2px solid rgba(255,255,255,0.3); border-radius:8px; background:rgba(255,255,255,0.2); color:#fff; width:100%;">
-                </label>
-            </div>
-            
-            <div style="margin: 1.5rem 0; padding: 1rem; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
-                <label style="display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 0.75rem; cursor: pointer; margin-bottom: 0 !important;">
-                    <input type="checkbox" name="accept_terms" required style="width: 18px !important; height: 18px !important; min-width: 18px !important; flex-shrink: 0 !important; cursor: pointer; margin-top: 0.125rem; margin-right: 0 !important;">
-                    <span style="color: #1b1b1f; font-size: 0.9rem; line-height: 1.6; flex: 1; margin-top: 0;">
-                        <span class="auth-terms-text">I have read and agree to the <a href="#" id="termsLink" style="color: #2864ef; text-decoration: underline;">Terms and Conditions</a> and <a href="#" id="privacyLink" style="color: #2864ef; text-decoration: underline;">Data Privacy Policy</a> of Barangay Culiat Public Facilities Reservation System, including compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).</span>
-                    </span>
-                </label>
-            </div>
-            </div>
-            
-            <button class="btn-primary" type="submit" id="submitBtn" style="position: sticky; bottom: 0; margin-top: 0.35rem;">Register</button>
-        </form>
-        
-        <div class="auth-footer">
-            Already registered? <a href="<?= base_path(); ?>/login">Sign in here</a>
+                <button class="btn-primary" type="submit" id="submitBtn">Create account</button>
+            </form>
         </div>
-    </div>
-</div>
     </div>
 </section>
 
@@ -804,8 +798,19 @@ window.addEventListener('load', function() {
 
 // Real-time Form Validation
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('.auth-form');
+    const form = document.getElementById('registerForm') || document.querySelector('.auth-split-form');
     if (!form) return;
+
+    const toggleBtn = document.getElementById('toggleRegisterPassword');
+    const pwdInput = document.getElementById('registerPassword');
+    if (toggleBtn && pwdInput) {
+        toggleBtn.addEventListener('click', function () {
+            const isHidden = pwdInput.type === 'password';
+            pwdInput.type = isHidden ? 'text' : 'password';
+            toggleBtn.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+            toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        });
+    }
     
     // Validation rules
     const validators = {
@@ -909,7 +914,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Show error
     function showError(input, message) {
-        const wrapper = input.closest('.input-wrapper') || input.parentElement;
+        const wrapper = input.closest('.auth-split-field') || input.closest('.input-wrapper') || input.parentElement;
         const fieldName = input.name;
         let errorDiv = document.getElementById(`error-${fieldName}`);
         
@@ -927,7 +932,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Clear error
     function clearError(input) {
-        const wrapper = input.closest('.input-wrapper') || input.parentElement;
+        const wrapper = input.closest('.auth-split-field') || input.closest('.input-wrapper') || input.parentElement;
         const fieldName = input.name;
         const errorDiv = document.getElementById(`error-${fieldName}`);
         

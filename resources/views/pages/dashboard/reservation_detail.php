@@ -1314,6 +1314,17 @@ function closeViolationModal() {
     document.getElementById('violationModal').style.display = 'none';
 }
 
+window.openModifyModalDetail = openModifyModalDetail;
+window.closeModifyModal = closeModifyModal;
+window.openPostponeModalDetail = openPostponeModalDetail;
+window.closePostponeModal = closePostponeModal;
+window.openCancelModalDetail = openCancelModalDetail;
+window.closeCancelModal = closeCancelModal;
+window.openExtendModal = openExtendModal;
+window.closeExtendModal = closeExtendModal;
+window.openViolationModal = openViolationModal;
+window.closeViolationModal = closeViolationModal;
+
 </script>
 
 <!-- Violation Recording Modal -->

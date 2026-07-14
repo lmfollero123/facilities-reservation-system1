@@ -112,7 +112,10 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <?php
     $dashboardNavJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-navigation.js';
     $dashboardNavJsVer = is_file($dashboardNavJsPath) ? (string)filemtime($dashboardNavJsPath) : '1';
+    $frsPartialJsPath = dirname(__DIR__, 3) . '/public/js/frs-partial-update.js';
+    $frsPartialJsVer = is_file($frsPartialJsPath) ? (string)filemtime($frsPartialJsPath) : '1';
     ?>
+    <script src="<?= base_path(); ?>/public/js/frs-partial-update.js?v=<?= htmlspecialchars($frsPartialJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/dashboard-navigation.js?v=<?= htmlspecialchars($dashboardNavJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 </head>
 <body class="dashboard dashboard-page">
@@ -245,7 +248,7 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
             <button id="keepSessionBtn" type="button" class="btn-primary session-timeout-btn">
                 Keep me logged in
             </button>
-            <form method="POST" action="<?= base_path(); ?>/logout" style="display:inline;margin:0;">
+            <form method="POST" action="<?= base_path(); ?>/logout" style="display:inline;margin:0;" onsubmit="try{Object.keys(sessionStorage).forEach(function(k){if(k.indexOf('bcf_booking_purpose_')===0)sessionStorage.removeItem(k);});}catch(e){}">
                 <?= csrf_field(); ?>
                 <button type="submit" class="btn-outline session-timeout-btn">Log out now</button>
             </form>

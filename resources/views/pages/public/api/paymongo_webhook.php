@@ -37,6 +37,10 @@ $eventId = $parsed['event_id'];
 $eventType = $parsed['event_type'];
 $checkoutId = $parsed['checkout_id'];
 $reservationIdFromMeta = $parsed['reservation_id'];
+$paymongoPaymentId = (string)($parsed['payment_id'] ?? '');
+if ($paymongoPaymentId === '') {
+    $paymongoPaymentId = paymongoExtractPaymentId($event);
+}
 
 if ($checkoutId === '' && $reservationIdFromMeta <= 0) {
     http_response_code(400);
@@ -85,6 +89,9 @@ try {
     $isFailed = (stripos($eventType, 'payment.failed') !== false || stripos($eventType, 'checkout_session.expired') !== false);
 
     if ($isSuccess) {
+        // Prefer PayMongo payment resource id (pay_...) for refunds; keep event id only as fallback.
+        $providerId = $paymongoPaymentId !== '' ? $paymongoPaymentId : $eventId;
+
         $updatePay = $pdo->prepare(
             'UPDATE payments
              SET status = :status,
@@ -95,7 +102,7 @@ try {
         );
         $updatePay->execute([
             'status' => 'paid',
-            'event_id' => $eventId,
+            'event_id' => $providerId,
             'payload_json' => $payload,
             'id' => $paymentId,
         ]);
@@ -138,19 +145,19 @@ try {
         );
         $updatePay->execute([
             'status' => 'failed',
-            'event_id' => $eventId,
+            'event_id' => ($paymongoPaymentId !== '' ? $paymongoPaymentId : $eventId),
             'payload_json' => $payload,
             'id' => $paymentId,
         ]);
     } else {
         $updatePay = $pdo->prepare(
             'UPDATE payments
-             SET provider_event_id = :event_id,
+             SET provider_event_id = COALESCE(NULLIF(:event_id, ""), provider_event_id),
                  payload_json = :payload_json
              WHERE id = :id'
         );
         $updatePay->execute([
-            'event_id' => $eventId,
+            'event_id' => ($paymongoPaymentId !== '' ? $paymongoPaymentId : $eventId),
             'payload_json' => $payload,
             'id' => $paymentId,
         ]);

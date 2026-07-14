@@ -277,7 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
 
         $resStmt = $pdo->prepare(
             'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.user_id,
-                    f.name AS facility_name
+                    f.name AS facility_name, f.is_free
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
              ' . $whereClause
@@ -289,42 +289,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
             throw new Exception('Reservation not found or you do not have permission to cancel it.');
         }
         
-        if (!in_array($reservation['status'], ['pending_payment', 'pending', 'approved'], true)) {
-            throw new Exception('Only pending-payment, pending, or approved reservations can be cancelled. This reservation is already ' . $reservation['status'] . '.');
+        if (!in_array($reservation['status'], ['pending_payment', 'pending', 'approved', 'postponed'], true)) {
+            throw new Exception('Only pending-payment, pending, approved, or postponed reservations can be cancelled. This reservation is already ' . $reservation['status'] . '.');
         }
         
         if (frs_reservation_slot_has_passed((string)$reservation['reservation_date'], (string)$reservation['time_slot'])) {
             throw new Exception('You cannot cancel a reservation that has already started or passed.');
         }
         
-        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_priority = FALSE, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
         $stmt->execute(['status' => 'cancelled', 'id' => $reservationId]);
         
-        // Check if payment was made and issue refund
-        $paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, provider_event_id FROM payments WHERE reservation_id = :reservation_id AND status = :status LIMIT 1');
-        $paymentStmt->execute(['reservation_id' => $reservationId, 'status' => 'paid']);
-        $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($payment) {
-            // Issue refund via PayMongo if provider_event_id exists
-            if (!empty($payment['provider_event_id'])) {
-                $refundResult = frs_issue_refund($payment['provider_event_id'], $payment['amount']);
+        $facilityIsFree = !empty($reservation['is_free']);
+        $refunded = false;
+        $refundWarning = '';
+        $note = $isAdminOrStaff ? 'Cancelled by admin/staff.' : 'Cancelled by user.';
 
-                if ($refundResult['ok']) {
-                    // Update payment status to refunded
-                    $updatePaymentStmt = $pdo->prepare('UPDATE payments SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-                    $updatePaymentStmt->execute(['status' => 'refunded', 'id' => $payment['id']]);
-                    $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Payment refunded via PayMongo.' : 'Cancelled by user. Payment refunded via PayMongo.';
+        // Paid bookings: issue refund. Free facilities skip the refund flow entirely.
+        if (!$facilityIsFree) {
+            $paymentStmt = $pdo->prepare(
+                'SELECT id, amount, reference_no, provider_event_id, provider_checkout_id, payload_json
+                 FROM payments
+                 WHERE reservation_id = :reservation_id AND status = :status
+                 LIMIT 1'
+            );
+            $paymentStmt->execute(['reservation_id' => $reservationId, 'status' => 'paid']);
+            $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($payment && (float)($payment['amount'] ?? 0) > 0) {
+                $refundOutcome = frs_refund_payment_row(
+                    $pdo,
+                    $payment,
+                    'requested_by_customer',
+                    'Cancelled by resident — RES-' . $reservationId
+                );
+                if (!empty($refundOutcome['refunded'])) {
+                    $refunded = true;
+                    $note = $isAdminOrStaff
+                        ? 'Cancelled by admin/staff. Payment refunded via PayMongo.'
+                        : 'Cancelled by user. Payment refunded via PayMongo.';
                 } else {
-                    $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Refund failed: ' . $refundResult['message'] : 'Cancelled by user. Refund failed: ' . $refundResult['message'];
+                    $refundWarning = (string)($refundOutcome['message'] ?? 'Refund could not be completed automatically.');
+                    $note = ($isAdminOrStaff ? 'Cancelled by admin/staff. ' : 'Cancelled by user. ')
+                        . 'Refund failed: ' . $refundWarning;
                 }
-            } else {
-                // No provider_event_id - payment may not have been processed via webhook
-                // Don't auto-refund, keep payment as paid and note that manual refund is needed
-                $note = $isAdminOrStaff ? 'Cancelled by admin/staff. Payment exists but requires manual refund (no PayMongo event ID).' : 'Cancelled by user. Payment exists but requires manual refund (no PayMongo event ID).';
             }
         } else {
-            $note = $isAdminOrStaff ? 'Cancelled by admin/staff.' : 'Cancelled by user.';
+            $note = $isAdminOrStaff
+                ? 'Cancelled by admin/staff. Free facility — no refund required.'
+                : 'Cancelled by user. Free facility — no refund required.';
         }
         
         $histStmt = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:reservation_id, :status, :note, :user_id)');
@@ -337,11 +350,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
         
         logAudit('Resident self-cancelled reservation', 'Reservations', 'RES-' . $reservationId . ' – ' . $reservation['facility_name']);
         
+        $notifBody = 'Your reservation for ' . $reservation['facility_name']
+            . ' on ' . date('F j, Y', strtotime($reservation['reservation_date']))
+            . ' (' . $reservation['time_slot'] . ') has been cancelled.';
+        if ($refunded) {
+            $notifBody .= ' Your payment has been refunded.';
+        } elseif ($facilityIsFree) {
+            $notifBody .= ' No payment was required for this free facility.';
+        } elseif ($refundWarning !== '') {
+            $notifBody .= ' Your booking was cancelled, but the automatic refund could not be completed. Staff will assist with the refund.';
+        }
+        $notifBody .= ' The time slot is now available for others.';
+
         createNotification(
             $userId,
             'booking',
             'Reservation Cancelled',
-            'Your reservation for ' . $reservation['facility_name'] . ' on ' . date('F j, Y', strtotime($reservation['reservation_date'])) . ' (' . $reservation['time_slot'] . ') has been cancelled. The time slot is now available for others.',
+            $notifBody,
             $frsMineNotifyRel
         );
 
@@ -349,20 +374,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
         $userStmt->execute(['id' => $userId]);
         $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
         if ($userInfo && !empty($userInfo['email'])) {
+            if ($refunded) {
+                $emailReason = 'Cancelled by you. Your payment has been refunded. The time slot is now available for others.';
+            } elseif ($facilityIsFree) {
+                $emailReason = 'Cancelled by you. This was a free facility booking (no payment/refund). The time slot is now available for others.';
+            } elseif ($refundWarning !== '') {
+                $emailReason = 'Cancelled by you. Automatic refund could not be completed (' . $refundWarning . '). Please contact support for assistance. The time slot is now available for others.';
+            } else {
+                $emailReason = 'Cancelled by you. The time slot is now available for others.';
+            }
             $emailBody = getReservationCancelledEmailTemplate(
                 $userInfo['name'],
                 $reservation['facility_name'],
                 $reservation['reservation_date'],
                 $reservation['time_slot'],
-                'Cancelled by you. The time slot is now available for others.',
+                $emailReason,
                 'View My Reservations',
                 $frsMineNotifyAbs
             );
             sendEmail($userInfo['email'], $userInfo['name'], 'Reservation Cancelled', $emailBody);
         }
         
-        $message = 'Reservation cancelled successfully. The time slot is now available for others.';
-        $messageType = 'success';
+        if ($refunded) {
+            $message = 'Reservation cancelled successfully. Your payment has been refunded.';
+            $messageType = 'success';
+        } elseif ($refundWarning !== '') {
+            $message = 'Reservation cancelled, but the automatic refund failed: ' . $refundWarning . ' Please contact support.';
+            $messageType = 'error';
+        } else {
+            $message = 'Reservation cancelled successfully. The time slot is now available for others.';
+            $messageType = 'success';
+        }
         
     } catch (Throwable $e) {
         $message = $e->getMessage();

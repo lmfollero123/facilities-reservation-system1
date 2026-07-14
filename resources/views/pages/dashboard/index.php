@@ -703,7 +703,7 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<form method="GET" class="booking-card" style="margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items: end;">
+<form method="GET" class="booking-card" style="margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items: end;" data-frs-partial="dash-filtered">
     <?= frs_chart_hidden_preserve(); ?>
     <div style="grid-column: 1 / -1; margin-bottom: 0.25rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
         <strong style="color:#334155; font-size:0.9rem;">Filter statistics, upcoming list &amp; pending requests</strong>
@@ -737,12 +737,13 @@ ob_start();
         <label for="end_date" style="display:block; font-weight:600; margin-bottom:0.35rem; color:#334155;">End Date</label>
         <input type="date" id="end_date" name="end_date" class="booking-form-control" value="<?= htmlspecialchars($endDateFilter); ?>">
     </div>
-    <div style="display:flex; gap:0.5rem;">
-        <button type="submit" class="btn-primary" style="flex:1;">Apply Filters</button>
-        <a href="<?= base_path(); ?>/dashboard" class="btn-outline" style="flex:1; text-align:center; text-decoration:none;">Reset</a>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; min-width:0;">
+        <button type="submit" class="btn-primary" style="flex:1 1 8rem; min-width:8rem;">Apply Filters</button>
+        <a href="<?= base_path(); ?>/dashboard" class="btn-outline" style="flex:1 1 8rem; min-width:8rem; text-align:center; text-decoration:none;">Reset</a>
     </div>
 </form>
 
+<div class="dash-filtered-region" data-frs-partial-id="dash-filtered" data-frs-partial-root>
 <div class="stat-grid">
     <?php if (in_array($userRole, ['Admin', 'Staff'])): ?>
         <!-- Admin/Staff Global Statistics -->
@@ -834,45 +835,6 @@ ob_start();
     <?php endif; ?>
 </div>
 
-<?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
-
-<!-- Global Filter for All Charts -->
-<div class="booking-card" style="margin-top: 1rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: var(--gov-blue-dark);">Global Filter (Apply to All Charts)</h3>
-        <button type="button" onclick="applyGlobalFilter()" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">Apply to All</button>
-    </div>
-    <form id="global-filter-form" class="chart-filter-bar">
-        <div class="chart-filter-fields">
-            <label class="chart-filter-item">
-                <span>Status</span>
-                <select id="global-status" class="booking-form-control chart-filter-control">
-                    <option value=""<?= ($trendChartFilter['status'] === '') ? ' selected' : ''; ?>>All</option>
-                    <?php foreach (['approved' => 'Approved', 'pending' => 'Pending', 'denied' => 'Denied', 'cancelled' => 'Cancelled'] as $key => $label): ?>
-                        <option value="<?= $key; ?>"<?= ($trendChartFilter['status'] === $key) ? ' selected' : ''; ?>><?= $label; ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <label class="chart-filter-item">
-                <span>Facility</span>
-                <select id="global-facility" class="booking-form-control chart-filter-control">
-                    <option value="0"<?= ($trendChartFilter['facility'] === 0) ? ' selected' : ''; ?>>All Facilities</option>
-                    <?php foreach ($facilityOptions as $facility): ?>
-                        <option value="<?= (int)$facility['id']; ?>"<?= ($trendChartFilter['facility'] === (int)$facility['id']) ? ' selected' : ''; ?>><?= htmlspecialchars($facility['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <label class="chart-filter-item">
-                <span>Months</span>
-                <select id="global-months" class="booking-form-control chart-filter-control">
-                    <option value="6"<?= ($trendChartFilter['months'] === 6) ? ' selected' : ''; ?>>Last 6 months</option>
-                    <option value="12"<?= ($trendChartFilter['months'] === 12) ? ' selected' : ''; ?>>Last 12 months</option>
-                </select>
-            </label>
-        </div>
-    </form>
-</div>
-
 <div class="booking-wrapper" style="margin-top: 1rem;">
     <section class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
@@ -930,11 +892,11 @@ ob_start();
             <?php if ($upcomingTotalPages > 1): ?>
                 <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                     <?php if ($upcomingPage > 1): ?>
-                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage - 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage - 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" data-frs-partial="dash-filtered" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
                     <?php endif; ?>
                     <span style="padding: 0.5rem 1rem; color: #5b6888;">Page <?= $upcomingPage; ?> of <?= $upcomingTotalPages; ?> (<?= $upcomingTotal; ?> total)</span>
                     <?php if ($upcomingPage < $upcomingTotalPages): ?>
-                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage + 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+                        <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['upcoming_page' => $upcomingPage + 1, 'upcoming_page_size' => $upcomingPerPage]); ?>" data-frs-partial="dash-filtered" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -977,7 +939,7 @@ ob_start();
         </div>
         <div class="pagination" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
             <?php if ($pendingPage > 1): ?>
-                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage - 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
+                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage - 1]); ?>" data-frs-partial="dash-filtered" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">&larr; Prev</a>
             <?php endif; ?>
             
             <span style="padding: 0.5rem 1rem; color: #5b6888; font-size: 0.9rem;">
@@ -985,7 +947,7 @@ ob_start();
             </span>
             
             <?php if ($pendingPage < $pendingTotalPages): ?>
-                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage + 1]); ?>" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
+                <a href="<?= buildFilterUrl(base_path(), '/dashboard', $statusFilter, $facilityFilter, $startDateFilter, $endDateFilter, ['pending_page' => $pendingPage + 1]); ?>" data-frs-partial="dash-filtered" style="padding: 0.5rem 1rem; text-decoration: none; color: var(--gov-blue); border: 1px solid var(--gov-blue); border-radius: 6px; background: white;">Next &rarr;</a>
             <?php endif; ?>
         </div>
         
@@ -996,17 +958,69 @@ ob_start();
     </aside>
     <?php endif; ?>
 </div>
+</div>
 
+<?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
+
+<!-- Global Filter for All Charts -->
+<div class="booking-card dash-global-chart-filter" style="margin-top: 1rem;">
+    <div class="dash-global-chart-filter__head">
+        <h3 style="margin: 0; font-size: 1.1rem; color: var(--gov-blue-dark);">Global Filter (Apply to All Charts)</h3>
+        <button type="button" onclick="applyGlobalFilter()" class="btn-primary dash-global-chart-filter__btn">Apply to All</button>
+    </div>
+    <form id="global-filter-form" class="chart-filter-bar">
+        <div class="chart-filter-fields">
+            <label class="chart-filter-item">
+                <span>Status</span>
+                <select id="global-status" class="booking-form-control chart-filter-control">
+                    <option value=""<?= ($trendChartFilter['status'] === '') ? ' selected' : ''; ?>>All</option>
+                    <?php foreach (['approved' => 'Approved', 'pending' => 'Pending', 'denied' => 'Denied', 'cancelled' => 'Cancelled'] as $key => $label): ?>
+                        <option value="<?= $key; ?>"<?= ($trendChartFilter['status'] === $key) ? ' selected' : ''; ?>><?= $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Facility</span>
+                <select id="global-facility" class="booking-form-control chart-filter-control">
+                    <option value="0"<?= ($trendChartFilter['facility'] === 0) ? ' selected' : ''; ?>>All Facilities</option>
+                    <?php foreach ($facilityOptions as $facility): ?>
+                        <option value="<?= (int)$facility['id']; ?>"<?= ($trendChartFilter['facility'] === (int)$facility['id']) ? ' selected' : ''; ?>><?= htmlspecialchars($facility['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="chart-filter-item">
+                <span>Months</span>
+                <select id="global-months" class="booking-form-control chart-filter-control">
+                    <option value="6"<?= ($trendChartFilter['months'] === 6) ? ' selected' : ''; ?>>Last 6 months</option>
+                    <option value="12"<?= ($trendChartFilter['months'] === 12) ? ' selected' : ''; ?>>Last 12 months</option>
+                </select>
+            </label>
+        </div>
+    </form>
+</div>
+
+<div class="dash-charts-region" data-frs-partial-id="dash-charts" data-frs-partial-root>
+<script type="application/json" id="dash-charts-config"><?= json_encode([
+    'monthlyLabels' => $monthlyLabels,
+    'monthlyData' => $monthlyData,
+    'statusLabels' => $statusLabels,
+    'statusCounts' => $statusCounts,
+    'statusColors' => $statusColors,
+    'facilityLabels' => $facilityLabels,
+    'facilityCounts' => $facilityCounts,
+    'rotateFacilityLabels' => true,
+    'showValueLabels' => true,
+], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
 <div class="reports-grid" style="margin-top: 1rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly reservation counts. Use the filter to change status, facility, date range, or 6 vs 12 months.'); ?>
-        <?= frs_dashboard_chart_filter_form('dash-trend', 'trend', $facilityOptions, $trendChartFilter, true, false, ['status', 'topfac']); ?>
+        <?= frs_dashboard_chart_filter_form('dash-trend', 'trend', $facilityOptions, $trendChartFilter, true, false, ['status', 'topfac'], 'dash-charts'); ?>
         <canvas id="monthlyChart" style="max-height: 300px;"></canvas>
     </section>
 
     <section class="booking-card">
         <?= frs_heading_with_tip('Status Breakdown', 'Distribution of approved, pending, denied, and cancelled reservations for the filter below.'); ?>
-        <?= frs_dashboard_chart_filter_form('dash-status', 'status', $facilityOptions, $statusChartFilter, false, false, ['trend', 'topfac']); ?>
+        <?= frs_dashboard_chart_filter_form('dash-status', 'status', $facilityOptions, $statusChartFilter, false, false, ['trend', 'topfac'], 'dash-charts'); ?>
         <canvas id="statusChart" style="max-height: 300px;"></canvas>
     </section>
 </div>
@@ -1018,12 +1032,13 @@ ob_start();
             ? 'Facilities with the most approved bookings in the selected period (top N from filter).'
             : 'Your most frequently booked facilities in the selected period.'
     ); ?>
-    <?= frs_dashboard_chart_filter_form('dash-topfac', 'topfac', $facilityOptions, $topfacChartFilter, false, true, ['trend', 'status']); ?>
+    <?= frs_dashboard_chart_filter_form('dash-topfac', 'topfac', $facilityOptions, $topfacChartFilter, false, true, ['trend', 'status'], 'dash-charts'); ?>
     <?php if (!empty($facilityLabels)): ?>
     <canvas id="facilityChart" style="max-height: 300px;"></canvas>
     <?php else: ?>
     <p style="color: #8b95b5; padding: 1rem 0;">No data for the selected filters.</p>
     <?php endif; ?>
+</div>
 </div>
 
 <div class="booking-card" style="margin-top: 1rem;">
@@ -1059,21 +1074,13 @@ ob_start();
 
     function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-    function init() {
-        // Only handle collapsibles within the dashboard page (not sidebar)
-        document.querySelectorAll('.booking-card .collapsible-header, .collapsible-card .collapsible-header').forEach(header => {
+    function applyCollapseState() {
+        document.querySelectorAll('.booking-card .collapsible-header, .collapsible-card .collapsible-header').forEach(function (header) {
             const targetId = header.getAttribute('data-collapse-target');
             if (!targetId) return;
-            
             const body = document.getElementById(targetId);
-            if (!body) {
-                console.warn('Collapsible target not found:', targetId);
-                return;
-            }
-            
+            if (!body) return;
             const chevron = header.querySelector('.chevron');
-            
-            // Apply saved state
             if (state[targetId]) {
                 body.classList.add('is-collapsed');
                 if (chevron) chevron.style.transform = 'rotate(-90deg)';
@@ -1081,63 +1088,80 @@ ob_start();
                 body.classList.remove('is-collapsed');
                 if (chevron) chevron.style.transform = 'rotate(0deg)';
             }
-            
-            // Add click handler with event prevention
-            header.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const isCollapsed = body.classList.toggle('is-collapsed');
-                if (chevron) {
-                    chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-                }
-                state[targetId] = isCollapsed;
-                save();
-            });
         });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+    if (!document.documentElement.dataset.frsCollapseDelegated) {
+        document.documentElement.dataset.frsCollapseDelegated = '1';
+        document.addEventListener('click', function (e) {
+            const header = e.target.closest('.booking-card .collapsible-header, .collapsible-card .collapsible-header');
+            if (!header) return;
+            const targetId = header.getAttribute('data-collapse-target');
+            if (!targetId) return;
+            const body = document.getElementById(targetId);
+            if (!body) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const chevron = header.querySelector('.chevron');
+            const isCollapsed = body.classList.toggle('is-collapsed');
+            if (chevron) {
+                chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            }
+            state[targetId] = isCollapsed;
+            save();
+        });
     }
+
+    window.frsReinitDashboardCollapsibles = applyCollapseState;
+    applyCollapseState();
 })();
 
 function applyGlobalFilter() {
     const status = document.getElementById('global-status').value;
     const facility = document.getElementById('global-facility').value;
     const months = document.getElementById('global-months').value;
-
-    // Build URL with the new filter values
     const url = new URL(window.location.href);
-
-    // Set for all chart prefixes
-    const prefixes = ['trend', 'status', 'topfac'];
-    prefixes.forEach(prefix => {
+    ['trend', 'status', 'topfac'].forEach(function (prefix) {
         url.searchParams.set(prefix + '_status', status);
         url.searchParams.set(prefix + '_facility', facility);
         url.searchParams.set(prefix + '_months', months);
     });
-
-    // Redirect to apply filters
-    window.location.href = url.toString();
+    if (typeof window.frsPartialLoad === 'function') {
+        window.frsPartialLoad(url.toString(), 'dash-charts');
+    } else {
+        window.location.href = url.toString();
+    }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.frsInitReservationCharts) {
-        window.frsInitReservationCharts({
-            monthlyLabels: <?= json_encode($monthlyLabels); ?>,
-            monthlyData: <?= json_encode($monthlyData); ?>,
-            statusLabels: <?= json_encode($statusLabels); ?>,
-            statusCounts: <?= json_encode($statusCounts); ?>,
-            statusColors: <?= json_encode($statusColors); ?>,
-            facilityLabels: <?= json_encode($facilityLabels); ?>,
-            facilityCounts: <?= json_encode($facilityCounts); ?>,
-            rotateFacilityLabels: true,
-            showValueLabels: true
-        });
+function frsReadDashChartsConfig() {
+    const el = document.getElementById('dash-charts-config');
+    if (!el || !el.textContent) return window.frsChartConfig || {};
+    try {
+        return JSON.parse(el.textContent);
+    } catch (e) {
+        return window.frsChartConfig || {};
     }
+}
+
+function frsInitDashboardCharts() {
+    const cfg = frsReadDashChartsConfig();
+    window.frsChartConfig = cfg;
+    if (window.frsInitReservationCharts) {
+        window.frsInitReservationCharts(cfg);
+    }
+}
+
+window.frsOnPartialLoaded = function (partialId) {
+    if (partialId === 'dash-charts') {
+        frsInitDashboardCharts();
+    }
+    if (partialId === 'dash-filtered' && typeof window.frsReinitDashboardCollapsibles === 'function') {
+        window.frsReinitDashboardCollapsibles();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    frsInitDashboardCharts();
 });
 </script>
 

@@ -442,9 +442,30 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
 }
 
 @media (max-width: 640px) {
+    .occ-dash-strip {
+        padding: 0.75rem;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+    .occ-dash-strip__meta {
+        align-items: flex-start;
+        width: 100%;
+    }
+    .occ-dash-carousel {
+        grid-template-columns: 2rem minmax(0, 1fr) 2rem;
+        gap: 0.35rem;
+        max-width: 100%;
+    }
+    .occ-dash-nav {
+        width: 2rem;
+        height: 2rem;
+        font-size: 1.1rem;
+    }
     .occ-dash-hero {
         grid-template-columns: 1fr;
         min-height: 0;
+        max-width: 100%;
     }
     .occ-dash-hero__media {
         min-height: 120px;

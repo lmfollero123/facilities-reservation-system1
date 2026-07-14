@@ -293,11 +293,15 @@ if (!function_exists('frs_dashboard_chart_filter_form')) {
         array $filter,
         bool $showMonths = false,
         bool $showLimit = false,
-        array $skipPrefixes = []
+        array $skipPrefixes = [],
+        ?string $partialId = null
     ): string {
         ob_start();
+        $partialAttr = $partialId !== null && $partialId !== ''
+            ? ' data-frs-partial="' . htmlspecialchars($partialId, ENT_QUOTES, 'UTF-8') . '"'
+            : '';
         ?>
-        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>">
+        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>"<?= $partialAttr; ?>>
             <?= frs_chart_hidden_preserve(array_merge($skipPrefixes, [$prefix])); ?>
             <div class="chart-filter-fields">
                 <label class="chart-filter-item">

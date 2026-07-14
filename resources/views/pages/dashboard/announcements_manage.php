@@ -609,9 +609,14 @@ function previewImage(event) {
 }
 
 function clearImage() {
-    document.getElementById('image').value = '';
-    document.getElementById('image-preview').style.display = 'none';
+    const image = document.getElementById('image');
+    const preview = document.getElementById('image-preview');
+    if (image) image.value = '';
+    if (preview) preview.style.display = 'none';
 }
+
+window.previewImage = previewImage;
+window.clearImage = clearImage;
 </script>
 
 <?php

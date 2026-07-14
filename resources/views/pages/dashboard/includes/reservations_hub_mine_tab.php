@@ -27,6 +27,10 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     padding: 1.25rem;
     margin-bottom: 1.5rem;
     min-height: 60vh;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
 }
@@ -43,6 +47,9 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0.35rem;
     flex: 1;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     grid-auto-rows: minmax(90px, 1fr);
 }
 .my-reservations-calendar-dayname {
@@ -153,6 +160,11 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     gap:0.5rem 1rem;
     font-size:0.8rem;
     color:#6b7280;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-bottom: 0.65rem;
 }
 .my-reservations-legend-item {
     display:flex;
@@ -204,13 +216,215 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     white-space: nowrap;
 }
 @media (max-width: 640px) {
+    .my-reservations-calendar {
+        padding: 0.75rem;
+        min-height: 0;
+        margin-bottom: 1rem;
+        border-radius: 10px;
+    }
     .my-reservations-calendar-grid {
-        gap: 0.2rem;
-        grid-auto-rows: minmax(72px, 1fr);
+        gap: 0.15rem;
+        grid-auto-rows: minmax(46px, auto);
+    }
+    .my-reservations-calendar-dayname {
+        font-size: 0.65rem;
+        padding: 0.15rem 0;
     }
     .my-reservations-calendar-cell {
-        min-height: 72px;
-        padding: 0.35rem;
+        min-height: 46px;
+        padding: 0.2rem 0.15rem 0.35rem;
+        border-radius: 7px;
+    }
+    .my-reservations-calendar-cell .date-label {
+        font-size: 0.72rem;
+        margin-bottom: 0.1rem;
+    }
+    .my-reservations-calendar-cell .status-chip {
+        max-width: 100%;
+        padding: 0.05rem 0.25rem;
+        font-size: 0.55rem;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .my-reservations-calendar-cell .status-chip[data-chip-short] {
+        font-size: 0;
+        line-height: 0;
+    }
+    .my-reservations-calendar-cell .status-chip[data-chip-short]::after {
+        content: attr(data-chip-short);
+        font-size: 0.55rem;
+        line-height: 1.15;
+        font-weight: 700;
+    }
+    .my-reservations-legend {
+        flex-wrap: wrap;
+        gap: 0.4rem 0.75rem;
+        overflow-x: visible;
+        padding-bottom: 0.25rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.72rem;
+        width: 100%;
+        max-width: 100%;
+    }
+    .my-reservations-legend-item {
+        flex: 0 1 auto;
+        min-width: 0;
+        white-space: normal;
+    }
+    .my-reservations-legend-item.my-reservations-legend-demand,
+    .my-reservations-legend-item[style*="margin-left"] {
+        margin-left: 0 !important;
+        border-left: none !important;
+        padding-left: 0 !important;
+    }
+    .my-reservations-legend-dot {
+        width: 8px;
+        height: 8px;
+    }
+    .mine-cal-nav-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem;
+        align-items: stretch;
+    }
+    .mine-cal-jump-form {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem;
+        width: 100%;
+        min-width: 0;
+    }
+    .mine-cal-month-select,
+    .mine-cal-year-select {
+        min-width: 0;
+        width: 100%;
+        font-size: 0.8rem;
+        padding: 0.4rem 0.45rem;
+    }
+    .mine-cal-nav-btn {
+        padding: 0.4rem 0.35rem;
+        font-size: 0.75rem;
+        text-align: center;
+        justify-content: center;
+        min-width: 0;
+        white-space: nowrap;
+    }
+    .mine-cal-nav-btn:last-child {
+        grid-column: 1 / -1;
+    }
+    .my-reservations-calendar-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.65rem;
+        width: 100%;
+        max-width: 100%;
+    }
+    .my-reservations-calendar-header > * {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+    .my-reservations-calendar-grid {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        gap: 0.1rem;
+    }
+    .my-reservations-calendar-grid > * {
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    .mine-scope-tabs {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .mine-scope-tabs a {
+        flex: 1 1 auto;
+        text-align: center;
+        font-size: 0.8rem !important;
+        padding: 0.45rem 0.55rem !important;
+    }
+    .my-reservations-res-card,
+    .mine-day-modal__sheet {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .mine-action-modal .modal-dialog {
+        width: 95% !important;
+        max-width: 95% !important;
+        padding: 1.1rem !important;
+        margin: 0.75rem;
+        max-height: 90dvh;
+        overflow-y: auto;
+    }
+    .mine-action-modal .modal-dialog > div[style*="display: flex"] {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .mine-action-modal .modal-dialog .btn-primary,
+    .mine-action-modal .modal-dialog .btn-outline {
+        flex: 1 1 auto;
+        min-height: 44px;
+        text-align: center;
+        justify-content: center;
+    }
+
+    /* Day reservations modal — stack cards for phone */
+    .mine-day-modal {
+        padding: 0 !important;
+        align-items: flex-end !important;
+    }
+    .mine-day-modal__sheet {
+        max-width: 100% !important;
+        max-height: 92dvh !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 1rem !important;
+    }
+    .mine-day-modal__header {
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+    .my-reservations-res-card__top {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+    .my-reservations-res-card__info {
+        min-width: 0 !important;
+        width: 100%;
+    }
+    .my-reservations-res-card__meta {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .my-reservations-res-card__actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        width: 100%;
+    }
+    .my-reservations-res-card__actions-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        width: 100%;
+    }
+    .my-reservations-res-card__actions-row > .btn-outline,
+    .my-reservations-res-card__actions-row > .btn-primary,
+    .my-reservations-res-card__actions-row > a.btn-primary {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+        box-sizing: border-box;
     }
 }
 </style>
@@ -303,54 +517,57 @@ $mineTabYearMin = (int)date('Y') - 5;
 $mineTabYearMax = (int)date('Y') + 5;
 ?>
 
+<div data-frs-partial-id="mine-calendar" data-frs-partial-root>
+<script type="application/json" id="mine-cal-reservation-data"><?= json_encode($calendarReservations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
+<script type="application/json" id="mine-cal-docs-data"><?= json_encode($mineReservationDocsById, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
 <div class="my-reservations-calendar">
     <div class="my-reservations-calendar-header">
-        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-            <a class="<?= $calendarScope === 'mine' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'mine', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
+        <div class="mine-scope-tabs" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+            <a class="<?= $calendarScope === 'mine' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" data-frs-partial="mine-calendar" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'mine', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
                 My Current Reservations
             </a>
             <?php if ($hubStaffView): ?>
-            <a class="<?= $calendarScope === 'all' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'all', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
+            <a class="<?= $calendarScope === 'all' ? 'btn-primary' : 'btn-outline'; ?>" style="text-decoration:none; padding:0.35rem 0.7rem; border-radius:8px;" data-frs-partial="mine-calendar" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => 'all', 'year' => $mineTabCalYear, 'month' => $mineTabCalMonth]), ENT_QUOTES, 'UTF-8'); ?>">
                 All Reservations
             </a>
             <?php endif; ?>
         </div>
         <div class="mine-cal-nav-row">
-            <form method="get" action="<?= htmlspecialchars($__mineCalPath, ENT_QUOTES, 'UTF-8'); ?>" class="mine-cal-jump-form">
+            <form method="get" action="<?= htmlspecialchars($__mineCalPath, ENT_QUOTES, 'UTF-8'); ?>" class="mine-cal-jump-form" data-frs-partial="mine-calendar" data-frs-partial-auto>
                 <?php if ($__frsMineOnBookHub): ?>
                     <input type="hidden" name="module" value="mine">
                 <?php endif; ?>
                 <input type="hidden" name="scope" value="<?= htmlspecialchars($calendarScope, ENT_QUOTES, 'UTF-8'); ?>">
-                <select name="month" class="mine-cal-month-select" aria-label="Select month" onchange="this.form.submit()">
+                <select name="month" class="mine-cal-month-select" aria-label="Select month">
                     <?php for ($m = 1; $m <= 12; $m++): ?>
                         <option value="<?= $m; ?>" <?= $mineTabCalMonth === $m ? 'selected' : ''; ?>>
                             <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
                         </option>
                     <?php endfor; ?>
                 </select>
-                <select name="year" class="mine-cal-year-select" aria-label="Select year" onchange="this.form.submit()">
+                <select name="year" class="mine-cal-year-select" aria-label="Select year">
                     <?php for ($y = $mineTabYearMax; $y >= $mineTabYearMin; $y--): ?>
                         <option value="<?= $y; ?>" <?= $mineTabCalYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
                     <?php endfor; ?>
                 </select>
             </form>
-            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabPrevYear, 'month' => $mineTabPrevMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">&larr; Prev</a>
-            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabNextYear, 'month' => $mineTabNextMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">Next &rarr;</a>
-            <a class="btn-outline mine-cal-nav-btn" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => (int)date('Y'), 'month' => (int)date('n')]), ENT_QUOTES, 'UTF-8'); ?>">Today</a>
+            <a class="btn-outline mine-cal-nav-btn" data-frs-partial="mine-calendar" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabPrevYear, 'month' => $mineTabPrevMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">&larr; Prev</a>
+            <a class="btn-outline mine-cal-nav-btn" data-frs-partial="mine-calendar" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => $mineTabNextYear, 'month' => $mineTabNextMonthNum]), ENT_QUOTES, 'UTF-8'); ?>">Next &rarr;</a>
+            <a class="btn-outline mine-cal-nav-btn" data-frs-partial="mine-calendar" href="<?= htmlspecialchars($__mineCalPath . $__mineCalQ(['scope' => $calendarScope, 'year' => (int)date('Y'), 'month' => (int)date('n')]), ENT_QUOTES, 'UTF-8'); ?>">Today</a>
         </div>
-        <div class="my-reservations-legend">
-            <div class="my-reservations-legend-item">
-                <span class="my-reservations-legend-dot" style="background:#22c55e;"></span> Approved
-            </div>
-            <div class="my-reservations-legend-item">
-                <span class="my-reservations-legend-dot" style="background:#eab308;"></span> Pending / Postponed
-            </div>
-            <div class="my-reservations-legend-item">
-                <span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Denied / Cancelled
-            </div>
-            <div class="my-reservations-legend-item">
-                <span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Past
-            </div>
+    </div>
+    <div class="my-reservations-legend">
+        <div class="my-reservations-legend-item">
+            <span class="my-reservations-legend-dot" style="background:#22c55e;"></span> Approved
+        </div>
+        <div class="my-reservations-legend-item">
+            <span class="my-reservations-legend-dot" style="background:#eab308;"></span> Pending / Postponed
+        </div>
+        <div class="my-reservations-legend-item">
+            <span class="my-reservations-legend-dot" style="background:#ef4444;"></span> Denied / Cancelled
+        </div>
+        <div class="my-reservations-legend-item">
+            <span class="my-reservations-legend-dot" style="background:#94a3b8;"></span> Past
         </div>
     </div>
     <div class="my-reservations-calendar-grid">
@@ -373,6 +590,7 @@ $mineTabYearMax = (int)date('Y') + 5;
             // Determine dominant status for the day (for background color)
             $dayStatusClass = '';
             $chipLabel = '';
+            $chipShort = '';
             $activeCellReservations = [];
             foreach ($cellReservations as $r) {
                 if (!frs_reservation_slot_has_passed((string)$r['reservation_date'], (string)$r['time_slot'])) {
@@ -382,6 +600,7 @@ $mineTabYearMax = (int)date('Y') + 5;
             if (!empty($cellReservations) && empty($activeCellReservations)) {
                 $dayStatusClass = ' status-past';
                 $chipLabel = 'Past';
+                $chipShort = 'Past';
             } elseif (!empty($activeCellReservations)) {
                 $hasApproved = false;
                 $hasPending = false;
@@ -395,10 +614,10 @@ $mineTabYearMax = (int)date('Y') + 5;
                 if ($hasApproved) $dayStatusClass = ' status-approved';
                 elseif ($hasPending) $dayStatusClass = ' status-pending';
                 elseif ($hasDenied) $dayStatusClass = ' status-denied';
-                if ($dayStatusClass === ' status-approved') $chipLabel = 'Approved';
-                elseif ($dayStatusClass === ' status-pending') $chipLabel = 'Pending';
-                elseif ($dayStatusClass === ' status-denied') $chipLabel = 'Denied / Cancelled';
-                else $chipLabel = 'Mixed';
+                if ($dayStatusClass === ' status-approved') { $chipLabel = 'Approved'; $chipShort = 'OK'; }
+                elseif ($dayStatusClass === ' status-pending') { $chipLabel = 'Pending'; $chipShort = 'Pend'; }
+                elseif ($dayStatusClass === ' status-denied') { $chipLabel = 'Denied / Cancelled'; $chipShort = 'Done'; }
+                else { $chipLabel = 'Mixed'; $chipShort = 'Mix'; }
             }
             $cellHref = '';
             if (!empty($cellReservations)) {
@@ -411,10 +630,10 @@ $mineTabYearMax = (int)date('Y') + 5;
                 ]);
             }
         ?>
-            <div class="my-reservations-calendar-cell<?= $isToday ? ' today' : ''; ?><?= empty($cellHref) ? ' empty' : ''; ?><?= $dayStatusClass; ?>" onclick="if(this.dataset.href){ window.location.href=this.dataset.href; }" data-href="<?= htmlspecialchars($cellHref); ?>">
+            <div class="my-reservations-calendar-cell<?= $isToday ? ' today' : ''; ?><?= empty($cellHref) ? ' empty' : ''; ?><?= $dayStatusClass; ?>"<?= $cellHref !== '' ? ' data-frs-partial="mine-calendar" data-frs-partial-url="' . htmlspecialchars($cellHref, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
                 <div class="date-label"><?= $day; ?></div>
                 <?php if (!empty($cellReservations) && $chipLabel !== ''): ?>
-                    <div class="status-chip"><?= htmlspecialchars($chipLabel); ?></div>
+                    <div class="status-chip" title="<?= htmlspecialchars($chipLabel); ?>"<?= $chipShort !== '' ? ' data-chip-short="' . htmlspecialchars($chipShort, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?= htmlspecialchars($chipLabel); ?></div>
                 <?php endif; ?>
             </div>
         <?php endfor; ?>
@@ -437,8 +656,8 @@ $mineTabYearMax = (int)date('Y') + 5;
 
 <!-- Day Reservations Modal (opens when you click a date) -->
 <div id="dayReservationsModal" class="mine-day-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100000; align-items:center; justify-content:center; padding:1.25rem;">
-    <div style="background: var(--bg-primary, #ffffff); border-radius: 14px; width:100%; max-width: 900px; max-height: 90vh; overflow:auto; padding: 1.25rem;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border-color,#e5e7eb); padding-bottom:0.85rem; margin-bottom:1rem;">
+    <div class="mine-day-modal__sheet" style="background: var(--bg-primary, #ffffff); border-radius: 14px; width:100%; max-width: 900px; max-height: 90vh; overflow:auto; padding: 1.25rem;">
+        <div class="mine-day-modal__header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border-color,#e5e7eb); padding-bottom:0.85rem; margin-bottom:1rem;">
             <div>
                 <div style="font-weight:800; color: var(--text-primary,#0f172a); font-size:1.1rem;">
                     Reservations on <?= htmlspecialchars($selectedDateLabel ?: ''); ?>
@@ -485,15 +704,15 @@ $mineTabYearMax = (int)date('Y') + 5;
                             && !$slotStartedOrPassed
                             && (($reservation['facility_status'] ?? 'available') === 'available');
 
-                        // Resident can cancel own reservation only when: status pending/approved, and before start time
-                        $canCancel = $isOwnReservation && in_array($reservation['status'], ['pending_payment', 'pending', 'approved'], true) && !$slotHasPassed;
+                        // Resident can cancel own upcoming: pending-payment, pending, approved, or postponed
+                        $canCancel = $isOwnReservation && in_array($reservation['status'], ['pending_payment', 'pending', 'approved', 'postponed'], true) && !$slotHasPassed;
 
                         $canEditDetails = $isOwnReservation && in_array($reservation['status'], ['pending', 'approved', 'postponed'], true) && !$slotHasPassed;
                         $canPayNow = $isOwnReservation && (($reservation['status'] ?? '') === 'pending_payment');
                     ?>
                     <div class="my-reservations-res-card<?= $isPastDisplay ? ' is-past' : ''; ?>" style="border:1px solid var(--border-color,#e5e7eb); border-radius:12px; padding:1rem;">
-                        <div style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-                            <div style="min-width:220px;">
+                        <div class="my-reservations-res-card__top" style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+                            <div class="my-reservations-res-card__info">
                                 <div style="font-weight:800; color: var(--text-primary,#0f172a);"><?= htmlspecialchars($reservation['facility_name'] ?? 'Facility'); ?></div>
                                 <div style="color: var(--text-secondary,#6b7280); margin-top:0.15rem;">
                                     <?= htmlspecialchars($reservation['reservation_date']); ?> • <?= htmlspecialchars($reservation['time_slot']); ?>
@@ -504,7 +723,7 @@ $mineTabYearMax = (int)date('Y') + 5;
                                     </div>
                                 <?php endif; ?>
                             </div>
-                            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                            <div class="my-reservations-res-card__meta" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                                 <span class="<?= $isPastDisplay ? 'res-past-badge' : ''; ?>" style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.65rem; border-radius:999px; background:<?= $statusBg; ?>; color:<?= $statusColor; ?>; font-weight:800; font-size:0.85rem;">
                                     <?php if ($calendarScope === 'all' && !$isOwnReservation && !$canViewOtherReservationDetails): ?>
                                         Reserved
@@ -550,8 +769,8 @@ $mineTabYearMax = (int)date('Y') + 5;
                             </details>
                         <?php endif; ?>
 
-                        <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.85rem;">
-                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <div class="my-reservations-res-card__actions" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.85rem;">
+                            <div class="my-reservations-res-card__actions-row" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                                 <?php if ($canPayNow): ?>
                                     <a href="<?= base_path(); ?>/dashboard/pay-now?reservation_id=<?= (int)$reservation['id']; ?>"
                                         class="btn-primary"
@@ -653,11 +872,12 @@ $mineTabYearMax = (int)date('Y') + 5;
         <?php endif; ?>
     </div>
 </div>
+</div>
 
-<!-- Reservation Detail Modal -->
-<div id="reservationDetailModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 13000; padding: 2rem; position: fixed; inset: 0;">
-    <div class="modal-dialog" style="max-width: 1000px; z-index: 13001; max-height: 85vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); margin: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+<!-- Reservation Detail Modal (wide layout matches Confirm Booking; above day modal) -->
+<div id="reservationDetailModal" class="modal-confirm" style="display: none; opacity: 0; visibility: hidden; z-index: 100020; position: fixed; inset: 0;">
+    <div class="modal-dialog booking-confirm-dialog" style="z-index: 100021;">
+        <div class="booking-confirm-header">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <div style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--gov-blue), var(--gov-blue-dark)); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-info-circle" style="font-size: 1.5rem; color: white;"></i>
@@ -667,150 +887,107 @@ $mineTabYearMax = (int)date('Y') + 5;
                     <p style="margin: 0.25rem 0 0; color: #64748b; font-size: 0.875rem;">View your booking information</p>
                 </div>
             </div>
-            <button type="button" onclick="closeReservationDetailModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;">&times;</button>
+            <button type="button" onclick="closeReservationDetailModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; padding: 0.5rem; line-height: 1;" aria-label="Close">&times;</button>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-building" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Facility & Schedule</h4>
+        <div class="booking-confirm-grid">
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-building" style="color: var(--gov-blue);"></i>
+                    <span>Facility & Schedule</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Facility</span>
-                        <span id="detail-facility" style="color: #1e293b; font-weight: 600;"></span>
+                <div class="booking-confirm-fields">
+                    <div class="booking-confirm-field booking-confirm-field--full">
+                        <span class="booking-confirm-label">Facility</span>
+                        <span id="detail-facility" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Date</span>
-                        <span id="detail-date" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Date</span>
+                        <span id="detail-date" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Time</span>
-                        <span id="detail-time" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Duration</span>
+                        <span id="detail-duration" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Duration</span>
-                        <span id="detail-duration" style="color: #1e293b; font-weight: 600;"></span>
+                    <div class="booking-confirm-field booking-confirm-field--full">
+                        <span class="booking-confirm-label">Time</span>
+                        <span id="detail-time" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Status</span>
-                        <span id="detail-status" style="color: #1e293b; font-weight: 600;"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-file-text" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Event Details</h4>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Purpose</span>
-                        <span id="detail-purpose" style="color: #1e293b; font-weight: 600;"></span>
-                    </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Expected Attendees</span>
-                        <span id="detail-attendees" style="color: #1e293b;"></span>
-                    </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Notes</span>
-                        <span id="detail-notes" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field booking-confirm-field--full">
+                        <span class="booking-confirm-label">Status</span>
+                        <span id="detail-status" class="booking-confirm-value"></span>
                     </div>
                 </div>
             </div>
 
-            <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; border: 1px solid #e2e8f0;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-paperclip" style="font-size: 1.1rem; color: var(--gov-blue);"></i>
-                    <h4 style="margin: 0; color: var(--gov-blue-dark); font-size: 0.95rem; font-weight: 600;">Supporting Document</h4>
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-file-text" style="color: var(--gov-blue);"></i>
+                    <span>Event Details</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Document Type</span>
-                        <span id="detail-doc-type" style="color: #1e293b;"></span>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Purpose</span>
+                        <span id="detail-purpose" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: #64748b; font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">File</span>
-                        <span id="detail-doc-file" style="color: #1e293b;"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Attendees</span>
+                        <span id="detail-attendees" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Notes</span>
+                        <span id="detail-notes" class="booking-confirm-value"></span>
                     </div>
                 </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; padding: 1.25rem; color: white;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <i class="bi bi-currency-peso" style="font-size: 1.1rem;"></i>
-                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">Cost Breakdown</h4>
+            <div class="booking-confirm-card">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-paperclip" style="color: var(--gov-blue);"></i>
+                    <span>Supporting Document</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                    <div>
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Rate per Hour</span>
-                        <span id="detail-rate" style="font-weight: 600;"></span>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Type</span>
+                        <span id="detail-doc-type" class="booking-confirm-value"></span>
                     </div>
-                    <div>
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Hours</span>
-                        <span id="detail-hours"></span>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">File</span>
+                        <span id="detail-doc-file" class="booking-confirm-value"></span>
                     </div>
-                    <div style="margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.2);">
-                        <span style="color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-bottom: 0.25rem;">Total Cost</span>
-                        <span id="detail-total" style="font-weight: 700; font-size: 1.5rem;"></span>
+                </div>
+            </div>
+
+            <div class="booking-confirm-card booking-confirm-card--cost">
+                <div class="booking-confirm-card-title">
+                    <i class="bi bi-currency-peso"></i>
+                    <span>Cost Breakdown</span>
+                </div>
+                <div class="booking-confirm-fields booking-confirm-fields--single">
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Rate per Hour</span>
+                        <span id="detail-rate" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field">
+                        <span class="booking-confirm-label">Hours</span>
+                        <span id="detail-hours" class="booking-confirm-value"></span>
+                    </div>
+                    <div class="booking-confirm-field" style="margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid rgba(255,255,255,0.25);">
+                        <span class="booking-confirm-label">Total Cost</span>
+                        <span id="detail-total" class="booking-confirm-value booking-confirm-total"></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-            <button type="button" class="btn-outline" onclick="closeReservationDetailModal()" style="flex: 1; padding: 0.875rem 1rem;">Close</button>
+        <div class="booking-confirm-actions">
+            <button type="button" class="btn-outline" onclick="closeReservationDetailModal()">Close</button>
         </div>
     </div>
 </div>
 
 <script>
 (function(){
-    const modal = document.getElementById('dayReservationsModal');
-    const closeBtn = document.getElementById('closeDayReservationsModal');
-    if (!modal) return;
-
-    if (modal.parentNode !== document.body) {
-        document.body.appendChild(modal);
-    }
-
-    function isNestedMineModalOpen() {
-        return ['cancelReservationModal', 'editDetailsModal', 'rescheduleModal'].some(function(id) {
-            const el = document.getElementById(id);
-            return el && el.style.display === 'flex';
-        });
-    }
-
-    function openModal(){
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-    }
-    function closeModal(){
-        if (isNestedMineModalOpen()) return;
-        modal.style.display = 'none';
-        document.body.style.overflow = '';
-        const url = new URL(window.location.href);
-        url.searchParams.delete('selected_date');
-        url.searchParams.delete('open_day_modal');
-        window.history.replaceState({}, '', url);
-    }
-
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal && !isNestedMineModalOpen()) closeModal(); });
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape' || modal.style.display !== 'flex') return;
-        if (isNestedMineModalOpen()) return;
-        closeModal();
-    });
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('open_day_modal') === '1' && params.get('selected_date')) {
-        openModal();
-    }
-
-    // Reservation Detail Modal
     const detailModal = document.getElementById('reservationDetailModal');
     if (detailModal && detailModal.parentNode !== document.body) {
         document.body.appendChild(detailModal);
@@ -827,53 +1004,59 @@ $mineTabYearMax = (int)date('Y') + 5;
         document.body.style.overflow = '';
         document.body.style.removeProperty('overflow');
     }
+    window.closeReservationDetailModal = closeReservationDetailModal;
 
     function formatTime(time24) {
         const [hours, minutes] = time24.split(':');
-        const hour = parseInt(hours);
+        const hour = parseInt(hours, 10);
         const ampm = hour >= 12 ? 'PM' : 'AM';
         const hour12 = hour % 12 || 12;
         return `${hour12}:${minutes} ${ampm}`;
     }
 
+    function readMineCalJson(id) {
+        const el = document.getElementById(id);
+        if (!el || !el.textContent) return null;
+        try {
+            return JSON.parse(el.textContent);
+        } catch (e) {
+            return null;
+        }
+    }
+
     window.openReservationDetailModal = function(reservationId) {
-        // Find the reservation data from the calendar reservations
-        const reservationData = <?= json_encode($calendarReservations); ?>;
-        const reservation = reservationData.find(r => r.id === reservationId);
+        const reservationData = readMineCalJson('mine-cal-reservation-data') || [];
+        const reservation = reservationData.find(function (r) { return Number(r.id) === Number(reservationId); });
 
         if (!reservation) {
             alert('Reservation not found');
             return;
         }
 
-        // Calculate duration
         const timeParts = reservation.time_slot.split(' - ');
         if (timeParts.length !== 2) {
             alert('Invalid time slot format');
             return;
         }
 
-        const startTime = new Date(`2000-01-01T${timeParts[0]}`);
-        const endTime = new Date(`2000-01-01T${timeParts[1]}`);
+        const startTime = new Date('2000-01-01T' + timeParts[0]);
+        const endTime = new Date('2000-01-01T' + timeParts[1]);
         const durationMs = endTime - startTime;
         const durationHours = durationMs / (1000 * 60 * 60);
 
-        // Get facility rate from reservation data
         const ratePerHour = parseFloat(reservation.base_rate) || 0;
         const totalCost = ratePerHour * durationHours;
 
-        // Populate modal
         document.getElementById('detail-facility').textContent = reservation.facility_name;
         document.getElementById('detail-date').textContent = new Date(reservation.reservation_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        document.getElementById('detail-time').textContent = `${formatTime(timeParts[0])} - ${formatTime(timeParts[1])}`;
-        document.getElementById('detail-duration').textContent = `${durationHours.toFixed(1)} hour(s)`;
+        document.getElementById('detail-time').textContent = formatTime(timeParts[0]) + ' - ' + formatTime(timeParts[1]);
+        document.getElementById('detail-duration').textContent = durationHours.toFixed(1) + ' hour(s)';
         document.getElementById('detail-status').textContent = reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1);
         document.getElementById('detail-purpose').textContent = reservation.purpose;
         document.getElementById('detail-attendees').textContent = reservation.expected_attendees;
         document.getElementById('detail-notes').textContent = 'N/A';
 
-        // Get document info
-        const docs = <?= json_encode($mineReservationDocsById); ?>;
+        const docs = readMineCalJson('mine-cal-docs-data') || {};
         const reservationDocs = docs[reservationId] || [];
         if (reservationDocs.length > 0) {
             document.getElementById('detail-doc-type').textContent = reservationDocs[0].document_type || 'None';
@@ -883,18 +1066,32 @@ $mineTabYearMax = (int)date('Y') + 5;
             document.getElementById('detail-doc-file').textContent = 'None';
         }
 
-        document.getElementById('detail-rate').textContent = `₱${ratePerHour.toFixed(2)}`;
+        document.getElementById('detail-rate').textContent = '₱' + ratePerHour.toFixed(2);
         document.getElementById('detail-hours').textContent = durationHours.toFixed(1);
-        document.getElementById('detail-total').textContent = `₱${totalCost.toFixed(2)}`;
+        document.getElementById('detail-total').textContent = '₱' + totalCost.toFixed(2);
 
-        // Show modal
         const modal = document.getElementById('reservationDetailModal');
-        modal.style.display = 'flex';
-        modal.style.opacity = '1';
-        modal.style.visibility = 'visible';
-        modal.classList.add('open');
+        if (modal && modal.parentNode !== document.body) {
+            document.body.appendChild(modal);
+        }
+        if (modal) {
+            modal.style.zIndex = '100020';
+            modal.style.display = 'flex';
+            modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
+            modal.classList.add('open');
+        }
         document.body.style.overflow = 'hidden';
     };
+
+    document.addEventListener('frs:partial-loaded', function (e) {
+        if (e.detail && e.detail.id === 'mine-calendar') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('open_day_modal') === '1' && params.get('selected_date')) {
+                /* handled by frs-partial-update.js */
+            }
+        }
+    });
 })();
 </script>
 
@@ -909,7 +1106,9 @@ $mineTabYearMax = (int)date('Y') + 5;
         <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 6px; border-left: 4px solid #f59e0b;">
             <strong style="color: var(--text-primary);">⚠️ Cancellation policy</strong>
             <ul style="margin: 0.5rem 0 0 1.25rem; padding: 0; font-size: 0.9rem; color: var(--text-secondary);">
-                <li>You can only cancel <strong>upcoming</strong> reservations (pending or approved).</li>
+                <li>You can cancel <strong>upcoming</strong> reservations (pending, approved, or postponed).</li>
+                <li>If you already paid, a refund will be issued automatically when possible.</li>
+                <li>Free facility bookings do not involve payment or refund.</li>
                 <li>Once cancelled, the time slot becomes available for others.</li>
                 <li>Past or already-started reservations cannot be cancelled.</li>
             </ul>

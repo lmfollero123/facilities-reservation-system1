@@ -3,11 +3,27 @@ require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/ui_helpers.php';
 $pageTitle = $pageTitle ?? 'LGU Facilities Reservation';
 $bodyClass = $bodyClass ?? '';
+$authSplitLayout = $authSplitLayout ?? false;
 // VISUAL CHANGE ONLY - Add landing-page class for home page and public pages
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
 // Remove hash and query string for checking
 $requestPath = parse_url($requestUri, PHP_URL_PATH) ?? $requestUri;
 $phpSelf = $_SERVER['PHP_SELF'] ?? '';
+$pathForAuthCheck = rtrim((string)(parse_url($requestPath, PHP_URL_PATH) ?? $requestPath), '/') ?: '/';
+$pathTailSegment = basename($pathForAuthCheck);
+$phpSelfBase = basename($phpSelf);
+// Detect auth pages that hide navbar (login flow + register)
+$authSplitPathSegments = [
+    'login', 'register', 'login-otp', 'login-setup-2fa',
+    'verify-email', 'forgot-password', 'reset-password',
+];
+$authSplitPhpFiles = [
+    'login.php', 'register.php', 'login_otp.php', 'login_setup_2fa.php',
+    'verify_email.php', 'forgot_password.php', 'reset_password.php',
+];
+$isAuthSplitPage = $authSplitLayout
+    || in_array($pathTailSegment, $authSplitPathSegments, true)
+    || in_array($phpSelfBase, $authSplitPhpFiles, true);
 $isHomePage = strpos($phpSelf, 'home.php') !== false || $requestPath === '/' || (strpos($requestPath, '/home') !== false);
 $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/announcements') !== false ||
@@ -42,6 +58,9 @@ $isPublicPage = strpos($phpSelf, 'announcements.php') !== false ||
                 strpos($requestPath, '/reset-password') !== false;
 if ($isHomePage || $isPublicPage) {
     $bodyClass = ($bodyClass ? $bodyClass . ' ' : '') . 'landing-page';
+}
+if ($isAuthSplitPage) {
+    $bodyClass = ($bodyClass ? $bodyClass . ' ' : '') . 'auth-split-page';
 }
 ?>
 <!DOCTYPE html>
@@ -133,6 +152,12 @@ if ($isHomePage || $isPublicPage) {
         $publicCssVersion = file_exists($publicCssPath) ? filemtime($publicCssPath) : time();
     ?>
     <link rel="stylesheet" href="<?= $base; ?>/public/css/public-pages.css?v=<?= $publicCssVersion; ?>">
+    <?php endif; ?>
+    <?php if ($isAuthSplitPage):
+        $authCssPath = $appRoot . '/public/css/auth-pages.css';
+        $authCssVersion = file_exists($authCssPath) ? filemtime($authCssPath) : time();
+    ?>
+    <link rel="stylesheet" href="<?= $base; ?>/public/css/auth-pages.css?v=<?= $authCssVersion; ?>">
     <?php endif; ?>
     <link rel="icon" href="<?= $base; ?>/public/img/infragov-logo.png?v=<?= file_exists($appRoot . '/public/img/infragov-logo.png') ? filemtime($appRoot . '/public/img/infragov-logo.png') : time(); ?>" type="image/png">
     <?php if (!empty($useTailwind)): 

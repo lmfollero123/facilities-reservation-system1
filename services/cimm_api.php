@@ -209,13 +209,11 @@ function cimmIsActiveMaintenanceSchedule(array $schedule, ?int $now = null): boo
     }
 
     $inWindow = cimmScheduleWithinDateWindow($schedule, $now);
-    $endTs = strtotime((string)($schedule['scheduled_end'] ?? ''));
 
     if (in_array($status, ['in_progress', 'delayed', 'under_maintenance'], true)) {
-        if (!$endTs) {
-            return true;
-        }
-        return $inWindow || $now <= $endTs;
+        // Respect start–end day window only. Missing end date collapses to start day
+        // via cimmScheduleWithinDateWindow (not "active forever").
+        return $inWindow;
     }
 
     if ($status === 'scheduled' && $inWindow) {

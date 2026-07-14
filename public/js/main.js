@@ -778,7 +778,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function shouldExcludeLink(element) {
         // Exclude links with specific attributes or classes
         if (element.hasAttribute('data-no-transition')) return true;
+        if (element.hasAttribute('data-frs-partial')) return true;
+        if (element.hasAttribute('data-frs-partial-url')) return true;
         if (element.classList.contains('no-transition')) return true;
+        if (element.classList.contains('frs-partial-link')) return true;
         if (element.hasAttribute('download')) return true;
         if (element.target === '_blank') return true;
 
@@ -819,9 +822,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }, animationDuration);
     }
 
-    // Intercept internal link clicks (dashboard only — public pages use public-navigation.js)
+    // Intercept internal link clicks (guest/public pages — dashboard uses dashboard-navigation.js)
     document.addEventListener('click', function (event) {
+        if (event.defaultPrevented) return;
         if (document.body.classList.contains('landing-page')) {
+            return;
+        }
+        if (document.body.classList.contains('dashboard')) {
             return;
         }
 
@@ -868,9 +875,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
     });
 
-    // Show loading on page unload (dashboard only)
-    window.addEventListener('beforeunload', function () {
+    // Hard navigation helpers (dashboard uses soft nav — skip overlay there)
+    window.addEventListener('pagehide', function () {
+        if (navigationTimeout) {
+            clearTimeout(navigationTimeout);
+        }
         if (document.body.classList.contains('landing-page')) {
+            return;
+        }
+        if (document.body.classList.contains('dashboard')) {
             return;
         }
         showLoading();
@@ -887,13 +900,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (loadingOverlay && loadingOverlay.classList.contains('active')) {
                 hideLoading();
             }
-        }
-    });
-
-    // Cleanup on page unload
-    window.addEventListener('unload', function () {
-        if (navigationTimeout) {
-            clearTimeout(navigationTimeout);
         }
     });
 

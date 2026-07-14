@@ -64,6 +64,28 @@
         return 'forward';
     }
 
+    function isAuthSplitPath(path) {
+        const p = (path || '/').replace(/\/$/, '') || '/';
+        const authPaths = [
+            '/login', '/register', '/login-otp', '/login-setup-2fa',
+            '/verify-email', '/forgot-password', '/reset-password',
+        ];
+        return authPaths.some(function (ap) {
+            return p === ap || p.endsWith(ap);
+        });
+    }
+
+    function syncPageChrome(doc, toPath) {
+        let isAuthSplit = false;
+        if (doc && doc.body) {
+            isAuthSplit = doc.body.classList.contains('auth-split-page');
+        }
+        if (!isAuthSplit) {
+            isAuthSplit = isAuthSplitPath(toPath);
+        }
+        document.body.classList.toggle('auth-split-page', isAuthSplit);
+    }
+
     function isAuthUrl(url) {
         return AUTH_PATH_RE.test(toAppPath(url));
     }
@@ -502,6 +524,7 @@
             main.innerHTML = newMain.innerHTML;
             stripEntranceAnimations(main);
             clearSlideClasses(main);
+            syncPageChrome(doc, toPath);
 
             if (typeof window.frsInitHomeScrollAnimations === 'function') {
                 window.frsInitHomeScrollAnimations(main);
