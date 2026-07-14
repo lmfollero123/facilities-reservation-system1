@@ -1,5 +1,5 @@
 /**
- * Dashboard live occupancy — single-facility carousel + View All modal.
+ * Dashboard live occupancy — modern single-facility slideshow + View All modal.
  */
 (function () {
     'use strict';
@@ -18,16 +18,21 @@
             .replace(/"/g, '&quot;');
     }
 
+    function pillClassForState(state) {
+        if (AVAILABLE_KEYS.has(state)) return 'is-available';
+        if (BUSY_KEYS.has(state)) return state === 'booked' ? 'is-booked' : 'is-busy';
+        if (state === 'maintenance' || state === 'no_show_risk') return 'is-warn';
+        if (UNAVAILABLE_KEYS.has(state)) return 'is-muted';
+        return 'is-available';
+    }
+
     function statusBadgeHtml(fac) {
         const d = fac.aggregate_display || {};
         const state = fac.aggregate_state || 'available';
         const label = d.label || (BUSY_KEYS.has(state) ? 'Occupied' : UNAVAILABLE_KEYS.has(state) ? 'Unavailable' : 'Available');
-        const bg = d.bg || '#ecfdf5';
-        const color = d.color || '#047857';
+        const pillClass = pillClassForState(state);
         return (
-            '<span class="occ-dash-pill" style="background:' + escapeHtml(bg) +
-            ';color:' + escapeHtml(color) +
-            ';border:1px solid ' + escapeHtml(color) + '40;">' +
+            '<span class="occ-dash-pill ' + pillClass + '">' +
             escapeHtml(label) + '</span>'
         );
     }
@@ -48,20 +53,49 @@
         return reservations[0].time_slot || '';
     }
 
+    function nextReservationHint(fac) {
+        const reservations = fac.reservations_today || [];
+        const upcoming = reservations.find(function (r) {
+            return r.operational_state === 'upcoming' || r.operational_state === 'scheduled';
+        });
+        if (upcoming) {
+            return upcoming.time_slot || '';
+        }
+        const active = reservations.find(function (r) {
+            return r.operational_state === 'checked_in' || r.operational_state === 'no_show_risk';
+        });
+        if (active) {
+            return active.time_slot || '';
+        }
+        return reservations[0] ? (reservations[0].time_slot || '') : '';
+    }
+
     function renderHeroCard(fac) {
         const slot = activeSlotHint(fac);
+        const nextSlot = nextReservationHint(fac);
         const img = fac.image_url || '';
         const name = escapeHtml(fac.facility_name || 'Facility');
+        const bookingCount = (fac.reservations_today || []).length;
 
         return (
             '<article class="occ-dash-hero" data-facility-id="' + escapeHtml(String(fac.facility_id || '')) + '">' +
                 '<div class="occ-dash-hero__media">' +
                     '<img src="' + escapeHtml(img) + '" alt="" loading="lazy" class="occ-dash-hero__img">' +
+                    '<div class="occ-dash-hero__shade" aria-hidden="true"></div>' +
                 '</div>' +
                 '<div class="occ-dash-hero__content">' +
+                    '<p class="occ-dash-hero__eyebrow">Live facility status</p>' +
                     '<h3 class="occ-dash-hero__name">' + name + '</h3>' +
                     statusBadgeHtml(fac) +
-                    (slot ? '<p class="occ-dash-hero__slot">' + escapeHtml(slot) + '</p>' : '') +
+                    '<div class="occ-dash-hero__meta">' +
+                        (nextSlot
+                            ? '<span><strong>Next / current:</strong> ' + escapeHtml(nextSlot) + '</span>'
+                            : '<span><strong>Schedule:</strong> No reservations today</span>') +
+                        (slot && slot !== nextSlot
+                            ? '<span><strong>Detail:</strong> ' + escapeHtml(slot) + '</span>'
+                            : '') +
+                        '<span><strong>Today:</strong> ' + bookingCount + ' booking' + (bookingCount === 1 ? '' : 's') + '</span>' +
+                    '</div>' +
                 '</div>' +
             '</article>'
         );
@@ -110,11 +144,14 @@
         let currentIndex = 0;
         let modalFilter = 'all';
         let modalQuery = '';
+        let autoTimer = null;
+        const AUTO_MS = 5500;
 
         const carousel = root.querySelector('[data-occ-dash-carousel]');
         const foot = root.querySelector('[data-occ-dash-foot]');
         const emptyEl = root.querySelector('[data-occ-dash-empty]');
         const stage = root.querySelector('[data-occ-dash-stage]');
+        const stageWrap = root.querySelector('.occ-dash-stage-wrap');
         const counter = root.querySelector('[data-occ-dash-counter]');
         const dots = root.querySelector('[data-occ-dash-dots]');
         const prevBtn = root.querySelector('[data-occ-dash-prev]');
@@ -162,6 +199,21 @@
             }).join('');
         }
 
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+        }
+
+        function startAuto() {
+            stopAuto();
+            if (facilities.length <= 1) return;
+            autoTimer = setInterval(function () {
+                goTo(currentIndex + 1);
+            }, AUTO_MS);
+        }
+
         function renderCarousel() {
             updateSummary();
             const hasFacilities = facilities.length > 0;
@@ -172,6 +224,7 @@
 
             if (!hasFacilities) {
                 if (stage) stage.innerHTML = '';
+                stopAuto();
                 return;
             }
 
@@ -196,6 +249,7 @@
 
         function openModal() {
             if (!modal) return;
+            stopAuto();
             if (modal.parentNode !== document.body) document.body.appendChild(modal);
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
@@ -209,6 +263,7 @@
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+            startAuto();
         }
 
         function goTo(index) {
@@ -253,16 +308,30 @@
         }
 
         if (prevBtn) {
-            prevBtn.addEventListener('click', function () { goTo(currentIndex - 1); });
+            prevBtn.addEventListener('click', function () {
+                goTo(currentIndex - 1);
+                startAuto();
+            });
         }
         if (nextBtn) {
-            nextBtn.addEventListener('click', function () { goTo(currentIndex + 1); });
+            nextBtn.addEventListener('click', function () {
+                goTo(currentIndex + 1);
+                startAuto();
+            });
         }
         if (dots) {
             dots.addEventListener('click', function (e) {
                 const btn = e.target.closest('[data-occ-dash-dot]');
                 if (!btn) return;
                 goTo(parseInt(btn.getAttribute('data-occ-dash-dot'), 10));
+                startAuto();
+            });
+        }
+
+        if (stageWrap) {
+            stageWrap.addEventListener('mouseenter', stopAuto);
+            stageWrap.addEventListener('mouseleave', function () {
+                if (!modal || !modal.classList.contains('is-open')) startAuto();
             });
         }
 
@@ -298,6 +367,7 @@
         });
 
         renderCarousel();
+        startAuto();
         if (liveUrl) {
             setInterval(refresh, REFRESH_MS);
         }

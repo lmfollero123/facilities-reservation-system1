@@ -262,11 +262,7 @@ ob_start();
             <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
             <h2>Reserving Spaces,<br>Serving Community.</h2>
             <p>Join the Barangay Culiat Public Facilities Reservation System. Book courts, halls, and community spaces — made for Culiat residents.</p>
-            <div class="auth-split-dots" aria-hidden="true">
-                <span></span>
-                <span class="is-active"></span>
-                <span></span>
-            </div>
+            <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
             <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
         </div>
     </aside>

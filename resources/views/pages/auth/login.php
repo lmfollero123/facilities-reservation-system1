@@ -239,11 +239,7 @@ ob_start();
             <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
             <h2>Magandang Buhay! 👋</h2>
             <p>Book public facilities online — reserve covered courts, halls, and community spaces without the long lines. Fast, simple, and made for our residents.</p>
-            <div class="auth-split-dots" aria-hidden="true">
-                <span class="is-active"></span>
-                <span></span>
-                <span></span>
-            </div>
+            <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
             <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
         </div>
     </aside>

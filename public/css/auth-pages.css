@@ -25,8 +25,8 @@
 /* ── Brand panel (left) ── */
 .auth-split-brand {
     position: relative;
-    flex: 0 0 44%;
-    max-width: 520px;
+    flex: 0 0 50%;
+    max-width: 600px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -161,6 +161,128 @@
 
 .auth-split-dots span.is-active {
     width: 24px;
+    background: #fff;
+}
+
+/* Facility slideshow (auth brand panel) */
+.auth-fac-slide {
+    position: relative;
+    z-index: 1;
+    margin-top: auto;
+    padding-top: 1.5rem;
+}
+
+.auth-fac-slide__label {
+    margin: 0 0 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.auth-fac-slide__frame {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    background: rgba(0, 0, 0, 0.2);
+    aspect-ratio: 16 / 10;
+}
+
+.auth-fac-slide__item {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+}
+
+.auth-fac-slide__item.is-active {
+    opacity: 1;
+    position: relative;
+}
+
+.auth-fac-slide__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    min-height: 160px;
+}
+
+.auth-fac-slide__item figcaption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1.6rem 0.85rem 0.75rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.auth-fac-slide__item figcaption strong {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.auth-fac-slide__item figcaption span {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.auth-fac-slide__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: background 0.2s ease;
+}
+
+.auth-fac-slide__nav:hover {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.auth-fac-slide__nav--prev { left: 0.5rem; }
+.auth-fac-slide__nav--next { right: 0.5rem; }
+
+.auth-fac-slide__dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-top: 0.65rem;
+}
+
+.auth-fac-slide__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    border: 0;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: width 0.2s ease, background 0.2s ease;
+}
+
+.auth-fac-slide__dot.is-active {
+    width: 20px;
     background: #fff;
 }
 
@@ -542,6 +664,16 @@
 
     .auth-split-brand-footer {
         display: none;
+    }
+
+    .auth-fac-slide {
+        margin-top: 1.25rem;
+        padding-top: 0;
+    }
+
+    .auth-fac-slide__frame {
+        aspect-ratio: 16 / 9;
+        max-height: 180px;
     }
 
     .auth-split-decor::before {

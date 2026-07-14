@@ -27,7 +27,7 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
 >
     <div class="occ-dash-strip__header">
         <div>
-            <h2 class="occ-dash-strip__title">Live Occupancy</h2>
+            <h2 class="occ-dash-strip__title">Live Facility Status</h2>
             <p class="occ-dash-strip__subtitle" data-occ-dash-summary>
                 <span data-occ-dash-busy><?= (int)($sum['occupied'] ?? 0); ?></span> of
                 <span data-occ-dash-total><?= (int)($sum['total_facilities'] ?? 0); ?></span> facilities busy right now
@@ -43,18 +43,20 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
     </div>
 
     <div class="occ-dash-carousel" data-occ-dash-carousel hidden>
-        <button type="button" class="occ-dash-nav occ-dash-nav--prev" data-occ-dash-prev aria-label="Previous facility">
-            <span aria-hidden="true">&lsaquo;</span>
-        </button>
-        <div class="occ-dash-stage" data-occ-dash-stage aria-live="polite"></div>
-        <button type="button" class="occ-dash-nav occ-dash-nav--next" data-occ-dash-next aria-label="Next facility">
-            <span aria-hidden="true">&rsaquo;</span>
-        </button>
+        <div class="occ-dash-stage-wrap">
+            <button type="button" class="occ-dash-nav occ-dash-nav--prev" data-occ-dash-prev aria-label="Previous facility">
+                <span aria-hidden="true">‹</span>
+            </button>
+            <div class="occ-dash-stage" data-occ-dash-stage aria-live="polite"></div>
+            <button type="button" class="occ-dash-nav occ-dash-nav--next" data-occ-dash-next aria-label="Next facility">
+                <span aria-hidden="true">›</span>
+            </button>
+            <div class="occ-dash-dots occ-dash-dots--overlay" data-occ-dash-dots role="tablist" aria-label="Choose facility"></div>
+        </div>
     </div>
 
     <div class="occ-dash-carousel-foot" data-occ-dash-foot hidden>
         <span class="occ-dash-counter" data-occ-dash-counter></span>
-        <div class="occ-dash-dots" data-occ-dash-dots role="tablist" aria-label="Choose facility"></div>
     </div>
 
     <p class="occ-dash-empty" data-occ-dash-empty <?= empty($occDashSnapshot['facilities']) ? '' : 'hidden'; ?>>No facilities to show yet.</p>
@@ -126,152 +128,207 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
     text-decoration: none;
 }
 .occ-dash-strip__staff-link:hover {
-    color: #2563eb;
+    color: #047857;
     text-decoration: underline;
 }
 .occ-dash-strip__asof {
     color: #94a3b8;
     font-size: 0.78rem;
 }
+
+/* Modern full-bleed slideshow */
 .occ-dash-carousel {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 0.65rem;
-    align-items: stretch;
+    position: relative;
+}
+.occ-dash-stage-wrap {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+    background: #0f172a;
+}
+.occ-dash-stage {
+    min-width: 0;
 }
 .occ-dash-nav {
-    align-self: center;
-    width: 36px;
-    height: 36px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    width: 42px;
+    height: 42px;
     border-radius: 999px;
-    border: 1px solid #e2e8f0;
-    background: #fff;
-    color: #334155;
-    font-size: 1.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(15, 23, 42, 0.42);
+    color: #fff;
+    font-size: 1.55rem;
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s, border-color 0.15s;
-    flex-shrink: 0;
+    backdrop-filter: blur(6px);
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 .occ-dash-nav:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: rgba(5, 150, 105, 0.85);
+    border-color: rgba(255, 255, 255, 0.45);
 }
 .occ-dash-nav:disabled {
     opacity: 0.35;
     cursor: not-allowed;
 }
-.occ-dash-stage {
-    min-width: 0;
-}
+.occ-dash-nav--prev { left: 0.85rem; }
+.occ-dash-nav--next { right: 0.85rem; }
+
 .occ-dash-hero {
-    display: grid;
-    grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
-    gap: 1rem;
-    align-items: center;
+    position: relative;
+    display: block;
     width: 100%;
-    min-height: 132px;
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
+    min-height: 280px;
+    height: clamp(260px, 36vw, 380px);
     overflow: hidden;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 .occ-dash-hero__media {
-    height: 100%;
-    min-height: 132px;
-    background: #f1f5f9;
+    position: absolute;
+    inset: 0;
 }
 .occ-dash-hero__img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+    transform: scale(1.02);
+}
+.occ-dash-hero__shade {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(6, 95, 70, 0.82) 0%, rgba(6, 95, 70, 0.45) 42%, rgba(15, 23, 42, 0.18) 100%),
+        linear-gradient(180deg, transparent 40%, rgba(15, 23, 42, 0.55) 100%);
+    pointer-events: none;
 }
 .occ-dash-hero__content {
-    padding: 0.85rem 1rem 0.85rem 0;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    padding: 1.35rem 4.25rem 2.4rem 1.5rem;
+    color: #fff;
     min-width: 0;
 }
-.occ-dash-hero__name {
+.occ-dash-hero__eyebrow {
     margin: 0 0 0.45rem;
-    font-size: 1.05rem;
+    font-size: 0.72rem;
     font-weight: 700;
-    color: #0f172a;
-    line-height: 1.3;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
 }
-.occ-dash-hero__slot {
-    margin: 0.45rem 0 0;
-    font-size: 0.84rem;
-    color: #64748b;
+.occ-dash-hero__name {
+    margin: 0 0 0.65rem;
+    font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+    max-width: 28rem;
+}
+.occ-dash-hero__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 1.25rem;
+    margin-top: 0.75rem;
+    font-size: 0.86rem;
+    color: rgba(255, 255, 255, 0.88);
+}
+.occ-dash-hero__meta strong {
+    color: #fff;
+    font-weight: 600;
 }
 .occ-dash-carousel-foot {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.75rem;
-    margin-top: 0.65rem;
+    margin-top: 0.55rem;
 }
 .occ-dash-counter {
     font-size: 0.78rem;
     color: #94a3b8;
     white-space: nowrap;
 }
-.occ-dash-dots {
+.occ-dash-dots--overlay {
+    position: absolute;
+    left: 50%;
+    bottom: 0.85rem;
+    transform: translateX(-50%);
+    z-index: 3;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    justify-content: flex-end;
+    gap: 0.4rem;
+    justify-content: center;
+    max-width: calc(100% - 6rem);
 }
 .occ-dash-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 999px;
     border: 0;
     padding: 0;
-    background: #cbd5e1;
+    background: rgba(255, 255, 255, 0.4);
     cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
+    transition: transform 0.15s, background 0.15s, width 0.15s;
 }
 .occ-dash-dot.is-active {
-    background: #2563eb;
-    transform: scale(1.15);
+    width: 22px;
+    background: #34d399;
 }
 .occ-dash-pill {
-    display: inline-block;
-    padding: 0.2rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.7rem;
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     border: 1px solid transparent;
+    backdrop-filter: blur(8px);
+}
+.occ-dash-pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
 }
 .occ-dash-pill.is-available {
-    background: #ecfdf5;
-    color: #047857;
-    border-color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.92);
+    color: #022c22;
+    border-color: rgba(167, 243, 208, 0.5);
 }
 .occ-dash-pill.is-busy {
-    background: #fff7ed;
-    color: #c2410c;
-    border-color: #fdba74;
+    background: rgba(249, 115, 22, 0.92);
+    color: #431407;
+    border-color: rgba(253, 186, 116, 0.5);
 }
 .occ-dash-pill.is-booked {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border-color: #bfdbfe;
+    background: rgba(37, 99, 235, 0.9);
+    color: #eff6ff;
+    border-color: rgba(147, 197, 253, 0.45);
 }
 .occ-dash-pill.is-warn {
-    background: #fef3c7;
-    color: #92400e;
-    border-color: #fde68a;
+    background: rgba(245, 158, 11, 0.92);
+    color: #451a03;
+    border-color: rgba(253, 230, 138, 0.5);
 }
 .occ-dash-pill.is-muted {
-    background: #f8fafc;
-    color: #64748b;
-    border-color: #e2e8f0;
+    background: rgba(100, 116, 139, 0.85);
+    color: #f8fafc;
+    border-color: rgba(226, 232, 240, 0.35);
 }
 .occ-dash-empty {
     margin: 0;
@@ -370,9 +427,9 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
     cursor: pointer;
 }
 .occ-dash-filter.is-active {
-    background: #eff6ff;
-    border-color: #93c5fd;
-    color: #1d4ed8;
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+    color: #047857;
 }
 .occ-dash-modal__list {
     overflow: auto;
@@ -433,7 +490,7 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
 }
 .occ-dash-modal__board-link {
     font-size: 0.84rem;
-    color: #2563eb;
+    color: #047857;
     text-decoration: none;
     font-weight: 600;
 }
@@ -452,34 +509,22 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
         align-items: flex-start;
         width: 100%;
     }
-    .occ-dash-carousel {
-        grid-template-columns: 2rem minmax(0, 1fr) 2rem;
-        gap: 0.35rem;
-        max-width: 100%;
-    }
-    .occ-dash-nav {
-        width: 2rem;
-        height: 2rem;
-        font-size: 1.1rem;
-    }
     .occ-dash-hero {
-        grid-template-columns: 1fr;
-        min-height: 0;
-        max-width: 100%;
-    }
-    .occ-dash-hero__media {
-        min-height: 120px;
-        max-height: 140px;
+        min-height: 220px;
+        height: 240px;
     }
     .occ-dash-hero__content {
-        padding: 0 0.85rem 0.85rem;
+        padding: 1rem 3.25rem 2.2rem 1rem;
     }
+    .occ-dash-nav {
+        width: 34px;
+        height: 34px;
+        font-size: 1.25rem;
+    }
+    .occ-dash-nav--prev { left: 0.5rem; }
+    .occ-dash-nav--next { right: 0.5rem; }
     .occ-dash-carousel-foot {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .occ-dash-dots {
-        justify-content: flex-start;
+        justify-content: center;
     }
 }
 </style>
