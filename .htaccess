@@ -8,6 +8,11 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Pass Authorization to PHP (Apache often strips it for CGI/FPM).
+    # Required for mobile JWT Bearer tokens on /api/mobile/v1/*.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
     # Dotenv and env backups — highest priority
     RewriteRule (^|/)\.env(\.|$) - [F,L]
     RewriteRule (^|/)env\.(local|production|backup|example)$ - [F,L,NC]
@@ -37,6 +42,10 @@
 DirectoryIndex index.php index.html
 
 # Security Headers
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
 <IfModule mod_headers.c>
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-XSS-Protection "1; mode=block"
@@ -46,6 +55,12 @@ DirectoryIndex index.php index.html
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
     Header unset Server
     Header unset X-Powered-By
+</IfModule>
+
+# Relax CSP on JSON API routes (mobile companion + other APIs).
+<IfModule mod_headers.c>
+    SetEnvIf Request_URI "^/api/" FRS_API_ROUTE=1
+    Header always unset Content-Security-Policy env=FRS_API_ROUTE
 </IfModule>
 
 # Explicit deny for .env (Apache 2.4)

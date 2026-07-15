@@ -144,28 +144,34 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 </div>
 
 <!-- Global AI Assistant (floating, dashboard-only) -->
-<button
-    type="button"
-    class="chatbot-fab"
-    id="chatbotWidgetFab"
-    aria-label="Open AI Assistant"
-    title="Ask the AI Assistant"
->
-    <span class="chatbot-fab-icon">🤖</span>
-</button>
+<div class="chatbot-fab-wrap" id="chatbotFabWrap">
+    <div class="chatbot-tip-bubble" id="chatbotTipBubble" role="status" aria-live="polite" hidden>
+        <span class="chatbot-tip-text" id="chatbotTipText"></span>
+        <button type="button" class="chatbot-tip-dismiss" id="chatbotTipDismiss" aria-label="Dismiss tip">&times;</button>
+        <span class="chatbot-tip-arrow" aria-hidden="true"></span>
+    </div>
+    <span class="chatbot-fab-hand" id="chatbotFabHand" aria-hidden="true">👋</span>
+    <button
+        type="button"
+        class="chatbot-fab"
+        id="chatbotWidgetFab"
+        aria-label="Open AI Assistant"
+        title="Ask the AI Assistant"
+    >
+        <span class="chatbot-fab-icon" aria-hidden="true">💬</span>
+    </button>
+</div>
 
 <div class="chatbot-panel" id="chatbotWidgetPanel" aria-hidden="true" data-user-id="<?= htmlspecialchars((string)($_SESSION['user_id'] ?? 'guest')); ?>">
     <div class="chatbot-panel-inner">
         <header class="chatbot-panel-header">
-            <div class="chatbot-header-main">
-                <div class="chatbot-avatar">
-                    🤖
-                </div>
+            <a href="<?= htmlspecialchars(base_path()); ?>/dashboard/ai-chatbot" class="chatbot-header-main chatbot-header-link" id="chatbotHeaderOpenFull" title="Open full-screen assistant">
+                <div class="chatbot-avatar" aria-hidden="true">💬</div>
                 <div class="chatbot-header-text">
-                    <h3>LGU AI Assistant</h3>
-                    <p>Hi <?= htmlspecialchars($userName); ?>, how can I help you today?</p>
+                    <h3>Culiat Assistant</h3>
+                    <p class="chatbot-online"><span class="chatbot-online-dot"></span> Online now</p>
                 </div>
-            </div>
+            </a>
             <button type="button" class="chatbot-close-btn" id="chatbotWidgetCloseBtn" aria-label="Close AI Assistant">
                 ✕
             </button>
@@ -173,20 +179,12 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 
         <div class="chatbot-messages" id="chatbotWidgetMessages">
             <div class="message bot-message">
-                <div class="message-avatar">🤖</div>
+                <div class="message-avatar">💬</div>
                 <div class="message-body">
+                    <div class="message-sender">Culiat Assistant</div>
                     <div class="message-content">
-                        <p>Hello <?= htmlspecialchars($userName); ?>! I'm your AI assistant. I can help you with:</p>
-                        <ul>
-                            <li>Finding available facilities</li>
-                            <li>Understanding booking policies</li>
-                            <li>Checking reservation status</li>
-                            <li>Answering FAQs</li>
-                            <li>Guiding you through the booking process</li>
-                        </ul>
-                        <p class="message-note">
-                            <strong>Tip:</strong> You can ask me to book a facility—e.g. &quot;Book the Convention Hall for Jan 25, 2pm to 4pm for a birthday party&quot;—and I&apos;ll prefill the form for you!
-                        </p>
+                        <p>Hi <?= htmlspecialchars($userName); ?>! I can help you find facilities, check policies, view reservations, or start a booking.</p>
+                        <p class="message-note">Try: &quot;Book the Convention Hall tomorrow from 2pm to 4pm for a meeting.&quot;</p>
                     </div>
                     <small class="message-meta">Just now</small>
                 </div>
@@ -195,31 +193,24 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 
         <footer class="chatbot-input-area">
             <form id="chatbotWidgetForm" autocomplete="off">
-                <div class="chatbot-input-wrapper">
+                <div class="chatbot-composer">
                     <textarea
                         id="chatbotWidgetInput"
-                        placeholder="Type your message here..."
+                        placeholder="Reply to Culiat Assistant…"
                         rows="1"
                     ></textarea>
                     <button type="button" class="chatbot-voice-btn" id="chatbotWidgetVoiceBtn" aria-label="Voice input" title="Speak your message">🎤</button>
+                    <button type="submit" class="chatbot-send-btn" id="chatbotWidgetSendBtn" aria-label="Send">
+                        <span>Send</span>
+                    </button>
                 </div>
-                <button type="submit" class="btn-primary chatbot-send-btn" id="chatbotWidgetSendBtn">
-                    <span>Send</span>
-                </button>
+                <p class="chatbot-voice-status" id="chatbotVoiceStatus" hidden></p>
             </form>
             <div class="chatbot-quick-actions">
-                <button type="button" class="chatbot-quick-btn" data-action="available-facilities">
-                    📋 Available Facilities
-                </button>
-                <button type="button" class="chatbot-quick-btn" data-action="booking-policy">
-                    📖 Booking Policy
-                </button>
-                <button type="button" class="chatbot-quick-btn" data-action="my-reservations">
-                    📅 My Reservations
-                </button>
-                <button type="button" class="chatbot-quick-btn" data-action="help">
-                    ❓ Help
-                </button>
+                <button type="button" class="chatbot-quick-btn" data-action="available-facilities">Available Facilities</button>
+                <button type="button" class="chatbot-quick-btn" data-action="booking-policy">Booking Policy</button>
+                <button type="button" class="chatbot-quick-btn" data-action="my-reservations">My Reservations</button>
+                <button type="button" class="chatbot-quick-btn" data-action="help">Help</button>
             </div>
         </footer>
     </div>
@@ -459,12 +450,28 @@ $chartFiltersJsVer = is_file($chartFiltersJsPath) ? (string)filemtime($chartFilt
 // AI Assistant (floating chatbot) - dashboard-only, with localStorage persistence
 document.addEventListener('DOMContentLoaded', function () {
     const fab = document.getElementById('chatbotWidgetFab');
+    const fabWrap = document.getElementById('chatbotFabWrap');
     const panel = document.getElementById('chatbotWidgetPanel');
     const closeBtn = document.getElementById('chatbotWidgetCloseBtn');
     const form = document.getElementById('chatbotWidgetForm');
     const input = document.getElementById('chatbotWidgetInput');
     const messagesContainer = document.getElementById('chatbotWidgetMessages');
     const sendBtn = document.getElementById('chatbotWidgetSendBtn');
+    const isFullChatPage = /\/dashboard\/ai-chatbot\/?$/.test(window.location.pathname)
+        || window.location.pathname.indexOf('/dashboard/ai-chatbot') !== -1;
+
+    // Dedicated full-screen chat page has its own UI — hide floating widget
+    if (isFullChatPage) {
+        document.body.classList.add('ai-chatbot-page');
+        if (fabWrap) fabWrap.hidden = true;
+        if (panel) {
+            panel.hidden = true;
+            panel.classList.remove('open');
+            panel.setAttribute('aria-hidden', 'true');
+        }
+        try { localStorage.setItem('chatbot_panel_open_' + (panel?.getAttribute('data-user-id') || 'guest'), '0'); } catch (e) {}
+        return;
+    }
 
     if (!fab || !panel || !form || !input || !messagesContainer || !sendBtn) {
         return;
@@ -511,7 +518,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (type === 'user') {
             wrapper.innerHTML = '<div class="message-body user-body"><div class="message-content"><p>' + escapeHtml(text) + '</p></div><small class="message-meta">' + timeStr + '</small></div>';
         } else {
-            wrapper.innerHTML = '<div class="message-avatar">🤖</div><div class="message-body"><div class="message-content"><p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + timeStr + '</small></div>';
+            wrapper.innerHTML = '<div class="message-avatar">💬</div><div class="message-body"><div class="message-sender">Culiat Assistant</div><div class="message-content"><p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + timeStr + '</small></div>';
         }
         messagesContainer.appendChild(wrapper);
         if (!skipSave) {
@@ -534,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (m.type === 'user') {
                     w.innerHTML = '<div class="message-body user-body"><div class="message-content"><p>' + escapeHtml(m.text) + '</p></div><small class="message-meta">' + (m.time || '') + '</small></div>';
                 } else {
-                    w.innerHTML = '<div class="message-avatar">🤖</div><div class="message-body"><div class="message-content"><p>' + escapeHtml(m.text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + (m.time || '') + '</small></div>';
+                    w.innerHTML = '<div class="message-avatar">💬</div><div class="message-body"><div class="message-sender">Culiat Assistant</div><div class="message-content"><p>' + escapeHtml(m.text).replace(/\n/g, '<br>') + '</p></div><small class="message-meta">' + (m.time || '') + '</small></div>';
                 }
                 messagesContainer.appendChild(w);
             });
@@ -552,6 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
     })();
 
     function openChat() {
+        if (typeof window.hideChatTip === 'function') window.hideChatTip();
         panel.classList.add('open');
         panel.setAttribute('aria-hidden', 'false');
         try { localStorage.setItem(PANEL_OPEN_KEY, '1'); } catch (e) {}
@@ -567,7 +575,85 @@ document.addEventListener('DOMContentLoaded', function () {
         try { localStorage.setItem(PANEL_OPEN_KEY, '0'); } catch (e) {}
     }
 
+    // Periodic wave + tip/quote bubble (every 20s when closed)
+    (function initChatbotNudge() {
+        const tipBubble = document.getElementById('chatbotTipBubble');
+        const tipText = document.getElementById('chatbotTipText');
+        const tipDismiss = document.getElementById('chatbotTipDismiss');
+        if (!tipBubble || !tipText) return;
+
+        const tips = [
+            'Magandang araw! Need help booking a facility? Tap me anytime.',
+            'Tip: Book early for Culiat Covered Court — weekends fill up fast.',
+            'Quote: “Simple systems serve the community best.” Ask me about policies.',
+            'Tip: You can say “Book Convention Hall tomorrow 2–4pm” and I’ll prefill the form.',
+            'Need your reservations? Ask “Show my reservations.”',
+            'Tip: Blackout dates block bookings — check the calendar before you pick a date.',
+            'Quote: “Ready today, reserved tomorrow.” I’m here if you get stuck.',
+            'Tip: Enable notifications in Profile so you don’t miss approval updates.',
+            'Walk-in desk? Staff can book for residents with assisted booking.',
+            'Tip: Upload a Valid ID in your profile for smoother auto-approval.',
+        ];
+        let tipIndex = 0;
+        let tipHideTimer = null;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        window.hideChatTip = function hideChatTip() {
+            tipBubble.classList.remove('is-visible');
+            tipBubble.hidden = true;
+            if (tipHideTimer) {
+                clearTimeout(tipHideTimer);
+                tipHideTimer = null;
+            }
+        };
+
+        function showTip() {
+            if (panel.classList.contains('open')) return;
+            if (document.hidden) return;
+            tipText.textContent = tips[tipIndex % tips.length];
+            tipIndex += 1;
+            tipBubble.hidden = false;
+            // Force reflow so transition runs
+            void tipBubble.offsetWidth;
+            tipBubble.classList.add('is-visible');
+            if (tipHideTimer) clearTimeout(tipHideTimer);
+            tipHideTimer = setTimeout(hideChatTip, 6500);
+        }
+
+        function waveAndTip() {
+            if (panel.classList.contains('open') || document.hidden) return;
+            if (!reduceMotion) {
+                const waveTarget = fabWrap || fab;
+                waveTarget.classList.remove('is-waving');
+                fab.classList.remove('is-waving');
+                void waveTarget.offsetWidth;
+                waveTarget.classList.add('is-waving');
+                fab.classList.add('is-waving');
+                setTimeout(function () {
+                    waveTarget.classList.remove('is-waving');
+                    fab.classList.remove('is-waving');
+                }, 1400);
+            }
+            showTip();
+        }
+
+        tipDismiss?.addEventListener('click', function (e) {
+            e.stopPropagation();
+            hideChatTip();
+        });
+        tipBubble.addEventListener('click', function (e) {
+            if (e.target === tipDismiss) return;
+            hideChatTip();
+            openChat();
+        });
+
+        // First gentle nudge after a short delay, then every 20s
+        setTimeout(waveAndTip, 8000);
+        setInterval(waveAndTip, 20000);
+    })();
+
     fab.addEventListener('click', function () {
+        if (typeof window.hideChatTip === 'function') window.hideChatTip();
         if (panel.classList.contains('open')) {
             closeChat();
         } else {
@@ -578,6 +664,14 @@ document.addEventListener('DOMContentLoaded', function () {
     closeBtn.addEventListener('click', function () {
         closeChat();
     });
+
+    // Header name/brand opens dedicated full-screen page (do not toggle panel)
+    const headerFullLink = document.getElementById('chatbotHeaderOpenFull');
+    if (headerFullLink) {
+        headerFullLink.addEventListener('click', function () {
+            try { localStorage.setItem(PANEL_OPEN_KEY, '0'); } catch (e) {}
+        });
+    }
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && panel.classList.contains('open')) {
@@ -725,33 +819,102 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const voiceBtn = document.getElementById('chatbotWidgetVoiceBtn');
-    if (voiceBtn && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'en-PH';
+    const voiceStatus = document.getElementById('chatbotVoiceStatus');
+    function setVoiceStatus(text, isError) {
+        if (!voiceStatus) return;
+        if (!text) {
+            voiceStatus.hidden = true;
+            voiceStatus.textContent = '';
+            voiceStatus.classList.remove('is-error');
+            return;
+        }
+        voiceStatus.hidden = false;
+        voiceStatus.textContent = text;
+        voiceStatus.classList.toggle('is-error', !!isError);
+    }
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const voiceSecure = window.isSecureContext || location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+    if (voiceBtn && SpeechRecognitionCtor && voiceSecure) {
+        const recognition = new SpeechRecognitionCtor();
+        recognition.lang = 'en-US';
         recognition.interimResults = false;
+        recognition.continuous = false;
         recognition.maxAlternatives = 1;
-        voiceBtn.addEventListener('click', function () {
+        let isListening = false;
+
+        voiceBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isListening) {
+                try { recognition.stop(); } catch (err) {}
+                return;
+            }
+            setVoiceStatus('');
             try {
-                voiceBtn.disabled = true;
                 recognition.start();
             } catch (err) {
-                voiceBtn.disabled = false;
+                // Already started — try stop then restart
+                try {
+                    recognition.stop();
+                    setTimeout(function () {
+                        try { recognition.start(); } catch (err2) {
+                            setVoiceStatus('Could not start voice input. Try again.', true);
+                        }
+                    }, 200);
+                } catch (err2) {
+                    setVoiceStatus('Could not start voice input. Try again.', true);
+                }
             }
         });
+        recognition.addEventListener('start', function () {
+            isListening = true;
+            voiceBtn.classList.add('is-listening');
+            voiceBtn.setAttribute('aria-pressed', 'true');
+            setVoiceStatus('Listening… speak now');
+        });
         recognition.addEventListener('result', function (event) {
-            const transcript = event.results[0][0].transcript;
-            input.value = (input.value ? input.value + ' ' : '') + transcript.trim();
-            input.focus();
+            const transcript = (event.results[0] && event.results[0][0] && event.results[0][0].transcript) || '';
+            if (transcript.trim()) {
+                input.value = (input.value ? input.value + ' ' : '') + transcript.trim();
+                input.dispatchEvent(new Event('input'));
+                input.focus();
+            }
         });
         recognition.addEventListener('end', function () {
-            voiceBtn.disabled = false;
+            isListening = false;
+            voiceBtn.classList.remove('is-listening');
+            voiceBtn.setAttribute('aria-pressed', 'false');
+            setVoiceStatus('');
         });
-        recognition.addEventListener('error', function () {
-            voiceBtn.disabled = false;
+        recognition.addEventListener('error', function (event) {
+            isListening = false;
+            voiceBtn.classList.remove('is-listening');
+            voiceBtn.setAttribute('aria-pressed', 'false');
+            const code = (event && event.error) || '';
+            if (code === 'aborted' || code === 'no-speech') {
+                setVoiceStatus(code === 'no-speech' ? 'No speech detected. Tap the mic and try again.' : '');
+                return;
+            }
+            if (code === 'not-allowed' || code === 'service-not-allowed') {
+                setVoiceStatus('Microphone permission blocked. Allow mic access in your browser.', true);
+                return;
+            }
+            if (code === 'network') {
+                setVoiceStatus('Voice service network error. Check your connection.', true);
+                return;
+            }
+            setVoiceStatus('Voice input failed (' + (code || 'unknown') + '). Try typing instead.', true);
         });
     } else if (voiceBtn) {
-        voiceBtn.style.display = 'none';
+        voiceBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!voiceSecure) {
+                setVoiceStatus('Voice input needs HTTPS (or localhost).', true);
+            } else {
+                setVoiceStatus('Voice input is not supported in this browser. Try Chrome or Edge.', true);
+            }
+        });
+        voiceBtn.title = voiceSecure ? 'Voice input not supported in this browser' : 'Voice input requires HTTPS';
     }
 
     function showTypingIndicator() {
@@ -760,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function () {
         wrapper.className = 'message bot-message typing';
         wrapper.id = id;
         wrapper.innerHTML = '' +
-            '<div class="message-avatar">🤖</div>' +
+            '<div class="message-avatar">💬</div>' +
             '<div class="message-body">' +
             '  <div class="message-content typing-dots">' +
             '    <span></span><span></span><span></span>' +

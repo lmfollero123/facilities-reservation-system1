@@ -40,6 +40,17 @@ if ($isHealthApi) {
     exit;
 }
 
+$isMobileApi = (
+    $apiPath === 'api/mobile' ||
+    strpos($apiPath, 'api/mobile/') === 0 ||
+    $path === 'api/mobile' ||
+    strpos($path, 'api/mobile/') === 0
+);
+if ($isMobileApi) {
+    require_once __DIR__ . '/resources/views/pages/public/api/mobile/index.php';
+    exit;
+}
+
 $isIntegrationsApi = (
     $apiPath === 'api/integrations' ||
     strpos($apiPath, 'api/integrations/') === 0

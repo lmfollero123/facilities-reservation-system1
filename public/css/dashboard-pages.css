@@ -734,7 +734,7 @@
         transform: none !important;
     }
 
-    body.dashboard-page .chatbot-fab {
+    body.dashboard-page .chatbot-fab-wrap {
         right: 0.85rem !important;
         bottom: 0.85rem !important;
     }

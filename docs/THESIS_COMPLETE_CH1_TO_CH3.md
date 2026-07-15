@@ -250,6 +250,10 @@ Digital government and e-governance literature supports web-based service delive
 
 ## 3.3 Sprint Cycles (summary)
 
+Full §3.3 sprint boards (**To Do | In Progress | Done** per sprint, plus system-wide snapshot) are in:
+
+**`docs/THESIS_CH3_SECTION_3.3_SPRINT_CYCLES.md`**
+
 | Sprint theme | Deliverables |
 |--------------|--------------|
 | Foundation | Auth, registration, facilities CRUD, basic booking |
@@ -259,6 +263,7 @@ Digital government and e-governance literature supports web-based service delive
 | Integrations | CIMM sync, integration dashboards, Gemini chatbot |
 | Compliance | Document archival, DPA export, security hardening |
 | Polish | Responsive UI, announcements redesign, approval tabs, ID verification queue, auto-announcements |
+| UX hardening (Jul 2026) | Auth redesign, walk-in search, live occupancy slideshow, blackouts mobile |
 
 ## 3.4 Scrum Artifacts
 

@@ -31,7 +31,7 @@ $dashboardSearchItems[] = ['label' => 'Check In / Out', 'url' => $base . '/dashb
 
 if (frs_can_read($role, 'ai_tools')) {
     $dashboardSearchItems[] = ['label' => 'Smart Scheduler', 'url' => $base . '/dashboard/ai-scheduling', 'keywords' => 'ai smart scheduler scheduling recommendations'];
-    $dashboardSearchItems[] = ['label' => 'AI Chatbot', 'url' => $base . '/dashboard/ai-chatbot', 'keywords' => 'ai chatbot assistant help bot gemini'];
+    $dashboardSearchItems[] = ['label' => 'Culiat Assistant', 'url' => $base . '/dashboard/ai-chatbot', 'keywords' => 'ai chatbot assistant help bot gemini culiat'];
 }
 if ($role === 'Admin' && frs_ai_dev_tools_visible()) {
     $dashboardSearchItems[] = ['label' => 'AI Model Lab', 'url' => $base . '/dashboard/ai-model-lab', 'keywords' => 'ai model lab test ml sklearn demo training status'];
