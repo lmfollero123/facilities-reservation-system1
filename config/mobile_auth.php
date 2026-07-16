@@ -46,6 +46,18 @@ if (!function_exists('frs_mobile_user_public')) {
      */
     function frs_mobile_user_public(array $user): array
     {
+        $pic = $user['profile_picture'] ?? null;
+        $avatarUrl = null;
+        if (is_string($pic) && trim($pic) !== '') {
+            $pic = trim($pic);
+            if (preg_match('#^https?://#i', $pic)) {
+                $avatarUrl = $pic;
+            } else {
+                $origin = function_exists('base_url') ? rtrim((string) base_url(), '/') : '';
+                $avatarUrl = $origin . '/' . ltrim($pic, '/');
+            }
+        }
+
         return [
             'id' => (int) ($user['id'] ?? 0),
             'name' => (string) ($user['name'] ?? ''),
@@ -54,6 +66,8 @@ if (!function_exists('frs_mobile_user_public')) {
             'mobile' => $user['mobile'] ?? null,
             'address' => $user['address'] ?? null,
             'status' => (string) ($user['status'] ?? 'active'),
+            'profile_picture' => $pic,
+            'avatar_url' => $avatarUrl,
         ];
     }
 }

@@ -567,6 +567,60 @@ if ($route === 'me/password' && $method === 'POST') {
     mobile_json(['ok' => true, 'message' => 'Password changed.']);
 }
 
+if ($route === 'me/avatar' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $uid = (int) $user['id'];
+    if (empty($_FILES['profile_picture']['name']) || ($_FILES['profile_picture']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        mobile_error('profile_picture file is required (JPEG, PNG, GIF, or WebP, max 2MB).', 422, 'validation');
+    }
+    require_once dirname(__DIR__, 6) . '/config/upload_helper.php';
+    $uploadErrors = validateFileUpload(
+        $_FILES['profile_picture'],
+        ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        2 * 1024 * 1024
+    );
+    if (!empty($uploadErrors)) {
+        mobile_error(implode(' ', $uploadErrors), 422, 'validation');
+    }
+
+    $uploadDir = dirname(__DIR__, 6) . '/public/uploads/profile_pictures';
+    if (!is_dir($uploadDir) && !@mkdir($uploadDir, 0755, true)) {
+        mobile_error('Could not prepare upload directory.', 500, 'upload_failed');
+    }
+
+    $ext = strtolower(pathinfo((string) $_FILES['profile_picture']['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+        $ext = 'jpg';
+    }
+    $fileName = 'profile-' . $uid . '-' . time() . '.' . $ext;
+    $targetPath = $uploadDir . '/' . $fileName;
+    [$ok, $err] = saveOptimizedImage($_FILES['profile_picture']['tmp_name'], $targetPath, 900, 82);
+    if (!$ok && !move_uploaded_file($_FILES['profile_picture']['tmp_name'], $targetPath)) {
+        mobile_error($err ?: 'Failed to upload profile picture.', 500, 'upload_failed');
+    }
+    @chmod($targetPath, 0644);
+    $profilePicture = '/public/uploads/profile_pictures/' . $fileName;
+
+    $old = (string) ($user['profile_picture'] ?? '');
+    $pdo->prepare('UPDATE users SET profile_picture = ?, updated_at = NOW() WHERE id = ?')
+        ->execute([$profilePicture, $uid]);
+
+    if ($old !== '' && str_contains($old, '/public/uploads/profile_pictures/')) {
+        $oldFs = dirname(__DIR__, 6) . $old;
+        if (is_file($oldFs)) {
+            @unlink($oldFs);
+        }
+    }
+
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
+    $stmt->execute([$uid]);
+    mobile_json([
+        'ok' => true,
+        'message' => 'Profile picture updated.',
+        'user' => frs_mobile_user_public($stmt->fetch(PDO::FETCH_ASSOC) ?: $user),
+    ]);
+}
+
 // ---------- FACILITIES ----------
 if ($route === 'facilities' && $method === 'GET') {
     mobile_require_user($pdo);
@@ -718,45 +772,41 @@ if ($route === 'reservations' && $method === 'POST') {
     $timeSlot = trim((string) ($body['time_slot'] ?? ''));
     $purpose = trim((string) ($body['purpose'] ?? ''));
     $notes = trim((string) ($body['notes'] ?? $body['booking_notes'] ?? ''));
-    if ($notes !== '') {
-        $purpose = $purpose === '' ? $notes : ($purpose . ' — ' . $notes);
-    }
-    $attendees = isset($body['expected_attendees']) ? (int) $body['expected_attendees'] : null;
-
-    if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $timeSlot === '' || $purpose === '') {
-        mobile_error('facility_id, reservation_date, time_slot, and purpose are required.', 422, 'validation');
-    }
-    if ($date < date('Y-m-d')) {
-        mobile_error('Reservation date must be today or later.', 422, 'validation');
-    }
-
-    $fac = $pdo->prepare(
-        'SELECT id, name, status, is_free, base_rate, capacity FROM facilities WHERE id = ? AND status != "deleted"'
-    );
-    $fac->execute([$facilityId]);
-    $facility = $fac->fetch(PDO::FETCH_ASSOC);
-    if (!$facility) {
-        mobile_error('Facility not found.', 404, 'not_found');
-    }
-    if (($facility['status'] ?? '') === 'maintenance' || ($facility['status'] ?? '') === 'offline') {
-        mobile_error('This facility is not available for booking.', 400, 'facility_unavailable');
-    }
+    $attendees = isset($body['expected_attendees'])
+        ? (int) $body['expected_attendees']
+        : (isset($body['attendees']) ? (int) $body['attendees'] : 0);
 
     require_once dirname(__DIR__, 6) . '/config/ai_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/auto_approval.php';
-    if (function_exists('detectBookingConflict')) {
-        $conflict = detectBookingConflict($facilityId, $date, $timeSlot);
-        if (!empty($conflict['has_conflict'])) {
-            mobile_error($conflict['message'] ?? 'Time slot conflicts with an existing reservation.', 409, 'conflict');
-        }
+    if (file_exists(dirname(__DIR__, 6) . '/config/time_helpers.php')) {
+        require_once dirname(__DIR__, 6) . '/config/time_helpers.php';
     }
 
     $uid = (int) $user['id'];
-    $advanceDays = 60;
-    if (function_exists('frs_resident_booking_limit_config')) {
-        $advanceDays = (int) (frs_resident_booking_limit_config()['advance_max_days'] ?? 60);
+    $check = frs_validate_resident_booking_request($pdo, $uid, [
+        'facility_id' => $facilityId,
+        'reservation_date' => $date,
+        'time_slot' => $timeSlot,
+        'purpose' => $purpose,
+        'notes' => $notes,
+        'expected_attendees' => $attendees,
+    ]);
+    if (empty($check['ok'])) {
+        mobile_error(
+            (string) ($check['message'] ?? 'Booking validation failed.'),
+            (int) ($check['http'] ?? 400),
+            (string) ($check['error'] ?? 'validation')
+        );
     }
+
+    /** @var array<string, mixed> $facility */
+    $facility = $check['facility'] ?? [];
+    if ($notes !== '') {
+        $purpose = $purpose === '' ? $notes : ($purpose . ' — ' . $notes);
+    }
+
+    $advanceDays = (int) (frs_resident_booking_limit_config()['advance_max_days'] ?? 60);
     $auto = evaluateAutoApproval($facilityId, $date, $timeSlot, $attendees, false, $uid, $advanceDays);
     $autoApprovedByRules = !empty($auto['auto_approve']);
 
@@ -796,6 +846,19 @@ if ($route === 'reservations' && $method === 'POST') {
         if (function_exists('frs_lock_facility_for_booking')) {
             frs_lock_facility_for_booking($pdo, $facilityId);
         }
+        // Re-check conflict under lock
+        if (function_exists('detectBookingConflict')) {
+            $conflict = detectBookingConflict($facilityId, $date, $timeSlot);
+            if (!empty($conflict['has_conflict'])) {
+                $pdo->rollBack();
+                mobile_error(
+                    (string) ($conflict['message'] ?? 'Time slot conflicts with an existing reservation.'),
+                    409,
+                    'conflict'
+                );
+            }
+        }
+
         $cols = ['user_id', 'facility_id', 'reservation_date', 'time_slot', 'purpose', 'status', 'expected_attendees', 'is_commercial', 'auto_approved'];
         $placeholders = ['?', '?', '?', '?', '?', '?', '?', '0', '?'];
         $values = [$uid, $facilityId, $date, $timeSlot, $purpose, $initialStatus, $attendees, $isAutoApproved ? 1 : 0];
@@ -1114,46 +1177,94 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
     $body = mobile_body();
     $newDate = trim((string) ($body['reservation_date'] ?? $body['new_date'] ?? ''));
     $newSlot = trim((string) ($body['time_slot'] ?? $body['new_time_slot'] ?? ''));
-    $reason = trim((string) ($body['reason'] ?? 'Rescheduled via Companion app'));
+    $reason = trim((string) ($body['reason'] ?? ''));
     require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/ai_helpers.php';
+    if (file_exists(dirname(__DIR__, 6) . '/config/time_helpers.php')) {
+        require_once dirname(__DIR__, 6) . '/config/time_helpers.php';
+    }
 
     $reservation = mobile_load_reservation($pdo, $id, (int) $user['id']);
     if (!$reservation) {
         mobile_error('Reservation not found.', 404, 'not_found');
     }
-    if (!in_array($reservation['status'], ['pending', 'approved', 'postponed', 'pending_payment'], true)) {
+
+    // Match website My Reservations: pending_payment must be paid first; denied/cancelled blocked.
+    if (($reservation['status'] ?? '') === 'pending_payment') {
+        mobile_error('Please complete payment first before rescheduling.', 400, 'payment_required');
+    }
+    if (!in_array($reservation['status'], ['pending', 'approved', 'postponed'], true)) {
         mobile_error('This reservation cannot be rescheduled.', 400, 'not_reschedulable');
+    }
+    if ($reason === '') {
+        mobile_error('Reason for rescheduling is required.', 422, 'validation');
     }
     if ($newDate === '' || $newSlot === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $newDate)) {
         mobile_error('reservation_date and time_slot are required.', 422, 'validation');
     }
-    if ($newDate < date('Y-m-d')) {
-        mobile_error('New date cannot be in the past.', 422, 'validation');
+
+    if (function_exists('frs_reservation_slot_has_passed')
+        && (frs_reservation_slot_has_passed((string) $reservation['reservation_date'], (string) $reservation['time_slot'])
+            || (function_exists('frs_reservation_slot_is_ongoing')
+                && frs_reservation_slot_is_ongoing((string) $reservation['reservation_date'], (string) $reservation['time_slot'])))) {
+        mobile_error('Cannot reschedule a reservation that has already started or is ongoing.', 400, 'already_started');
     }
 
+    $isPostponed = ($reservation['status'] ?? '') === 'postponed';
     $count = (int) ($reservation['reschedule_count'] ?? 0);
-    if ($count >= 1 && ($reservation['status'] ?? '') !== 'postponed') {
+    if ($count >= 1 && !$isPostponed) {
         mobile_error('You can only reschedule once per reservation.', 400, 'reschedule_limit');
     }
 
     $eventDate = new DateTime((string) $reservation['reservation_date']);
     $today = new DateTime('today');
     $daysLeft = (int) $today->diff($eventDate)->format('%r%a');
-    if ($daysLeft < 3 && ($reservation['status'] ?? '') !== 'postponed') {
-        mobile_error('Reschedule is only allowed at least 3 days before the booking date.', 400, 'too_late');
+    if ($daysLeft < 3 && !$isPostponed) {
+        mobile_error(
+            'Rescheduling is only allowed up to 3 days before the event. The event is '
+            . max(0, $daysLeft) . ' day(s) away.',
+            400,
+            'too_late'
+        );
     }
 
-    if (function_exists('detectBookingConflict')) {
-        $conflict = detectBookingConflict((int) $reservation['facility_id'], $newDate, $newSlot, $id);
-        if (!empty($conflict['has_conflict'])) {
-            mobile_error($conflict['message'] ?? 'Selected slot conflicts with another booking.', 409, 'conflict');
-        }
+    if ($newDate === (string) $reservation['reservation_date']
+        && $newSlot === (string) $reservation['time_slot']) {
+        mobile_error('You are already scheduled for this date and time. Please select a different slot.', 422, 'same_slot');
+    }
+
+    $uid = (int) $user['id'];
+    $facilityId = (int) $reservation['facility_id'];
+    $purpose = trim((string) ($reservation['purpose'] ?? 'Resident booking'));
+    $attendees = (int) ($reservation['expected_attendees'] ?? $reservation['attendees'] ?? 1);
+    if ($attendees < 1) {
+        $attendees = 1;
+    }
+
+    // Same facility/date/slot rules as create; skip identity (already booked) and quota
+    // double-count via exclude id; skip full quota for simple date move (web parity).
+    $check = frs_validate_resident_booking_request($pdo, $uid, [
+        'facility_id' => $facilityId,
+        'reservation_date' => $newDate,
+        'time_slot' => $newSlot,
+        'purpose' => $purpose,
+        'notes' => '',
+        'expected_attendees' => $attendees,
+        'exclude_reservation_id' => $id,
+        'skip_quota' => true,
+        'skip_identity' => true,
+    ]);
+    if (empty($check['ok'])) {
+        mobile_error(
+            (string) ($check['message'] ?? 'Reschedule validation failed.'),
+            (int) ($check['http'] ?? 400),
+            (string) ($check['error'] ?? 'validation')
+        );
     }
 
     $newStatus = $reservation['status'];
     if (in_array($reservation['status'], ['approved', 'postponed'], true)) {
-        // Paid stay approved if still paid; otherwise staff may need to re-check.
+        // Website: approved/postponed require re-approval unless already paid / free.
         try {
             $paid = $pdo->prepare('SELECT id FROM payments WHERE reservation_id = ? AND status = "paid" LIMIT 1');
             $paid->execute([$id]);
@@ -1177,10 +1288,10 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
         $id,
         $newStatus,
         'Rescheduled via Companion app to ' . $newDate . ' ' . $newSlot . '. ' . $reason,
-        (int) $user['id'],
+        $uid,
     ]);
 
-    $fresh = mobile_load_reservation($pdo, $id, (int) $user['id']);
+    $fresh = mobile_load_reservation($pdo, $id, $uid);
     mobile_json([
         'ok' => true,
         'message' => 'Reservation rescheduled.',
@@ -1242,13 +1353,24 @@ if (preg_match('#^reservations/(\d+)/pass$#', $route, $m) && $method === 'GET') 
 if ($route === 'check-in/facility' && $method === 'POST') {
     $user = mobile_require_user($pdo);
     $body = mobile_body();
-    $rawToken = trim((string) ($body['token'] ?? ''));
+    $rawToken = trim((string) ($body['token'] ?? $body['code'] ?? $body['qr_payload'] ?? ''));
     if ($rawToken === '') {
         mobile_error('Facility QR token required.', 422, 'validation');
     }
     // Accept full URL or raw token
     if (preg_match('/[?&]token=([^&]+)/', $rawToken, $tm)) {
         $rawToken = urldecode($tm[1]);
+    }
+    // Reservation pass QR is not a facility gate QR.
+    if ($rawToken !== '' && ($rawToken[0] === '{' || str_contains($rawToken, 'reservation_pass'))) {
+        $decoded = json_decode($rawToken, true);
+        if (is_array($decoded) && ($decoded['type'] ?? '') === 'reservation_pass') {
+            mobile_error(
+                'That is a booking pass QR. Scan the facility QR posted at the entrance to check in.',
+                400,
+                'wrong_qr_type'
+            );
+        }
     }
 
     require_once dirname(__DIR__, 6) . '/config/occupancy_monitoring.php';
@@ -1402,16 +1524,38 @@ if ($route === 'occupancy/live' && $method === 'GET') {
     if (function_exists('frs_sanitize_occupancy_snapshot_for_public')) {
         $snap = frs_sanitize_occupancy_snapshot_for_public($snap);
     }
-    // Slim payload for mobile
+    // Slim payload for mobile (modern Live Occupancy strip)
     $facilities = [];
     foreach ($snap['facilities'] ?? [] as $f) {
+        $counts = is_array($f['counts'] ?? null) ? $f['counts'] : [];
+        $checkedIn = (int) ($counts['checked_in'] ?? 0);
+        $booked = (int) ($counts['booked'] ?? 0);
+        $imageUrl = $f['image_url'] ?? null;
+        if (is_string($imageUrl) && $imageUrl !== '' && !preg_match('#^https?://#i', $imageUrl)) {
+            $origin = function_exists('base_url') ? rtrim((string) base_url(), '/') : '';
+            $imageUrl = $origin . '/' . ltrim($imageUrl, '/');
+        } elseif (!is_string($imageUrl) || $imageUrl === '') {
+            $imageUrl = null;
+        }
+        $state = (string) ($f['aggregate_state'] ?? 'available');
+        $label = (string) ($f['aggregate_display']['label'] ?? $state);
         $facilities[] = [
             'facility_id' => (int) ($f['facility_id'] ?? 0),
             'facility_name' => (string) ($f['facility_name'] ?? ''),
-            'aggregate_state' => (string) ($f['aggregate_state'] ?? 'available'),
-            'label' => (string) ($f['aggregate_display']['label'] ?? ''),
+            'aggregate_state' => $state,
+            'status' => $state,
+            'label' => $label,
+            'is_occupied' => !empty($f['is_occupied']),
             'is_within_operating_hours' => !empty($f['is_within_operating_hours']),
             'operating_hours' => (string) ($f['operating_hours'] ?? ''),
+            'image_url' => $imageUrl,
+            'current' => $checkedIn > 0 ? $checkedIn : $booked,
+            'capacity' => isset($f['capacity']) ? (int) $f['capacity'] : null,
+            'counts' => [
+                'checked_in' => $checkedIn,
+                'booked' => $booked,
+                'no_show_risk' => (int) ($counts['no_show_risk'] ?? 0),
+            ],
         ];
     }
     mobile_json([
@@ -1420,6 +1564,329 @@ if ($route === 'occupancy/live' && $method === 'GET') {
         'summary' => $snap['summary'] ?? null,
         'facilities' => $facilities,
         'disclaimer' => $snap['disclaimer'] ?? null,
+    ]);
+}
+
+// ---------- SMART SCHEDULER (same engine as website /dashboard/ai-scheduling) ----------
+if ($route === 'smart-scheduler' && $method === 'GET') {
+    $user = mobile_require_user($pdo);
+    $uid = (int) $user['id'];
+    $userName = (string) ($user['name'] ?? 'Resident');
+
+    $servicePath = dirname(__DIR__, 6) . '/services/RecommendationService.php';
+    if (!file_exists($servicePath)) {
+        mobile_error('Recommendation service is not available.', 503, 'unavailable');
+    }
+    require_once $servicePath;
+
+    try {
+        $service = new RecommendationService($pdo);
+        $raw = $service->getPersonalizedRecommendations($uid);
+        if (!is_array($raw)) {
+            $raw = [];
+        }
+    } catch (Throwable $e) {
+        error_log('Mobile smart-scheduler: ' . $e->getMessage());
+        mobile_error('Could not load recommendations.', 500, 'scheduler_failed');
+    }
+
+    $historyCount = 0;
+    try {
+        $h = $pdo->prepare(
+            "SELECT COUNT(*) FROM reservations
+             WHERE user_id = ?
+               AND reservation_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+               AND status IN ('approved','completed')"
+        );
+        $h->execute([$uid]);
+        $historyCount = (int) $h->fetchColumn();
+    } catch (Throwable $e) {
+        $historyCount = 0;
+    }
+    $personalized = $historyCount >= 3;
+    $items = [];
+    foreach ($raw as $rec) {
+        if (!is_array($rec)) {
+            continue;
+        }
+        $facilityId = (int) ($rec['facility_id'] ?? 0);
+        $imageUrl = null;
+        $isFree = true;
+        $baseRate = null;
+        if ($facilityId > 0) {
+            try {
+                $fstmt = $pdo->prepare(
+                    'SELECT image_path, is_free, base_rate FROM facilities WHERE id = ? LIMIT 1'
+                );
+                $fstmt->execute([$facilityId]);
+                $frow = $fstmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $imageUrl = mobile_facility_image_url($frow['image_path'] ?? null);
+                $isFree = !isset($frow['is_free']) || !empty($frow['is_free']);
+                if (isset($frow['base_rate'])) {
+                    $normalized = preg_replace('/[^\d]/', '', (string) $frow['base_rate']);
+                    $baseRate = $normalized !== '' ? (float) ((int) $normalized) : null;
+                }
+            } catch (Throwable $e) {
+                // ignore enrichment errors
+            }
+        }
+        $date = (string) ($rec['suggested_date'] ?? '');
+        $time = (string) ($rec['suggested_time'] ?? '');
+        $items[] = [
+            'facility_id' => $facilityId,
+            'facility_name' => (string) ($rec['facility_name'] ?? 'Facility'),
+            'score' => (int) ($rec['score'] ?? 0),
+            'reasons' => array_values(array_filter(array_map('strval', $rec['reasons'] ?? []))),
+            'suggested_date' => $date,
+            'suggested_time' => $time,
+            'suggested_duration' => isset($rec['suggested_duration']) ? (float) $rec['suggested_duration'] : null,
+            'suggested_attendees' => isset($rec['suggested_attendees']) ? (int) $rec['suggested_attendees'] : null,
+            'is_fallback' => !empty($rec['is_fallback']),
+            'image_url' => $imageUrl,
+            'is_free' => $isFree,
+            'base_rate' => $baseRate,
+            'book_prefill' => [
+                'facility_id' => $facilityId,
+                'reservation_date' => $date,
+                'time_slot' => $time,
+                'expected_attendees' => isset($rec['suggested_attendees']) ? (int) $rec['suggested_attendees'] : null,
+            ],
+        ];
+    }
+
+    // Optional Gemini insight (same helper as dashboard chatbot) — non-blocking.
+    $geminiInsight = null;
+    $geminiConfigPath = dirname(__DIR__, 6) . '/config/gemini_config.php';
+    if (file_exists($geminiConfigPath)) {
+        require_once $geminiConfigPath;
+    }
+    require_once dirname(__DIR__, 6) . '/config/gemini_chatbot.php';
+    if (function_exists('geminiChatbotResponse') && $items !== []) {
+        try {
+            $top = array_slice($items, 0, 3);
+            $lines = [];
+            foreach ($top as $t) {
+                $lines[] = sprintf(
+                    '- %s (score %d%%) on %s %s',
+                    $t['facility_name'],
+                    $t['score'],
+                    $t['suggested_date'],
+                    $t['suggested_time']
+                );
+            }
+            $mode = $personalized ? 'personalized from booking history' : 'popular / fallback (limited history)';
+            $system = 'You are the PFRS Smart Scheduler assistant for Barangay Culiat residents. '
+                . 'Write 2 short friendly sentences (English or Taglish) summarizing why these slots are recommended. '
+                . 'Do not invent facilities. Do not output JSON.';
+            $userMsg = "Resident name: {$userName}. Recommendation mode: {$mode}.\nTop suggestions:\n"
+                . implode("\n", $lines)
+                . "\nWrite a brief insight for the mobile Smart Scheduler screen.";
+            $g = geminiChatbotResponse($system, $userMsg, []);
+            if ($g && !empty($g['reply'])) {
+                $geminiInsight = trim((string) $g['reply']);
+            }
+        } catch (Throwable $e) {
+            error_log('Mobile smart-scheduler Gemini insight: ' . $e->getMessage());
+        }
+    }
+
+    mobile_json([
+        'ok' => true,
+        'title' => 'Smart Scheduler',
+        'subtitle' => 'Recommended for you',
+        'engine' => 'recommendation_service',
+        'gemini_used' => $geminiInsight !== null,
+        'personalized' => $personalized,
+        'history_count' => $historyCount,
+        'min_history' => 3,
+        'gemini_insight' => $geminiInsight,
+        'recommendations' => $items,
+        'message' => $items === []
+            ? 'No recommendations yet. Book a few facilities to unlock personalized suggestions.'
+            : ($personalized
+                ? 'Based on your recent booking patterns.'
+                : 'Popular picks while we learn your preferences (book 3+ approved reservations for full personalization).'),
+    ]);
+}
+
+// ---------- BOOKING POLICY (resident limits) ----------
+if ($route === 'booking/policy' && $method === 'GET') {
+    $user = mobile_require_user($pdo);
+    require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
+    $cfg = frs_resident_booking_limit_config();
+    $identity = frs_resident_identity_allows_booking($pdo, (int) $user['id']);
+    mobile_json([
+        'ok' => true,
+        'limits' => [
+            'per_day' => (int) $cfg['per_day'],
+            'per_week' => (int) $cfg['per_week'],
+            'per_month' => (int) $cfg['per_month'],
+            'per_year' => (int) $cfg['per_year'],
+            'max_upcoming_active' => (int) $cfg['max_upcoming_active'],
+            'advance_max_days' => (int) $cfg['advance_max_days'],
+        ],
+        'rules' => [
+            'min_duration_minutes' => 30,
+            'max_duration_hours' => 12,
+            'attendees_required' => true,
+            'reschedule_min_days_before' => 3,
+            'reschedule_max_times' => 1,
+            'identity_required' => true,
+        ],
+        'summary' => frs_resident_booking_limits_summary(),
+        'policy_bullets' => frs_resident_booking_limits_policy_bullets(),
+        'can_book' => !empty($identity['ok']),
+        'identity_message' => empty($identity['ok']) ? (string) $identity['message'] : null,
+    ]);
+}
+
+// ---------- AI ASSISTANT (Gemini) ----------
+if ($route === 'assistant/chat' && $method === 'POST') {
+    @set_time_limit(45);
+    $user = mobile_require_user($pdo);
+    $body = mobile_body();
+    $message = trim((string) ($body['message'] ?? ''));
+    $userId = (int) $user['id'];
+    $userName = (string) ($user['name'] ?? 'Resident');
+
+    require_once dirname(__DIR__, 6) . '/config/chatbot_responses.php';
+    $geminiConfigPath = dirname(__DIR__, 6) . '/config/gemini_config.php';
+    if (file_exists($geminiConfigPath)) {
+        require_once $geminiConfigPath;
+    }
+    require_once dirname(__DIR__, 6) . '/config/gemini_chatbot.php';
+
+    if ($message === '') {
+        mobile_json([
+            'ok' => true,
+            'reply' => getRandomResponse(getEmptyMessageResponses()),
+        ]);
+    }
+
+    if (!checkGeminiChatbotRateLimit($userId)) {
+        mobile_json([
+            'ok' => false,
+            'error' => 'rate_limited',
+            'reply' => 'You have sent many messages in a short time. Please wait a few minutes before using the AI assistant again.',
+        ], 429);
+    }
+
+    $history = $body['history'] ?? [];
+    if (!is_array($history)) {
+        $history = [];
+    }
+    $sanitizedHistory = [];
+    foreach (array_slice($history, -10) as $msg) {
+        if (!is_array($msg)) {
+            continue;
+        }
+        $role = (($msg['role'] ?? '') === 'model') ? 'model' : 'user';
+        $text = '';
+        if (isset($msg['parts'][0]['text'])) {
+            $text = trim((string) $msg['parts'][0]['text']);
+        } elseif (isset($msg['text'])) {
+            $text = trim((string) $msg['text']);
+        }
+        if ($text !== '') {
+            $sanitizedHistory[] = ['role' => $role, 'parts' => [['text' => $text]]];
+        }
+    }
+
+    if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
+        try {
+            require_once dirname(__DIR__, 6) . '/config/occupancy_monitoring.php';
+
+            $facStmt = $pdo->query(
+                "SELECT id, name, status, capacity, amenities, location, operating_hours
+                 FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50"
+            );
+            $facilities = $facStmt ? ($facStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+
+            $bStmt = $pdo->prepare(
+                'SELECT r.reservation_date, r.time_slot, f.name AS facility_name
+                 FROM reservations r
+                 JOIN facilities f ON r.facility_id = f.id
+                 WHERE r.user_id = :uid
+                 ORDER BY r.reservation_date DESC
+                 LIMIT 5'
+            );
+            $bStmt->execute(['uid' => $userId]);
+            $userBookings = $bStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $liveOccupancy = null;
+            if (function_exists('frs_build_operational_occupancy_snapshot')) {
+                try {
+                    $liveOccupancy = frs_build_operational_occupancy_snapshot($pdo);
+                    if (function_exists('frs_sanitize_occupancy_snapshot_for_public')) {
+                        $liveOccupancy = frs_sanitize_occupancy_snapshot_for_public($liveOccupancy);
+                    }
+                } catch (Throwable $occErr) {
+                    error_log('Mobile assistant occupancy snapshot error: ' . $occErr->getMessage());
+                    $liveOccupancy = null;
+                }
+            }
+
+            $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId, $liveOccupancy);
+            $geminiResult = geminiChatbotResponse($prompt, $message, $sanitizedHistory);
+
+            if ($geminiResult && !empty($geminiResult['reply'])) {
+                $reply = (string) $geminiResult['reply'];
+                $out = ['ok' => true, 'reply' => $reply];
+
+                if (!empty($geminiResult['booking']) && is_array($geminiResult['booking'])) {
+                    $b = $geminiResult['booking'];
+                    if (empty($b['facility_id']) && !empty($b['facility_name'])) {
+                        foreach ($facilities as $f) {
+                            if (stripos((string) $f['name'], (string) $b['facility_name']) !== false
+                                || stripos((string) $b['facility_name'], (string) $f['name']) !== false) {
+                                $b['facility_id'] = (int) $f['id'];
+                                break;
+                            }
+                        }
+                    }
+                    $hasUsefulData = isset($b['facility_id']) || isset($b['reservation_date'])
+                        || isset($b['start_time']) || isset($b['end_time'])
+                        || isset($b['time_slot']) || isset($b['purpose']);
+                    if ($hasUsefulData) {
+                        $out['action'] = 'prefill_booking';
+                        $out['data'] = $b;
+                    }
+                }
+
+                mobile_json($out);
+            }
+        } catch (Throwable $e) {
+            error_log('Mobile Gemini assistant error: ' . $e->getMessage());
+        }
+    }
+
+    $geminiConfigured = defined('GEMINI_API_KEY')
+        && GEMINI_API_KEY !== ''
+        && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE';
+
+    if ($geminiConfigured) {
+        mobile_json([
+            'ok' => false,
+            'error' => 'gemini_unavailable',
+            'reply' => 'The AI assistant could not reach Gemini right now (invalid API key, quota, or network). '
+                . 'Please try again later or book a facility from the Bookings tab.',
+        ], 503);
+    }
+
+    $simpleGreetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening'];
+    $msgLower = strtolower($message);
+    if (in_array($msgLower, $simpleGreetings, true)
+        || in_array($msgLower . '!', $simpleGreetings, true)) {
+        mobile_json([
+            'ok' => true,
+            'reply' => getRandomResponse(getGreetingResponses($userName)),
+        ]);
+    }
+
+    mobile_json([
+        'ok' => true,
+        'reply' => 'I can help with facility bookings, availability, and your reservations. '
+            . 'Ask me about a facility, operating hours, or say you want to book one.',
     ]);
 }
 

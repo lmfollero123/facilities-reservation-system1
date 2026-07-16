@@ -522,6 +522,546 @@ function frs_resident_booking_limits_policy_bullets(): string
 }
 
 /**
+ * Active statuses that count toward resident booking quotas.
+ */
+function frs_active_booking_statuses_sql(PDO $pdo): string
+{
+    static $sql = null;
+    if ($sql !== null) {
+        return $sql;
+    }
+    $supportsPendingPayment = false;
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM reservations LIKE 'status'");
+        $col = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+        $type = (string) ($col['Type'] ?? '');
+        $supportsPendingPayment = stripos($type, 'pending_payment') !== false;
+    } catch (Throwable $e) {
+        $supportsPendingPayment = true;
+    }
+    $sql = $supportsPendingPayment
+        ? '"pending_payment","pending","approved"'
+        : '"pending","approved"';
+    return $sql;
+}
+
+/**
+ * Residents must be verified or have uploaded a valid ID (same as web Book Facility).
+ *
+ * @return array{ok: bool, message: string, error: string}
+ */
+function frs_resident_identity_allows_booking(PDO $pdo, int $userId): array
+{
+    $stmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['ok' => false, 'message' => 'User not found.', 'error' => 'not_found'];
+    }
+    $role = (string) ($row['role'] ?? 'Resident');
+    if (in_array($role, ['Staff', 'Admin'], true) || !empty($row['is_verified'])) {
+        return ['ok' => true, 'message' => '', 'error' => ''];
+    }
+    try {
+        $doc = $pdo->prepare(
+            'SELECT id FROM user_documents
+             WHERE user_id = ? AND document_type = "valid_id" AND is_archived = 0
+             LIMIT 1'
+        );
+        $doc->execute([$userId]);
+        if ($doc->fetchColumn()) {
+            return ['ok' => true, 'message' => '', 'error' => ''];
+        }
+    } catch (Throwable $e) {
+        // table may be missing in older installs — fall through to deny
+    }
+    return [
+        'ok' => false,
+        'message' => 'Please upload a valid ID on the website first. Unverified residents must submit a valid ID before booking.',
+        'error' => 'id_required',
+    ];
+}
+
+/**
+ * Hard-block facility date for booking (offline / blackout / maintenance), matching web Book Facility.
+ *
+ * @return array{ok: bool, message: string, error: string}
+ */
+function frs_facility_date_bookable(PDO $pdo, int $facilityId, string $dateYmd, ?array $facilityRow = null): array
+{
+    if ($facilityRow === null) {
+        $fac = $pdo->prepare(
+            'SELECT id, name, status FROM facilities WHERE id = ? AND status != "deleted" LIMIT 1'
+        );
+        $fac->execute([$facilityId]);
+        $facilityRow = $fac->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    if (!$facilityRow) {
+        return ['ok' => false, 'message' => 'Facility not found.', 'error' => 'not_found'];
+    }
+
+    $status = (string) ($facilityRow['status'] ?? '');
+    $name = (string) ($facilityRow['name'] ?? 'Facility');
+
+    if ($status === 'offline') {
+        return [
+            'ok' => false,
+            'message' => 'This facility is currently offline and unavailable for booking.',
+            'error' => 'facility_unavailable',
+        ];
+    }
+
+    $blackout = null;
+    try {
+        $bo = $pdo->prepare(
+            'SELECT reason FROM facility_blackout_dates
+             WHERE facility_id = ? AND blackout_date = ? LIMIT 1'
+        );
+        $bo->execute([$facilityId, $dateYmd]);
+        $blackout = $bo->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        $blackout = null;
+    }
+
+    if ($blackout) {
+        $display = (string) ($blackout['reason'] ?? 'unavailable');
+        if (file_exists(__DIR__ . '/blackout_dates.php')) {
+            require_once __DIR__ . '/blackout_dates.php';
+            if (function_exists('frs_blackout_enrich_row')) {
+                $enriched = frs_blackout_enrich_row($blackout);
+                $display = (string) ($enriched['display_reason'] ?? $display);
+                if (($enriched['source_type'] ?? '') === 'cimm') {
+                    return [
+                        'ok' => false,
+                        'message' => 'This facility has scheduled CIMM maintenance on the selected date (' . $display . '). Please choose another date or facility.',
+                        'error' => 'blackout',
+                    ];
+                }
+            }
+        }
+        return [
+            'ok' => false,
+            'message' => 'This facility is blacked out on the selected date (' . $display . '). Please choose another date or facility.',
+            'error' => 'blackout',
+        ];
+    }
+
+    if ($status === 'maintenance') {
+        $hasAnyBlackout = false;
+        try {
+            $any = $pdo->prepare('SELECT 1 FROM facility_blackout_dates WHERE facility_id = ? LIMIT 1');
+            $any->execute([$facilityId]);
+            $hasAnyBlackout = (bool) $any->fetchColumn();
+        } catch (Throwable $e) {
+            $hasAnyBlackout = false;
+        }
+        // CIMM sets maintenance for a window but dated blackouts define which days are blocked.
+        if (!$hasAnyBlackout) {
+            return [
+                'ok' => false,
+                'message' => 'This facility is currently under maintenance and cannot be booked. Please select a different facility.',
+                'error' => 'facility_unavailable',
+            ];
+        }
+    }
+
+    if ($status !== 'available' && $status !== 'maintenance') {
+        return [
+            'ok' => false,
+            'message' => 'The facility "' . $name . '" is not available for booking (status: ' . $status . ').',
+            'error' => 'facility_unavailable',
+        ];
+    }
+
+    return ['ok' => true, 'message' => '', 'error' => ''];
+}
+
+/**
+ * Validate time slot format/duration and parse start/end (HH:MM).
+ *
+ * @return array{ok: bool, message: string, error: string, start?: string, end?: string, hours?: float}
+ */
+function frs_validate_booking_time_slot(string $timeSlot): array
+{
+    $parsed = function_exists('parseTimeSlot') ? parseTimeSlot($timeSlot) : null;
+    if (!$parsed || empty($parsed['start']) || empty($parsed['end'])) {
+        return [
+            'ok' => false,
+            'message' => 'Invalid time slot. Use a start and end time (e.g. 09:00 - 11:00).',
+            'error' => 'invalid_time_slot',
+        ];
+    }
+    /** @var DateTimeInterface $start */
+    $start = $parsed['start'];
+    /** @var DateTimeInterface $end */
+    $end = $parsed['end'];
+    if ($end <= $start) {
+        return [
+            'ok' => false,
+            'message' => 'End time must be after start time.',
+            'error' => 'invalid_time_slot',
+        ];
+    }
+    $durationHours = ((int) $end->format('H') * 60 + (int) $end->format('i')
+        - ((int) $start->format('H') * 60 + (int) $start->format('i'))) / 60.0;
+    if ($durationHours > 12) {
+        return [
+            'ok' => false,
+            'message' => 'Reservation duration cannot exceed 12 hours.',
+            'error' => 'duration_too_long',
+        ];
+    }
+    if ($durationHours < 0.5) {
+        return [
+            'ok' => false,
+            'message' => 'Reservation duration must be at least 30 minutes.',
+            'error' => 'duration_too_short',
+        ];
+    }
+    return [
+        'ok' => true,
+        'message' => '',
+        'error' => '',
+        'start' => $start->format('H:i'),
+        'end' => $end->format('H:i'),
+        'hours' => $durationHours,
+    ];
+}
+
+/**
+ * Full resident booking validation (parity with web Book Facility).
+ *
+ * @param array{
+ *   facility_id: int,
+ *   reservation_date: string,
+ *   time_slot: string,
+ *   purpose: string,
+ *   notes?: string,
+ *   expected_attendees?: int|null,
+ *   exclude_reservation_id?: int|null,
+ *   skip_quota?: bool,
+ *   skip_identity?: bool
+ * } $input
+ * @return array{ok: bool, message: string, error: string, http: int, facility?: array}
+ */
+function frs_validate_resident_booking_request(PDO $pdo, int $userId, array $input): array
+{
+    $facilityId = (int) ($input['facility_id'] ?? 0);
+    $date = trim((string) ($input['reservation_date'] ?? ''));
+    $timeSlot = trim((string) ($input['time_slot'] ?? ''));
+    $purpose = trim((string) ($input['purpose'] ?? ''));
+    $notes = trim((string) ($input['notes'] ?? ''));
+    $attendees = isset($input['expected_attendees']) ? (int) $input['expected_attendees'] : 0;
+    $excludeId = isset($input['exclude_reservation_id']) ? (int) $input['exclude_reservation_id'] : null;
+    $skipQuota = !empty($input['skip_quota']);
+    $skipIdentity = !empty($input['skip_identity']);
+
+    if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $timeSlot === '' || $purpose === '') {
+        return [
+            'ok' => false,
+            'message' => 'facility_id, reservation_date, time_slot, and purpose are required.',
+            'error' => 'validation',
+            'http' => 422,
+        ];
+    }
+
+    $textCheck = frs_validate_booking_text_fields($purpose, $notes);
+    if (empty($textCheck['ok'])) {
+        return [
+            'ok' => false,
+            'message' => (string) $textCheck['message'],
+            'error' => 'validation',
+            'http' => 422,
+        ];
+    }
+
+    if (!$skipIdentity) {
+        $idCheck = frs_resident_identity_allows_booking($pdo, $userId);
+        if (empty($idCheck['ok'])) {
+            return [
+                'ok' => false,
+                'message' => (string) $idCheck['message'],
+                'error' => (string) ($idCheck['error'] ?: 'id_required'),
+                'http' => 403,
+            ];
+        }
+    }
+
+    $tz = function_exists('frs_app_timezone') ? frs_app_timezone() : new DateTimeZone('Asia/Manila');
+    $today = new DateTime('today', $tz);
+    $reservationDate = DateTime::createFromFormat('Y-m-d', $date, $tz);
+    if (!$reservationDate) {
+        return ['ok' => false, 'message' => 'Invalid date format.', 'error' => 'validation', 'http' => 422];
+    }
+    if ($reservationDate < $today) {
+        return [
+            'ok' => false,
+            'message' => 'Cannot book facilities for past dates. Please select today or a future date.',
+            'error' => 'validation',
+            'http' => 422,
+        ];
+    }
+
+    $cfg = frs_resident_booking_limit_config();
+    $advanceDays = (int) ($cfg['advance_max_days'] ?? 60);
+    if (frs_booking_limits_apply_to_user($pdo, $userId)) {
+        $maxDate = (clone $today)->modify('+' . $advanceDays . ' days');
+        if ($reservationDate > $maxDate) {
+            return [
+                'ok' => false,
+                'message' => "Bookings are allowed only up to {$advanceDays} days in advance.",
+                'error' => 'advance_limit',
+                'http' => 422,
+            ];
+        }
+    }
+
+    $slotCheck = frs_validate_booking_time_slot($timeSlot);
+    if (empty($slotCheck['ok'])) {
+        return [
+            'ok' => false,
+            'message' => (string) $slotCheck['message'],
+            'error' => (string) ($slotCheck['error'] ?: 'invalid_time_slot'),
+            'http' => 422,
+        ];
+    }
+
+    $startHi = (string) $slotCheck['start'];
+    if (function_exists('frs_is_start_time_past_for_date') && frs_is_start_time_past_for_date($date, $startHi)) {
+        $earliestHi = function_exists('frs_minutes_to_hhmm') && function_exists('frs_earliest_bookable_start_minutes')
+            ? frs_minutes_to_hhmm(frs_earliest_bookable_start_minutes())
+            : 'now';
+        return [
+            'ok' => false,
+            'message' => 'For reservations today, the earliest start time is ' . $earliestHi . ' (Philippine time). Past time slots are not available.',
+            'error' => 'time_in_past',
+            'http' => 422,
+        ];
+    }
+
+    if ($attendees < 1) {
+        return [
+            'ok' => false,
+            'message' => 'Expected number of attendees is required (enter at least 1).',
+            'error' => 'validation',
+            'http' => 422,
+        ];
+    }
+
+    $fac = $pdo->prepare(
+        'SELECT id, name, status, is_free, base_rate, capacity FROM facilities WHERE id = ? AND status != "deleted" LIMIT 1'
+    );
+    $fac->execute([$facilityId]);
+    $facility = $fac->fetch(PDO::FETCH_ASSOC);
+    if (!$facility) {
+        return ['ok' => false, 'message' => 'Facility not found.', 'error' => 'not_found', 'http' => 404];
+    }
+
+    $capCell = (string) ($facility['capacity'] ?? '');
+    if ($capCell !== '' && preg_match('/(\d{1,7})/', $capCell, $cm)) {
+        $maxListed = (int) $cm[1];
+        if ($attendees > $maxListed) {
+            return [
+                'ok' => false,
+                'message' => 'Expected attendees (' . $attendees . ') cannot exceed this facility\'s maximum occupancy (' . $maxListed . ').',
+                'error' => 'capacity_exceeded',
+                'http' => 422,
+            ];
+        }
+    }
+
+    $dateOk = frs_facility_date_bookable($pdo, $facilityId, $date, $facility);
+    if (empty($dateOk['ok'])) {
+        return [
+            'ok' => false,
+            'message' => (string) $dateOk['message'],
+            'error' => (string) ($dateOk['error'] ?: 'facility_unavailable'),
+            'http' => 400,
+        ];
+    }
+
+    if (!$skipQuota && frs_booking_limits_apply_to_user($pdo, $userId)) {
+        // Exclude current reservation when rescheduling so it does not double-count.
+        if ($excludeId && $excludeId > 0) {
+            $activeSql = frs_active_booking_statuses_sql($pdo);
+            $tmpOk = frs_validate_resident_booking_limits_excluding(
+                $pdo,
+                $userId,
+                $date,
+                $activeSql,
+                $excludeId
+            );
+            if (empty($tmpOk['ok'])) {
+                return [
+                    'ok' => false,
+                    'message' => (string) $tmpOk['message'],
+                    'error' => 'booking_limit',
+                    'http' => 409,
+                ];
+            }
+        } else {
+            $limitCheck = frs_validate_resident_booking_limits(
+                $pdo,
+                $userId,
+                $date,
+                frs_active_booking_statuses_sql($pdo)
+            );
+            if (empty($limitCheck['ok'])) {
+                return [
+                    'ok' => false,
+                    'message' => (string) $limitCheck['message'],
+                    'error' => 'booking_limit',
+                    'http' => 409,
+                ];
+            }
+        }
+    }
+
+    if (function_exists('detectBookingConflict')) {
+        $conflict = detectBookingConflict($facilityId, $date, $timeSlot, $excludeId);
+        if (!empty($conflict['has_conflict'])) {
+            return [
+                'ok' => false,
+                'message' => (string) ($conflict['message'] ?? 'Time slot conflicts with an existing reservation.'),
+                'error' => 'conflict',
+                'http' => 409,
+            ];
+        }
+    } elseif (function_exists('frs_has_overlapping_booking')
+        && frs_has_overlapping_booking($pdo, $facilityId, $date, $timeSlot, $excludeId)) {
+        return [
+            'ok' => false,
+            'message' => 'The selected date and time overlaps an existing booking. Please choose another time.',
+            'error' => 'conflict',
+            'http' => 409,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'message' => '',
+        'error' => '',
+        'http' => 200,
+        'facility' => $facility,
+    ];
+}
+
+/**
+ * Same as frs_validate_resident_booking_limits but ignores one reservation id (reschedule).
+ *
+ * @return array{ok: bool, message: string}
+ */
+function frs_validate_resident_booking_limits_excluding(
+    PDO $pdo,
+    int $userId,
+    string $reservationDate,
+    string $activeStatusesSql,
+    int $excludeReservationId
+): array {
+    if (!frs_booking_limits_apply_to_user($pdo, $userId)) {
+        return ['ok' => true, 'message' => ''];
+    }
+
+    $cfg = frs_resident_booking_limit_config();
+    $today = date('Y-m-d');
+    $exclude = max(0, $excludeReservationId);
+
+    $upcomingStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid
+           AND reservation_date >= :today
+           AND status IN (' . $activeStatusesSql . ')
+           AND id != :exclude'
+    );
+    $upcomingStmt->execute(['uid' => $userId, 'today' => $today, 'exclude' => $exclude]);
+    $upcoming = (int) $upcomingStmt->fetchColumn();
+    if ($upcoming >= $cfg['max_upcoming_active']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: You can have at most ' . $cfg['max_upcoming_active']
+                . ' active upcoming reservation(s) at a time.',
+        ];
+    }
+
+    $perDayStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date = :date
+           AND status IN (' . $activeStatusesSql . ')
+           AND id != :exclude'
+    );
+    $perDayStmt->execute(['uid' => $userId, 'date' => $reservationDate, 'exclude' => $exclude]);
+    if ((int) $perDayStmt->fetchColumn() >= $cfg['per_day']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Only ' . $cfg['per_day'] . ' active reservation per day is allowed.',
+        ];
+    }
+
+    $weekStart = date('Y-m-d', strtotime($reservationDate . ' -6 days'));
+    $weekStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')
+           AND id != :exclude'
+    );
+    $weekStmt->execute([
+        'uid' => $userId,
+        'start' => $weekStart,
+        'end' => $reservationDate,
+        'exclude' => $exclude,
+    ]);
+    if ((int) $weekStmt->fetchColumn() >= $cfg['per_week']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_week'] . ' reservations per week.',
+        ];
+    }
+
+    $monthStart = date('Y-m-d', strtotime($reservationDate . ' -29 days'));
+    $monthStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')
+           AND id != :exclude'
+    );
+    $monthStmt->execute([
+        'uid' => $userId,
+        'start' => $monthStart,
+        'end' => $reservationDate,
+        'exclude' => $exclude,
+    ]);
+    if ((int) $monthStmt->fetchColumn() >= $cfg['per_month']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_month'] . ' reservations per month.',
+        ];
+    }
+
+    $yearStart = substr($reservationDate, 0, 4) . '-01-01';
+    $yearEnd = substr($reservationDate, 0, 4) . '-12-31';
+    $yearStmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM reservations
+         WHERE user_id = :uid AND reservation_date BETWEEN :start AND :end
+           AND status IN (' . $activeStatusesSql . ')
+           AND id != :exclude'
+    );
+    $yearStmt->execute([
+        'uid' => $userId,
+        'start' => $yearStart,
+        'end' => $yearEnd,
+        'exclude' => $exclude,
+    ]);
+    if ((int) $yearStmt->fetchColumn() >= $cfg['per_year']) {
+        return [
+            'ok' => false,
+            'message' => 'Limit reached: Maximum ' . $cfg['per_year'] . ' reservations per year.',
+        ];
+    }
+
+    return ['ok' => true, 'message' => ''];
+}
+
+/**
  * Apply staff approve / deny / cancel (or pending_payment) for a reservation row.
  *
  * @param array<string, mixed> $reservation Row with facility_name, facility_status, status, reservation_date, time_slot, requester_id, requester_email, requester_name; optional postponed_priority

@@ -51,6 +51,7 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/me` |
 | PATCH | `/me` (`name`, `mobile`, `address`) |
 | POST | `/me/password` (`current_password`, `new_password`) |
+| POST | `/me/avatar` | Multipart form field `profile_picture` (JPEG/PNG/GIF/WebP, max 2MB). Returns updated `user` with `avatar_url`. |
 
 ## Home / facilities / reservations
 
@@ -63,11 +64,12 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/facilities/{id}/calendar?year=&month=` | Day tones: green / yellow / red / blackout |
 | GET | `/reservations?status=` |
 | GET | `/reservations/{id}` | Includes `amount`, `is_free`, `payment_due_at`, `payment_status` |
-| POST | `/reservations` | Body: `facility_id`, `reservation_date`, `time_slot`, `purpose`, optional `expected_attendees`, `notes`. May land in `pending_payment` when PayMongo hybrid mode is on. |
+| POST | `/reservations` | Body: `facility_id`, `reservation_date`, `time_slot`, `purpose`, **`expected_attendees` (≥1)**, optional `notes`. Same resident rules as the website (ID/identity, advance window, quotas, blackouts, conflicts, duration 30m–12h, capacity). May land in `pending_payment` when PayMongo hybrid mode is on. |
+| GET | `/booking/policy` | Resident limits + rules (`per_day`/`week`/`month`/`year`, `max_upcoming_active`, `advance_max_days`, `can_book`, identity message). |
 | POST | `/reservations/{id}/cancel` | Cancels; attempts PayMongo refund if paid |
 | POST | `/reservations/{id}/pay` | Starts PayMongo checkout → `checkout_url` (GCash / card / QRPh) |
 | POST | `/reservations/{id}/payment-sync` | Polls PayMongo after browser checkout |
-| POST | `/reservations/{id}/reschedule` | Body: `reservation_date`, `time_slot`, optional `reason` (1×, ≥3 days ahead) |
+| POST | `/reservations/{id}/reschedule` | Body: `reservation_date`, `time_slot`, **`reason` (required)**. Same date/slot/blackout/conflict rules as create. Once only · ≥3 days before event · not while `pending_payment` · not after start. |
 | GET | `/reservations/{id}/pass` | Approved only — QR payload |
 | POST | `/check-in/facility` | Body: `token` (facility QR token or full URL) |
 | GET | `/occupancy/live` |
@@ -75,6 +77,8 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/notifications` |
 | POST | `/notifications/{id}/read` |
 | POST | `/devices` | Body: `fcm_token`, optional `platform`, `device_name` |
+| GET | `/smart-scheduler` | Personalized / popular reservation recommendations (same `RecommendationService` as website Smart Scheduler). Optional Gemini insight blurb when `GEMINI_API_KEY` is set. |
+| POST | `/assistant/chat` | Body: `message`, optional `history` (last 10 turns). Gemini-backed PFRS assistant; may return `action: prefill_booking` with `data` for the booking form. Requires `GEMINI_API_KEY` on server. |
 
 ## Errors
 

@@ -22,15 +22,17 @@
     width: 100%;
 }
 
-/* ── Brand panel (left) ── */
+/* ── Brand panel (left) — equal 50% with form panel ── */
 .auth-split-brand {
     position: relative;
-    flex: 0 0 50%;
-    max-width: 600px;
+    flex: 1 1 50%;
+    width: 50%;
+    max-width: none;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 2.5rem 2.75rem;
+    padding: 2.75rem 3rem;
     background: linear-gradient(145deg, #065f46 0%, #047857 35%, #059669 70%, #10b981 100%);
     color: #fff;
     overflow: hidden;
@@ -109,10 +111,10 @@
 }
 
 .auth-split-brand p {
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.65;
     color: rgba(255, 255, 255, 0.88);
-    max-width: 22rem;
+    max-width: 28rem;
     margin: 0;
 }
 
@@ -286,14 +288,17 @@
     background: #fff;
 }
 
-/* ── Form panel (right) — Main Bg, darkened & blurred ── */
+/* ── Form panel (right) — equal 50% with brand; form fills the half ── */
 .auth-split-form-panel {
     position: relative;
-    flex: 1;
+    flex: 1 1 50%;
+    width: 50%;
+    max-width: none;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem 1.5rem;
+    padding: 2.5rem 3rem;
     background: #0f172a;
     overflow-y: auto;
     overflow-x: hidden;
@@ -322,18 +327,18 @@
     position: relative;
     z-index: 2;
     width: 100%;
-    max-width: 400px;
+    max-width: none;
     background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    padding: 2rem 2.25rem;
-    border-radius: 16px;
+    padding: 2.75rem 3rem;
+    border-radius: 20px;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
     border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .auth-split-form-inner.is-wide {
-    max-width: 520px;
+    max-width: none;
 }
 
 .auth-split-form-top {
@@ -344,28 +349,28 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: #1b1b1f;
     margin-bottom: 1.75rem;
 }
 
 .auth-split-logo-text img {
-    height: 32px;
+    height: 36px;
     width: auto;
 }
 
 .auth-split-form-top h1 {
-    font-size: clamp(1.5rem, 2.5vw, 1.85rem);
+    font-size: clamp(1.75rem, 2.8vw, 2.15rem);
     font-weight: 700;
     color: #1b1b1f;
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.55rem;
 }
 
 .auth-split-form-top .auth-split-sub {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     color: #64748b;
-    line-height: 1.5;
+    line-height: 1.55;
     margin: 0;
 }
 
@@ -437,12 +442,12 @@
 .auth-split-form select,
 .auth-split-form textarea {
     width: 100%;
-    padding: 0.85rem 0 0.65rem;
+    padding: 0.95rem 0 0.75rem;
     border: none;
     border-bottom: 2px solid #cbd5e1;
     border-radius: 0;
     background: transparent;
-    font-size: 1rem;
+    font-size: 1.05rem;
     color: #1e293b;
     font-family: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -485,12 +490,12 @@
 
 .auth-split-form .btn-primary {
     margin-top: 0.5rem;
-    padding: 0.95rem 1.5rem;
+    padding: 1.05rem 1.5rem;
     background: linear-gradient(135deg, #059669, #047857) !important;
     color: #fff !important;
     border: none;
     border-radius: 10px;
-    font-size: 1rem;
+    font-size: 1.05rem;
     font-weight: 600;
     cursor: pointer;
     width: 100%;
@@ -649,6 +654,7 @@
 
     .auth-split-brand {
         flex: none;
+        width: 100%;
         max-width: none;
         min-height: auto;
         padding: 2rem 1.5rem 1.75rem;
@@ -684,8 +690,13 @@
     }
 
     .auth-split-form-panel {
+        width: 100%;
         padding: 2rem 1.25rem 2.5rem;
         flex: 1;
+    }
+
+    .auth-split-form-inner {
+        padding: 2rem 1.5rem;
     }
 
     .auth-split-form-row {
