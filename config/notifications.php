@@ -37,7 +37,29 @@ function createNotification($userId, $type, $title, $message, $link = null) {
             'message' => $message,
             'link' => $link,
         ]);
-        return (int)$pdo->lastInsertId();
+        $id = (int) $pdo->lastInsertId();
+
+        // Best-effort system-tray push for companion app (no-op if FCM unconfigured).
+        if ($id > 0 && $userId !== null && (int) $userId > 0) {
+            try {
+                require_once __DIR__ . '/mobile_push.php';
+                frs_mobile_notify_user(
+                    $pdo,
+                    (int) $userId,
+                    (string) $title,
+                    (string) $message,
+                    [
+                        'type' => (string) $type,
+                        'notification_id' => (string) $id,
+                        'link' => (string) ($link ?? ''),
+                    ]
+                );
+            } catch (Throwable $pushEx) {
+                error_log('FCM push after notification failed: ' . $pushEx->getMessage());
+            }
+        }
+
+        return $id;
     } catch (Throwable $e) {
         error_log('Notification creation failed: ' . $e->getMessage());
         return false;

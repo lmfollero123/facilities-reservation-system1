@@ -12,6 +12,7 @@ MOBILE_JWT_SECRET=change-me-to-a-long-random-string
 MOBILE_ACCESS_TTL=900
 MOBILE_REFRESH_TTL=2592000
 # MOBILE_OTP_DEV_ACCEPT=1   # local only — accepts any 6-digit OTP
+# FCM_SERVICE_ACCOUNT_PATH=/home/cprf.infragovservices.com/private/firebase-adminsdk.json
 ```
 
 3. Base URL: `{APP_URL}/api/mobile/v1`
@@ -76,7 +77,7 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/announcements` |
 | GET | `/notifications` |
 | POST | `/notifications/{id}/read` |
-| POST | `/devices` | Body: `fcm_token`, optional `platform`, `device_name` |
+| POST | `/devices` | Body: `fcm_token`, optional `platform`, `device_name`. System-tray push needs: app `google-services.json` + server `FCM_SERVICE_ACCOUNT_PATH` (Firebase Admin SDK JSON) + `createNotification` → FCM HTTP v1. In-app inbox works without FCM. |
 | GET / PATCH | `/me/preferences` | Notification channels (`booking_*`, `reminder_*` × in_app/email/sms) + security (`email_otp`, disable `google_authenticator`). Same prefs as website Profile. |
 | GET | `/smart-scheduler` | Personalized / popular reservation recommendations (same `RecommendationService` as website Smart Scheduler). Optional Gemini insight blurb when `GEMINI_API_KEY` is set. |
 | POST | `/assistant/chat` | Body: `message`, optional `history` (last 10 turns). Gemini-backed PFRS assistant; may return `action: prefill_booking`. If Gemini is down but a key is configured, returns a rule-based `reply` with `error: gemini_unavailable` (still HTTP 200). |

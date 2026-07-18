@@ -62,11 +62,16 @@ function mobile_facility_image_url(?string $path): ?string
     if ($path === null || $path === '') {
         return null;
     }
+    $path = trim($path);
     if (preg_match('#^https?://#i', $path)) {
         return $path;
     }
-    $base = rtrim(function_exists('base_path') ? base_path() : '', '/');
-    return $base . '/' . ltrim($path, '/');
+    // Absolute URL required by the Flutter Image.network client.
+    $origin = function_exists('base_url') ? rtrim((string) base_url(), '/') : '';
+    if ($origin === '' && function_exists('base_path')) {
+        $origin = rtrim((string) base_path(), '/');
+    }
+    return $origin . '/' . ltrim($path, '/');
 }
 
 /**
