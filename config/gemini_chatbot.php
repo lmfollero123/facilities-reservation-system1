@@ -163,11 +163,36 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
         }
     }
 
+    $reply = frs_gemini_strip_markdown((string) $reply);
+
     return [
         'success' => true,
         'reply' => $reply,
         'booking' => $booking
     ];
+}
+
+/**
+ * Strip Markdown emphasis so chat UIs that show plain text don't display raw * / **.
+ */
+function frs_gemini_strip_markdown(string $text): string
+{
+    // Fenced code blocks → inner text only
+    $text = preg_replace('/```[\w]*\s*([\s\S]*?)```/', '$1', $text) ?? $text;
+    // Bold / italic (order: ** then *)
+    $text = preg_replace('/\*\*(.+?)\*\*/s', '$1', $text) ?? $text;
+    $text = preg_replace('/__(.+?)__/s', '$1', $text) ?? $text;
+    $text = preg_replace('/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/s', '$1', $text) ?? $text;
+    $text = preg_replace('/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/s', '$1', $text) ?? $text;
+    // Markdown bullets at line start
+    $text = preg_replace('/^(\s*)[\*\-]\s+/m', '$1• ', $text) ?? $text;
+    // Headers
+    $text = preg_replace('/^#{1,6}\s+/m', '', $text) ?? $text;
+    // Any leftover emphasis markers that confuse residents
+    $text = str_replace(['**', '__'], '', $text);
+    $text = preg_replace('/(?<![A-Za-z0-9])\*(?![A-Za-z0-9])/', '', $text) ?? $text;
+
+    return trim(preg_replace("/[ \t]+\n/", "\n", $text) ?? $text);
 }
 
 /**
@@ -323,6 +348,8 @@ function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string
 You are a helpful AI assistant for an LGU (Local Government Unit) Facilities Reservation System in Barangay Culiat.
 
 LANGUAGE: Always respond in Tagalog (Filipino). You may mix in English words when natural (Taglish), as commonly used in the Philippines. Be warm and helpful (magalang at matulungin).
+
+FORMAT: Write plain text only. Do NOT use Markdown (no **bold**, no *italics*, no # headers, no ``` code fences). Use numbered lists (1. 2. 3.) or the • character for bullets.
 
 Current local time: {$nowLabel} (Asia/Manila).
 
