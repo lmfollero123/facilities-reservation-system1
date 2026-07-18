@@ -7,11 +7,8 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 require_once __DIR__ . '/../../../../config/chatbot_responses.php';
-// Load Gemini config explicitly (gemini_config.php is gitignored)
-$geminiConfigPath = dirname(__DIR__, 4) . '/config/gemini_config.php';
-if (file_exists($geminiConfigPath)) {
-    require_once $geminiConfigPath;
-}
+// gemini_chatbot.php loads GEMINI_API_KEY from cprf.env / .env first.
+// Do NOT require gemini_config.php before that — a stale key there blocks the env key.
 require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 
@@ -57,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- Gemini AI (try first when available) ---
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
-            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50");
+            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours FROM facilities ORDER BY name LIMIT 50");
             $facilities = $facStmt ? $facStmt->fetchAll(PDO::FETCH_ASSOC) : [];
             $userBookings = [];
             if ($userId) {
@@ -73,19 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $userBookings = $bStmt->fetchAll(PDO::FETCH_ASSOC);
             }
 
-            // Same Live Occupancy engine as the dashboard strip / monitor
+            // Skip live occupancy in chatbot — keep Gemini latency reliable.
             $liveOccupancy = null;
-            if (function_exists('frs_build_operational_occupancy_snapshot')) {
-                try {
-                    $liveOccupancy = frs_build_operational_occupancy_snapshot($pdo);
-                    if (function_exists('frs_sanitize_occupancy_snapshot_for_public')) {
-                        $liveOccupancy = frs_sanitize_occupancy_snapshot_for_public($liveOccupancy);
-                    }
-                } catch (Throwable $occErr) {
-                    error_log('Chatbot live occupancy snapshot error: ' . $occErr->getMessage());
-                    $liveOccupancy = null;
-                }
-            }
 
             $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId, $liveOccupancy);
 
@@ -130,9 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $geminiConfigured = defined('GEMINI_API_KEY')
-        && GEMINI_API_KEY !== ''
-        && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE';
+    $geminiConfigured = function_exists('frs_gemini_api_key')
+        ? frs_gemini_api_key() !== ''
+        : (defined('GEMINI_API_KEY')
+            && GEMINI_API_KEY !== ''
+            && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE');
     if ($geminiConfigured && function_exists('geminiChatbotResponse')) {
         $bookingLike = preg_match(
             '/\b(book|reserve|reservation|pa book|mag-book|mag book|risk score|conflict|availability)\b/i',

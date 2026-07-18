@@ -16,6 +16,27 @@ if (!defined('GEMINI_API_KEY') && file_exists(__DIR__ . '/gemini_config.php')) {
 }
 
 /**
+ * Resolve Gemini API key at call time.
+ * Prefer ~/private/cprf.env / .env over a stale config/gemini_config.php constant.
+ */
+function frs_gemini_api_key(): string
+{
+    $fromEnv = function_exists('env_value')
+        ? trim((string) env_value('GEMINI_API_KEY', ''))
+        : trim((string) (getenv('GEMINI_API_KEY') ?: ''));
+    if ($fromEnv !== '' && $fromEnv !== 'YOUR_GEMINI_API_KEY_HERE') {
+        return $fromEnv;
+    }
+    if (defined('GEMINI_API_KEY')) {
+        $k = trim((string) GEMINI_API_KEY);
+        if ($k !== '' && $k !== 'YOUR_GEMINI_API_KEY_HERE') {
+            return $k;
+        }
+    }
+    return '';
+}
+
+/**
  * Call Gemini API and return text response.
  *
  * @param string $systemPrompt System/context prompt
@@ -24,7 +45,8 @@ if (!defined('GEMINI_API_KEY') && file_exists(__DIR__ . '/gemini_config.php')) {
  * @return array{success: bool, reply: string, booking?: array}|null
  */
 function geminiChatbotResponse(string $systemPrompt, string $userMessage, array $conversationHistory = []): ?array {
-    if (!defined('GEMINI_API_KEY') || GEMINI_API_KEY === '' || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+    $apiKey = frs_gemini_api_key();
+    if ($apiKey === '') {
         return null;
     }
 
@@ -33,8 +55,7 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
     $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
     $raw = false;
     $httpCode = 0;
-    $apiKey = GEMINI_API_KEY;
-    $perRequestTimeout = 12;
+    $perRequestTimeout = 20;
     $connectTimeout = 5;
     $maxModelAttempts = 3;
     $attemptedModels = 0;
@@ -95,8 +116,22 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
     }
 
     $data = json_decode($raw, true);
-    $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+    // Newer models may return multiple parts (text + metadata); join text parts.
+    $text = null;
+    $parts = $data['candidates'][0]['content']['parts'] ?? null;
+    if (is_array($parts)) {
+        $chunks = [];
+        foreach ($parts as $part) {
+            if (is_array($part) && isset($part['text']) && is_string($part['text']) && $part['text'] !== '') {
+                $chunks[] = $part['text'];
+            }
+        }
+        if ($chunks !== []) {
+            $text = implode('', $chunks);
+        }
+    }
     if (!$text || !is_string($text)) {
+        error_log('Gemini API 200 but no text in candidates: ' . substr((string) $raw, 0, 300));
         return null;
     }
 
