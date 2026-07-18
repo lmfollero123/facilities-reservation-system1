@@ -155,7 +155,7 @@ function frs_gemini_json_announcement_request(string $systemPrompt, string $fact
         return null;
     }
 
-    $models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+    $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
     $apiKey = GEMINI_API_KEY;
     $payloadBase = [
         'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],

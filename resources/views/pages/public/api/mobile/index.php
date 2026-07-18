@@ -2015,11 +2015,9 @@ if ($route === 'assistant/chat' && $method === 'POST') {
 
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
-            require_once dirname(__DIR__, 6) . '/config/occupancy_monitoring.php';
-
             $facStmt = $pdo->query(
-                "SELECT id, name, status, capacity, amenities, location, operating_hours
-                 FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50"
+                'SELECT id, name, status, capacity, amenities, location, operating_hours
+                 FROM facilities ORDER BY name LIMIT 50'
             );
             $facilities = $facStmt ? ($facStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
 
@@ -2034,18 +2032,9 @@ if ($route === 'assistant/chat' && $method === 'POST') {
             $bStmt->execute(['uid' => $userId]);
             $userBookings = $bStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+            // Skip live occupancy on mobile: the snapshot can be slow enough to
+            // exceed phone/proxy timeouts before Gemini (or soft-fail) can respond.
             $liveOccupancy = null;
-            if (function_exists('frs_build_operational_occupancy_snapshot')) {
-                try {
-                    $liveOccupancy = frs_build_operational_occupancy_snapshot($pdo);
-                    if (function_exists('frs_sanitize_occupancy_snapshot_for_public')) {
-                        $liveOccupancy = frs_sanitize_occupancy_snapshot_for_public($liveOccupancy);
-                    }
-                } catch (Throwable $occErr) {
-                    error_log('Mobile assistant occupancy snapshot error: ' . $occErr->getMessage());
-                    $liveOccupancy = null;
-                }
-            }
 
             $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId, $liveOccupancy);
             $geminiResult = geminiChatbotResponse($prompt, $message, $sanitizedHistory);

@@ -28,13 +28,15 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
         return null;
     }
 
-    $models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+    // Prefer models available to new AI Studio / auth (AQ.) keys.
+    // gemini-2.5-* returns 404 for new projects; gemini-2.0-* often has free-tier limit 0.
+    $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
     $raw = false;
     $httpCode = 0;
     $apiKey = GEMINI_API_KEY;
     $perRequestTimeout = 12;
     $connectTimeout = 5;
-    $maxModelAttempts = 2;
+    $maxModelAttempts = 3;
     $attemptedModels = 0;
 
     $contents = [];
