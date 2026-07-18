@@ -66,7 +66,7 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/reservations?status=` |
 | GET | `/reservations/{id}` | Includes `amount`, `is_free`, `payment_due_at`, `payment_status` |
 | POST | `/reservations` | Body: `facility_id`, `reservation_date`, `time_slot`, `purpose`, **`expected_attendees` (≥1)**, optional `notes`. Same resident rules as the website (ID/identity, advance window, quotas, blackouts, conflicts, duration 30m–12h, capacity). May land in `pending_payment` when PayMongo hybrid mode is on. |
-| GET | `/booking/policy` | Resident limits + rules (`per_day`/`week`/`month`/`year`, `max_upcoming_active`, `advance_max_days`, `can_book`, identity message). |
+| GET | `/booking/policy` | Resident limits + rules + Help center copy (`help.booking` / `reschedule` / `cancel_refund` / `qr_checkin`). Mirrors website. |
 | POST | `/reservations/{id}/cancel` | Cancels; attempts PayMongo refund if paid |
 | POST | `/reservations/{id}/pay` | Starts PayMongo checkout → `checkout_url` (GCash / card / QRPh) |
 | POST | `/reservations/{id}/payment-sync` | Polls PayMongo after browser checkout |

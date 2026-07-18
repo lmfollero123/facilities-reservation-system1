@@ -1361,16 +1361,17 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
         mobile_error('Cannot reschedule a reservation that has already started or is ongoing.', 400, 'already_started');
     }
 
-    $isPostponed = ($reservation['status'] ?? '') === 'postponed';
+    // Website parity: one reschedule per reservation (no postponed exception).
     $count = (int) ($reservation['reschedule_count'] ?? 0);
-    if ($count >= 1 && !$isPostponed) {
+    if ($count >= 1) {
         mobile_error('You can only reschedule once per reservation.', 400, 'reschedule_limit');
     }
 
     $eventDate = new DateTime((string) $reservation['reservation_date']);
     $today = new DateTime('today');
     $daysLeft = (int) $today->diff($eventDate)->format('%r%a');
-    if ($daysLeft < 3 && !$isPostponed) {
+    // Website parity: at least 3 days before the event (no postponed exception).
+    if ($daysLeft < 3) {
         mobile_error(
             'Rescheduling is only allowed up to 3 days before the event. The event is '
             . max(0, $daysLeft) . ' day(s) away.',
@@ -1382,6 +1383,11 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
     if ($newDate === (string) $reservation['reservation_date']
         && $newSlot === (string) $reservation['time_slot']) {
         mobile_error('You are already scheduled for this date and time. Please select a different slot.', 422, 'same_slot');
+    }
+
+    $newDateObj = new DateTime($newDate);
+    if ($newDateObj < $today) {
+        mobile_error('New reservation date cannot be in the past.', 422, 'past_date');
     }
 
     $uid = (int) $user['id'];
@@ -1413,39 +1419,70 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
         );
     }
 
-    $newStatus = $reservation['status'];
-    if (in_array($reservation['status'], ['approved', 'postponed'], true)) {
-        // Website: approved/postponed require re-approval unless already paid / free.
-        try {
-            $paid = $pdo->prepare('SELECT id FROM payments WHERE reservation_id = ? AND status = "paid" LIMIT 1');
-            $paid->execute([$id]);
-            $hasPaid = (bool) $paid->fetchColumn();
-            $newStatus = $hasPaid || !empty($reservation['is_free']) ? 'approved' : 'pending';
-        } catch (Throwable $e) {
-            $newStatus = 'pending';
-        }
+    $oldStatus = (string) ($reservation['status'] ?? 'pending');
+    $oldDate = (string) ($reservation['reservation_date'] ?? '');
+    $oldSlot = (string) ($reservation['time_slot'] ?? '');
+
+    // Website parity: approved / postponed always return to pending for re-approval.
+    $newStatus = in_array($oldStatus, ['approved', 'postponed'], true) ? 'pending' : $oldStatus;
+
+    // Keep postponed_priority when leaving postponed (website behavior); clear postponed_at only.
+    $hasPriority = false;
+    try {
+        $priorityStmt = $pdo->prepare('SELECT postponed_priority FROM reservations WHERE id = ?');
+        $priorityStmt->execute([$id]);
+        $hasPriority = (bool) $priorityStmt->fetchColumn();
+    } catch (Throwable $e) {
+        $hasPriority = false;
     }
 
     $pdo->prepare(
         'UPDATE reservations
          SET reservation_date = ?, time_slot = ?, status = ?,
              reschedule_count = COALESCE(reschedule_count, 0) + 1,
-             postponed_at = NULL, postponed_priority = FALSE, updated_at = NOW()
+             postponed_at = NULL, updated_at = NOW()
          WHERE id = ?'
     )->execute([$newDate, $newSlot, $newStatus, $id]);
+
+    $histNote = 'Rescheduled via Companion app from ' . $oldDate . ' (' . $oldSlot . ') to '
+        . $newDate . ' (' . $newSlot . '). Reason: ' . $reason;
+    if ($oldStatus === 'approved' || $oldStatus === 'postponed') {
+        $histNote .= ' Status changed to pending for re-approval.';
+        if ($oldStatus === 'postponed' && $hasPriority) {
+            $histNote .= ' Priority status maintained.';
+        }
+    }
+
     $pdo->prepare(
         'INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (?, ?, ?, ?)'
-    )->execute([
-        $id,
-        $newStatus,
-        'Rescheduled via Companion app to ' . $newDate . ' ' . $newSlot . '. ' . $reason,
-        $uid,
-    ]);
+    )->execute([$id, $newStatus, $histNote, $uid]);
+
+    if (file_exists(dirname(__DIR__, 6) . '/config/notifications.php')) {
+        require_once dirname(__DIR__, 6) . '/config/notifications.php';
+        if (function_exists('createNotification')) {
+            $notifMsg = 'Your reservation for ' . ($reservation['facility_name'] ?? 'facility')
+                . ' was rescheduled to ' . $newDate . ' (' . $newSlot . ').';
+            if ($newStatus === 'pending') {
+                $notifMsg .= ' It is pending staff re-approval.';
+            }
+            createNotification(
+                $uid,
+                'booking',
+                'Reservation rescheduled',
+                $notifMsg,
+                null
+            );
+        }
+    }
 
     $fresh = mobile_load_reservation($pdo, $id, $uid);
+    $msg = 'Reservation rescheduled.';
+    if ($newStatus === 'pending' && in_array($oldStatus, ['approved', 'postponed'], true)) {
+        $msg = 'Reservation rescheduled and set to pending for staff re-approval.';
+    }
     mobile_json([
         'ok' => true,
-        'message' => 'Reservation rescheduled.',
+        'message' => $msg,
         'reservation' => mobile_serialize_reservation($fresh ?: $reservation),
     ]);
 }
@@ -1888,6 +1925,39 @@ if ($route === 'booking/policy' && $method === 'GET') {
         'policy_bullets' => frs_resident_booking_limits_policy_bullets(),
         'can_book' => !empty($identity['ok']),
         'identity_message' => empty($identity['ok']) ? (string) $identity['message'] : null,
+        // Companion Help center — same rules as website My Reservations / Terms.
+        'help' => [
+            'booking' => [
+                'Valid ID / identity verification is required before residents can book.',
+                frs_resident_booking_limits_policy_bullets(),
+                'Duration must be between 30 minutes and 12 hours.',
+                'Expected attendees is required and cannot exceed facility capacity.',
+                'Some bookings may be auto-approved; staff can still override.',
+                'Paid facilities may require PayMongo payment (GCash / card / QRPh) within the payment window.',
+            ],
+            'reschedule' => [
+                'Only pending, approved, or postponed reservations can be rescheduled.',
+                'Complete payment first if status is pending payment.',
+                'Reschedule at least 3 days before the event (same-day not allowed).',
+                'Only one reschedule is allowed per reservation.',
+                'A reason is required.',
+                'Approved or postponed bookings return to pending for staff re-approval after reschedule.',
+                'Reservations that have already started or are ongoing cannot be rescheduled.',
+            ],
+            'cancel_refund' => [
+                'You may cancel upcoming reservations that are pending payment, pending, approved, or postponed.',
+                'You cannot cancel a reservation that has already started or passed.',
+                'Free facilities: cancel releases the slot; no refund is involved.',
+                'Paid bookings: the app attempts an automatic PayMongo refund when you cancel.',
+                'If automatic refund fails, staff will follow up — keep your booking reference ready.',
+                'Rejected or cancelled reservations cannot be rescheduled; create a new booking instead.',
+            ],
+            'qr_checkin' => [
+                'QR facility pass is available only for approved reservations.',
+                'Bring a valid ID when checking in at the facility.',
+                'Follow barangay staff instructions on-site.',
+            ],
+        ],
     ]);
 }
 
@@ -2073,14 +2143,23 @@ if ($route === 'home' && $method === 'GET') {
         );
         $ann = $a ? ($a->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
     } catch (Throwable $e) {
-        $ann = [];
+        // Some schemas use `body` instead of `message`.
+        try {
+            $a = $pdo->query(
+                'SELECT id, title, body AS message, created_at FROM notifications WHERE user_id IS NULL ORDER BY created_at DESC LIMIT 5'
+            );
+            $ann = $a ? ($a->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+        } catch (Throwable $e2) {
+            $ann = [];
+        }
     }
     $announcements = array_map(static function ($r) {
+        $text = (string) ($r['message'] ?? $r['body'] ?? '');
         return [
             'id' => (int) $r['id'],
             'title' => (string) ($r['title'] ?? ''),
-            'message' => (string) ($r['message'] ?? ''),
-            'body' => (string) ($r['message'] ?? ''),
+            'message' => $text,
+            'body' => $text,
             'created_at' => $r['created_at'] ?? null,
         ];
     }, $ann);
