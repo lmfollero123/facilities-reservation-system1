@@ -90,7 +90,7 @@ flowchart LR
 **In scope:** Web application, facilities (not equipment inventory module), CIMM sync, integration dashboards, Gemini chatbot, optional PayMongo payments.
 
 **Limitations:**
-- No native mobile app (responsive web only)  
+- Resident Companion Flutter app (Android) via `/api/mobile/v1` — see `docs/MOBILE_API.md`  
 - Payments disabled by default for capstone  
 - Infrastructure integration: connected for barangay-scoped construction reports; detailed bidirectional automation not yet specified  
 - Survey/interview evaluation pending  

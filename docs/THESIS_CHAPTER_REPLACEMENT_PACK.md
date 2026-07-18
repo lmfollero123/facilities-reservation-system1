@@ -351,7 +351,7 @@ Use these when panel asks "does your system actually do this?"
 ## Assumptions avoided
 
 - No unverified workload reduction percentages
-- No native mobile app claims
+- No unsupported “full native iOS App Store” claims without noting Android companion + API
 - No live utilities/infrastructure API claims
 - No separate equipment booking workflow
 

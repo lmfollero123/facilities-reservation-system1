@@ -60,9 +60,16 @@ function frs_save_notification_preferences(int $userId, array $prefs): bool
         return false;
     }
     $merged = frs_default_notification_preferences();
+    // Start from saved prefs so partial updates do not wipe other channels.
+    $current = frs_get_notification_preferences($userId);
+    foreach ($merged as $key => $_) {
+        if (array_key_exists($key, $current)) {
+            $merged[$key] = (bool) $current[$key];
+        }
+    }
     foreach ($merged as $key => $_) {
         if (array_key_exists($key, $prefs)) {
-            $merged[$key] = (bool)$prefs[$key];
+            $merged[$key] = (bool) $prefs[$key];
         }
     }
     try {
@@ -74,7 +81,7 @@ function frs_save_notification_preferences(int $userId, array $prefs): bool
             'prefs' => json_encode($merged, JSON_UNESCAPED_UNICODE),
             'id' => $userId,
         ]);
-        return $stmt->rowCount() > 0;
+        return true;
     } catch (Throwable $e) {
         error_log('frs_save_notification_preferences: ' . $e->getMessage());
         return false;

@@ -567,6 +567,152 @@ if ($route === 'me/password' && $method === 'POST') {
     mobile_json(['ok' => true, 'message' => 'Password changed.']);
 }
 
+if ($route === 'me/preferences' && $method === 'GET') {
+    $user = mobile_require_user($pdo);
+    require_once dirname(__DIR__, 6) . '/config/notification_preferences.php';
+    frs_ensure_notification_preferences_schema();
+    $uid = (int) $user['id'];
+    $stmt = $pdo->prepare(
+        'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret
+         FROM users WHERE id = ? LIMIT 1'
+    );
+    $stmt->execute([$uid]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
+    mobile_json([
+        'ok' => true,
+        'preferences' => [
+            'notifications' => frs_get_notification_preferences($uid),
+            'security' => [
+                'email_otp' => (bool) ((int) ($row['enable_otp'] ?? 1)),
+                'google_authenticator' => !empty($row['totp_enabled']) && !empty($row['totp_secret']),
+                'google_authenticator_setup_on_web' => true,
+            ],
+        ],
+    ]);
+}
+
+if ($route === 'me/preferences' && in_array($method, ['PATCH', 'PUT'], true)) {
+    $user = mobile_require_user($pdo);
+    $body = mobile_body();
+    $uid = (int) $user['id'];
+    require_once dirname(__DIR__, 6) . '/config/notification_preferences.php';
+    frs_ensure_notification_preferences_schema();
+
+    $updated = false;
+    $messages = [];
+
+    if (isset($body['notifications']) && is_array($body['notifications'])) {
+        $allowed = array_keys(frs_default_notification_preferences());
+        $prefs = [];
+        foreach ($allowed as $key) {
+            if (array_key_exists($key, $body['notifications'])) {
+                $prefs[$key] = filter_var($body['notifications'][$key], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($prefs[$key] === null) {
+                    $prefs[$key] = (bool) $body['notifications'][$key];
+                }
+            }
+        }
+        if ($prefs !== []) {
+            if (!frs_save_notification_preferences($uid, $prefs)) {
+                mobile_error('Could not save notification preferences.', 500, 'save_failed');
+            }
+            $updated = true;
+            $messages[] = 'Notification preferences updated.';
+        }
+    }
+
+    if (array_key_exists('email_otp', $body) || (isset($body['security']) && is_array($body['security']) && array_key_exists('email_otp', $body['security']))) {
+        $enableOtp = array_key_exists('email_otp', $body)
+            ? $body['email_otp']
+            : $body['security']['email_otp'];
+        $enableOtp = filter_var($enableOtp, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($enableOtp === null) {
+            mobile_error('email_otp must be true or false.', 422, 'validation');
+        }
+        $stmt = $pdo->prepare(
+            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role
+             FROM users WHERE id = ? LIMIT 1'
+        );
+        $stmt->execute([$uid]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
+        $totpActive = !empty($row['totp_enabled']) && !empty($row['totp_secret']);
+        if ($enableOtp === false && function_exists('frs_role_requires_two_factor')
+            && frs_role_requires_two_factor((string) ($row['role'] ?? ''))
+            && !$totpActive) {
+            mobile_error(
+                'Email OTP cannot be turned off while Google Authenticator is also off for this role.',
+                422,
+                'otp_required'
+            );
+        }
+        if ($enableOtp === false && $totpActive && function_exists('frs_role_requires_two_factor')
+            && !frs_role_requires_two_factor((string) ($row['role'] ?? ''))) {
+            // Residents may keep TOTP as sole 2FA; allowing email OTP off is fine.
+        }
+        $pdo->prepare('UPDATE users SET enable_otp = ?, updated_at = NOW() WHERE id = ?')
+            ->execute([$enableOtp ? 1 : 0, $uid]);
+        $updated = true;
+        $messages[] = $enableOtp ? 'Email OTP enabled.' : 'Email OTP disabled.';
+    }
+
+    // Disable Google Authenticator only (setup requires website QR flow).
+    $disableTotp = false;
+    if (array_key_exists('google_authenticator', $body)) {
+        $disableTotp = filter_var($body['google_authenticator'], FILTER_VALIDATE_BOOLEAN) === false;
+    } elseif (isset($body['security']) && is_array($body['security']) && array_key_exists('google_authenticator', $body['security'])) {
+        $disableTotp = filter_var($body['security']['google_authenticator'], FILTER_VALIDATE_BOOLEAN) === false;
+    }
+    if ($disableTotp) {
+        $stmt = $pdo->prepare(
+            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role
+             FROM users WHERE id = ? LIMIT 1'
+        );
+        $stmt->execute([$uid]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
+        $totpActive = !empty($row['totp_enabled']) && !empty($row['totp_secret']);
+        if (!$totpActive) {
+            mobile_error('Google Authenticator is not enabled.', 422, 'validation');
+        }
+        $emailOtpOn = (bool) ((int) ($row['enable_otp'] ?? 1));
+        if (function_exists('frs_role_requires_two_factor')
+            && frs_role_requires_two_factor((string) ($row['role'] ?? ''))
+            && !$emailOtpOn) {
+            mobile_error(
+                'Enable Email OTP before turning off Google Authenticator.',
+                422,
+                'otp_required'
+            );
+        }
+        $pdo->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, updated_at = NOW() WHERE id = ?')
+            ->execute([$uid]);
+        $updated = true;
+        $messages[] = 'Google Authenticator disabled. Re-enable it from the website Profile page.';
+    }
+
+    if (!$updated) {
+        mobile_error('No preference fields to update.', 422, 'validation');
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret
+         FROM users WHERE id = ? LIMIT 1'
+    );
+    $stmt->execute([$uid]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    mobile_json([
+        'ok' => true,
+        'message' => implode(' ', $messages),
+        'preferences' => [
+            'notifications' => frs_get_notification_preferences($uid),
+            'security' => [
+                'email_otp' => (bool) ((int) ($row['enable_otp'] ?? 1)),
+                'google_authenticator' => !empty($row['totp_enabled']) && !empty($row['totp_secret']),
+                'google_authenticator_setup_on_web' => true,
+            ],
+        ],
+    ]);
+}
+
 if ($route === 'me/avatar' && $method === 'POST') {
     $user = mobile_require_user($pdo);
     $uid = (int) $user['id'];
@@ -1865,12 +2011,15 @@ if ($route === 'assistant/chat' && $method === 'POST') {
         && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE';
 
     if ($geminiConfigured) {
+        // Soft-fail: keep the chat usable with a rule-based reply instead of a hard 503.
         mobile_json([
-            'ok' => false,
+            'ok' => true,
             'error' => 'gemini_unavailable',
-            'reply' => 'The AI assistant could not reach Gemini right now (invalid API key, quota, or network). '
-                . 'Please try again later or book a facility from the Bookings tab.',
-        ], 503);
+            'message' => 'The AI assistant could not reach Gemini right now. Showing a basic reply instead.',
+            'reply' => 'I can still help with facility bookings, availability, and your reservations. '
+                . 'Ask about a facility, operating hours, or say you want to book one. '
+                . '(Full AI replies will return once Gemini is available again.)',
+        ]);
     }
 
     $simpleGreetings = ['hi', 'hello', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening'];

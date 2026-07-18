@@ -31,6 +31,7 @@ public/img/announcements/
 public/img/facilities/
 public/uploads/
 docs/diagrams/
+docs/*.md
 # IDE & editor
 .vscode/
 .idea/

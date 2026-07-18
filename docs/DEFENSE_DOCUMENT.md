@@ -855,19 +855,24 @@ This avoids contradicting “free facilities” messaging in the UI and chatbot 
 
 ## Future Enhancements
 
-1. **Mobile Application**: Native iOS/Android apps or installable PWA
+1. **iOS companion / Play Store distribution**: Publish the existing Flutter Resident Companion beyond sideloaded Android APK
 2. **Event permit attachments**: Barangay resolution / letter uploads with large bookings
 3. **Advanced Analytics**: Demand forecasting in production reports UI
 4. **Live LGU integrations**: CIMM maintenance API (scaffolded), utilities/infrastructure feeds
 5. **Filipino/Tagalog localization** for public pages
 
-**Recently delivered:** AI chatbot (Gemini + booking prefill), notification preferences, 24h booking reminders (cron), automated PHPUnit CI.
+**Recently delivered:** AI chatbot (Gemini + booking prefill), notification preferences, 24h booking reminders (cron), automated PHPUnit CI, Resident Companion Flutter app (`/api/mobile/v1`), mobile security & notification preference sync.
 
 ---
 
-**Document Version**: 1.2  
-**Last Updated**: May 2026  
+**Document Version**: 1.3  
+**Last Updated**: July 2026  
 **Prepared For**: Capstone Defense Presentation
+
+### Recent Updates (v1.3)
+- Resident Companion Flutter app (Android): auth, booking, QR, Smart Scheduler, Gemini assistant
+- Mobile API preference endpoints for email OTP and notification channels
+- Thesis scope updated to include companion app (see `docs/MOBILE_API.md`)
 
 ### Recent Updates (v1.2)
 - Notification preferences (Profile): in-app, email, SMS for booking status and reminders

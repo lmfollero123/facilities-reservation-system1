@@ -283,8 +283,29 @@ Ensure these still work for Sprint B:
 
 ---
 
+## 9. Resident Companion app (Flutter)
+
+1. Ensure mobile API migration is applied: `database/migration_add_mobile_api.sql` (and `MOBILE_JWT_SECRET` in `.env`).
+2. Set `GEMINI_API_KEY` for AI chat / Smart Scheduler insight (optional; app falls back if Gemini is down).
+3. From the Flutter project (`culiat_resident`):
+
+```bash
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://lgu.test
+flutter build apk --release
+```
+
+Release APKs default to `https://cprf.infragovservices.com`. Override with `--dart-define=API_BASE_URL=...` for LAN/local.
+
+4. Smoke-test: login → Settings (email OTP + notification toggles) → Smart Scheduler “Book” → calendar swipe → QR scan / AI chat.
+
+Contract: [MOBILE_API.md](./MOBILE_API.md)
+
+---
+
 ## Related docs
 
 - [CAPSTONE_IMPLEMENTATION_PLAN.md](./CAPSTONE_IMPLEMENTATION_PLAN.md) — what was built
 - [DEPLOYMENT_CPANEL.md](./DEPLOYMENT_CPANEL.md) — general live deploy
+- [MOBILE_API.md](./MOBILE_API.md) — companion JWT API
 - [README.md](../README.md) — project overview

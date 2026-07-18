@@ -202,15 +202,30 @@
 | 8.3 | Email templates (approval, lock, reset, booking, verified, welcome) | Implemented | System | `config/email_templates.php` |
 | 8.4 | SMTP email delivery | Implemented | System | `config/mail_helper.php` |
 | 8.5 | SMS (IPROG / PhilSMS, opt-in per user) | Implemented | System | `config/sms_helper.php` |
-| 8.6 | Notification preferences (in-app / email / SMS) | Implemented | All | Profile |
+| 8.6 | Notification preferences (in-app / email / SMS) | Implemented | All | Profile; Companion Settings |
 | 8.7 | Reservation status notifications (all channels per prefs) | Implemented | System | Booking workflow |
-| 8.8 | **Announcements management** (create, image, category, link) | Implemented | Staff+ | `/dashboard/announcements-manage` |
-| 8.9 | Public announcements archive | Implemented | Public | `/announcements` |
-| 8.10 | **Contact inquiries inbox** (view/respond) | Implemented | Staff+ | `/dashboard/contact-inquiries` |
-| 8.11 | **Contact information management** (public page content) | Implemented | Staff+ | `/dashboard/contact-info` |
-| 8.12 | SMS test tool | Implemented | Admin | `/dashboard/sms-test` |
+| 8.8 | Companion push/inbox notifications | Implemented | Resident | Flutter `/notifications` |
+| 8.9 | **Announcements management** (create, image, category, link) | Implemented | Staff+ | `/dashboard/announcements-manage` |
+| 8.10 | Public announcements archive | Implemented | Public | `/announcements` |
+| 8.11 | **Contact inquiries inbox** (view/respond) | Implemented | Staff+ | `/dashboard/contact-inquiries` |
+| 8.12 | **Contact information management** (public page content) | Implemented | Staff+ | `/dashboard/contact-info` |
+| 8.13 | SMS test tool | Implemented | Admin | `/dashboard/sms-test` |
 
 **Key files:** `config/notifications.php`, `config/notification_preferences.php`, `announcements_manage.php`, `contact_inquiries.php`, `contact_info_manage.php`
+
+---
+
+## 8b. Resident Companion App (Flutter)
+
+| ID | Feature | Status | Role | Entry |
+|----|---------|--------|------|-------|
+| C1 | JWT auth (login, OTP, refresh, register) | Implemented | Resident | `/api/mobile/v1/auth/*` |
+| C2 | Home, facilities, bookings, QR pass/scan | Implemented | Resident | Flutter shell tabs |
+| C3 | Smart Scheduler + Gemini assistant | Implemented | Resident | `/smart-scheduler`, `/assistant` |
+| C4 | Biometric app unlock | Implemented | Resident | Settings (device-local) |
+| C5 | Email OTP + notification channel prefs sync | Implemented | Resident | `GET/PATCH /me/preferences` |
+
+**Docs:** `docs/MOBILE_API.md` · App path: companion Flutter project (`culiat_resident`)
 
 ---
 
@@ -328,7 +343,7 @@ Items below are **not** part of the current shipped product — see `BACKLOG.md`
 - Live Infrastructure Projects & Utilities APIs (beyond preview UI)
 - Full demand-forecasting UI in Reports
 - Brevo SMTP migration (if still on legacy mail provider)
-- Mobile native app
+- iOS App Store companion build (Android APK companion is shipped)
 - IoT / automatic door sensors for check-in
 
 ---

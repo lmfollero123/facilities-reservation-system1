@@ -14,7 +14,7 @@ The system includes AI-assisted capabilities that are currently implemented in p
 
 The project also includes external integration components with different levels of completion. CIMM maintenance synchronization is implemented as an outbound integration that updates facility status and blackout dates when API credentials are configured. Infrastructure and utilities integration pages are present as preview modules with sample data and are not yet connected to live external APIs.
 
-Online payments are implemented as an optional module through PayMongo and can be enabled through environment configuration. For capstone use, this module may remain disabled depending on deployment settings and policy decisions. The project does not include a native mobile application; access is provided through a responsive web interface.
+Online payments are implemented as an optional module through PayMongo and can be enabled through environment configuration. For capstone use, this module may remain disabled depending on deployment settings and policy decisions. Residents can also use the **PFRS Resident Companion** Flutter application (Android), which calls the same business rules through a token-based mobile API (`/api/mobile/v1`); the responsive website remains the primary staff/admin surface.
 
 ## Chapter 2 - System Architecture and Technology Basis (Revised)
 

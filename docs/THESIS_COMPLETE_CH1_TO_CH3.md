@@ -7,7 +7,7 @@
 **Deployment context:** Barangay Culiat, Quezon City (barangay-level LGU)  
 **System URL (production):** CPRF — Community Public Reservation Facilities (`cprf.infragovservices.com`)
 
-> **Documentation note:** This draft reflects the **implemented** codebase as of July 2026. Equipment inventory is **not** implemented; scope is **facility reservation** only. Online payments exist but are **optional** (`PAYMENTS_ENABLED`, off by default). Native mobile app is **not implemented** (responsive web only).
+> **Documentation note:** This draft reflects the **implemented** codebase as of July 2026. Equipment inventory is **not** implemented; scope is **facility reservation** only. Online payments exist but are **optional** (`PAYMENTS_ENABLED`, off by default). A **Resident Companion** Flutter app (Android APK) consumes the `/api/mobile/v1` JWT API for auth, booking, QR check-in, Smart Scheduler, Gemini assistant, and preference sync — see `docs/MOBILE_API.md`.
 
 ---
 
@@ -40,6 +40,7 @@ The system is deployed at **barangay level** for **Barangay Culiat** residents a
 | **AI** | Conflict detection, recommendations, risk scoring, purpose classification, Smart Scheduler, Gemini chatbot |
 | **Calendar & reports** | Month/week/day views, iCal export, dashboard KPIs, CSV/PDF reports |
 | **Communications** | In-app, email, SMS (opt-in), announcements (manual + Gemini auto for CIMM/CPRF blackouts) |
+| **Resident Companion app** | Flutter Android client: login/OTP, home, facilities, create/reschedule bookings, QR pass & facility scan, Smart Scheduler, AI chat, push/inbox notifications, biometric unlock, notification & security preference sync (`/api/mobile/v1`) |
 | **Administration** | Audit trail, document management/archival, system settings, Data Privacy Act export |
 | **Payments** | PayMongo integration (**optional**, disabled by default) |
 
@@ -58,7 +59,7 @@ The system is deployed at **barangay level** for **Barangay Culiat** residents a
 
 ### 1.2.4 Out of scope (not implemented)
 
-- Native Android/iOS mobile application  
+- iOS App Store companion release (Android Resident Companion APK is implemented)  
 - Equipment inventory / standalone equipment reservation module  
 - Full demand-forecasting dashboard UI  
 - Filipino/Tagalog UI (i18n)  

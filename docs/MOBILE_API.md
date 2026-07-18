@@ -77,8 +77,9 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/notifications` |
 | POST | `/notifications/{id}/read` |
 | POST | `/devices` | Body: `fcm_token`, optional `platform`, `device_name` |
+| GET / PATCH | `/me/preferences` | Notification channels (`booking_*`, `reminder_*` × in_app/email/sms) + security (`email_otp`, disable `google_authenticator`). Same prefs as website Profile. |
 | GET | `/smart-scheduler` | Personalized / popular reservation recommendations (same `RecommendationService` as website Smart Scheduler). Optional Gemini insight blurb when `GEMINI_API_KEY` is set. |
-| POST | `/assistant/chat` | Body: `message`, optional `history` (last 10 turns). Gemini-backed PFRS assistant; may return `action: prefill_booking` with `data` for the booking form. Requires `GEMINI_API_KEY` on server. |
+| POST | `/assistant/chat` | Body: `message`, optional `history` (last 10 turns). Gemini-backed PFRS assistant; may return `action: prefill_booking`. If Gemini is down but a key is configured, returns a rule-based `reply` with `error: gemini_unavailable` (still HTTP 200). |
 
 ## Errors
 
