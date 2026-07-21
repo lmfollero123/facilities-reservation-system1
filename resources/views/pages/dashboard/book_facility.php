@@ -407,6 +407,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                     $error = '⚠️ This facility has scheduled CIMM maintenance on the selected date'
                         . (' (' . ($enriched['display_reason'] ?? 'maintenance') . ').')
                         . ' Please choose another date or facility.';
+                } elseif (($enriched['source_type'] ?? '') === 'ipms') {
+                    $error = '⚠️ This facility has an ongoing IPMS infrastructure project on the selected date'
+                        . (' (' . ($enriched['display_reason'] ?? 'project') . ').')
+                        . ' Please choose another date or facility.';
                 } else {
                     $error = '⚠️ This facility is blacked out on the selected date'
                         . (' (' . ($enriched['display_reason'] ?? 'unavailable') . ').')

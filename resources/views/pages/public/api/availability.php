@@ -74,7 +74,10 @@ foreach ($facilities as $facility) {
         $blackoutRow = $blackoutStmt->fetch(PDO::FETCH_ASSOC);
         if ($blackoutRow) {
             $enriched = frs_blackout_enrich_row($blackoutRow);
-            $label = ($enriched['source_type'] ?? '') === 'cimm' ? 'SCHEDULED MAINTENANCE' : 'BLACKOUT';
+            $sourceType = $enriched['source_type'] ?? '';
+            $label = $sourceType === 'cimm'
+                ? 'SCHEDULED MAINTENANCE'
+                : ($sourceType === 'ipms' ? 'INFRASTRUCTURE PROJECT' : 'BLACKOUT');
             $facilityData['timeline'][] = [
                 'type' => 'blocked',
                 'label' => $label,

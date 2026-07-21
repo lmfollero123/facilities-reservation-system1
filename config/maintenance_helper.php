@@ -393,6 +393,61 @@ Thank you for your patience during the maintenance period.
 LGU Facilities Reservation System
 This is an automated notification.
     ";
-    
+
     return sendEmail($userEmail, $userName, $subject, $htmlBody, $textBody);
+}
+
+/**
+ * @return array<string, string> sync source key => absolute path of that source's managed-maintenance JSON file
+ */
+function frs_maintenance_hold_sources(): array
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return [
+        'cimm' => $root . '/storage/cimm_managed_maintenance.json',
+        'ipms' => $root . '/storage/ipms_managed_maintenance.json',
+    ];
+}
+
+/**
+ * True when the given sync source's own managed-maintenance file currently claims this facility.
+ */
+function frs_maintenance_hold_active(string $source, int $facilityId): bool
+{
+    $path = frs_maintenance_hold_sources()[$source] ?? null;
+    if ($path === null || !is_file($path)) {
+        return false;
+    }
+    $raw = file_get_contents($path);
+    $ids = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($ids)) {
+        return false;
+    }
+    foreach ($ids as $id) {
+        if ((int)$id === $facilityId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * True when a sync source OTHER than $excludeSource still claims this facility needs maintenance.
+ *
+ * Two external integrations (CIMM, IPMS) can both put the same facility into "maintenance" and
+ * each only knows its own reason for doing so. Without this check, whichever one finishes its
+ * work window first would revert the facility straight to "available" even though the other
+ * integration still has it blocked.
+ */
+function frs_facility_has_other_maintenance_hold(int $facilityId, string $excludeSource): bool
+{
+    foreach (array_keys(frs_maintenance_hold_sources()) as $source) {
+        if ($source === $excludeSource) {
+            continue;
+        }
+        if (frs_maintenance_hold_active($source, $facilityId)) {
+            return true;
+        }
+    }
+    return false;
 }

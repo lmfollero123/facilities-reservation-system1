@@ -48,21 +48,41 @@ function frs_integration_cimm_status(): array
  */
 function frs_integration_infrastructure_status(): array
 {
+    require_once dirname(__DIR__) . '/services/ipms_api.php';
+
+    $configured = ipms_api_key() !== '';
+    $state = frs_ipms_load_sync_state();
+    $summary = is_array($state['last_summary'] ?? null) ? $state['last_summary'] : [];
+    $lastSync = $state['last_sync_at'] ?? null;
+    $hasSynced = $lastSync !== null && $lastSync !== '';
+    $needsReview = is_array($summary['needs_review'] ?? null) ? count($summary['needs_review']) : 0;
+
     return [
         'slug' => 'infrastructure',
-        'name' => 'Infrastructure Projects',
-        'description' => 'Preview module for external project timelines that may affect facility capacity.',
-        'connected' => false,
-        'status_label' => 'Preview — Not Connected',
-        'status_class' => 'offline',
-        'last_sync' => null,
-        'preview' => true,
-        'can_sync' => false,
-        'sync_type' => 'none',
+        'name' => 'Infrastructure Projects (IPMS)',
+        'description' => 'Pulls Culiat infrastructure projects from IPMS and blocks booking on facilities under active work.',
+        'connected' => $configured && $hasSynced && empty($summary['errors']),
+        'status_label' => !$configured
+            ? 'Not configured'
+            : ($hasSynced ? (empty($summary['errors']) ? 'Connected' : 'Sync warnings') : 'Not synced yet'),
+        'status_class' => !$configured
+            ? 'offline'
+            : (($hasSynced && empty($summary['errors'])) ? 'active' : ($hasSynced ? 'maintenance' : 'offline')),
+        'last_sync' => $lastSync,
+        'preview' => !$configured,
+        'can_sync' => $configured,
+        'sync_type' => 'ajax',
+        'sync_url' => function_exists('base_path') ? base_path() . '/public/api/sync-ipms-projects.php' : '/public/api/sync-ipms-projects.php',
         'manage_url' => function_exists('base_path') ? base_path() . '/dashboard/infrastructure-projects' : '/dashboard/infrastructure-projects',
-        'metrics' => ['Mode' => 'Sample data only'],
-        'errors' => [],
-        'cron_hint' => null,
+        'metrics' => [
+            'Matched projects' => (int)($summary['matched_project_count'] ?? 0),
+            'Needs manual review' => $needsReview,
+            'Updated to maintenance' => (int)($summary['updated_to_maintenance'] ?? 0),
+            'Updated to available' => (int)($summary['updated_to_available'] ?? 0),
+            'Blackouts added' => (int)($summary['blackouts_added'] ?? 0),
+        ],
+        'errors' => (array)($summary['errors'] ?? []),
+        'cron_hint' => 'php scripts/sync_ipms_projects.php',
     ];
 }
 

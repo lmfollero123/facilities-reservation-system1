@@ -637,6 +637,13 @@ function frs_facility_date_bookable(PDO $pdo, int $facilityId, string $dateYmd, 
                         'error' => 'blackout',
                     ];
                 }
+                if (($enriched['source_type'] ?? '') === 'ipms') {
+                    return [
+                        'ok' => false,
+                        'message' => 'This facility has an ongoing IPMS infrastructure project on the selected date (' . $display . '). Please choose another date or facility.',
+                        'error' => 'blackout',
+                    ];
+                }
             }
         }
         return [

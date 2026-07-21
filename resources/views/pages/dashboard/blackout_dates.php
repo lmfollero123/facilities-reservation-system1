@@ -248,6 +248,12 @@ ob_start();
                         <span class="text-slate-500">CIMM maintenance</span>
                         <span class="font-bold text-amber-800"><?= (int)$sourceCounts['cimm']; ?></span>
                     </div>
+                    <?php if (!empty($sourceCounts['ipms'])): ?>
+                    <div>
+                        <span class="text-slate-500">IPMS projects</span>
+                        <span class="font-bold text-sky-800"><?= (int)$sourceCounts['ipms']; ?></span>
+                    </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -274,7 +280,7 @@ ob_start();
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                 <div>
                     <h2 class="text-base font-semibold text-slate-900">Blackout calendar</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Click a highlighted date to view details. Red = CPRF blackout · Amber = CIMM maintenance.</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Click a highlighted date to view details. Red = CPRF blackout · Amber = CIMM maintenance · Blue = IPMS project.</p>
                 </div>
                 <div class="flex flex-wrap items-end gap-2 sm:gap-3 frs-bo-toolbar-filters">
                     <button type="button" id="bo-add-modal-btn" class="btn-primary inline-flex items-center gap-2 w-full sm:w-auto justify-center">
@@ -360,7 +366,8 @@ ob_start();
                     <div class="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500 frs-bo-legend">
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> CPRF</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> CIMM</span>
-                        <span class="hidden sm:inline"><?= (int)$monthSourceCounts['manual']; ?> blackout · <?= (int)$monthSourceCounts['cimm']; ?> maintenance</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> IPMS</span>
+                        <span class="hidden sm:inline"><?= (int)$monthSourceCounts['manual']; ?> blackout · <?= (int)$monthSourceCounts['cimm']; ?> maintenance · <?= (int)($monthSourceCounts['ipms'] ?? 0); ?> project</span>
                     </div>
                 </div>
             </div>
@@ -389,9 +396,13 @@ ob_start();
                         $hasBlackout = !empty($cellItems);
                         $cellManual = 0;
                         $cellCimm = 0;
+                        $cellIpms = 0;
                         foreach ($cellItems as $ci) {
-                            if (($ci['source_type'] ?? '') === 'cimm') {
+                            $ciType = $ci['source_type'] ?? '';
+                            if ($ciType === 'cimm') {
                                 $cellCimm++;
+                            } elseif ($ciType === 'ipms') {
+                                $cellIpms++;
                             } else {
                                 $cellManual++;
                             }
@@ -402,10 +413,13 @@ ob_start();
                             : '';
                         $cellClasses = 'frs-bo-cal-cell';
                         if ($hasBlackout) {
-                            if ($cellManual > 0 && $cellCimm > 0) {
+                            $sourcesPresent = (int)($cellManual > 0) + (int)($cellCimm > 0) + (int)($cellIpms > 0);
+                            if ($sourcesPresent > 1) {
                                 $cellClasses .= ' is-mixed';
                             } elseif ($cellCimm > 0) {
                                 $cellClasses .= ' is-cimm';
+                            } elseif ($cellIpms > 0) {
+                                $cellClasses .= ' is-ipms';
                             } else {
                                 $cellClasses .= ' is-blocked';
                             }
@@ -427,10 +441,15 @@ ob_start();
                                 if ($cellCimm > 0) {
                                     $parts[] = $cellCimm . ' maint.';
                                 }
+                                if ($cellIpms > 0) {
+                                    $parts[] = $cellIpms . ' project';
+                                }
                                 $chipText = implode(' · ', $parts);
                             }
                             if ($n === 1 && ($cellItems[0]['source_type'] ?? '') === 'cimm') {
                                 $chipText = 'Maint.';
+                            } elseif ($n === 1 && ($cellItems[0]['source_type'] ?? '') === 'ipms') {
+                                $chipText = 'Project';
                             }
                         }
                     ?>
@@ -486,15 +505,16 @@ ob_start();
                             <?php foreach ($dayBlackouts as $b):
                                 $b = frs_blackout_enrich_row($b);
                                 $isCimm = ($b['source_type'] ?? '') === 'cimm';
+                                $isIpms = ($b['source_type'] ?? '') === 'ipms';
                             ?>
                                 <article class="rounded-xl border p-4 <?= $isCimm
                                     ? 'border-amber-200 bg-amber-50/60'
-                                    : 'border-slate-200 bg-slate-50/50'; ?>">
+                                    : ($isIpms ? 'border-sky-200 bg-sky-50/60' : 'border-slate-200 bg-slate-50/50'); ?>">
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
                                         <p class="font-semibold text-slate-900"><?= htmlspecialchars($b['facility_name']); ?></p>
                                         <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <?= $isCimm
                                             ? 'bg-amber-200 text-amber-900'
-                                            : 'bg-red-100 text-red-800'; ?>">
+                                            : ($isIpms ? 'bg-sky-200 text-sky-900' : 'bg-red-100 text-red-800'); ?>">
                                             <?= htmlspecialchars($b['source_label']); ?>
                                         </span>
                                     </div>
@@ -502,6 +522,10 @@ ob_start();
                                     <?php if ($isCimm): ?>
                                         <p class="text-xs text-amber-800/80 mt-2">
                                             Synced from CIMM. Completing or cancelling the maintenance schedule in CIMM removes this automatically.
+                                        </p>
+                                    <?php elseif ($isIpms): ?>
+                                        <p class="text-xs text-sky-800/80 mt-2">
+                                            Synced from IPMS. This clears automatically once IPMS marks the project completed or cancelled.
                                         </p>
                                     <?php elseif (!empty($b['created_by_name'])): ?>
                                         <p class="text-xs text-slate-400 mt-2">Added by <?= htmlspecialchars($b['created_by_name']); ?></p>
@@ -814,6 +838,14 @@ ob_start();
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-cimm:hover {
     background: var(--bo-cell-cimm-hover, #fef3c7);
 }
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-ipms {
+    background: var(--bo-cell-ipms-bg, #f0f9ff);
+    border-color: var(--bo-cell-ipms-border, #7dd3fc);
+    cursor: pointer;
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-ipms:hover {
+    background: var(--bo-cell-ipms-hover, #e0f2fe);
+}
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-mixed {
     background: linear-gradient(135deg, #fef2f2 50%, #fffbeb 50%);
     border-color: #f59e0b;
@@ -822,6 +854,10 @@ ob_start();
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-cimm .frs-bo-cal-chip {
     background: var(--bo-chip-cimm-bg, rgba(251, 191, 36, 0.35));
     color: var(--bo-chip-cimm-fg, #92400e);
+}
+.frs-bo-calendar-grid .frs-bo-cal-cell.is-ipms .frs-bo-cal-chip {
+    background: var(--bo-chip-ipms-bg, rgba(125, 211, 252, 0.35));
+    color: var(--bo-chip-ipms-fg, #075985);
 }
 .frs-bo-calendar-grid .frs-bo-cal-cell.is-today {
     box-shadow: 0 0 0 2px var(--bo-today-ring, #3b82f6);

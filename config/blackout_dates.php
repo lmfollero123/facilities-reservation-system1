@@ -9,6 +9,9 @@ require_once __DIR__ . '/database.php';
 /** Reason prefix used by CIMM maintenance sync (see services/cimm_api.php). */
 const FRS_BLACKOUT_CIMM_PREFIX = 'CIMM Sync:';
 
+/** Reason prefix used by IPMS infrastructure-project sync (see services/ipms_api.php). */
+const FRS_BLACKOUT_IPMS_PREFIX = 'IPMS Sync:';
+
 /**
  * True when a blackout row was created by CIMM maintenance sync (not CPRF staff).
  */
@@ -19,7 +22,16 @@ function frs_blackout_is_cimm_sync(array $row): bool
 }
 
 /**
- * True for staff-created blackouts (not CIMM sync).
+ * True when a blackout row was created by IPMS infrastructure-project sync (not CPRF staff).
+ */
+function frs_blackout_is_ipms_sync(array $row): bool
+{
+    $reason = trim((string)($row['reason'] ?? ''));
+    return $reason !== '' && str_starts_with($reason, FRS_BLACKOUT_IPMS_PREFIX);
+}
+
+/**
+ * True for staff-created blackouts (not CIMM or IPMS sync).
  */
 function frs_blackout_reason_is_cprf_manual(string $reason): bool
 {
@@ -27,15 +39,22 @@ function frs_blackout_reason_is_cprf_manual(string $reason): bool
     if ($reason === '') {
         return true;
     }
-    return !str_starts_with($reason, FRS_BLACKOUT_CIMM_PREFIX);
+    return !str_starts_with($reason, FRS_BLACKOUT_CIMM_PREFIX)
+        && !str_starts_with($reason, FRS_BLACKOUT_IPMS_PREFIX);
 }
 
 /**
- * @return 'cimm'|'manual'
+ * @return 'cimm'|'ipms'|'manual'
  */
 function frs_blackout_source_type(array $row): string
 {
-    return frs_blackout_is_cimm_sync($row) ? 'cimm' : 'manual';
+    if (frs_blackout_is_cimm_sync($row)) {
+        return 'cimm';
+    }
+    if (frs_blackout_is_ipms_sync($row)) {
+        return 'ipms';
+    }
+    return 'manual';
 }
 
 /**
@@ -43,11 +62,12 @@ function frs_blackout_source_type(array $row): string
  */
 function frs_blackout_enrich_row(array $row): array
 {
-    $isCimm = frs_blackout_is_cimm_sync($row);
-    $row['source_type'] = $isCimm ? 'cimm' : 'manual';
-    $row['source_label'] = $isCimm ? 'CIMM maintenance' : 'CPRF blackout';
-    $row['is_removable'] = !$isCimm;
-    if ($isCimm) {
+    $sourceType = frs_blackout_source_type($row);
+    $row['source_type'] = $sourceType;
+
+    if ($sourceType === 'cimm') {
+        $row['source_label'] = 'CIMM maintenance';
+        $row['is_removable'] = false;
         $reason = trim((string)($row['reason'] ?? ''));
         $row['display_reason'] = $reason !== ''
             ? trim(substr($reason, strlen(FRS_BLACKOUT_CIMM_PREFIX)))
@@ -55,7 +75,19 @@ function frs_blackout_enrich_row(array $row): array
         if ($row['display_reason'] === '') {
             $row['display_reason'] = 'Scheduled maintenance';
         }
+    } elseif ($sourceType === 'ipms') {
+        $row['source_label'] = 'IPMS project';
+        $row['is_removable'] = false;
+        $reason = trim((string)($row['reason'] ?? ''));
+        $row['display_reason'] = $reason !== ''
+            ? trim(substr($reason, strlen(FRS_BLACKOUT_IPMS_PREFIX)))
+            : 'Infrastructure project';
+        if ($row['display_reason'] === '') {
+            $row['display_reason'] = 'Infrastructure project';
+        }
     } else {
+        $row['source_label'] = 'CPRF blackout';
+        $row['is_removable'] = true;
         $row['display_reason'] = trim((string)($row['reason'] ?? '')) ?: 'Facility unavailable';
     }
     return $row;
@@ -72,11 +104,11 @@ function frs_blackout_enrich_rows(array $rows): array
 
 /**
  * @param list<array<string, mixed>> $rows
- * @return array{manual: int, cimm: int}
+ * @return array{manual: int, cimm: int, ipms: int}
  */
 function frs_blackout_count_by_source(array $rows): array
 {
-    $counts = ['manual' => 0, 'cimm' => 0];
+    $counts = ['manual' => 0, 'cimm' => 0, 'ipms' => 0];
     foreach ($rows as $row) {
         $key = frs_blackout_source_type($row);
         $counts[$key]++;
@@ -85,26 +117,30 @@ function frs_blackout_count_by_source(array $rows): array
 }
 
 /**
- * @return array{manual: int, cimm: int, total: int}
+ * @return array{manual: int, cimm: int, ipms: int, total: int}
  */
 function frs_count_blackout_dates_by_source(PDO $pdo, int $year, ?int $facilityId = null): array
 {
     if (!frs_blackout_table_exists($pdo)) {
-        return ['manual' => 0, 'cimm' => 0, 'total' => 0];
+        return ['manual' => 0, 'cimm' => 0, 'ipms' => 0, 'total' => 0];
     }
 
     $start = sprintf('%04d-01-01', $year);
     $end = sprintf('%04d-12-31', $year);
-    $prefix = FRS_BLACKOUT_CIMM_PREFIX . '%';
+    $cimmPrefix = FRS_BLACKOUT_CIMM_PREFIX . '%';
+    $ipmsPrefix = FRS_BLACKOUT_IPMS_PREFIX . '%';
 
     $sql = 'SELECT
                 SUM(CASE WHEN reason LIKE :cimm_prefix THEN 1 ELSE 0 END) AS cimm,
-                SUM(CASE WHEN reason NOT LIKE :cimm_prefix2 OR reason IS NULL THEN 1 ELSE 0 END) AS manual
+                SUM(CASE WHEN reason LIKE :ipms_prefix THEN 1 ELSE 0 END) AS ipms,
+                SUM(CASE WHEN (reason NOT LIKE :cimm_prefix2 AND reason NOT LIKE :ipms_prefix2) OR reason IS NULL THEN 1 ELSE 0 END) AS manual
             FROM facility_blackout_dates
             WHERE blackout_date BETWEEN :start AND :end';
     $params = [
-        'cimm_prefix' => $prefix,
-        'cimm_prefix2' => $prefix,
+        'cimm_prefix' => $cimmPrefix,
+        'cimm_prefix2' => $cimmPrefix,
+        'ipms_prefix' => $ipmsPrefix,
+        'ipms_prefix2' => $ipmsPrefix,
         'start' => $start,
         'end' => $end,
     ];
@@ -119,8 +155,9 @@ function frs_count_blackout_dates_by_source(PDO $pdo, int $year, ?int $facilityI
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $manual = (int)($row['manual'] ?? 0);
     $cimm = (int)($row['cimm'] ?? 0);
+    $ipms = (int)($row['ipms'] ?? 0);
 
-    return ['manual' => $manual, 'cimm' => $cimm, 'total' => $manual + $cimm];
+    return ['manual' => $manual, 'cimm' => $cimm, 'ipms' => $ipms, 'total' => $manual + $cimm + $ipms];
 }
 
 function frs_blackout_table_exists(PDO $pdo): bool
@@ -415,7 +452,7 @@ function frs_delete_blackout_date(PDO $pdo, int $blackoutId): bool
         return false;
     }
     $row = frs_get_blackout_by_id($pdo, $blackoutId);
-    if ($row && frs_blackout_is_cimm_sync($row)) {
+    if ($row && (frs_blackout_is_cimm_sync($row) || frs_blackout_is_ipms_sync($row))) {
         return false;
     }
     $stmt = $pdo->prepare('DELETE FROM facility_blackout_dates WHERE id = ?');

@@ -577,6 +577,8 @@ function cimmScheduleDateRange(array $schedule): array
  */
 function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
 {
+    require_once dirname(__DIR__) . '/config/maintenance_helper.php';
+
     $summary = [
         'updated_to_maintenance' => 0,
         'updated_to_available' => 0,
@@ -637,9 +639,14 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
                 $summary['updated_to_maintenance']++;
                 $facilitiesWentToMaintenance[$facilityId] = $facilityName;
             } elseif (!$isActiveNow && $currentStatus === 'maintenance' && $cimmManaged) {
+                unset($cimmManagedMaintenance[$facilityId]);
+                // Another integration (e.g. IPMS) may still have this facility under an active hold.
+                if (function_exists('frs_facility_has_other_maintenance_hold')
+                    && frs_facility_has_other_maintenance_hold($facilityId, 'cimm')) {
+                    continue;
+                }
                 $upd = $pdo->prepare('UPDATE facilities SET status = "available", updated_at = NOW() WHERE id = :id');
                 $upd->execute(['id' => $facilityId]);
-                unset($cimmManagedMaintenance[$facilityId]);
                 $summary['updated_to_available']++;
                 $facilitiesWentToAvailable[$facilityId] = $facilityName;
             }
