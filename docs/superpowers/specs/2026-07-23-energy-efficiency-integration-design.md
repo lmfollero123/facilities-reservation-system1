@@ -113,14 +113,14 @@ Reads `energy_saving_recommendations` (existing table: facility_id, year, month,
 - **Push (on save):** reading is stored locally first (`pending`) — a local save never fails because their API is down — then pushed immediately; success → `synced` + `external_record_id`; failure → `failed` + captured error.
 - **Pull (recommendations):** `GET .../recommendations?status=approved&updated_since=<watermark>`; upsert cache rows by `energy_recommendation_id`; resolve CPRF facility via map.
 - **Cron:** `scripts/sync_energy_integration.php` (mirrors `sync_ipms_projects.php`) — retries `pending`/`failed` pushes, pulls recommendations, updates integration status; flags `--dry-run`, `--verbose`.
-- **Manual:** `public/api/sync-energy.php` — Admin/Staff session check + CSRF + rate limit, triggers the same sync routine (IPMS pattern).
+- **Manual:** `public/api/sync-energy.php` — POST-only with Admin/Staff session + role check, triggers the same sync routine (identical protection to the existing IPMS/CIMM sync endpoints, which the System Settings sync cards call without CSRF tokens). The module page's own "Sync Now" form does carry a CSRF token.
 - **Audit:** entries via `config/audit.php` for reading create/edit, mapping change, and sync runs.
 
 ## 5. Security
 
 - CSRF tokens on every form/POST; PDO prepared statements only; `htmlspecialchars()` on all output — recommendation text is externally sourced data and must always be escaped.
 - API token lives only in `.env` (both repos); never committed.
-- Manual sync endpoint rate-limited and permission-checked.
+- Manual sync endpoint POST-only and permission-checked (Admin/Staff session), matching the existing integration sync endpoints.
 
 ## 6. Testing
 
