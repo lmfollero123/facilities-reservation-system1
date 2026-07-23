@@ -20,7 +20,8 @@ Rejected: a whole-`.dashboard-content` swapper (re-introduces the full soft-swap
 
 - Document-level `submit` listener (capture phase, consistent with the file's existing delegation style).
 - Handles only `form[data-frs-ajax]` whose method is POST (attribute or default). GET forms keep the existing `form[data-frs-partial]` path untouched.
-- The form must be inside a `[data-frs-partial-id]` region — the swap target is the **closest** such ancestor. If none exists: `console.warn` once and let the browser submit normally (never break a form).
+- The form must be inside a `[data-frs-partial-id]` region — the swap target is the **closest** such ancestor — OR name its region explicitly via `data-frs-ajax-target="<region-id>"` (required for forms inside modals that the partial layer re-mounts onto `<body>`, outside any region). If neither resolves: `console.warn` once and let the browser submit normally (never break a form).
+- Optional `data-frs-ajax-close="<selector>"`: after a successful submit (toast type `success`), hide the matched element (`style.display='none'`) and restore `document.body.style.overflow` — declarative modal closing.
 - If `window.fetch`/`FormData`/`DOMParser` are unavailable, do nothing (native submit).
 
 ### 3.2 Submission
@@ -59,12 +60,11 @@ One small helper standardizing the three existing flash patterns (inline `$messa
 
 ## 5. Phase-1 conversions
 
-### 5.1 `book_facility.php` (Book + My Reservations)
+### 5.1 `book_facility.php` — My Reservations actions only (scope amended during planning)
 
-- Booking submit form, and the cancel/reschedule action forms in the My Reservations pane (`includes/reservations_mine_post_handlers.php` handlers), marked `data-frs-ajax`.
-- Each form's enclosing section gets (or already has) a `data-frs-partial-id` region — the page already uses `frs-partial-update.js` regions for the calendar/tabs; reuse those region ids where the forms live inside them.
-- Its `$_SESSION['booking_flash']` writes become `frs_flash_success()`/`frs_flash_error()`; the read-and-render-inline code is removed in favor of the toast channel for successes (inline validation errors unchanged).
-- Upload path (booking document/valid-ID upload) exercised via FormData.
+- The cancel/reschedule/edit action forms in the My Reservations pane (modals the partial layer mounts to `<body>`) are marked `data-frs-ajax` with `data-frs-ajax-target="mine-calendar"` and `data-frs-ajax-close` pointing at their modal.
+- `$_SESSION['booking_flash']` writes become `frs_flash_success()`/`frs_flash_error()` (benefits full-load toasts immediately).
+- **The main booking submit form is deferred to phase 2** (user decision 2026-07-23): its pane depends on large inline-script blocks that live outside any swappable region; converting it safely first requires relocating those scripts into a region — a refactor with real regression risk on the app's most important form. It is PRG today and reloads on success anyway.
 
 ### 5.2 `reservations_manage.php` (approvals)
 
