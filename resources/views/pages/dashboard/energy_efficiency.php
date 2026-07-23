@@ -28,6 +28,7 @@ $pageTitle = 'Energy Efficiency | LGU Facilities Reservation';
 
 $canCreate = frs_can_create($role, 'energy');
 $canUpdate = frs_can_update($role, 'energy');
+$canDelete = frs_can_delete($role, 'energy');
 $syncEnabled = energy_api_enabled();
 
 $message = '';
@@ -75,6 +76,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
             $messageType = 'error';
         } catch (Throwable $e) {
             $message = 'Unable to save reading: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    } elseif ($_POST['action'] === 'update_reading' && $canUpdate) {
+        $readingId = (int)($_POST['reading_id'] ?? 0);
+        try {
+            frs_energy_update_reading($pdo, $readingId, [
+                'current_reading_kwh' => $_POST['current_reading_kwh'] ?? null,
+                'previous_reading_kwh' => $_POST['previous_reading_kwh'] ?? null,
+                'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
+                'notes' => trim((string)($_POST['notes'] ?? '')),
+            ]);
+            $push = $syncEnabled
+                ? frs_energy_push_reading($pdo, $readingId)
+                : ['success' => false, 'error' => 'Sync disabled — reading saved locally as pending.'];
+            if ($push['success']) {
+                $message = 'Reading corrected and re-pushed to the Energy system.';
+                $messageType = 'success';
+            } else {
+                $message = 'Reading corrected. Push pending: ' . (string)$push['error'];
+                $messageType = 'success';
+            }
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to correct reading: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    } elseif ($_POST['action'] === 'delete_reading' && $canDelete) {
+        $readingId = (int)($_POST['reading_id'] ?? 0);
+        try {
+            frs_energy_delete_reading($pdo, $readingId);
+            $message = 'Reading deleted.';
+            $messageType = 'success';
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to delete reading: ' . $e->getMessage();
             $messageType = 'error';
         }
     } elseif ($_POST['action'] === 'save_mapping' && $canUpdate) {
@@ -134,6 +174,24 @@ if ($hasTables) {
         if (in_array($row['sync_status'], ['pending', 'failed'], true)) {
             $pendingCount++;
         }
+    }
+}
+
+// Edit-reading target: only valid when it is still a facility's latest reading.
+$editReadingId = (int)($_GET['edit_reading'] ?? 0);
+$editReading = null;
+$editReadingIsOnly = false;
+if ($hasTables && $editReadingId > 0 && $canUpdate) {
+    foreach ($latestReadings as $r) {
+        if ((int)$r['id'] === $editReadingId) {
+            $editReading = $r;
+            break;
+        }
+    }
+    if ($editReading !== null) {
+        $onlyStmt = $pdo->prepare('SELECT COUNT(*) FROM energy_meter_readings WHERE facility_id = :facility_id AND id != :id');
+        $onlyStmt->execute(['facility_id' => (int)$editReading['facility_id'], 'id' => $editReadingId]);
+        $editReadingIsOnly = (int)$onlyStmt->fetchColumn() === 0;
     }
 }
 
@@ -243,7 +301,67 @@ ob_start();
 
 <?php if ($tab === 'readings'): ?>
     <div class="booking-wrapper">
-        <?php if ($canCreate): ?>
+        <?php if ($editReading !== null): ?>
+        <section class="booking-card">
+            <h2>Edit Reading</h2>
+            <p style="color:#8b95b5; margin-bottom:1rem;">Only the latest reading for a facility can be corrected. The reading period itself cannot be changed — record a new month instead if the period is wrong.</p>
+            <form method="POST" action="<?= htmlspecialchars($tabUrl('readings')); ?>" class="booking-form">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="action" value="update_reading">
+                <input type="hidden" name="reading_id" value="<?= (int)$editReading['id']; ?>">
+                <label>
+                    Facility
+                    <input type="text" value="<?= htmlspecialchars((string)$editReading['facility_name']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Reading Month
+                    <input type="text" value="<?= htmlspecialchars(($monthNames[(int)$editReading['month']] ?? $editReading['month']) . ' ' . $editReading['year']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Reading Date
+                    <input type="date" name="reading_date" required value="<?= htmlspecialchars((string)$editReading['reading_date']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Previous Meter Reading (kWh)
+                    <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="energy-edit-prev-input" value="<?= htmlspecialchars((string)$editReading['previous_reading_kwh']); ?>" <?= $editReadingIsOnly ? '' : 'readonly'; ?> style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; <?= $editReadingIsOnly ? '' : 'background:#f4f6fa;'; ?>">
+                    <?php if (!$editReadingIsOnly): ?>
+                        <small style="color:#8b95b5;">Locked — this facility has earlier readings, so the previous value must stay linked to the prior reading.</small>
+                    <?php endif; ?>
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Current Meter Reading (kWh)
+                    <input type="number" step="0.01" min="0" name="current_reading_kwh" id="energy-edit-curr-input" required value="<?= htmlspecialchars((string)$editReading['current_reading_kwh']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <p id="energy-edit-consumption-preview" style="margin-top:0.5rem; color:#0066cc; font-weight:600;"></p>
+                <label style="margin-top:0.75rem; display:block;">
+                    Notes (optional)
+                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"><?= htmlspecialchars((string)($editReading['notes'] ?? '')); ?></textarea>
+                </label>
+                <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center;">
+                    <button type="submit" class="btn-primary">Save Correction</button>
+                    <a href="<?= htmlspecialchars($tabUrl('readings')); ?>">Cancel</a>
+                </div>
+            </form>
+            <script>
+            (function () {
+                'use strict';
+                var prev = document.getElementById('energy-edit-prev-input');
+                var curr = document.getElementById('energy-edit-curr-input');
+                var preview = document.getElementById('energy-edit-consumption-preview');
+                if (!prev || !curr || !preview) return;
+                function updatePreview() {
+                    var p = parseFloat(prev.value), c = parseFloat(curr.value);
+                    preview.textContent = (!isNaN(p) && !isNaN(c) && c >= p)
+                        ? 'Consumption: ' + (c - p).toFixed(2) + ' kWh'
+                        : '';
+                }
+                prev.addEventListener('input', updatePreview);
+                curr.addEventListener('input', updatePreview);
+                updatePreview();
+            })();
+            </script>
+        </section>
+        <?php elseif ($canCreate): ?>
         <section class="booking-card">
             <h2>Add Meter Reading</h2>
             <p style="color:#8b95b5; margin-bottom:1rem;">One reading per facility per month. The previous value auto-fills from the facility's last reading.</p>
@@ -322,7 +440,7 @@ ob_start();
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
-                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Sync</th><th>Recorded By</th></tr>
+                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Sync</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($latestReadings as $r): ?>
@@ -337,6 +455,21 @@ ob_start();
                                         </span>
                                     </td>
                                     <td><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
+                                    <?php if ($canUpdate || $canDelete): ?>
+                                    <td style="white-space:nowrap;">
+                                        <?php if ($canUpdate): ?>
+                                            <a href="<?= htmlspecialchars($tabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
+                                        <?php endif; ?>
+                                        <?php if ($canDelete && $r['sync_status'] !== 'synced'): ?>
+                                            <form method="POST" action="<?= htmlspecialchars($tabUrl('readings')); ?>" style="display:inline;">
+                                                <?= csrf_field(); ?>
+                                                <input type="hidden" name="action" value="delete_reading">
+                                                <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
+                                                <button type="submit" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem; color:#b23030;" onclick="return confirm('Delete this reading?')">Delete</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

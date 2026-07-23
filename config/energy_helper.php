@@ -166,6 +166,22 @@ function frs_energy_last_reading(PDO $pdo, int $facilityId): ?array
 }
 
 /**
+ * Whether $reading is its facility's latest reading by (year, month).
+ * Only the latest reading is safe to correct — earlier periods must stay
+ * chronologically frozen.
+ *
+ * @param array<string, mixed> $reading must contain facility_id, year, month
+ */
+function frs_energy_is_latest_reading(PDO $pdo, array $reading): bool
+{
+    $last = frs_energy_last_reading($pdo, (int)($reading['facility_id'] ?? 0));
+    if ($last === null) {
+        return false;
+    }
+    return (int)$last['year'] === (int)$reading['year'] && (int)$last['month'] === (int)$reading['month'];
+}
+
+/**
  * Insert a manual reading. When a previous reading exists, its
  * current_reading_kwh overrides the submitted previous value (meter
  * continuity); the first-ever reading uses the submitted previous value.
@@ -234,6 +250,120 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
     logAudit('Recorded energy meter reading', 'Energy Efficiency', "facility_id={$facilityId} {$data['year']}-{$data['month']}: {$consumption} kWh");
 
     return $id;
+}
+
+/**
+ * Correct a mistyped meter reading. Only the facility's latest reading is
+ * editable — the chronological guard in frs_energy_save_reading prevents
+ * re-entering past months, so typos in older rows cannot be fixed here.
+ * previous_reading_kwh may only change when this is the facility's ONLY
+ * reading (no earlier period exists); otherwise the stored previous value
+ * is kept, ignoring any submitted override, to preserve meter continuity.
+ * Marks the row 'pending' so the partner API push re-syncs the correction
+ * (an idempotent upsert on their side).
+ *
+ * @param array{current_reading_kwh: mixed, reading_date: string, notes: ?string,
+ *   previous_reading_kwh?: mixed} $data
+ * @throws InvalidArgumentException on invalid values or when not the latest reading
+ */
+function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
+{
+    $stmt = $pdo->prepare('SELECT * FROM energy_meter_readings WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $readingId]);
+    $reading = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($reading === false) {
+        throw new InvalidArgumentException('Reading not found.');
+    }
+
+    if (!frs_energy_is_latest_reading($pdo, $reading)) {
+        throw new InvalidArgumentException('Only the latest reading for a facility can be corrected. Earlier periods are locked for chronological integrity.');
+    }
+
+    if (!isset($data['current_reading_kwh']) || !is_numeric($data['current_reading_kwh'])) {
+        throw new InvalidArgumentException('Meter readings must be numeric values.');
+    }
+    $current = (float)$data['current_reading_kwh'];
+
+    $facilityId = (int)$reading['facility_id'];
+    $earlier = $pdo->prepare('
+        SELECT COUNT(*) FROM energy_meter_readings
+        WHERE facility_id = :facility_id
+          AND (year < :year OR (year = :year AND month < :month))
+    ');
+    $earlier->execute(['facility_id' => $facilityId, 'year' => (int)$reading['year'], 'month' => (int)$reading['month']]);
+    $isOnlyReading = (int)$earlier->fetchColumn() === 0;
+
+    $previous = (float)$reading['previous_reading_kwh'];
+    if ($isOnlyReading && array_key_exists('previous_reading_kwh', $data) && $data['previous_reading_kwh'] !== null && $data['previous_reading_kwh'] !== '') {
+        if (!is_numeric($data['previous_reading_kwh'])) {
+            throw new InvalidArgumentException('Meter readings must be numeric values.');
+        }
+        $previous = (float)$data['previous_reading_kwh'];
+    }
+
+    $consumption = frs_energy_compute_consumption($previous, $current);
+    if ($consumption === null) {
+        throw new InvalidArgumentException('Current reading must be greater than or equal to the previous reading (' . number_format($previous, 2) . ' kWh).');
+    }
+
+    $notes = $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null;
+
+    $update = $pdo->prepare('
+        UPDATE energy_meter_readings
+        SET previous_reading_kwh = :previous_kwh,
+            current_reading_kwh = :current_kwh,
+            consumption_kwh = :consumption_kwh,
+            reading_date = :reading_date,
+            notes = :notes,
+            sync_status = \'pending\',
+            synced_at = NULL,
+            sync_error = NULL
+        WHERE id = :id
+    ');
+    $update->execute([
+        'previous_kwh' => $previous,
+        'current_kwh' => $current,
+        'consumption_kwh' => $consumption,
+        'reading_date' => (string)$data['reading_date'],
+        'notes' => $notes,
+        'id' => $readingId,
+    ]);
+
+    require_once __DIR__ . '/audit.php';
+    logAudit('Updated energy meter reading', 'Energy Efficiency', "reading_id={$readingId} facility_id={$facilityId} {$reading['year']}-{$reading['month']}: {$consumption} kWh");
+}
+
+/**
+ * Delete a facility's latest reading. Only allowed while it has not yet been
+ * synced to the Energy system — a synced reading lives on the partner side
+ * too, and deleting it locally would silently diverge from the remote
+ * record; it must be corrected via frs_energy_update_reading instead, which
+ * re-pushes the correction as an idempotent upsert.
+ *
+ * @throws InvalidArgumentException when not found, not latest, or already synced
+ */
+function frs_energy_delete_reading(PDO $pdo, int $readingId): void
+{
+    $stmt = $pdo->prepare('SELECT * FROM energy_meter_readings WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $readingId]);
+    $reading = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($reading === false) {
+        throw new InvalidArgumentException('Reading not found.');
+    }
+
+    if (!frs_energy_is_latest_reading($pdo, $reading)) {
+        throw new InvalidArgumentException('Only the latest reading for a facility can be deleted. Earlier periods are locked for chronological integrity.');
+    }
+
+    if ($reading['sync_status'] === 'synced') {
+        throw new InvalidArgumentException('This reading has already been synced to the Energy system. Correct it via edit instead of deleting, so the correction is re-pushed.');
+    }
+
+    $delete = $pdo->prepare('DELETE FROM energy_meter_readings WHERE id = :id');
+    $delete->execute(['id' => $readingId]);
+
+    require_once __DIR__ . '/audit.php';
+    logAudit('Deleted energy meter reading', 'Energy Efficiency', "reading_id={$readingId} facility_id={$reading['facility_id']} {$reading['year']}-{$reading['month']}");
 }
 
 /**
@@ -418,6 +548,12 @@ function frs_energy_run_sync(PDO $pdo): array
         $errors[] = 'Recommendations pull: ' . $pull['error'];
     }
 
+    // Read the previous run's failure streak before it's overwritten below,
+    // so we can detect the run that crosses the "keeps failing" threshold.
+    $previousSummary = frs_energy_load_sync_state($pdo)['last_summary'];
+    $previousFailures = (int)($previousSummary['consecutive_failures'] ?? 0);
+    $consecutiveFailures = $errors !== [] ? $previousFailures + 1 : 0;
+
     $summary = [
         'success' => $errors === [],
         'pushed' => $pushed,
@@ -425,7 +561,33 @@ function frs_energy_run_sync(PDO $pdo): array
         'recommendations_upserted' => $pull['upserted'],
         'errors' => $errors,
         'ran_at' => date('c'),
+        'consecutive_failures' => $consecutiveFailures,
     ];
+
+    // Notify Admins the moment sync crosses 3 consecutive failing runs (not
+    // on every failure afterward, to avoid spamming on run 4, 5, ...).
+    if ($consecutiveFailures === 3) {
+        try {
+            require_once __DIR__ . '/notifications.php';
+            $firstError = $errors !== [] ? $errors[0] : 'Unknown error';
+            if (strlen($firstError) > 200) {
+                $firstError = substr($firstError, 0, 197) . '...';
+            }
+            $link = function_exists('base_path') ? base_path() . '/dashboard/energy-efficiency' : '/dashboard/energy-efficiency';
+            $admins = $pdo->query("SELECT id FROM users WHERE role = 'Admin' AND status = 'active'")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($admins as $adminId) {
+                createNotification(
+                    (int)$adminId,
+                    'system',
+                    'Energy sync failing',
+                    'The Energy Efficiency sync has failed 3 times in a row. First issue: ' . $firstError,
+                    $link
+                );
+            }
+        } catch (Throwable $notifyEx) {
+            error_log('Energy sync failure notification failed: ' . $notifyEx->getMessage());
+        }
+    }
 
     $save = $pdo->prepare('UPDATE energy_sync_state SET last_summary = :summary WHERE id = 1');
     $save->execute(['summary' => json_encode($summary)]);
