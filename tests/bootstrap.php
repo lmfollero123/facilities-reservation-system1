@@ -7,3 +7,5 @@ require_once $root . '/config/app.php';
 require_once $root . '/config/security.php';
 require_once $root . '/config/notification_preferences.php';
 require_once $root . '/config/sms_helper.php';
+require_once $root . '/services/energy_api.php';
+require_once $root . '/config/energy_helper.php';
