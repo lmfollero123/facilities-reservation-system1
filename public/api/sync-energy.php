@@ -51,6 +51,10 @@ try {
     }
 
     $pdo = db();
+    if (!frs_energy_tables_exist($pdo)) {
+        echo json_encode(['success' => false, 'message' => 'Energy integration tables missing. Run database/migration_add_energy_integration.sql.']);
+        exit;
+    }
     $summary = frs_energy_run_sync($pdo);
 
     echo json_encode([
