@@ -243,6 +243,132 @@
         loadPartial(buildUrlFromForm(form), partialId);
     });
 
+    // ---- AJAX POST forms (opt-in via data-frs-ajax) --------------------
+    // Progressive enhancement: on ANY resolution failure we return without
+    // preventDefault so the browser performs a normal full-page submit.
+
+    function ajaxFormTargetId(form) {
+        const explicit = (form.getAttribute('data-frs-ajax-target') || '').trim();
+        if (explicit) return explicit;
+        const region = form.closest('[data-frs-partial-id]');
+        return region ? region.getAttribute('data-frs-partial-id') : '';
+    }
+
+    function setSubmitting(form, on) {
+        form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])').forEach(function (btn) {
+            btn.disabled = on;
+            btn.setAttribute('aria-busy', on ? 'true' : 'false');
+        });
+    }
+
+    function readToastHeader(resp) {
+        const raw = resp.headers.get('X-FRS-Toast');
+        if (!raw) return null;
+        try {
+            const parsed = JSON.parse(decodeURIComponent(raw));
+            if (parsed && typeof parsed.message === 'string') {
+                return { message: parsed.message, type: parsed.type === 'error' ? 'error' : 'success' };
+            }
+        } catch (err) {
+            console.error('frsAjaxForm toast header', err);
+        }
+        return null;
+    }
+
+    function closeOnSuccess(form) {
+        const selector = (form.getAttribute('data-frs-ajax-close') || '').trim();
+        if (!selector) return;
+        document.querySelectorAll(selector).forEach(function (el) {
+            el.style.display = 'none';
+        });
+        document.body.style.overflow = '';
+    }
+
+    async function submitAjaxForm(form, submitter) {
+        const targetId = ajaxFormTargetId(form);
+        const target = resolveTarget(targetId);
+        if (!target) return false; // caller falls back to native submit
+
+        const body = new FormData(form);
+        if (submitter && submitter.name) {
+            body.append(submitter.name, submitter.value || '');
+        }
+
+        form.setAttribute('data-frs-ajax-busy', '1');
+        setSubmitting(form, true);
+        setLoading(target, true);
+
+        try {
+            const resp = await fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: body,
+                headers: {
+                    Accept: 'text/html',
+                    'X-FRS-Partial': targetId,
+                    'X-Requested-With': 'FRSAjaxForm',
+                },
+            });
+            const html = await resp.text();
+            const fragment = extractPartial(html, targetId);
+            if (fragment === null) {
+                // Login page, fatal error page, unexpected layout: never strand the user.
+                window.location.href = resp.url || window.location.href;
+                return true;
+            }
+            const toast = readToastHeader(resp);
+            target.innerHTML = fragment;
+            executeInlineScripts(target);
+            dispatchLoaded(targetId, target);
+            if (toast) {
+                if (typeof window.frsShowToast === 'function') {
+                    window.frsShowToast(toast.message, toast.type);
+                }
+                if (toast.type === 'success') {
+                    closeOnSuccess(form);
+                }
+            }
+            if (!toast || toast.type === 'error') {
+                if (typeof window.frsFocusFirstInvalid === 'function') {
+                    window.frsFocusFirstInvalid();
+                }
+            }
+            if (target.getBoundingClientRect().top < 0) {
+                target.scrollIntoView({ block: 'nearest' });
+            }
+            return true;
+        } catch (err) {
+            console.error('frsAjaxForm', err);
+            if (typeof window.frsShowToast === 'function') {
+                window.frsShowToast('Connection problem — your changes were not saved. Please try again.', 'error');
+            }
+            return true; // handled (do not native-resubmit a possibly-applied action)
+        } finally {
+            form.removeAttribute('data-frs-ajax-busy');
+            setSubmitting(form, false);
+            setLoading(target, false);
+        }
+    }
+
+    document.addEventListener('submit', function (e) {
+        const form = e.target.closest('form[data-frs-ajax]');
+        if (!form) return;
+        const method = (form.getAttribute('method') || 'get').toLowerCase();
+        if (method !== 'post') return;
+        if (!window.fetch || !window.FormData || !window.DOMParser) return; // native submit
+        if (form.hasAttribute('data-frs-ajax-busy')) {
+            e.preventDefault(); // double-submit guard
+            return;
+        }
+        const targetId = ajaxFormTargetId(form);
+        if (!targetId || !resolveTarget(targetId)) {
+            console.warn('frsAjaxForm: no swap region for form; submitting normally', form);
+            return; // native submit
+        }
+        e.preventDefault();
+        submitAjaxForm(form, e.submitter || null);
+    });
+
     document.addEventListener('change', function (e) {
         const select = e.target.closest('select');
         if (!select) return;
