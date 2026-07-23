@@ -186,6 +186,17 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
 
     $facilityId = (int)$data['facility_id'];
     $last = frs_energy_last_reading($pdo, $facilityId);
+    if ($last !== null) {
+        $lastPeriod = ((int)$last['year']) * 100 + (int)$last['month'];
+        $newPeriod = ((int)$data['year']) * 100 + (int)$data['month'];
+        if ($newPeriod <= $lastPeriod) {
+            throw new InvalidArgumentException(sprintf(
+                'Readings must be recorded in chronological order. The latest recorded period for this facility is %04d-%02d.',
+                (int)$last['year'],
+                (int)$last['month']
+            ));
+        }
+    }
     $previous = $last !== null ? (float)$last['current_reading_kwh'] : (float)$data['previous_reading_kwh'];
     $current = (float)$data['current_reading_kwh'];
 
@@ -274,15 +285,18 @@ function frs_energy_push_reading(PDO $pdo, int $readingId): array
 }
 
 /**
- * Pull engineer-approved recommendations (updated_since watermark) into the
- * local cache, resolving CPRF facilities via the mapping table.
+ * Pull recommendations of all statuses (updated_since watermark) into the
+ * local cache, resolving CPRF facilities via the mapping table. Pulling all
+ * statuses (not just 'approved') lets status changes made on the Energy
+ * side (e.g. an engineer un-approving a recommendation) reach the cache;
+ * the display layer is responsible for filtering to approved-only.
  *
  * @return array{success: bool, upserted: int, error: ?string}
  */
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
     $state = frs_energy_load_sync_state($pdo);
-    $query = ['status' => 'approved', 'per_page' => 100];
+    $query = ['status' => 'all', 'per_page' => 100];
     if (!empty($state['last_pull_at'])) {
         $query['updated_since'] = $state['last_pull_at'];
     }
@@ -294,6 +308,7 @@ function frs_energy_pull_recommendations(PDO $pdo): array
     }
 
     $upserted = 0;
+    $maxUpdatedAt = null;
     $page = 1;
     do {
         $query['page'] = $page;
@@ -346,12 +361,27 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 'reviewed_at' => $reviewedAt,
             ]);
             $upserted++;
+
+            if (isset($row['updated_at']) && $row['updated_at'] !== null) {
+                $rowUpdatedAt = (string)$row['updated_at'];
+                if ($maxUpdatedAt === null || strtotime($rowUpdatedAt) > strtotime($maxUpdatedAt)) {
+                    $maxUpdatedAt = $rowUpdatedAt;
+                }
+            }
         }
         $hasNext = !empty($result['data']['next_page_url']);
         $page++;
     } while ($hasNext && $page <= 10);
 
-    $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = NOW() WHERE id = 1')->execute();
+    // Use the remote's own updated_at watermark rather than our clock, to
+    // avoid missing rows on the next pull due to clock skew between this
+    // server and the Energy system. If no rows were fetched, leave the
+    // watermark unchanged (re-fetching the newest row next time is harmless
+    // since the upsert above is idempotent).
+    if ($maxUpdatedAt !== null) {
+        $watermark = date('Y-m-d H:i:s', strtotime($maxUpdatedAt));
+        $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = :w WHERE id = 1')->execute(['w' => $watermark]);
+    }
 
     return ['success' => true, 'upserted' => $upserted, 'error' => null];
 }

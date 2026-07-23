@@ -144,7 +144,8 @@ if ($hasTables && $tab === 'recommendations') {
         SELECT c.*, f.name AS facility_name
         FROM energy_recommendations_cache c
         LEFT JOIN facilities f ON f.id = c.facility_id
-        ' . ($filterFacility > 0 ? 'WHERE c.facility_id = :fid' : '') . '
+        WHERE c.status = \'approved\'
+        ' . ($filterFacility > 0 ? 'AND c.facility_id = :fid' : '') . '
         ORDER BY c.year DESC, c.month DESC, c.id DESC
         LIMIT 100
     ';
