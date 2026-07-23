@@ -138,20 +138,36 @@ if ($hasTables) {
 }
 
 $recommendations = [];
+$periodRaw = '';
 if ($hasTables && $tab === 'recommendations') {
     $filterFacility = (int)($_GET['facility_id'] ?? 0);
+    $filterYear = 0;
+    $filterMonth = 0;
+    $periodRaw = trim((string)($_GET['period'] ?? ''));
+    if ($periodRaw !== '') {
+        $parts = explode('-', $periodRaw);
+        if (count($parts) === 2 && ctype_digit($parts[0]) && ctype_digit($parts[1]) && (int)$parts[1] >= 1 && (int)$parts[1] <= 12) {
+            $filterYear = (int)$parts[0];
+            $filterMonth = (int)$parts[1];
+        }
+    }
     $sql = '
         SELECT c.*, f.name AS facility_name
         FROM energy_recommendations_cache c
         LEFT JOIN facilities f ON f.id = c.facility_id
         WHERE c.status = \'approved\'
         ' . ($filterFacility > 0 ? 'AND c.facility_id = :fid' : '') . '
+        ' . ($filterYear > 0 ? 'AND c.year = :fy AND c.month = :fm' : '') . '
         ORDER BY c.year DESC, c.month DESC, c.id DESC
         LIMIT 100
     ';
     $stmt = $pdo->prepare($sql);
     if ($filterFacility > 0) {
         $stmt->bindValue('fid', $filterFacility, PDO::PARAM_INT);
+    }
+    if ($filterYear > 0) {
+        $stmt->bindValue('fy', $filterYear, PDO::PARAM_INT);
+        $stmt->bindValue('fm', $filterMonth, PDO::PARAM_INT);
     }
     $stmt->execute();
     $recommendations = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -336,6 +352,7 @@ ob_start();
             <h2 style="margin:0;">Energy-Saving Recommendations</h2>
             <form method="GET" action="<?= htmlspecialchars(base_path() . '/dashboard/energy-efficiency'); ?>">
                 <input type="hidden" name="tab" value="recommendations">
+                <input type="month" name="period" value="<?= htmlspecialchars($periodRaw); ?>" onchange="this.form.submit()" style="padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
                 <select name="facility_id" onchange="this.form.submit()" style="padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
                     <option value="0">All facilities</option>
                     <?php foreach ($facilities as $f): ?>
