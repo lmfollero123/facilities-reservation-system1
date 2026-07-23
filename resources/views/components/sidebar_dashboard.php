@@ -45,6 +45,7 @@ $iconPaths = [
     'wrench' => '<path d="M14.7 6.3C15.1 5.9 15.1 5.3 14.7 4.9L13.1 3.3C12.7 2.9 12.1 2.9 11.7 3.3L10.5 4.5L7.5 1.5C6.7 0.7 5.3 0.7 4.5 1.5L1.5 4.5C0.7 5.3 0.7 6.7 1.5 7.5L4.5 10.5L3.3 11.7C2.9 12.1 2.9 12.7 3.3 13.1L4.9 14.7C5.3 15.1 5.9 15.1 6.3 14.7L7.5 13.5L10.5 16.5C11.3 17.3 12.7 17.3 13.5 16.5L16.5 13.5L17.7 14.7C18.1 15.1 18.7 15.1 19.1 14.7L20.7 13.1C21.1 12.7 21.1 12.1 20.7 11.7L19.5 10.5L22.5 7.5C23.3 6.7 23.3 5.3 22.5 4.5L19.5 1.5C18.7 0.7 17.3 0.7 16.5 1.5L13.5 4.5L14.7 6.3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     'hammer' => '<path d="M15 12L3 24L0 21L12 9M18 6L21 3L18 0L15 3L12 6L15 9L18 6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     'bolt' => '<path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    'lightbulb' => '<path d="M9 18H15M10 21H14M12 3C8.7 3 6 5.7 6 9C6 11.2 7.2 13.2 9 14.2V16H15V14.2C16.8 13.2 18 11.2 18 9C18 5.7 15.3 3 12 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     'chart-bar' => '<path d="M3 3V21H21M7 16L12 11L16 15L21 10M21 10H16M21 10V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     'users' => '<path d="M17 21V19C17 17.9 16.1 17 15 17H9C7.9 17 7 17.9 7 19V21M21 21V19C20.9993 17.1 20.1 15.3 18.6 14.1M3 21V19C3.00068 17.1 3.9 15.3 5.4 14.1M12 11C13.6569 11 15 9.65685 15 8C15 6.34315 13.6569 5 12 5C10.3431 5 9 6.34315 9 8C9 9.65685 10.3431 11 12 11Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     'folder' => '<path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -152,6 +153,9 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     }
     if (frs_can_read($role, 'utilities')) {
         $integrationsGroup[] = ['label' => 'UMAN Integration', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
+    }
+    if (frs_can_read($role, 'energy')) {
+        $integrationsGroup[] = ['label' => 'Energy Efficiency', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
     }
 
     // Reports - check permissions

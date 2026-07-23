@@ -173,6 +173,7 @@ if ($path === 'announcements') {
         'maintenance-insights' => 'predictive_maintenance.php',
         'infrastructure-projects' => 'infrastructure_projects_integration.php',
         'utilities-integration' => 'utilities_integration.php',
+        'energy-efficiency' => 'energy_efficiency.php',
         'calendar-export' => 'calendar_export_ics.php',
         'reports' => 'reports.php',
         'user-management' => 'user_management.php',
