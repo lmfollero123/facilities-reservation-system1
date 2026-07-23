@@ -134,6 +134,10 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
     <?php if (!empty($loginToast['message'])): ?>
         <div class="frs-toast-preset" data-frs-toast-message="<?= htmlspecialchars((string)$loginToast['message'], ENT_QUOTES, 'UTF-8'); ?>" data-frs-toast-type="<?= htmlspecialchars((string)($loginToast['type'] ?? 'success'), ENT_QUOTES, 'UTF-8'); ?>" hidden></div>
     <?php endif; ?>
+    <?php
+    require_once dirname(__DIR__, 3) . '/config/flash_helper.php';
+    frs_flash_emit();
+    ?>
 </div>
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
