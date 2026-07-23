@@ -47,6 +47,6 @@ final class FlashHelperTest extends TestCase
         $this->assertTrue(frs_flash_is_ajax_form_request());
         unset($_SERVER['HTTP_X_REQUESTED_WITH']);
         $_SERVER['HTTP_X_FRS_PARTIAL'] = 'some-region';
-        $this->assertTrue(frs_flash_is_ajax_form_request());
+        $this->assertFalse(frs_flash_is_ajax_form_request());
     }
 }

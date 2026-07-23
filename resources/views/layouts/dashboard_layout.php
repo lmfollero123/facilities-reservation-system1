@@ -5,6 +5,8 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../config/app.php';
 require_once __DIR__ . '/../../../config/ui_helpers.php';
 require_once __DIR__ . '/../../../config/reservation_helpers.php';
+require_once dirname(__DIR__, 3) . '/config/flash_helper.php';
+frs_flash_emit_header();
 $frsBookingLimitsPolicyJs = json_encode(frs_resident_booking_limits_policy_bullets(), JSON_UNESCAPED_UNICODE);
 $isLoggedIn = $_SESSION['user_authenticated'] ?? false;
 if (!$isLoggedIn) {

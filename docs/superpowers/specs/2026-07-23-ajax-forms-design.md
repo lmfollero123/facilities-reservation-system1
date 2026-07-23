@@ -18,7 +18,7 @@ Rejected: a whole-`.dashboard-content` swapper (re-introduces the full soft-swap
 
 ### 3.1 Interception
 
-- Document-level `submit` listener (capture phase, consistent with the file's existing delegation style).
+- Document-level `submit` listener (bubble phase — required so page-level validation listeners' `preventDefault()` runs first and is visible to the intercept, consistent with the file's existing delegation style).
 - Handles only `form[data-frs-ajax]` whose method is POST (attribute or default). GET forms keep the existing `form[data-frs-partial]` path untouched.
 - The form must be inside a `[data-frs-partial-id]` region — the swap target is the **closest** such ancestor — OR name its region explicitly via `data-frs-ajax-target="<region-id>"` (required for forms inside modals that the partial layer re-mounts onto `<body>`, outside any region). If neither resolves: `console.warn` once and let the browser submit normally (never break a form).
 - Optional `data-frs-ajax-close="<selector>"`: after a successful submit (toast type `success`), hide the matched element (`style.display='none'`) and restore `document.body.style.overflow` — declarative modal closing.
@@ -50,11 +50,12 @@ One small helper standardizing the three existing flash patterns (inline `$messa
 
 - `frs_flash_success(string $msg): void` / `frs_flash_error(string $msg): void` — store `['message' => $msg, 'type' => ...]` in `$_SESSION['frs_flash']` (single slot, last-write-wins).
 - `frs_flash_take(): ?array` — read + clear the slot.
-- `frs_flash_emit(): void` — called by the dashboard layout (or the page) during render:
-  - If a flash exists and the request carries `X-FRS-Partial` (or `X-Requested-With: FRSAjaxForm`): send header `X-FRS-Toast: <rawurlencode(json)>` (only if headers not already sent).
-  - Else if a flash exists: render it through the existing DOM toast channel (`data-frs-toast-message`/`data-frs-toast-type` on the `#frsToastStack` element) so full-page loads keep working with zero page code.
+- AJAX detection is `X-Requested-With: FRSAjaxForm` only — GET partial loads (`X-FRS-Partial`) never read the toast header, so they must not consume the flash.
+- Emission is two-phase, since HTTP headers must be sent before any HTML output:
+  - `frs_flash_emit_header(): void` — called from the layout's PHP prologue, before its first byte of output. If the request is an AJAX form submit and headers can still be sent and a flash exists: send header `X-FRS-Toast: <rawurlencode(json)>` and consume the flash. Otherwise consume nothing.
+  - `frs_flash_emit(): void` — called by the dashboard layout at the toast-stack render point, for full page loads. If a flash still exists (the header phase didn't consume it), render it through the existing DOM toast channel (`data-frs-toast-message`/`data-frs-toast-type` on the `#frsToastStack` element) so full-page loads keep working with zero page code.
 - Coexistence: pages not yet migrated keep their current patterns untouched. Migration = replace the page's ad-hoc flash write with `frs_flash_success()`/`frs_flash_error()`.
-- The layout's toast stack rendering moves behind `frs_flash_emit()` (backward compatible: it still honors any page that sets the old data-attributes directly).
+- The layout's toast stack rendering stays behind `frs_flash_emit()` (backward compatible: it still honors any page that sets the old data-attributes directly); `frs_flash_emit_header()` runs earlier, before the layout emits any output.
 
 **Error convention:** validation errors that must appear inline next to the form stay exactly as they are today (inline `$message`/`$messageType` render inside the region — the swap shows them). `frs_flash_error()` is for errors that suit a toast (e.g., rate-limited, generic failure). Success messages always go through `frs_flash_success()` on converted forms.
 

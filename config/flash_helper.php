@@ -1,10 +1,24 @@
 <?php
 /**
- * Session-backed flash messages with two delivery channels:
- *  - AJAX form submits (X-Requested-With: FRSAjaxForm / X-FRS-Partial header):
- *    an X-FRS-Toast response header the client turns into frsShowToast().
- *  - Full page loads: a .frs-toast-preset div in #frsToastStack that
- *    frs-toast.js already promotes to a toast on DOMContentLoaded.
+ * Session-backed flash messages with two delivery channels, emitted in two
+ * phases because HTTP headers must be sent before any HTML output:
+ *
+ *  - Header phase (frs_flash_emit_header()): called from the layout's PHP
+ *    prologue, before its first byte of output. On AJAX form submits
+ *    (X-Requested-With: FRSAjaxForm) it sends the X-FRS-Toast response
+ *    header (consuming the flash) so the client's fetch layer can read it
+ *    and call frsShowToast() on the swapped region. Calling this late (e.g.
+ *    at the toast-stack render point, after ~KBs of HTML) would silently
+ *    fail: headers_sent() would be true, the header would be dropped, and
+ *    the DOM fallback below renders outside the AJAX-swapped region anyway
+ *    — so AJAX submitters would never see the message.
+ *  - DOM phase (frs_flash_emit()): called from the layout at the toast-stack
+ *    render point, for full page loads. If the header phase already
+ *    delivered (and consumed) the flash, this is a no-op. Otherwise it
+ *    echoes a .frs-toast-preset div in #frsToastStack that frs-toast.js
+ *    promotes to a toast on DOMContentLoaded.
+ *
+ * A flash is only ever consumed by the channel that can actually deliver it.
  *
  * Standardizes the older per-page patterns (inline $message vars, ad-hoc
  * session keys like booking_flash). Pages migrate by calling
@@ -48,27 +62,42 @@ function frs_flash_build_toast_header(array $flash): string
     ]));
 }
 
-/** True when the request came from the AJAX form layer (or a partial GET). */
+/** True only for a real AJAX form submit (the header channel's only consumer). */
 function frs_flash_is_ajax_form_request(): bool
 {
-    return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm'
-        || ($_SERVER['HTTP_X_FRS_PARTIAL'] ?? '') !== '';
+    return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 }
 
 /**
- * Deliver a pending flash. Call from the layout at the toast-stack render
- * point: on AJAX requests it sends the X-FRS-Toast header (output is still
- * buffered there, so headers_sent() is normally false); on full loads it
- * echoes a preset div inside #frsToastStack.
+ * Header phase. Call from the layout's PHP prologue, before any HTML
+ * output. Delivers via the X-FRS-Toast header — and consumes the flash —
+ * only when the request is an AJAX form submit AND headers can still be
+ * sent AND a flash exists. Any failed condition consumes nothing, leaving
+ * the flash for frs_flash_emit()'s DOM-phase fallback.
+ */
+function frs_flash_emit_header(): void
+{
+    if (!frs_flash_is_ajax_form_request() || headers_sent()) {
+        return;
+    }
+    $flash = $_SESSION['frs_flash'] ?? null;
+    if (!is_array($flash) || !isset($flash['message'], $flash['type'])) {
+        return;
+    }
+    header('X-FRS-Toast: ' . frs_flash_build_toast_header($flash));
+    frs_flash_take();
+}
+
+/**
+ * DOM phase. Call from the layout at the toast-stack render point. If
+ * frs_flash_emit_header() already delivered (and consumed) the flash for
+ * this request, there is nothing left here. Otherwise, echoes a preset div
+ * inside #frsToastStack for full page loads.
  */
 function frs_flash_emit(): void
 {
     $flash = frs_flash_take();
     if ($flash === null) {
-        return;
-    }
-    if (frs_flash_is_ajax_form_request() && !headers_sent()) {
-        header('X-FRS-Toast: ' . frs_flash_build_toast_header($flash));
         return;
     }
     echo '<div class="frs-toast-preset" data-frs-toast-message="'
