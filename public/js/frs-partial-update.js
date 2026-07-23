@@ -287,7 +287,7 @@
     async function submitAjaxForm(form, submitter) {
         const targetId = ajaxFormTargetId(form);
         const target = resolveTarget(targetId);
-        if (!target) return false; // caller falls back to native submit
+        if (!target) return false; // defensive only: the submit listener verifies the region exists before preventDefault
 
         const body = new FormData(form);
         if (submitter && submitter.name) {
