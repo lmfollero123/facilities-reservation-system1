@@ -353,6 +353,7 @@
     document.addEventListener('submit', function (e) {
         const form = e.target.closest('form[data-frs-ajax]');
         if (!form) return;
+        if (e.defaultPrevented) return; // a page-level validation listener blocked this submit
         const method = (form.getAttribute('method') || 'get').toLowerCase();
         if (method !== 'post') return;
         if (!window.fetch || !window.FormData || !window.DOMParser) return; // native submit
