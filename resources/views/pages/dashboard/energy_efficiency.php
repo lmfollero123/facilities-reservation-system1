@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
         $month = (string)($_POST['reading_month'] ?? ''); // "YYYY-MM" from <input type=month>
         $parts = explode('-', $month);
         try {
-            if (count($parts) !== 2 || !ctype_digit($parts[0]) || !ctype_digit($parts[1])) {
+            if (count($parts) !== 2 || !ctype_digit($parts[0]) || !ctype_digit($parts[1]) || (int)$parts[1] < 1 || (int)$parts[1] > 12) {
                 throw new InvalidArgumentException('Please choose a valid reading month.');
             }
             $readingId = frs_energy_save_reading($pdo, [
@@ -126,10 +126,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
             $messageType = 'error';
         } else {
             $energyFacilityId = (int)substr($pair, 0, $sep);
-            $energyFacilityName = substr($pair, $sep + 1);
-            frs_energy_save_mapping($pdo, $facilityId, $energyFacilityId, $energyFacilityName, (int)($_SESSION['user_id'] ?? 0) ?: null);
-            $message = 'Facility mapping saved.';
-            $messageType = 'success';
+            if ($energyFacilityId <= 0) {
+                $message = 'Please choose an Energy-system facility.';
+                $messageType = 'error';
+            } else {
+                $energyFacilityName = substr($pair, $sep + 1);
+                frs_energy_save_mapping($pdo, $facilityId, $energyFacilityId, $energyFacilityName, (int)($_SESSION['user_id'] ?? 0) ?: null);
+                $message = 'Facility mapping saved.';
+                $messageType = 'success';
+            }
         }
         $tab = 'mapping';
     } elseif ($_POST['action'] === 'sync_now' && $canUpdate) {

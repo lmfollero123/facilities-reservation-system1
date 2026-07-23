@@ -2043,11 +2043,7 @@ ul.bcf-scroll-select-menu {
     <?php endif; ?>
 </div>
 
-<?php if ($success): ?>
-    <div class="message success" style="background:#e3f8ef;color:#0d7a43;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
-        <?= htmlspecialchars($success); ?>
-    </div>
-<?php elseif ($error): ?>
+<?php if ($error): ?>
     <div class="message error booking-error" data-error-field="<?= htmlspecialchars($errorField); ?>" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($error); ?>
     </div>

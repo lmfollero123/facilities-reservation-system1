@@ -233,17 +233,24 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
         VALUES
             (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :notes, :recorded_by, \'pending\')
     ');
-    $stmt->execute([
-        'facility_id' => $facilityId,
-        'year' => (int)$data['year'],
-        'month' => (int)$data['month'],
-        'reading_date' => (string)$data['reading_date'],
-        'previous_kwh' => $previous,
-        'current_kwh' => $current,
-        'consumption_kwh' => $consumption,
-        'notes' => $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null,
-        'recorded_by' => $data['recorded_by'],
-    ]);
+    try {
+        $stmt->execute([
+            'facility_id' => $facilityId,
+            'year' => (int)$data['year'],
+            'month' => (int)$data['month'],
+            'reading_date' => (string)$data['reading_date'],
+            'previous_kwh' => $previous,
+            'current_kwh' => $current,
+            'consumption_kwh' => $consumption,
+            'notes' => $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null,
+            'recorded_by' => $data['recorded_by'],
+        ]);
+    } catch (PDOException $e) {
+        if (($e->errorInfo[1] ?? null) == 1062) {
+            throw new InvalidArgumentException('A reading for this facility and month already exists.');
+        }
+        throw $e;
+    }
     $id = (int)$pdo->lastInsertId();
 
     require_once __DIR__ . '/audit.php';
@@ -366,12 +373,22 @@ function frs_energy_delete_reading(PDO $pdo, int $readingId): void
     logAudit('Deleted energy meter reading', 'Energy Efficiency', "reading_id={$readingId} facility_id={$reading['facility_id']} {$reading['year']}-{$reading['month']}");
 }
 
+/** Count readings still awaiting a successful push. */
+function frs_energy_pending_count(PDO $pdo): int
+{
+    try {
+        return (int)$pdo->query("SELECT COUNT(*) FROM energy_meter_readings WHERE sync_status IN ('pending','failed')")->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
 /**
  * Push one local reading to the Energy system and record the outcome.
  *
  * @return array{success: bool, error: ?string}
  */
-function frs_energy_push_reading(PDO $pdo, int $readingId): array
+function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = null): array
 {
     $stmt = $pdo->prepare('
         SELECT r.*, u.name AS recorded_by_name
@@ -386,7 +403,7 @@ function frs_energy_push_reading(PDO $pdo, int $readingId): array
         return ['success' => false, 'error' => 'Reading not found.'];
     }
 
-    $mapping = frs_energy_get_mapping($pdo);
+    $mapping = $mapping ?? frs_energy_get_mapping($pdo);
     $facilityId = (int)$reading['facility_id'];
     if (!isset($mapping[$facilityId])) {
         $fail = $pdo->prepare("UPDATE energy_meter_readings SET sync_status = 'failed', sync_error = :err WHERE id = :id");
@@ -528,8 +545,9 @@ function frs_energy_run_sync(PDO $pdo): array
     $pushFailed = 0;
 
     $pending = $pdo->query("SELECT id FROM energy_meter_readings WHERE sync_status IN ('pending','failed') ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+    $mapping = frs_energy_get_mapping($pdo);
     foreach ($pending as $readingId) {
-        $result = frs_energy_push_reading($pdo, (int)$readingId);
+        $result = frs_energy_push_reading($pdo, (int)$readingId, $mapping);
         if ($result['success']) {
             $pushed++;
         } else {

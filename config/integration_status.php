@@ -135,14 +135,7 @@ function frs_integration_energy_status(PDO $pdo): array
     $lastSync = $state['last_pull_at'] ?? $state['last_push_at'];
     $hasSynced = $lastSync !== null && $lastSync !== '';
 
-    $pendingReadings = 0;
-    if ($tablesReady) {
-        try {
-            $pendingReadings = (int)$pdo->query("SELECT COUNT(*) FROM energy_meter_readings WHERE sync_status IN ('pending','failed')")->fetchColumn();
-        } catch (Throwable $e) {
-            $pendingReadings = 0;
-        }
-    }
+    $pendingReadings = $tablesReady ? frs_energy_pending_count($pdo) : 0;
 
     return [
         'slug' => 'energy',

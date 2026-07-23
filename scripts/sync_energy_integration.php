@@ -81,7 +81,7 @@ try {
     }
 
     if ($dryRun) {
-        $pending = (int)$pdo->query("SELECT COUNT(*) FROM energy_meter_readings WHERE sync_status IN ('pending','failed')")->fetchColumn();
+        $pending = frs_energy_pending_count($pdo);
         energySyncOutputAndExit([
             'success' => true,
             'message' => 'Dry run: nothing pushed or pulled.',

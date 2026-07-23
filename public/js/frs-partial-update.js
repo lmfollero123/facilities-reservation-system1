@@ -295,6 +295,7 @@
         }
 
         form.setAttribute('data-frs-ajax-busy', '1');
+        busy = true;
         setSubmitting(form, true);
         setLoading(target, true);
 
@@ -345,6 +346,7 @@
             return true; // handled (do not native-resubmit a possibly-applied action)
         } finally {
             form.removeAttribute('data-frs-ajax-busy');
+            busy = false;
             setSubmitting(form, false);
             setLoading(target, false);
         }
@@ -366,6 +368,7 @@
             console.warn('frsAjaxForm: no swap region for form; submitting normally', form);
             return; // native submit
         }
+        if (busy) { return; } // a GET partial load is in flight; native submit is the safe fallback
         e.preventDefault();
         submitAjaxForm(form, e.submitter || null);
     });

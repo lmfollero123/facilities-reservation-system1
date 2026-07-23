@@ -519,7 +519,7 @@ $mineTabYearMax = (int)date('Y') + 5;
 
 <div data-frs-partial-id="mine-calendar" data-frs-partial-root>
 <?php if (!empty($message)): ?>
-    <div class="message <?= $messageType === 'error' ? 'error' : 'success'; ?>" style="background:<?= $messageType === 'error' ? '#fdecee;color:#b23030' : '#e8f5e9;color:#2e7d32'; ?>;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
+    <div class="message error" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($message); ?>
     </div>
 <?php endif; ?>
