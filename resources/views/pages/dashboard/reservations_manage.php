@@ -20,6 +20,7 @@ require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
+require_once __DIR__ . '/../../../../config/flash_helper.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -354,6 +355,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     }
 }
 
+if ($message !== '' && $messageType === 'success') {
+    frs_flash_success($message);
+    $message = '';
+}
+
 // Get pending reservations with pagination and filtering
 $pendingPerPage = 10;
 $pendingPage = max(1, (int)($_GET['pending_page'] ?? 1));
@@ -660,12 +666,6 @@ ob_start();
     </div>
 </div>
 
-<?php if ($message): ?>
-    <div class="message <?= $messageType; ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.25rem;background:<?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>;color:<?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>;">
-        <?= htmlspecialchars($message); ?>
-    </div>
-<?php endif; ?>
-
 <div class="booking-wrapper ra-approvals-layout">
     <section class="booking-card ra-approvals-main">
         <details class="ra-legend-details">
@@ -683,6 +683,11 @@ ob_start();
         </details>
 
         <div data-frs-partial-id="ra-approvals-main" data-frs-partial-root>
+        <?php if ($message): ?>
+            <div class="message <?= $messageType; ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.25rem;background:<?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>;color:<?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>;">
+                <?= htmlspecialchars($message); ?>
+            </div>
+        <?php endif; ?>
         <nav class="ra-view-tabs" aria-label="Approval sections">
             <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => 1])); ?>"
                class="ra-view-tab<?= $approvalsView === 'pending' ? ' is-active' : ''; ?>"
@@ -1063,7 +1068,11 @@ ob_start();
                 <p id="reviewDecisionPurpose" class="ra-review-purpose__text"></p>
             </div>
 
-            <form method="POST" id="reviewDecisionForm" action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>">
+            <form method="POST" id="reviewDecisionForm"
+                  data-frs-ajax
+                  data-frs-ajax-target="ra-approvals-main"
+                  data-frs-ajax-close="#reviewDecisionModal"
+                  action="<?= htmlspecialchars(base_path() . '/dashboard/reservations-manage', ENT_QUOTES, 'UTF-8'); ?>">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="view" value="pending">
                 <input type="hidden" name="reservation_id" id="review_reservation_id" value="">
@@ -1088,7 +1097,10 @@ ob_start();
             <h3>Modify Approved Reservation</h3>
             <button onclick="closeModifyModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="modifyForm">
+        <form method="POST" id="modifyForm"
+              data-frs-ajax
+              data-frs-ajax-target="ra-approvals-main"
+              data-frs-ajax-close="#modifyModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="modify_reservation_id">
@@ -1154,7 +1166,10 @@ ob_start();
             <h3>Postpone Approved Reservation</h3>
             <button onclick="closePostponeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="postponeForm">
+        <form method="POST" id="postponeForm"
+              data-frs-ajax
+              data-frs-ajax-target="ra-approvals-main"
+              data-frs-ajax-close="#postponeModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
@@ -1205,7 +1220,10 @@ ob_start();
             <h3>Cancel Approved Reservation</h3>
             <button onclick="closeCancelModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="cancelForm">
+        <form method="POST" id="cancelForm"
+              data-frs-ajax
+              data-frs-ajax-target="ra-approvals-main"
+              data-frs-ajax-close="#cancelModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
@@ -1240,7 +1258,10 @@ ob_start();
             <h3>Reschedule Priority Reservation</h3>
             <button type="button" onclick="closeStaffRescheduleModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="staffRescheduleForm">
+        <form method="POST" id="staffRescheduleForm"
+              data-frs-ajax
+              data-frs-ajax-target="ra-approvals-main"
+              data-frs-ajax-close="#staffRescheduleModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="view" value="pending">
             <input type="hidden" name="reservation_id" id="staff_reschedule_reservation_id">
@@ -1872,6 +1893,20 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                 return;
             }
             noteInput.classList.remove('ra-input-error');
+        });
+
+        // data-frs-ajax-close only hides #reviewDecisionModal and restores body
+        // overflow; the page's own closeReviewModal() also clears aria-hidden,
+        // resets the form (note textarea isn't re-cleared by openReviewModal),
+        // and wipes the banner/grid/purpose markup. Run the full close routine
+        // whenever this region re-renders while the modal is open so an AJAX
+        // approve/deny leaves no residue for the next open.
+        document.addEventListener('frs:partial-loaded', function(e) {
+            if (!e.detail || e.detail.id !== 'ra-approvals-main') return;
+            const modal = getReviewModal();
+            if (modal && modal.classList.contains('show')) {
+                closeReviewModal();
+            }
         });
     }
 })();
