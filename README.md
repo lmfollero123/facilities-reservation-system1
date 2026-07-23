@@ -85,6 +85,7 @@ Test integration: `php test_integration.php`
 | `scripts/auto_decline_expired.php` | Decline stale pending reservations |
 | `scripts/send_booking_reminders.php` | 24h reminders for approved bookings |
 | `scripts/process_expired_reservations.php` | Expired / cleanup flows |
+| `scripts/sync_energy_integration.php` | Push meter readings to LGU Energy; pull recommendations |
 
 ```bash
 php scripts/send_booking_reminders.php --dry-run

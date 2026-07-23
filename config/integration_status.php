@@ -122,6 +122,57 @@ function frs_integration_uman_status(PDO $pdo): array
 }
 
 /**
+ * @return array<string, mixed>
+ */
+function frs_integration_energy_status(PDO $pdo): array
+{
+    require_once __DIR__ . '/energy_helper.php';
+
+    $configured = energy_api_base_url() !== '' && energy_api_token() !== '';
+    $tablesReady = frs_energy_tables_exist($pdo);
+    $state = $tablesReady ? frs_energy_load_sync_state($pdo) : ['last_pull_at' => null, 'last_push_at' => null, 'last_summary' => null];
+    $summary = is_array($state['last_summary']) ? $state['last_summary'] : [];
+    $lastSync = $state['last_pull_at'] ?? $state['last_push_at'];
+    $hasSynced = $lastSync !== null && $lastSync !== '';
+
+    $pendingReadings = 0;
+    if ($tablesReady) {
+        try {
+            $pendingReadings = (int)$pdo->query("SELECT COUNT(*) FROM energy_meter_readings WHERE sync_status IN ('pending','failed')")->fetchColumn();
+        } catch (Throwable $e) {
+            $pendingReadings = 0;
+        }
+    }
+
+    return [
+        'slug' => 'energy',
+        'name' => 'Energy Efficiency (LGU Energy)',
+        'description' => 'Pushes manual facility meter readings to the LGU Energy system and pulls engineer-approved energy-saving recommendations.',
+        'connected' => $configured && $hasSynced && empty($summary['errors']),
+        'status_label' => !$configured
+            ? 'Not configured'
+            : ($hasSynced ? (empty($summary['errors']) ? 'Connected' : 'Sync warnings') : 'Not synced yet'),
+        'status_class' => !$configured
+            ? 'offline'
+            : (($hasSynced && empty($summary['errors'])) ? 'active' : ($hasSynced ? 'maintenance' : 'offline')),
+        'last_sync' => $lastSync,
+        'preview' => !$configured,
+        'can_sync' => $configured && $tablesReady && energy_api_enabled(),
+        'sync_type' => 'ajax',
+        'sync_url' => function_exists('base_path') ? base_path() . '/public/api/sync-energy.php' : '/public/api/sync-energy.php',
+        'manage_url' => function_exists('base_path') ? base_path() . '/dashboard/energy-efficiency' : '/dashboard/energy-efficiency',
+        'metrics' => [
+            'Readings pushed (last run)' => (int)($summary['pushed'] ?? 0),
+            'Push failures (last run)' => (int)($summary['push_failed'] ?? 0),
+            'Recommendations updated' => (int)($summary['recommendations_upserted'] ?? 0),
+            'Unsynced readings' => $pendingReadings,
+        ],
+        'errors' => (array)($summary['errors'] ?? []),
+        'cron_hint' => 'php scripts/sync_energy_integration.php',
+    ];
+}
+
+/**
  * @return array<int, array<string, mixed>>
  */
 function frs_integration_status_all(PDO $pdo): array
@@ -130,6 +181,7 @@ function frs_integration_status_all(PDO $pdo): array
         frs_integration_cimm_status(),
         frs_integration_infrastructure_status(),
         frs_integration_uman_status($pdo),
+        frs_integration_energy_status($pdo),
     ];
 }
 
