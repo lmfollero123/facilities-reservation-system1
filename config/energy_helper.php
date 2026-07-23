@@ -288,9 +288,9 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
     $earlier = $pdo->prepare('
         SELECT COUNT(*) FROM energy_meter_readings
         WHERE facility_id = :facility_id
-          AND (year < :year OR (year = :year AND month < :month))
+          AND (year < :year1 OR (year = :year2 AND month < :month))
     ');
-    $earlier->execute(['facility_id' => $facilityId, 'year' => (int)$reading['year'], 'month' => (int)$reading['month']]);
+    $earlier->execute(['facility_id' => $facilityId, 'year1' => (int)$reading['year'], 'year2' => (int)$reading['year'], 'month' => (int)$reading['month']]);
     $isOnlyReading = (int)$earlier->fetchColumn() === 0;
 
     $previous = (float)$reading['previous_reading_kwh'];
@@ -355,8 +355,8 @@ function frs_energy_delete_reading(PDO $pdo, int $readingId): void
         throw new InvalidArgumentException('Only the latest reading for a facility can be deleted. Earlier periods are locked for chronological integrity.');
     }
 
-    if ($reading['sync_status'] === 'synced') {
-        throw new InvalidArgumentException('This reading has already been synced to the Energy system. Correct it via edit instead of deleting, so the correction is re-pushed.');
+    if ($reading['sync_status'] === 'synced' || $reading['external_record_id'] !== null) {
+        throw new InvalidArgumentException('This reading already exists in the Energy system. Correct it via edit instead of deleting, so the correction is re-pushed.');
     }
 
     $delete = $pdo->prepare('DELETE FROM energy_meter_readings WHERE id = :id');
