@@ -178,6 +178,12 @@ function frs_energy_last_reading(PDO $pdo, int $facilityId): ?array
  */
 function frs_energy_save_reading(PDO $pdo, array $data): int
 {
+    foreach (['previous_reading_kwh', 'current_reading_kwh'] as $key) {
+        if (!isset($data[$key]) || !is_numeric($data[$key])) {
+            throw new InvalidArgumentException('Meter readings must be numeric values.');
+        }
+    }
+
     $facilityId = (int)$data['facility_id'];
     $last = frs_energy_last_reading($pdo, $facilityId);
     $previous = $last !== null ? (float)$last['current_reading_kwh'] : (float)$data['previous_reading_kwh'];
