@@ -17,6 +17,7 @@ if (!($_SESSION['user_authenticated'] ?? false)) {
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/flash_helper.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
 require_once __DIR__ . '/../../../../config/blackout_dates.php';
 require_once __DIR__ . '/../../../../services/PredictionService.php';
@@ -62,10 +63,6 @@ $pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservatio
 $success = '';
 $error = '';
 $errorField = '';
-if (!empty($_SESSION['booking_flash']) && is_array($_SESSION['booking_flash'])) {
-    $success = (string)($_SESSION['booking_flash']['msg'] ?? '');
-    unset($_SESSION['booking_flash']);
-}
 $bcfOpenBookingModal = false;
 $conflictWarning = null;
 $recommendations = [];
@@ -184,6 +181,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST' && !empty($userId)) {
 $frsCsrfOk = frs_csrf_ok();
 $frsCsrfError = 'Your session expired or the form is invalid. Please refresh and try again.';
 require_once __DIR__ . '/includes/reservations_mine_post_handlers.php';
+if ($message !== '' && $messageType === 'success') {
+    frs_flash_success($message);
+    $message = '';
+}
 require_once __DIR__ . '/../../../../config/reservation_documents.php';
 require_once __DIR__ . '/../../../../config/ai_demo_scenarios.php';
 
@@ -709,7 +710,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             if ($purposeAnalysis && $purposeAnalysis['is_unclear']) {
                 $success .= ' ⚠️ ' . htmlspecialchars($purposeAnalysis['warning']);
             }
-            $_SESSION['booking_flash'] = ['msg' => $success, 'type' => 'success'];
+            frs_flash_success($success);
             header('Location: ' . base_path() . '/dashboard/book-facility?module=mine');
             exit;
         } catch (Throwable $e) {
@@ -913,7 +914,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             ];
             $smsStatusKey = $initialStatus === 'pending_payment' ? 'pending_payment' : ($initialStatus === 'approved' ? 'approved' : 'pending');
             sendReservationStatusSms($bookingSmsPayload, $smsStatusKey);
-            $_SESSION['booking_flash'] = ['msg' => $success, 'type' => 'success'];
+            frs_flash_success($success);
             header('Location: ' . base_path() . '/dashboard/book-facility?module=mine');
             exit;
         } catch (Throwable $e) {
@@ -2042,11 +2043,6 @@ ul.bcf-scroll-select-menu {
     <?php endif; ?>
 </div>
 
-<?php if (!empty($message)): ?>
-    <div class="message <?= $messageType === 'error' ? 'error' : 'success'; ?>" style="background:<?= $messageType === 'error' ? '#fdecee;color:#b23030' : '#e8f5e9;color:#2e7d32'; ?>;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
-        <?= htmlspecialchars($message); ?>
-    </div>
-<?php endif; ?>
 <?php if ($success): ?>
     <div class="message success" style="background:#e3f8ef;color:#0d7a43;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($success); ?>

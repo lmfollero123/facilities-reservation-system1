@@ -518,6 +518,11 @@ $mineTabYearMax = (int)date('Y') + 5;
 ?>
 
 <div data-frs-partial-id="mine-calendar" data-frs-partial-root>
+<?php if (!empty($message)): ?>
+    <div class="message <?= $messageType === 'error' ? 'error' : 'success'; ?>" style="background:<?= $messageType === 'error' ? '#fdecee;color:#b23030' : '#e8f5e9;color:#2e7d32'; ?>;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
+        <?= htmlspecialchars($message); ?>
+    </div>
+<?php endif; ?>
 <script type="application/json" id="mine-cal-reservation-data"><?= json_encode($calendarReservations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
 <script type="application/json" id="mine-cal-docs-data"><?= json_encode($mineReservationDocsById, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
 <div class="my-reservations-calendar">
@@ -1113,7 +1118,10 @@ $mineTabYearMax = (int)date('Y') + 5;
                 <li>Past or already-started reservations cannot be cancelled.</li>
             </ul>
         </div>
-        <form method="POST" id="cancelReservationForm">
+        <form method="POST" id="cancelReservationForm"
+              data-frs-ajax
+              data-frs-ajax-target="mine-calendar"
+              data-frs-ajax-close="#cancelReservationModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="cancel_reservation">
             <input type="hidden" name="reservation_id" id="cancel_reservation_id">
@@ -1132,7 +1140,10 @@ $mineTabYearMax = (int)date('Y') + 5;
             <h3>Edit Purpose / Attendees</h3>
             <button onclick="closeEditDetailsModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="editDetailsForm" data-capacity-threshold="0">
+        <form method="POST" id="editDetailsForm" data-capacity-threshold="0"
+              data-frs-ajax
+              data-frs-ajax-target="mine-calendar"
+              data-frs-ajax-close="#editDetailsModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="edit_details">
             <input type="hidden" name="reservation_id" id="edit_details_reservation_id">
@@ -1159,7 +1170,10 @@ $mineTabYearMax = (int)date('Y') + 5;
             <h3>Request Reschedule</h3>
             <button onclick="closeRescheduleModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8b95b5;">&times;</button>
         </div>
-        <form method="POST" id="rescheduleForm">
+        <form method="POST" id="rescheduleForm"
+              data-frs-ajax
+              data-frs-ajax-target="mine-calendar"
+              data-frs-ajax-close="#rescheduleModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="reschedule">
             <input type="hidden" name="reservation_id" id="reschedule_reservation_id">
