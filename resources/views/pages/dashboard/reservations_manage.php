@@ -1810,6 +1810,12 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
         confirmBtn.textContent = isApprove ? 'Confirm approval' : 'Confirm denial';
         confirmBtn.className = isApprove ? 'btn-primary' : 'btn-outline ra-btn-danger';
         if (noteRequiredMark) noteRequiredMark.hidden = isApprove;
+        // data-frs-ajax-close only fires on a success toast, so a failed
+        // denial (missing reason, facility-offline exception, etc.) leaves
+        // the modal open with the admin's typed note intact. Clear it here,
+        // at open time, so a *different* reservation never inherits leftover
+        // text from a prior review.
+        noteInput.value = '';
         noteInput.placeholder = isApprove
             ? 'Optional remarks for the requester (e.g., setup instructions).'
             : 'Explain why this request is being denied.';
@@ -1893,20 +1899,6 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                 return;
             }
             noteInput.classList.remove('ra-input-error');
-        });
-
-        // data-frs-ajax-close only hides #reviewDecisionModal and restores body
-        // overflow; the page's own closeReviewModal() also clears aria-hidden,
-        // resets the form (note textarea isn't re-cleared by openReviewModal),
-        // and wipes the banner/grid/purpose markup. Run the full close routine
-        // whenever this region re-renders while the modal is open so an AJAX
-        // approve/deny leaves no residue for the next open.
-        document.addEventListener('frs:partial-loaded', function(e) {
-            if (!e.detail || e.detail.id !== 'ra-approvals-main') return;
-            const modal = getReviewModal();
-            if (modal && modal.classList.contains('show')) {
-                closeReviewModal();
-            }
         });
     }
 })();
