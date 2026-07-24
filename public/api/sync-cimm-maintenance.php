@@ -63,6 +63,7 @@ try {
     $result = frs_cimm_run_sync($pdo);
 
     if (!$result['success']) {
+        http_response_code(502);
         echo json_encode([
             'success' => false,
             'message' => 'Failed to fetch CIMM schedules.',
@@ -81,6 +82,7 @@ try {
         'ran_at' => $result['ran_at'],
     ]);
 } catch (Throwable $e) {
+    http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'CIMM maintenance sync crashed.',

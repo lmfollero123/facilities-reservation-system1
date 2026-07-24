@@ -869,6 +869,12 @@ $mineTabYearMax = (int)date('Y') + 5;
                                     <span class="info-icon">🔧</span>
                                     <span class="info-text">The facility is currently <?= htmlspecialchars($reservation['facility_status']); ?> and rescheduling is not available. Please contact support.</span>
                                 </div>
+                            <?php elseif ($canReschedule): ?>
+                                <?php $rescheduleDeadline = (clone $reservationDate)->modify('-3 days'); ?>
+                                <div class="info-message" style="margin-top:0.25rem;">
+                                    <span class="info-icon">ℹ️</span>
+                                    <span class="info-text">1 reschedule available for this reservation — allowed until <?= htmlspecialchars($rescheduleDeadline->format('M j, Y')); ?> (3 days before the event).</span>
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>

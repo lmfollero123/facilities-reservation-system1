@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     title VARCHAR(150) NOT NULL,
     message TEXT NOT NULL,
     link VARCHAR(255) NULL COMMENT 'Optional link to related page',
+    image_path VARCHAR(255) NULL COMMENT 'Optional announcement image',
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

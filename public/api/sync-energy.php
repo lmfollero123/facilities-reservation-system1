@@ -46,17 +46,23 @@ if (!$isStaff) {
 
 try {
     if (!energy_api_enabled()) {
+        http_response_code(503);
         echo json_encode(['success' => false, 'message' => 'Energy sync is disabled (ENERGY_SYNC_ENABLED=false).']);
         exit;
     }
 
     $pdo = db();
     if (!frs_energy_tables_exist($pdo)) {
+        http_response_code(503);
         echo json_encode(['success' => false, 'message' => 'Energy integration tables missing. Run database/migration_add_energy_integration.sql.']);
         exit;
     }
     $summary = frs_energy_run_sync($pdo);
 
+    if (!$summary['success']) {
+        // Upstream (Energy API) or per-reading failures: not a 200.
+        http_response_code(502);
+    }
     echo json_encode([
         'success' => $summary['success'],
         'message' => $summary['success'] ? 'Energy sync completed.' : 'Energy sync completed with errors.',
@@ -67,5 +73,6 @@ try {
         'ran_at' => $summary['ran_at'],
     ]);
 } catch (Throwable $e) {
+    http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Energy sync crashed.', 'error' => $e->getMessage()]);
 }

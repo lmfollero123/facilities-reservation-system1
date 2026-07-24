@@ -20,6 +20,12 @@ This guide walks you through deploying updates to your IndevFinite cPanel hostin
 
 Before pulling from GitHub:
 
+- [ ] **Tag the release locally** so there is always a known-good rollback point:
+  ```bash
+  git tag -a v1.x.y -m "Release v1.x.y"   # bump the version each deploy
+  git push origin main --tags
+  ```
+  Rolling back on the server is then just `git checkout <previous-tag>` (+ `composer install --no-dev`).
 - [ ] **`vendor/` is not in Git** — after each pull, run `composer install --no-dev` on the server (see [Post-pull: Composer](#post-pull-composer))
 - [ ] **Backup your database** (cPanel → phpMyAdmin → Export)
 - [ ] **Backup these files** (download via File Manager or SFTP):
@@ -210,6 +216,14 @@ Without `gemini_config.php`, the chatbot will fall back to mock/rule-based respo
 ---
 
 ## 4. Post-Deployment Verification
+
+Run the automated smoke test first (cPanel Terminal, from the app root):
+
+```bash
+php scripts/smoke_test.php https://cprf.infragovservices.com
+```
+
+It verifies .env, dependencies, DB connectivity, migrations, upload dirs, mail/energy config, plus the health endpoint, home page, login page, and the energy facilities feed — exit code 0 means all clear. Then spot-check manually:
 
 - [ ] **Homepage** loads and shows Main Bg
 - [ ] **Login / Register** pages show the Main Bg and work
