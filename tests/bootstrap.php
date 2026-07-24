@@ -10,3 +10,6 @@ require_once $root . '/config/sms_helper.php';
 require_once $root . '/services/energy_api.php';
 require_once $root . '/config/energy_helper.php';
 require_once $root . '/config/flash_helper.php';
+require_once $root . '/config/time_helpers.php';
+require_once $root . '/config/auto_approval_rules.php';
+require_once $root . '/config/reservation_helpers.php';

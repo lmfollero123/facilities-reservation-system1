@@ -20,6 +20,7 @@
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
+require_once __DIR__ . '/auto_approval_rules.php';
 
 // Load ML integration if available
 if (file_exists(__DIR__ . '/ai_ml_integration.php')) {
@@ -54,240 +55,81 @@ function evaluateAutoApproval(
     int $advanceBookingWindowDays = 60
 ): array {
     $pdo = db();
-    $conditions = [];
-    $allPassed = true;
-    $reason = '';
-    
-    // Initialize result structure
-    $result = [
-        'eligible' => false,
-        'auto_approve' => false,
-        'conditions' => [],
-        'reason' => ''
-    ];
-    
-    // Condition 1: Facility must have auto_approve enabled
+
+    // Gather the rows the rules need; the rule logic itself lives in
+    // frs_auto_approval_rules() (config/auto_approval_rules.php) so it can
+    // be unit-tested without a database.
     $facilityStmt = $pdo->prepare(
-        'SELECT auto_approve, capacity_threshold, max_duration_hours, capacity, status 
-         FROM facilities 
+        'SELECT auto_approve, capacity_threshold, max_duration_hours, capacity, status
+         FROM facilities
          WHERE id = :facility_id'
     );
     $facilityStmt->execute(['facility_id' => $facilityId]);
-    $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$facility) {
-        $result['reason'] = 'Facility not found';
+    $facility = $facilityStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    $blackout = null;
+    $existingSlots = [];
+    $hasViolations = false;
+    $userVerificationData = null;
+
+    if ($facility && $facility['status'] === 'available') {
+        $blackoutStmt = $pdo->prepare(
+            'SELECT id, reason FROM facility_blackout_dates
+             WHERE facility_id = :facility_id AND blackout_date = :date'
+        );
+        $blackoutStmt->execute([
+            'facility_id' => $facilityId,
+            'date' => $reservationDate
+        ]);
+        $blackout = $blackoutStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        $conflictStmt = $pdo->prepare(
+            'SELECT time_slot FROM reservations
+             WHERE facility_id = :facility_id
+               AND reservation_date = :date
+               AND status = "approved"'
+        );
+        $conflictStmt->execute([
+            'facility_id' => $facilityId,
+            'date' => $reservationDate
+        ]);
+        $existingSlots = $conflictStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        // Violations in the last 365 days (high/critical only)
+        $violationsStmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM user_violations
+             WHERE user_id = :user_id
+               AND created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)
+               AND severity IN ("high", "critical")'
+        );
+        $violationsStmt->execute(['user_id' => $userId]);
+        $hasViolations = (int)$violationsStmt->fetchColumn() > 0;
+
+        $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
+        $userVerificationStmt->execute(['user_id' => $userId]);
+        $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    $result = frs_auto_approval_rules(
+        $facility,
+        $blackout,
+        $existingSlots,
+        $hasViolations,
+        $userVerificationData,
+        $reservationDate,
+        $timeSlot,
+        $expectedAttendees,
+        $isCommercial,
+        $advanceBookingWindowDays
+    );
+
+    if (!$facility || $facility['status'] !== 'available') {
         return $result;
     }
-    
-    if ($facility['status'] !== 'available') {
-        $result['reason'] = 'Facility is not available';
-        return $result;
-    }
-    
+
     $facilityAutoApprove = (bool)($facility['auto_approve'] ?? false);
-    $conditions['facility_auto_approve_enabled'] = [
-        'passed' => $facilityAutoApprove,
-        'message' => $facilityAutoApprove 
-            ? 'Facility allows auto-approval' 
-            : 'Facility requires manual approval'
-    ];
-    
-    if (!$facilityAutoApprove) {
-        $allPassed = false;
-        $reason = 'Facility does not allow auto-approval';
-    }
-    
-    // Condition 2: Check blackout dates
-    $blackoutStmt = $pdo->prepare(
-        'SELECT id, reason FROM facility_blackout_dates 
-         WHERE facility_id = :facility_id AND blackout_date = :date'
-    );
-    $blackoutStmt->execute([
-        'facility_id' => $facilityId,
-        'date' => $reservationDate
-    ]);
-    $blackout = $blackoutStmt->fetch(PDO::FETCH_ASSOC);
-    
-    $isBlackedOut = (bool)$blackout;
-    $conditions['not_in_blackout'] = [
-        'passed' => !$isBlackedOut,
-        'message' => $isBlackedOut 
-            ? 'Reservation date is in blackout period: ' . ($blackout['reason'] ?? 'No reason specified')
-            : 'Reservation date is not blacked out'
-    ];
-    
-    if ($isBlackedOut) {
-        $allPassed = false;
-        $reason = $reason ?: 'Reservation date is blacked out';
-    }
-    
-    // Condition 3: Check reservation duration
-    $durationHours = getDurationHours($timeSlot);
-    $maxDurationHours = $facility['max_duration_hours'] ? (float)$facility['max_duration_hours'] : null;
-    
-    $durationWithinLimit = true;
-    if ($maxDurationHours !== null && $durationHours > $maxDurationHours) {
-        $durationWithinLimit = false;
-    }
-    
-    $conditions['duration_within_limit'] = [
-        'passed' => $durationWithinLimit,
-        'message' => $maxDurationHours === null
-            ? 'No duration limit set for this facility'
-            : ($durationWithinLimit 
-                ? "Reservation duration ({$durationHours}h) is within limit ({$maxDurationHours}h)"
-                : "Reservation duration ({$durationHours}h) exceeds limit ({$maxDurationHours}h)")
-    ];
-    
-    if (!$durationWithinLimit) {
-        $allPassed = false;
-        $reason = $reason ?: 'Reservation duration exceeds allowed limit';
-    }
-    
-    // Condition 4: Check expected attendees against capacity threshold
-    $capacityThreshold = $facility['capacity_threshold'] ? (int)$facility['capacity_threshold'] : null;
-    $attendeesWithinCapacity = true;
-    
-    if ($capacityThreshold !== null && $expectedAttendees !== null) {
-        if ($expectedAttendees > $capacityThreshold) {
-            $attendeesWithinCapacity = false;
-        }
-    }
-    
-    $conditions['attendees_within_capacity'] = [
-        'passed' => $attendeesWithinCapacity,
-        'message' => $capacityThreshold === null
-            ? 'No capacity threshold set for this facility'
-            : ($expectedAttendees === null
-                ? 'Expected attendees not specified'
-                : ($attendeesWithinCapacity
-                    ? "Expected attendees ({$expectedAttendees}) within capacity threshold ({$capacityThreshold})"
-                    : "Expected attendees ({$expectedAttendees}) exceeds capacity threshold ({$capacityThreshold})"))
-    ];
-    
-    if (!$attendeesWithinCapacity) {
-        $allPassed = false;
-        $reason = $reason ?: 'Expected attendees exceed capacity threshold';
-    }
-    
-    // Condition 5: Purpose must be non-commercial
-    $conditions['non_commercial'] = [
-        'passed' => !$isCommercial,
-        'message' => $isCommercial 
-            ? 'Commercial reservations require manual approval'
-            : 'Reservation is for non-commercial purposes'
-    ];
-    
-    if ($isCommercial) {
-        $allPassed = false;
-        $reason = $reason ?: 'Commercial reservations require manual approval';
-    }
-    
-    // Condition 6: Check for conflicts with existing approved bookings (overlapping time ranges)
-    $conflictStmt = $pdo->prepare(
-        'SELECT time_slot FROM reservations 
-         WHERE facility_id = :facility_id 
-           AND reservation_date = :date 
-           AND status = "approved"'
-    );
-    $conflictStmt->execute([
-        'facility_id' => $facilityId,
-        'date' => $reservationDate
-    ]);
-    $existingSlots = $conflictStmt->fetchAll(PDO::FETCH_COLUMN);
-    
-    $hasConflict = false;
-    foreach ($existingSlots as $existingSlot) {
-        if (timeSlotsOverlap($timeSlot, $existingSlot)) {
-            $hasConflict = true;
-            break;
-        }
-    }
-    
-    $conditions['no_conflict'] = [
-        'passed' => !$hasConflict,
-        'message' => $hasConflict 
-            ? 'Conflicts with existing approved reservation'
-            : 'No conflicts with existing approved reservations'
-    ];
-    
-    if ($hasConflict) {
-        $allPassed = false;
-        $reason = $reason ?: 'Conflicts with existing approved reservation';
-    }
-    
-    // Condition 7: User must have no previous violations
-    // Check for violations in the last 365 days (configurable)
-    $violationsStmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM user_violations 
-         WHERE user_id = :user_id 
-           AND created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)
-           AND severity IN ("high", "critical")'
-    );
-    $violationsStmt->execute(['user_id' => $userId]);
-    $hasViolations = (int)$violationsStmt->fetchColumn() > 0;
-    
-    $conditions['no_violations'] = [
-        'passed' => !$hasViolations,
-        'message' => $hasViolations 
-            ? 'User has previous violations requiring manual review'
-            : 'User has no recent high-severity violations'
-    ];
-    
-    if ($hasViolations) {
-        $allPassed = false;
-        $reason = $reason ?: 'User has previous violations requiring manual review';
-    }
-    
-    // Condition 7.5: User must be verified (have submitted valid ID)
-    // Note: Staff and Admin roles are automatically considered verified
-    $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
-    $userVerificationStmt->execute(['user_id' => $userId]);
-    $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
-    $isVerified = (bool)($userVerificationData['is_verified'] ?? false);
-    $userRole = $userVerificationData['role'] ?? 'Resident';
-    
-    // Staff and Admin are automatically verified (no ID upload required)
-    $isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
-    
-    $conditions['user_verified'] = [
-        'passed' => $isVerifiedOrPrivileged,
-        'message' => $isVerifiedOrPrivileged 
-            ? (in_array($userRole, ['Staff', 'Admin'], true) 
-                ? 'User is ' . $userRole . ' (automatically verified)' 
-                : 'User account is verified')
-            : 'User account is not verified - valid ID required for auto-approval'
-    ];
-    
-    if (!$isVerifiedOrPrivileged) {
-        $allPassed = false;
-        $reason = $reason ?: 'User account is not verified - valid ID required for auto-approval';
-    }
-    
-    // Condition 8: Reservation must be within advance booking window
-    $today = date('Y-m-d');
-    $maxDate = date('Y-m-d', strtotime("+{$advanceBookingWindowDays} days"));
-    $withinWindow = ($reservationDate >= $today && $reservationDate <= $maxDate);
-    
-    $conditions['within_advance_window'] = [
-        'passed' => $withinWindow,
-        'message' => $withinWindow 
-            ? "Reservation date is within advance booking window ({$advanceBookingWindowDays} days)"
-            : "Reservation date is outside advance booking window ({$advanceBookingWindowDays} days)"
-    ];
-    
-    if (!$withinWindow) {
-        $allPassed = false;
-        $reason = $reason ?: 'Reservation date is outside advance booking window';
-    }
-    
-    // Final determination
-    $result['eligible'] = $allPassed;
-    $result['auto_approve'] = $allPassed && $facilityAutoApprove;
-    $result['conditions'] = $conditions;
-    $result['reason'] = $reason ?: ($allPassed ? 'All conditions met for auto-approval' : 'One or more conditions not met');
-    
+    $allPassed = $result['eligible'];
+
     // Add ML-based risk assessment if available
     if (function_exists('assessRiskML') && $allPassed) {
         try {
