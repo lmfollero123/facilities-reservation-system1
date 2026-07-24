@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- Gemini AI (try first when available) ---
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
-            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours FROM facilities ORDER BY name LIMIT 50");
+            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50");
             $facilities = $facStmt ? $facStmt->fetchAll(PDO::FETCH_ASSOC) : [];
             $userBookings = [];
             if ($userId) {
@@ -308,6 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 LEFT JOIN reservations r
                     ON r.facility_id = f.id
                     AND r.reservation_date = :date
+                WHERE f.status != 'deleted'
                 ORDER BY f.name
             ");
             $stmt->execute(['date' => $date]);

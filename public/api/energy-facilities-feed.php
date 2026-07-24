@@ -60,6 +60,7 @@ try {
         SELECT id, name, description, location, capacity, operating_hours,
                latitude, longitude, status, created_at, updated_at
         FROM facilities
+        WHERE status != \'deleted\'
     ';
     $params = [];
 
@@ -71,7 +72,7 @@ try {
             echo json_encode(['success' => false, 'error' => 'Invalid updated_since timestamp.']);
             exit;
         }
-        $sql .= ' WHERE updated_at > :updated_since';
+        $sql .= ' AND updated_at > :updated_since';
         $params['updated_since'] = date('Y-m-d H:i:s', $ts);
     }
 

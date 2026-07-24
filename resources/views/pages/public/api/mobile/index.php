@@ -2016,8 +2016,8 @@ if ($route === 'assistant/chat' && $method === 'POST') {
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
             $facStmt = $pdo->query(
-                'SELECT id, name, status, capacity, amenities, location, operating_hours
-                 FROM facilities ORDER BY name LIMIT 50'
+                "SELECT id, name, status, capacity, amenities, location, operating_hours
+                 FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50"
             );
             $facilities = $facStmt ? ($facStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
 

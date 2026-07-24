@@ -115,7 +115,7 @@ if ($canBookOnBehalf && $bookingSubjectId !== $sessionActorId) {
 }
 
 try {
-    $facilitiesStmt = $pdo->query('SELECT id, name, base_rate, status, operating_hours FROM facilities ORDER BY name');
+    $facilitiesStmt = $pdo->query("SELECT id, name, base_rate, status, operating_hours FROM facilities WHERE status != 'deleted' ORDER BY name");
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
     $upcomingCimmByFacility = frs_facilities_upcoming_cimm_maintenance_map($pdo);
 } catch (Throwable $e) {
@@ -384,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
         $facilityStatusStmt->execute(['id' => $facilityId]);
         $facilityStatus = $facilityStatusStmt->fetch(PDO::FETCH_ASSOC);
         
-        if (!$facilityStatus) {
+        if (!$facilityStatus || $facilityStatus['status'] === 'deleted') {
             $error = 'Invalid facility selected. Please select a valid facility.';
         } elseif ($facilityStatus['status'] === 'offline') {
             $error = '⚠️ This facility is currently offline and unavailable for booking. Please select a different facility.';

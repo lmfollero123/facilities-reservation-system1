@@ -6,7 +6,7 @@ $pageTitle = 'Facilities | LGU Facilities Reservation';
 $base = base_path();
 $pdo = db();
 
-$stmt = $pdo->query('SELECT id, name, description, image_path, status FROM facilities ORDER BY name');
+$stmt = $pdo->query("SELECT id, name, description, image_path, status FROM facilities WHERE status != 'deleted' ORDER BY name");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fallback images rotation if no uploaded image

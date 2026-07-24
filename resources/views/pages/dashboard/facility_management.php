@@ -115,6 +115,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'error';
             }
         }
+    } elseif (($_POST['action'] ?? '') === 'delete_facility') {
+        $delFacilityId = (int)($_POST['facility_id'] ?? 0);
+        if (!$canDeleteFacilities) {
+            $message = 'You do not have permission to delete facilities.';
+            $messageType = 'error';
+        } elseif ($delFacilityId <= 0) {
+            $message = 'Invalid facility selected.';
+            $messageType = 'error';
+        } else {
+            $delStmt = $pdo->prepare('SELECT name, status FROM facilities WHERE id = ? LIMIT 1');
+            $delStmt->execute([$delFacilityId]);
+            $delFacility = $delStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$delFacility) {
+                $message = 'Facility not found.';
+                $messageType = 'error';
+            } elseif ($delFacility['status'] === 'deleted') {
+                $message = 'This facility is already deleted.';
+                $messageType = 'error';
+            } else {
+                $deleteReason = trim($_POST['delete_reason'] ?? '');
+
+                // Same consequence as going into maintenance: any pending or
+                // approved future reservation must not silently proceed
+                // against a facility that no longer accepts bookings.
+                $affectedResult = handleFacilityMaintenanceStatusChange($delFacilityId, $delFacility['name']);
+
+                $updStmt = $pdo->prepare(
+                    'UPDATE facilities
+                     SET status = "deleted", deleted_at = NOW(), deleted_by = ?, delete_reason = ?
+                     WHERE id = ?'
+                );
+                $updStmt->execute([$_SESSION['user_id'] ?? null, $deleteReason !== '' ? $deleteReason : null, $delFacilityId]);
+
+                $affectedCount = $affectedResult['pending_cancelled'] + $affectedResult['approved_postponed'];
+                $details = $delFacility['name'] . ($deleteReason !== '' ? " – Reason: {$deleteReason}" : '');
+                if ($affectedCount > 0) {
+                    $details .= ". Affected reservations: {$affectedCount}";
+                }
+                logAudit('Deleted facility', 'Facility Management', $details);
+
+                $message = 'Facility deleted. It is now hidden from public listings and booking.';
+                if ($affectedCount > 0) {
+                    $message .= " {$affectedCount} affected reservation(s) were cancelled/postponed and the resident(s) notified.";
+                }
+                $message .= ' You can restore it later from this page.';
+                $messageType = 'success';
+            }
+        }
+    } elseif (($_POST['action'] ?? '') === 'restore_facility') {
+        $restoreId = (int)($_POST['facility_id'] ?? 0);
+        if (!$canDeleteFacilities) {
+            $message = 'You do not have permission to restore facilities.';
+            $messageType = 'error';
+        } elseif ($restoreId <= 0) {
+            $message = 'Invalid facility selected.';
+            $messageType = 'error';
+        } else {
+            $restoreStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
+            $restoreStmt->execute([$restoreId]);
+            $restoreName = (string)($restoreStmt->fetchColumn() ?: 'Facility');
+
+            $updStmt = $pdo->prepare(
+                'UPDATE facilities
+                 SET status = "available", deleted_at = NULL, deleted_by = NULL, delete_reason = NULL
+                 WHERE id = ?'
+            );
+            $updStmt->execute([$restoreId]);
+
+            logAudit('Restored facility', 'Facility Management', $restoreName);
+            $message = 'Facility restored and set to Available.';
+            $messageType = 'success';
+        }
     } else {
         // Get facility ID from POST data first
         $facilityId = (int)($_POST['facility_id'] ?? 0);
@@ -484,6 +556,21 @@ ob_start();
                             <?php endif; ?>
                             <?php if ($canUpdateFacilities): ?>
                             <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                            <?php endif; ?>
+                            <?php if ($canDeleteFacilities): ?>
+                                <?php if ($facility['status'] === 'deleted'): ?>
+                                    <form method="POST" style="display:inline;">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
+                                        <button type="submit" name="action" value="restore_facility" class="btn btn-outline confirm-action" data-message="Restore &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot; and set it to Available?">Restore</button>
+                                    </form>
+                                <?php else: ?>
+                                    <form method="POST" style="display:inline;">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
+                                        <button type="submit" name="action" value="delete_facility" class="btn btn-outline btn-danger confirm-action" data-message="Delete &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot;? It will be hidden from public listings and booking. Any pending or approved future reservations will be cancelled/postponed and residents notified. You can restore it later.">Delete</button>
+                                    </form>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </article>

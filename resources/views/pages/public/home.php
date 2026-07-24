@@ -10,10 +10,11 @@ $base = base_path();
 
 // Load featured facilities for portfolio gallery
 $featuredStmt = $pdo->query(
-    'SELECT id, name, description, status, image_path 
-     FROM facilities 
-     ORDER BY created_at DESC 
-     LIMIT 6'
+    "SELECT id, name, description, status, image_path
+     FROM facilities
+     WHERE status != 'deleted'
+     ORDER BY created_at DESC
+     LIMIT 6"
 );
 $featuredFacilities = $featuredStmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -5429,6 +5429,21 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     color: #fff;
 }
 
+.status-badge.deleted {
+    background: #495057;
+    color: #fff;
+}
+
+.btn.btn-danger {
+    border-color: #e53935;
+    color: #e53935;
+}
+
+.btn.btn-danger:hover {
+    background: #e53935;
+    color: #fff;
+}
+
 .status-badge.admin {
     background: #6f42c1;
     color: #fff;
