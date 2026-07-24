@@ -151,6 +151,59 @@ function frs_energy_save_mapping(PDO $pdo, int $facilityId, int $energyFacilityI
     logAudit('Mapped facility to Energy system', 'Energy Efficiency', "facility_id={$facilityId} -> energy_facility_id={$energyFacilityId} ({$energyFacilityName})");
 }
 
+/**
+ * Auto-map facilities by the Energy system's external_ref.
+ *
+ * The Energy system mirrors CPRF facilities (source='cprf') and stores the
+ * CPRF facility id in external_ref; when its /api/v1/cprf/facilities rows
+ * carry that field, the mapping is exact by id — no name matching and no
+ * manual Facility Mapping work needed. Manual mapping stays available as a
+ * fallback for Energy-side facilities without an external_ref.
+ *
+ * @param array<int, array<string, mixed>>|null $energyFacilities pre-fetched rows, or null to fetch
+ * @return array{mapped: int, error: ?string}
+ */
+function frs_energy_auto_map_by_external_ref(PDO $pdo, ?array $energyFacilities = null): array
+{
+    if ($energyFacilities === null) {
+        require_once __DIR__ . '/../services/energy_api.php';
+        $fetch = fetchEnergyFacilities();
+        if (!$fetch['success']) {
+            return ['mapped' => 0, 'error' => $fetch['error']];
+        }
+        $energyFacilities = $fetch['data'];
+    }
+
+    $existing = frs_energy_get_mapping($pdo);
+    $localIds = array_map('intval', $pdo->query('SELECT id FROM facilities')->fetchAll(PDO::FETCH_COLUMN));
+    $localIds = array_flip($localIds);
+
+    $mapped = 0;
+    foreach ($energyFacilities as $remote) {
+        if (!is_array($remote) || !isset($remote['id'])) {
+            continue;
+        }
+        $externalRef = $remote['external_ref'] ?? null;
+        if ($externalRef === null || !is_numeric($externalRef)) {
+            continue; // Energy-side own facility, or an older Energy build without the column.
+        }
+        $facilityId = (int)$externalRef;
+        if (!isset($localIds[$facilityId])) {
+            continue; // stale reference to a CPRF facility that no longer exists
+        }
+        $remoteId = (int)$remote['id'];
+        $remoteName = (string)($remote['name'] ?? '');
+        $current = $existing[$facilityId] ?? null;
+        if ($current !== null && $current['energy_facility_id'] === $remoteId) {
+            continue; // already mapped correctly
+        }
+        frs_energy_save_mapping($pdo, $facilityId, $remoteId, $remoteName, null);
+        $mapped++;
+    }
+
+    return ['mapped' => $mapped, 'error' => null];
+}
+
 /** Latest reading for a facility (by year, month), or null. */
 function frs_energy_last_reading(PDO $pdo, int $facilityId): ?array
 {
@@ -544,6 +597,11 @@ function frs_energy_run_sync(PDO $pdo): array
     $pushed = 0;
     $pushFailed = 0;
 
+    // Auto-map by external_ref first so readings for newly mirrored
+    // facilities can push within the same run. Non-fatal: when the Energy
+    // API is unreachable the push/pull steps below surface the error.
+    $autoMap = frs_energy_auto_map_by_external_ref($pdo);
+
     $pending = $pdo->query("SELECT id FROM energy_meter_readings WHERE sync_status IN ('pending','failed') ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
     $mapping = frs_energy_get_mapping($pdo);
     foreach ($pending as $readingId) {
@@ -576,6 +634,7 @@ function frs_energy_run_sync(PDO $pdo): array
         'success' => $errors === [],
         'pushed' => $pushed,
         'push_failed' => $pushFailed,
+        'auto_mapped' => $autoMap['mapped'],
         'recommendations_upserted' => $pull['upserted'],
         'errors' => $errors,
         'ran_at' => date('c'),
