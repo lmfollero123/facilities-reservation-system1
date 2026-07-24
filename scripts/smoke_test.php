@@ -119,6 +119,20 @@ smoke('migrations applied (energy_sync_state present)', function () {
     return true;
 });
 
+smoke('no pending tracked migrations', function () {
+    try {
+        $applied = db()->query('SELECT filename FROM schema_migrations')->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return 'warn:migration tracking not initialized — run php run_migrations.php --baseline once';
+    }
+    $all = array_map('basename', glob(dirname(__DIR__) . '/database/migration_*.sql') ?: []);
+    $pending = array_diff($all, $applied);
+    if ($pending !== []) {
+        throw new RuntimeException(count($pending) . ' pending migration(s) — run php run_migrations.php');
+    }
+    return true;
+});
+
 smoke('upload directories writable', function () {
     $dirs = ['public/uploads', 'public/img/announcements'];
     $problems = [];

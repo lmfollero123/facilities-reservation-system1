@@ -158,19 +158,42 @@ chmod -R 755 logs storage
 
 ---
 
-### Step 6: Run Database Migrations (If Any)
+### Step 6: Run Database Migrations
 
-If new migrations were added:
+Migrations are tracked in a `schema_migrations` table, so the runner applies
+only files that haven't been applied yet and is safe to run on every deploy.
 
-1. Check the `database/` folder for new `.sql` migration files.
-2. Run them via cPanel **phpMyAdmin** (Import) or command line:
-   ```bash
-   php -r "
-   require 'config/database.php';
-   // Or run: mysql -u USER -p DATABASE < database/migration_xxx.sql
-   "
-   ```
-   Or import each migration file manually in phpMyAdmin.
+**One-time setup (first deploy after this change only).** The production
+database already has every existing migration applied by hand, so record
+them as applied *without* re-running them:
+
+```bash
+php run_migrations.php --baseline   # marks all current files as applied
+```
+
+**Every deploy after that:**
+
+```bash
+php run_migrations.php --status     # show what's pending
+php run_migrations.php              # apply pending migrations (idempotent)
+```
+
+The runner skips any `USE`/`CREATE DATABASE` lines inside migration files
+(it uses the connection from `config/database.php`) and stops on the first
+real error. If a migration was already applied by hand, record it without
+re-running: `php run_migrations.php --mark-applied=<file>`.
+
+**Adding a new migration:** name it so it sorts *after* existing ones —
+prefix with the date, e.g. `migration_2026_07_24_add_x.sql`. The runner
+applies files in filename order, so a sortable prefix keeps new migrations
+in the order they were written.
+
+> **Known limitation (not a deploy blocker):** the legacy
+> `migration_add_*.sql` files were applied chronologically over time and do
+> **not** replay cleanly in filename order against a brand-new database.
+> Fresh installs bootstrap from `database/schema.sql`; the runner is for
+> applying **new** migrations forward on an existing database. Consolidating
+> the legacy files into schema.sql is tracked as future work.
 
 ---
 
