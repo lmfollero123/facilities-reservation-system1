@@ -15,6 +15,7 @@ return [
         '/contact' => 'resources/views/pages/public/contact.php',
         '/login' => 'resources/views/pages/auth/login.php',
         '/register' => 'resources/views/pages/auth/register.php',
+        '/sso/consume' => 'resources/views/pages/auth/sso_consume.php',
     ],
     'dashboard' => [
         '/dashboard' => 'resources/views/pages/dashboard/index.php',
