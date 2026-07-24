@@ -60,6 +60,12 @@ if ($isIntegrationsApi) {
     exit;
 }
 
+$isStatsApi = ($apiPath === 'api/stats' || strpos($apiPath, 'api/stats') === 0);
+if ($isStatsApi) {
+    require_once __DIR__ . '/resources/views/pages/public/api/stats.php';
+    exit;
+}
+
 // Load app configuration (includes base_path function) - AFTER API routes
 require_once __DIR__ . '/config/app.php';
 

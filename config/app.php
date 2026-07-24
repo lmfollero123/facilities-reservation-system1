@@ -21,6 +21,17 @@ date_default_timezone_set('Asia/Manila');
 if (!function_exists('load_env_file')) {
     /**
      * Minimal .env loader (KEY=VALUE), non-destructive by default.
+     *
+     * Deliberately does NOT call putenv(): on threaded/persistent SAPIs
+     * (e.g. Apache's WinNT MPM on Windows XAMPP), putenv() writes are
+     * process-level and can leak into a *different* HTTP request handled
+     * by the same reused worker — confirmed happening for real between
+     * this suite's own sibling apps, where one app's DB name leaked into
+     * another's request. Only $_ENV/$_SERVER are set, which are rebuilt
+     * fresh by PHP on every request and can't leak this way. The
+     * "already set" check below now looks at $_ENV/$_SERVER (this
+     * request's own state) instead of getenv() (which could itself be
+     * showing a leaked value from a prior request on this worker).
      */
     function load_env_file(string $path, bool $override = false): void
     {
@@ -48,11 +59,10 @@ if (!function_exists('load_env_file')) {
             if ($val !== '' && (($val[0] === '"' && substr($val, -1) === '"') || ($val[0] === "'" && substr($val, -1) === "'"))) {
                 $val = substr($val, 1, -1);
             }
-            $alreadySet = getenv($key);
-            if (!$override && $alreadySet !== false && $alreadySet !== '') {
+            $alreadySet = isset($_ENV[$key]) && $_ENV[$key] !== '';
+            if (!$override && $alreadySet) {
                 continue;
             }
-            putenv($key . '=' . $val);
             $_ENV[$key] = $val;
             $_SERVER[$key] = $val;
         }
