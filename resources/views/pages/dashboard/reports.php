@@ -934,19 +934,19 @@ ob_start();
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly count of reservations for the selected facility and period.'); ?>
-        <?= frs_reports_period_filter_form('rpt-trend', 'trend', $allFacilities, $trendPeriod, ['status', 'topfac', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
+        <?= frs_reports_period_filter_form('rpt-trend', 'trend', $allFacilities, $trendPeriod, []); ?>
         <canvas id="monthlyChart" style="max-height: 320px;"></canvas>
     </section>
     <section class="booking-card">
         <?= frs_heading_with_tip('Status Breakdown', 'Share of approved, pending, denied, and cancelled reservations in the selected period.'); ?>
-        <?= frs_reports_period_filter_form('rpt-status', 'status', $allFacilities, $statusPeriod, ['trend', 'topfac', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
+        <?= frs_reports_period_filter_form('rpt-status', 'status', $allFacilities, $statusPeriod, []); ?>
         <canvas id="statusChart" style="max-height: 320px;"></canvas>
     </section>
 </div>
 
 <div class="booking-card" style="margin-bottom: 1.5rem;">
     <?= frs_heading_with_tip('Top Facilities by Approved Bookings', 'Facilities ranked by approved bookings in the selected period (top 5).'); ?>
-    <?= frs_reports_period_filter_form('rpt-topfac', 'topfac', $allFacilities, $topfacPeriod, ['trend', 'status', 'forecast', 'occ', 'kpi', 'util', 'outcomes']); ?>
+    <?= frs_reports_period_filter_form('rpt-topfac', 'topfac', $allFacilities, $topfacPeriod, []); ?>
     <?php if (!empty($facilityLabels)): ?>
     <canvas id="facilityChart" style="max-height: 320px;"></canvas>
     <?php else: ?>
@@ -957,7 +957,7 @@ ob_start();
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Predictive Analytics Forecast', 'Simple linear trend projection for the next 3 months based on historical monthly counts in the selected period.'); ?>
-        <?= frs_reports_period_filter_form('rpt-forecast', 'forecast', $allFacilities, $forecastPeriod, ['trend', 'status', 'topfac', 'occ', 'kpi', 'util', 'outcomes']); ?>
+        <?= frs_reports_period_filter_form('rpt-forecast', 'forecast', $allFacilities, $forecastPeriod, []); ?>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
             <?php foreach ($forecastLabels as $idx => $label): ?>
                 <div style="padding:0.85rem; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb;">
@@ -975,7 +975,7 @@ ob_start();
             'Operational Occupancy',
             ($occupancyNow['disclaimer'] ?: 'Estimated from today’s bookings, check-in/out, and staff overrides.') . ' Open Live Occupancy Board for real-time updates.'
         ); ?>
-        <?= frs_reports_occ_filter_form($allFacilities, $occFacilityFilter, ['trend', 'status', 'topfac', 'forecast', 'kpi', 'util', 'outcomes']); ?>
+        <?= frs_reports_occ_filter_form($allFacilities, $occFacilityFilter, []); ?>
         <p style="margin:0 0 0.85rem;"><a href="<?= base_path(); ?>/dashboard/occupancy-monitor">Open live occupancy board →</a></p>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:0.7rem; margin-bottom:0.85rem;">
             <div style="padding:0.75rem; background:#f8fafc; border-radius:8px;">
@@ -1008,7 +1008,7 @@ ob_start();
 <section>
     <div class="report-card">
         <?= frs_heading_with_tip('Monthly Reservation Volume (Overview KPIs)', 'Headline counts for the selected month/facility. Also drives Print Summary and AI Summary.'); ?>
-        <?= frs_reports_period_filter_form('rpt-kpi', 'kpi', $allFacilities, $kpiPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'util', 'outcomes']); ?>
+        <?= frs_reports_period_filter_form('rpt-kpi', 'kpi', $allFacilities, $kpiPeriod, []); ?>
         <div class="kpi-row">
             <div class="kpi">
                 <span>Total Reservations (<?= htmlspecialchars($filterLabel); ?>)</span>
@@ -1077,7 +1077,7 @@ ob_start();
         
         <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
             <?= frs_heading_with_tip('Facility Utilization', 'Approved bookings per facility vs. the busiest facility in the selected period (horizontal bars).', 'h3'); ?>
-            <?= frs_reports_period_filter_form('rpt-util', 'util', $allFacilities, $utilPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'kpi', 'outcomes']); ?>
+            <?= frs_reports_period_filter_form('rpt-util', 'util', $allFacilities, $utilPeriod, []); ?>
             <?php if (empty($facilityData)): ?>
                 <p style="color: #8b95b5; padding: 1rem 0;">No facility data available for this period.</p>
             <?php else: ?>
@@ -1101,7 +1101,7 @@ ob_start();
 
     <div class="report-card" style="margin-top: 1.5rem;">
         <?= frs_heading_with_tip('Reservation Outcomes', 'Count and percentage share of each final status in the selected period.'); ?>
-        <?= frs_reports_period_filter_form('rpt-outcomes', 'outcomes', $allFacilities, $outcomesPeriod, ['trend', 'status', 'topfac', 'forecast', 'occ', 'kpi', 'util']); ?>
+        <?= frs_reports_period_filter_form('rpt-outcomes', 'outcomes', $allFacilities, $outcomesPeriod, []); ?>
         <table class="table">
             <thead>
             <tr>

@@ -23,11 +23,48 @@
     function buildUrlFromForm(form) {
         const action = form.getAttribute('action') || window.location.pathname;
         const url = new URL(action, window.location.origin);
-        const params = new URLSearchParams(new FormData(form));
-        params.forEach(function (value, key) {
+        // Base: the current in-page state (kept fresh by pushState on every
+        // partial load), so submitting one widget's filter form cannot reset
+        // filters another region applied after this form was last rendered.
+        new URLSearchParams(window.location.search).forEach(function (value, key) {
             url.searchParams.set(key, value);
         });
+        // Server-rendered preserve inputs (data-frs-preserve) are the no-JS
+        // fallback; their values are a snapshot from render time and may be
+        // stale here — the live URL above supersedes them. Real fields win.
+        const fallbackOnly = new Set();
+        form.querySelectorAll('[data-frs-preserve]').forEach(function (el) {
+            if (el.name) fallbackOnly.add(el.name);
+        });
+        new URLSearchParams(new FormData(form)).forEach(function (value, key) {
+            if (!fallbackOnly.has(key)) {
+                url.searchParams.set(key, value);
+            }
+        });
         return url.toString();
+    }
+
+    /**
+     * Server-rendered partial links (pagination, calendar nav) snapshot the
+     * query string at render time; merge them over the live URL so clicking
+     * one after another region updated does not reset that region's filters.
+     * Links to another path, or without a query (intentional reset), pass
+     * through untouched.
+     */
+    function mergeLinkUrl(href) {
+        const url = new URL(href, window.location.href);
+        if (url.pathname !== window.location.pathname || !url.search) {
+            return url.toString();
+        }
+        const merged = new URL(url.pathname, window.location.origin);
+        new URLSearchParams(window.location.search).forEach(function (value, key) {
+            merged.searchParams.set(key, value);
+        });
+        url.searchParams.forEach(function (value, key) {
+            merged.searchParams.set(key, value);
+        });
+        merged.hash = url.hash;
+        return merged.toString();
     }
 
     function extractPartial(html, partialId) {
@@ -229,7 +266,7 @@
         const partialId = partialIdFromEl(link);
         if (!partialId) return;
         e.preventDefault();
-        loadPartial(link.href, partialId);
+        loadPartial(mergeLinkUrl(link.href), partialId);
     });
 
     document.addEventListener('submit', function (e) {

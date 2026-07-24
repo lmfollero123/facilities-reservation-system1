@@ -55,7 +55,10 @@ if (!function_exists('frs_chart_hidden_preserve')) {
             if (is_array($value)) {
                 continue;
             }
-            $html .= '<input type="hidden" name="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '" value="'
+            // data-frs-preserve marks these as no-JS fallback state: the AJAX
+            // partial layer rebuilds cross-widget state from the live URL
+            // instead (these values are a snapshot from render time).
+            $html .= '<input type="hidden" data-frs-preserve="1" name="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '" value="'
                 . htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '">';
         }
         return $html;
