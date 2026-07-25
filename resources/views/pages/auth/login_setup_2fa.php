@@ -141,10 +141,18 @@ try {
                 $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
                 $secret = $tfa->createSecret();
                 $_SESSION['pending_2fa_setup_totp_secret'] = $secret;
-                $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $secret);
                 $totpSecretDisplay = $secret;
                 $view = 'totp';
-                $success = 'Scan the QR code with Google Authenticator (or similar), then enter the 6-digit code to finish.';
+                // QR image is best-effort: it is fetched from an external service that can be
+                // unreachable on locked-down networks. Never let it block enrollment — fall back to the manual key.
+                try {
+                    $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $secret);
+                    $success = 'Scan the QR code with Google Authenticator (or similar), then enter the 6-digit code to finish.';
+                } catch (Throwable $qrErr) {
+                    error_log('2FA QR image unavailable, using manual key: ' . $qrErr->getMessage());
+                    $totpQrUri = null;
+                    $success = 'Add this key to your authenticator app ("Enter a setup key"), then enter the 6-digit code to finish.';
+                }
             } catch (Throwable $e) {
                 error_log('2FA setup TOTP start error: ' . $e->getMessage());
                 $error = 'Could not start authenticator setup. Try email OTP instead.';
@@ -208,9 +216,14 @@ try {
     if ($view === 'totp' && $totpQrUri === null && !empty($_SESSION['pending_2fa_setup_totp_secret'])) {
         $totpSecretDisplay = $_SESSION['pending_2fa_setup_totp_secret'];
         if (class_exists('RobThree\Auth\TwoFactorAuth') && class_exists('RobThree\Auth\Providers\Qr\QRServerProvider')) {
-            $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
-            $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
-            $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $totpSecretDisplay);
+            try {
+                $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
+                $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
+                $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $totpSecretDisplay);
+            } catch (Throwable $qrErr) {
+                error_log('2FA QR image unavailable, using manual key: ' . $qrErr->getMessage());
+                $totpQrUri = null;
+            }
         }
     }
 
@@ -310,13 +323,16 @@ ob_start();
                     Choose a different method
                 </button>
             </form>
-        <?php elseif ($view === 'totp' && $totpQrUri): ?>
+        <?php elseif ($view === 'totp'): ?>
+            <?php if ($totpQrUri): ?>
             <div style="text-align:center;margin-bottom:1rem;">
                 <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="Authenticator QR code" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:0.5rem;background:#fff;">
             </div>
+            <?php endif; ?>
             <?php if ($totpSecretDisplay): ?>
                 <p style="font-size:0.82rem;color:#64748b;word-break:break-all;margin:0 0 1rem;">
-                    Manual entry key: <code><?= htmlspecialchars($totpSecretDisplay); ?></code>
+                    <?php if (!$totpQrUri): ?><strong>Can&rsquo;t show a scannable code on this network.</strong> In your authenticator app choose <em>&ldquo;Enter a setup key&rdquo;</em> and type:<br><?php else: ?>Manual entry key: <?php endif; ?>
+                    <code><?= htmlspecialchars($totpSecretDisplay); ?></code>
                 </p>
             <?php endif; ?>
             <form method="POST" class="auth-form" id="totpForm">

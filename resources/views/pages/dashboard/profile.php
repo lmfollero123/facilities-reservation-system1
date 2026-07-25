@@ -273,13 +273,20 @@ if (isset($_SESSION['totp_pending_secret']) && $user && !empty($user['email'])) 
         }
         $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
         $tfa = new \RobThree\Auth\TwoFactorAuth($qrProvider, 'LGU Facilities');
-        $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $_SESSION['totp_pending_secret']);
         $totpSecret = $_SESSION['totp_pending_secret'];
+        // QR image is best-effort (external fetch, may be blocked on locked-down networks).
+        // Keep the secret for manual entry even if the QR image can't be produced.
+        try {
+            $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $totpSecret);
+        } catch (Throwable $qrErr) {
+            error_log('TOTP QR image unavailable, using manual key: ' . $qrErr->getMessage());
+            $totpQrUri = null;
+        }
     } catch (Throwable $e) {
-        error_log('TOTP QR generation error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
+        error_log('TOTP setup error: ' . $e->getMessage() . ' | File: ' . $e->getFile() . ' | Line: ' . $e->getLine());
         unset($_SESSION['totp_pending_secret']);
         if (empty($error)) {
-            $error = 'Could not generate QR code: ' . htmlspecialchars($e->getMessage());
+            $error = 'Could not start authenticator setup: ' . htmlspecialchars($e->getMessage());
         }
     }
 }
@@ -1430,11 +1437,13 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                                     <input type="hidden" name="totp_disable" value="1">
                                     <button type="submit" class="btn-outline" style="padding:0.5rem 1rem;">Disable Authenticator</button>
                                 </form>
-                            <?php elseif ($totpQrUri): ?>
-                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;">Scan the QR code with your app, then enter the 6-digit code below to verify.</p>
+                            <?php elseif ($totpSecret): ?>
+                                <p style="color:#5b6888; font-size:0.85rem; margin:0 0 0.75rem;"><?= $totpQrUri ? 'Scan the QR code with your app, then enter the 6-digit code below to verify.' : 'Add the setup key below to your authenticator app (choose &ldquo;Enter a setup key&rdquo;), then enter the 6-digit code below to verify.'; ?></p>
                                 <div id="totp-setup-modal" style="display:block;">
+                                    <?php if ($totpQrUri): ?>
                                     <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="TOTP QR" style="display:block; margin:0.75rem 0; max-width:200px;">
-                                    <p style="font-size:0.8rem; color:#6b7280; margin:0.5rem 0;">Or enter manually: <code style="background:#eee; padding:2px 6px; border-radius:4px;"><?= htmlspecialchars($totpSecret); ?></code></p>
+                                    <?php endif; ?>
+                                    <p style="font-size:0.8rem; color:#6b7280; margin:0.5rem 0;"><?= $totpQrUri ? 'Or enter manually: ' : 'Setup key: '; ?><code style="background:#eee; padding:2px 6px; border-radius:4px;"><?= htmlspecialchars($totpSecret); ?></code></p>
                                     <form method="POST" style="margin-top:0.75rem;" id="totpVerifyForm">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="totp_verify" value="1">

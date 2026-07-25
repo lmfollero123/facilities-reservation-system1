@@ -121,6 +121,8 @@ if ($isAuthSplitPage) {
     <?php endif; ?>
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <!-- Alpine.js (replaces Bootstrap JS behaviors during Tailwind migration) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
     <!-- Leaflet CSS (Free, open-source map library) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Google fonts -->
@@ -379,8 +381,8 @@ if ($isAuthSplitPage) {
 <?php include __DIR__ . '/../components/facility_assistant.php'; ?>
 <?php include __DIR__ . '/../components/footer.php'; ?>
 <script>window.APP_BASE_PATH = "<?= htmlspecialchars($base ?? base_path()); ?>";</script>
-<!-- Bootstrap core JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Bootstrap core JS removed — all behaviors migrated to Alpine.js / vanilla JS. Bootstrap CSS remains (styling only) until the CSS migration. -->
+
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- SimpleLightbox plugin JS -->
