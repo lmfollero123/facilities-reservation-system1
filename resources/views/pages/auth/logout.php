@@ -9,8 +9,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: ' . base_path() . '/login?error=csrf');
         exit;
     }
+
+    // If this session originated from a Main LGU SSO launch, send the admin
+    // back to the SSO hub instead of this system's own login page.
+    $returnToMainLgu = !empty($_SESSION['sso_from_mainlgu']);
+
     session_unset();
     session_destroy();
+
+    if ($returnToMainLgu) {
+        $mainLguUrl = ($_SERVER['SERVER_NAME'] ?? '') === 'localhost'
+            ? 'http://localhost/Main%20LGU/admin/dashboard.php'
+            : 'https://infragovservices.com/admin/dashboard.php';
+        header('Location: ' . $mainLguUrl);
+        exit;
+    }
+
     header('Location: ' . base_path() . '/login');
     exit;
 }

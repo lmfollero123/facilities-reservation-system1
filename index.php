@@ -60,6 +60,12 @@ if ($isIntegrationsApi) {
     exit;
 }
 
+$isStatsApi = ($apiPath === 'api/stats' || strpos($apiPath, 'api/stats') === 0);
+if ($isStatsApi) {
+    require_once __DIR__ . '/resources/views/pages/public/api/stats.php';
+    exit;
+}
+
 // Load app configuration (includes base_path function) - AFTER API routes
 require_once __DIR__ . '/config/app.php';
 
@@ -108,6 +114,8 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/public/api/paymongo_webhook.php';
 } elseif ($path === 'payment-return') {
     require_once __DIR__ . '/resources/views/pages/public/payment_return.php';
+} elseif ($path === 'sso/consume') {
+    require_once __DIR__ . '/resources/views/pages/auth/sso_consume.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
     // Extract dashboard sub-path early (used for auth + routing)
     $dashboardPath = str_replace('dashboard/', '', $path);
