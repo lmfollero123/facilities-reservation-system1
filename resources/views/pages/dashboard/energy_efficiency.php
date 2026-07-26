@@ -36,7 +36,7 @@ $messageType = '';
 $hasTables = frs_energy_tables_exist($pdo);
 
 $tab = (string)($_GET['tab'] ?? 'readings');
-if (!in_array($tab, ['readings', 'recommendations', 'mapping'], true)) {
+if (!in_array($tab, ['readings', 'recommendations', 'mapping', 'profiles'], true)) {
     $tab = 'readings';
 }
 
@@ -244,6 +244,20 @@ if ($tab === 'mapping' && $canUpdate) {
     $energyFacilitiesError = $result['error'];
 }
 
+$profiles = [];
+if ($hasTables && $tab === 'profiles') {
+    $profiles = $pdo->query('
+        SELECT f.id AS facility_id, f.name AS facility_name,
+               p.electric_meter_no, p.utility_provider, p.contract_account_no, p.main_energy_source,
+               p.backup_power, p.transformer_capacity, p.number_of_meters, p.baseline_kwh,
+               p.engineer_approved, p.baseline_locked, p.baseline_source, p.energy_updated_at
+        FROM facilities f
+        JOIN energy_facility_map m ON m.facility_id = f.id
+        LEFT JOIN energy_profile_cache p ON p.facility_id = f.id
+        ORDER BY f.name
+    ')->fetchAll(PDO::FETCH_ASSOC);
+}
+
 $monthNames = [1 => 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 $tabUrl = static fn (string $t): string => base_path() . '/dashboard/energy-efficiency?tab=' . $t;
 
@@ -299,6 +313,7 @@ ob_start();
 <nav class="booking-hub-tabs" aria-label="Energy sections">
     <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('readings')); ?>">Meter Readings</a>
     <a class="booking-hub-tab <?= $tab === 'recommendations' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('recommendations')); ?>">Recommendations</a>
+    <a class="booking-hub-tab <?= $tab === 'profiles' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('profiles')); ?>">Facility Profiles</a>
     <?php if ($canUpdate): ?>
         <a class="booking-hub-tab <?= $tab === 'mapping' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('mapping')); ?>">Facility Mapping</a>
     <?php endif; ?>
@@ -581,6 +596,57 @@ ob_start();
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+        <?php endif; ?>
+    </section>
+
+<?php elseif ($tab === 'profiles'): ?>
+    <section class="booking-card">
+        <h2>Facility Energy Profiles</h2>
+        <p style="color:#8b95b5; margin-bottom:1rem;">
+            Utility, meter, and baseline details configured for each facility by the LGU Energy team. This data is read-only here and refreshes automatically whenever a sync runs.
+            <?php if ($canUpdate): ?>
+                Only facilities mapped to the Energy system are listed below — see <a href="<?= htmlspecialchars($tabUrl('mapping')); ?>">Facility Mapping</a> to map more.
+            <?php else: ?>
+                Only facilities mapped to the Energy system are listed below.
+            <?php endif; ?>
+        </p>
+        <?php if ($profiles === []): ?>
+            <p style="color:#8b95b5; text-align:center; padding:2rem;">No facilities are mapped to the Energy system yet. Set up mapping first under Facility Mapping.</p>
+        <?php else: ?>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:1rem;">
+                <?php foreach ($profiles as $p): ?>
+                    <?php $hasProfile = $p['utility_provider'] !== null || $p['baseline_kwh'] !== null || $p['electric_meter_no'] !== null; ?>
+                    <article class="booking-card" style="margin:0;">
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:baseline; justify-content:space-between; margin-bottom:0.6rem;">
+                            <strong><?= htmlspecialchars((string)$p['facility_name']); ?></strong>
+                            <?php if ($hasProfile): ?>
+                                <span>
+                                    <span class="status-badge <?= $p['engineer_approved'] ? 'approved' : 'pending'; ?>"><?= $p['engineer_approved'] ? 'Approved' : 'Pending Approval'; ?></span>
+                                    <?php if ($p['baseline_locked']): ?>
+                                        <span class="status-badge admin">Baseline Locked</span>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!$hasProfile): ?>
+                            <p style="color:#8b95b5; margin:0;">No energy profile set yet — the Energy team hasn't configured this facility.</p>
+                        <?php else: ?>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem 1rem; font-size:0.9rem;">
+                                <div><span style="color:#8b95b5;">Utility Provider</span><br><?= htmlspecialchars((string)($p['utility_provider'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Contract Acct.</span><br><?= htmlspecialchars((string)($p['contract_account_no'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Electric Meter No.</span><br><?= htmlspecialchars((string)($p['electric_meter_no'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Main Energy Source</span><br><?= htmlspecialchars((string)($p['main_energy_source'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Backup Power</span><br><?= htmlspecialchars((string)($p['backup_power'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Transformer Capacity</span><br><?= htmlspecialchars((string)($p['transformer_capacity'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Number of Meters</span><br><?= htmlspecialchars((string)($p['number_of_meters'] ?? '—')); ?></div>
+                                <div><span style="color:#8b95b5;">Baseline kWh</span><br><?= $p['baseline_kwh'] !== null ? number_format((float)$p['baseline_kwh'], 2) : '—'; ?></div>
+                                <div><span style="color:#8b95b5;">Baseline Source</span><br><?= htmlspecialchars((string)($p['baseline_source'] ?? '—')); ?></div>
+                            </div>
+                            <p style="color:#8b95b5; font-size:0.8rem; margin:0.75rem 0 0;">Last updated from Energy: <?= htmlspecialchars((string)($p['energy_updated_at'] ?? 'never')); ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
             </div>
         <?php endif; ?>
     </section>
