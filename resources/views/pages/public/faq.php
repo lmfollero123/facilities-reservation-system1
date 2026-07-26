@@ -20,32 +20,32 @@ ob_start();
                     <i class="bi bi-rocket-takeoff"></i> Getting Started
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq1">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq1">
                             <span>Who can reserve LGU facilities?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq1" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq1" class="faq-answer">
                             <p>Ang mga rehistradong residente ng Barangay Culiat, Quezon City ang maaaring mag-reserve ng facilities sa pamamagitan ng sistemang ito. Para magsimula, gumawa lang ng account sa pamamagitan ng pagbibigay ng iyong valid na impormasyon, kasama ang iyong address sa loob ng barangay. Kailangan mong i-verify ang iyong identity sa pamamagitan ng pag-upload ng valid na government-issued ID para ma-enable ang auto-approval features.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq2">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq2">
                             <span>How do I create an account?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq2" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq2" class="faq-answer">
                             <p>I-click ang "Create Account" mula sa homepage o registration page. Punan ang iyong personal na impormasyon kasama ang iyong buong pangalan, email address, mobile number, at address sa loob ng Barangay Culiat. Maaari kang mag-upload ng valid ID habang nagre-register, o gawin ito mamaya mula sa iyong profile. Kapag nakarehistro na, ang iyong account ay agad na aktibo, bagama't kailangan ang ID verification para sa ilang privileges.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq3">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq3">
                             <span>What types of IDs are accepted for verification?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq3" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq3" class="faq-answer">
                             <p>Tanggap ang anumang government-issued identification document, kasama ngunit hindi limitado sa: Birth Certificate, Barangay ID, Resident ID, Driver's License, National ID, Passport, Postal ID, o anumang ibang valid na government-issued identification. Ang ID ay dapat malinaw, valid, at ipakita ang iyong buong pangalan na tumutugma sa iyong registration.</p>
                         </div>
                     </div>
@@ -58,42 +58,42 @@ ob_start();
                     <i class="bi bi-calendar-check"></i> Booking & Reservations
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq4">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq4">
                             <span>How far in advance can I book?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq4" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq4" class="faq-answer">
                             <p>Maaari kang mag-book ng facilities hanggang 30 araw nang maaga. Ang same-day bookings ay maaaring available depende sa availability ng facility, ngunit subject ito sa immediate approval. Inirerekomenda naming mag-book ng hindi bababa sa 3-5 araw nang maaga para matiyak ang iyong preferred date at time slot.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq5">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq5">
                             <span>Is approval required for all reservations?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq5" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq5" class="faq-answer">
                             <p>Karamihan sa reservations ay nangangailangan ng admin/staff approval. Gayunpaman, ang verified users na may valid IDs ay maaaring qualify para sa auto-approval sa eligible facilities kung lahat ng conditions ay natutugunan (facility ay may enabled na auto-approval, walang conflicts, within booking window, etc.). Makakatanggap ka ng notification kapag ang iyong reservation ay approved o kung kailangan ng additional information.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq6">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq6">
                             <span>How long does approval take?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq6" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq6" class="faq-answer">
                             <p>Ang approval timeframes ay nag-iiba-iba. Ang auto-approved reservations ay confirmed agad. Ang manual approvals ay karaniwang processed sa loob ng 24-48 hours sa business days (Monday-Friday, 8:00 AM - 5:00 PM). Ang reservations na ginawa sa weekends o holidays ay maaaring tumagal nang mas matagal. Makakatanggap ka ng email at in-app notifications kapag nagbago ang status ng iyong reservation.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq7">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq7">
                             <span>Are walk-ins allowed?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq7" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq7" class="faq-answer">
                             <p>Ang walk-ins ay subject sa availability ng facility sa first-come, first-served basis. Gayunpaman, lubos naming inirerekomenda na mag-book nang maaga sa pamamagitan ng system para matiyak ang iyong preferred date at time. Ang walk-ins ay maaaring tanggihan kung ang facility ay already reserved o undergoing maintenance.</p>
                         </div>
                     </div>
@@ -106,22 +106,22 @@ ob_start();
                     <i class="bi bi-cash-stack"></i> Fees & Payments
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq8">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq8">
                             <span>Are there fees for reserving facilities?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq8" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq8" class="faq-answer">
                             <p>Ang fees ay nag-iiba-iba depende sa facility at maaaring depende sa factors gaya ng duration, time of day, type of event, at kung ang activity ay commercial. Tingnan ang individual facility details para sa specific rates. Ang ilang facilities ay maaaring mag-offer ng free time slots para sa community events, non-profit activities, o barangay-sanctioned programs. Lahat ng fees at payment instructions ay ibibigay kapag ang reservation ay approved.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq9">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq9">
                             <span>When do I need to pay?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq9" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq9" class="faq-answer">
                             <p>Ang payment instructions at deadlines ay ibibigay kapag ang iyong reservation ay approved. Karaniwan, ang payment ay required bago ang reservation date. Ang failure to pay sa loob ng specified period ay maaaring result sa cancellation ng iyong reservation without prejudice to future bookings.</p>
                         </div>
                     </div>
@@ -134,32 +134,32 @@ ob_start();
                     <i class="bi bi-x-circle"></i> Cancellations & Changes
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq10">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq10">
                             <span>What happens if I cancel my reservation?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq10" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq10" class="faq-answer">
                             <p>Ang cancellations ay dapat gawin ng hindi bababa sa 24 hours nang maaga sa pamamagitan ng system o sa pamamagitan ng pag-contact sa Facilities Management Office. Ang cancellations na ginawa ng mas mababa sa 24 hours bago ang reserved time ay maaaring subject sa fees o restrictions. Ang refund policies ay nag-iiba-iba depende sa facility at timing ng cancellation. Pakitingnan ang terms habang nagbo-book.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq11">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq11">
                             <span>What happens if I don't show up (no-show)?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq11" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq11" class="faq-answer">
                             <p>Ang no-shows ay sineseryoso dahil pinipigilan nito ang ibang residents na gamitin ang facilities. Ang repeated no-shows ay maaaring result sa restrictions sa future bookings, kasama ang temporary suspension ng reservation privileges. Kung hindi ka makaka-attend sa iyong reservation, pakicancel agad para bigyang-daan ang iba na gamitin ang facility.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq12">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq12">
                             <span>Can I modify my reservation after approval?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq12" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq12" class="faq-answer">
                             <p>Ang changes sa approved reservations ay subject sa availability at admin approval. Contact ang Facilities Management Office sa lalong madaling panahon kung kailangan mong baguhin ang iyong reservation. Ang significant changes ay maaaring require cancellation at re-booking, na maaaring makaapekto sa fees o availability.</p>
                         </div>
                     </div>
@@ -172,32 +172,32 @@ ob_start();
                     <i class="bi bi-shield-check"></i> Policies & Rules
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq13">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq13">
                             <span>What activities are prohibited?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq13" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq13" class="faq-answer">
                             <p>Ang unauthorized commercial activity, political gatherings without proper clearance, activities na naglalagay sa panganib ang public safety, at anumang use na lumalabag sa local ordinances ay strictly prohibited. Ang damages sa facilities ay charged sa reserving party at maaaring include administrative sanctions. Lahat ng activities ay dapat comply sa barangay regulations at national laws.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq14">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq14">
                             <span>What are the penalties for violations?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq14" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq14" class="faq-answer">
                             <p>Ang penalties ay depende sa nature at severity ng violation. Maaaring include ang payment for damages, fees, restrictions sa future bookings, temporary o permanent suspension ng reservation privileges, at sa serious cases, administrative sanctions o legal action. Ang LGU ay may right na mag-reassign, reschedule, o tanggihan ang requests para tiyakin ang public safety at service continuity.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq15">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq15">
                             <span>How are disputes handled?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq15" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq15" class="faq-answer">
                             <p>Ang disputes ay dapat ireport sa Facilities Management Office agad. Ang office ay rereview ang matter at gagawa ng determination based sa facts, terms and conditions, at barangay policies. Ang decisions ay maaaring appealed sa proper channels. Lahat ng communications at decisions ay documented para sa transparency at accountability.</p>
                         </div>
                     </div>
@@ -210,22 +210,22 @@ ob_start();
                     <i class="bi bi-headset"></i> Technical Support
                 </h3>
                 <div class="faq-list">
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq16">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq16">
                             <span>I forgot my password. How do I reset it?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq16" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq16" class="faq-answer">
                             <p>Sa login page, i-click ang "Forgot Password" at ilagay ang iyong registered email address. Makakatanggap ka ng instructions para i-reset ang iyong password. Kung hindi ka makatanggap ng email, tingnan ang iyong spam folder o contact ang Facilities Management Office para sa assistance.</p>
                         </div>
                     </div>
 
-                    <div class="faq-card" x-data="{ open: false }">
-                        <div class="faq-question" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open" :aria-expanded="open" data-bs-target="#faq17">
+                    <div class="faq-card">
+                        <div class="faq-question" role="button" tabindex="0" aria-expanded="false" data-bs-target="#faq17">
                             <span>I'm having trouble accessing the system. What should I do?</span>
                             <i class="bi bi-chevron-down"></i>
                         </div>
-                        <div id="faq17" class="faq-answer" x-show="open" x-cloak x-transition>
+                        <div id="faq17" class="faq-answer">
                             <p>Tiyakin na gumagamit ka ng supported web browser (Chrome, Firefox, Safari, o Edge) at may stable internet connection. I-clear ang iyong browser cache at cookies, o subukan gamitin ang ibang browser o device. Kung patuloy ang problema, contact ang Facilities Management Office sa business hours para sa technical support.</p>
                         </div>
                     </div>
@@ -369,6 +369,11 @@ ob_start();
 .faq-answer {
     padding: 0 1.5rem;
     background: #ffffff;
+    display: none;
+}
+
+.faq-question[aria-expanded="true"] + .faq-answer {
+    display: block;
 }
 
 .faq-answer p {
@@ -379,7 +384,7 @@ ob_start();
     font-size: 0.95rem;
 }
 
-/* Accordion is driven by Alpine (x-show); no Bootstrap collapse overrides needed */
+/* Accordion is driven by vanilla JS toggling aria-expanded (see script below); no Bootstrap collapse overrides needed */
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
@@ -402,6 +407,21 @@ ob_start();
     }
 }
 </style>
+
+<script>
+(function () {
+    document.querySelectorAll('#faq .faq-question').forEach(function (q) {
+        function toggle() {
+            var expanded = q.getAttribute('aria-expanded') === 'true';
+            q.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        }
+        q.addEventListener('click', toggle);
+        q.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        });
+    });
+})();
+</script>
 
 <?php
 $content = ob_get_clean();

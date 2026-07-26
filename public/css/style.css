@@ -6,9 +6,6 @@
    ============================================ */
 
 /* Light Mode (Default) */
-/* Hide Alpine x-show/x-cloak elements until Alpine initializes (deferred load) */
-[x-cloak] { display: none !important; }
-
 :root {
     /* Background Colors */
     --bg-primary: #f5f7fa;

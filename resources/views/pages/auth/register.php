@@ -362,7 +362,7 @@ ob_start();
 
                     <label class="auth-split-terms">
                         <input type="checkbox" name="accept_terms" required>
-                        <span>I agree to the <a href="#" id="termsLink" onclick="event.preventDefault(); window.dispatchEvent(new CustomEvent('open-terms'));">Terms &amp; Conditions</a> and <a href="#" id="privacyLink" onclick="event.preventDefault(); window.dispatchEvent(new CustomEvent('open-terms'));">Data Privacy Policy</a> of Barangay Culiat CPRFS, including compliance with the Data Privacy Act of 2012 (RA 10173).</span>
+                        <span>I agree to the <a href="#" id="termsLink">Terms &amp; Conditions</a> and <a href="#" id="privacyLink">Data Privacy Policy</a> of Barangay Culiat CPRFS, including compliance with the Data Privacy Act of 2012 (RA 10173).</span>
                     </label>
                 </div>
 
@@ -373,22 +373,13 @@ ob_start();
 </section>
 
 <!-- Terms and Conditions Modal -->
-<div class="modal" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" role="dialog" aria-modal="true"
-     x-data="{ open: false, accept() { localStorage.setItem('lgu_facilities_terms_accepted', 'true'); this.open = false; } }"
-     x-init="open = !localStorage.getItem('lgu_facilities_terms_accepted')"
-     x-effect="document.body.style.overflow = open ? 'hidden' : ''"
-     @open-terms.window="open = true"
-     @keydown.escape.window="open = false"
-     @click.self="open = false"
-     :class="{ 'show': open }"
-     :style="open ? 'display:block' : 'display:none'"
-     x-cloak>
+<div class="modal" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" role="dialog" aria-modal="true">
     <div class="modal-dialog modal-dialog-scrollable modal-lg terms-modal-dialog terms-modal-content">
             <div class="modal-header" style="border-bottom: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem; flex-shrink: 0;">
                 <h5 class="modal-title" id="termsModalLabel" style="color: #1e3a5f; font-weight: 700; font-size: 1.5rem;">
                     Terms and Conditions & Data Privacy Policy
                 </h5>
-                <button type="button" class="btn-close" @click="open = false" aria-label="Close"></button>
+                <button type="button" class="btn-close" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="padding: 1.5rem; color: #333; overflow-y: auto; flex: 1; min-height: 0;">
                 <div style="margin-bottom: 2rem;">
@@ -573,7 +564,7 @@ ob_start();
                 </div>
             </div>
             <div class="modal-footer" style="border-top: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem; flex-shrink: 0;">
-                <button type="button" class="btn btn-secondary" @click="accept()" id="understandBtn" style="padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; background: #6c757d; border: none; color: #fff; cursor: pointer;">
+                <button type="button" class="btn btn-secondary" id="understandBtn" style="padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; background: #6c757d; border: none; color: #fff; cursor: pointer;">
                     I Understand
                 </button>
             </div>
@@ -710,7 +701,7 @@ ob_start();
 // Auto-open modal on page load using Bootstrap's default behavior
 // Only show once - check localStorage
 window.addEventListener('load', function() {
-    // Terms & Conditions modal is now driven by Alpine (see #termsModal x-data).
+    // Terms & Conditions modal is now driven by the vanilla-JS controller further down this file.
     // The legacy Bootstrap-based logic below is intentionally bypassed by this early return.
     const modalElement = null;
     if (!modalElement) return;
@@ -802,6 +793,27 @@ window.addEventListener('load', function() {
         setTimeout(cleanupBackdrop, 100);
     });
 });
+
+// Terms & Conditions modal — vanilla controller (replaces the Bootstrap/Alpine versions; no eval, CSP-safe)
+(function () {
+    var modal = document.getElementById('termsModal');
+    if (!modal) return;
+    var STORAGE_KEY = 'lgu_facilities_terms_accepted';
+    function openModal() { modal.classList.add('show'); modal.style.display = 'block'; document.body.style.overflow = 'hidden'; }
+    function closeModal() { modal.classList.remove('show'); modal.style.display = 'none'; document.body.style.overflow = ''; }
+    function acceptTerms() { localStorage.setItem(STORAGE_KEY, 'true'); closeModal(); }
+    var closeBtn = modal.querySelector('.btn-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    var understandBtn = document.getElementById('understandBtn');
+    if (understandBtn) understandBtn.addEventListener('click', acceptTerms);
+    modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+    ['termsLink', 'privacyLink'].forEach(function (id) {
+        var link = document.getElementById(id);
+        if (link) link.addEventListener('click', function (e) { e.preventDefault(); openModal(); });
+    });
+    if (!localStorage.getItem(STORAGE_KEY)) openModal();
+})();
 
 // Real-time Form Validation
 document.addEventListener('DOMContentLoaded', function() {
