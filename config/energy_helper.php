@@ -106,6 +106,43 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
     return $payload;
 }
 
+/**
+ * Transform one facility-profiles API row into an energy_profile_cache
+ * upsert-ready row. Pure — no PDO — so the field-mapping logic is unit
+ * tested independently of the pull orchestration in frs_energy_pull_profiles().
+ *
+ * @param array<string, mixed> $row one row from GET /api/v1/cprf/facility-profiles
+ * @return array{facility_id: int, electric_meter_no: ?string, utility_provider: ?string,
+ *   contract_account_no: ?string, main_energy_source: ?string, backup_power: ?string,
+ *   transformer_capacity: ?string, number_of_meters: ?int, baseline_kwh: ?float,
+ *   engineer_approved: bool, baseline_locked: bool, baseline_source: ?string,
+ *   energy_updated_at: ?string}|null null when the row has no usable facility_external_ref
+ */
+function frs_energy_parse_profile_row(array $row): ?array
+{
+    if (!isset($row['facility_external_ref']) || !is_numeric($row['facility_external_ref'])) {
+        return null;
+    }
+
+    return [
+        'facility_id' => (int)$row['facility_external_ref'],
+        'electric_meter_no' => isset($row['electric_meter_no']) && $row['electric_meter_no'] !== null ? (string)$row['electric_meter_no'] : null,
+        'utility_provider' => isset($row['utility_provider']) && $row['utility_provider'] !== null ? (string)$row['utility_provider'] : null,
+        'contract_account_no' => isset($row['contract_account_no']) && $row['contract_account_no'] !== null ? (string)$row['contract_account_no'] : null,
+        'main_energy_source' => isset($row['main_energy_source']) && $row['main_energy_source'] !== null ? (string)$row['main_energy_source'] : null,
+        'backup_power' => isset($row['backup_power']) && $row['backup_power'] !== null ? (string)$row['backup_power'] : null,
+        'transformer_capacity' => isset($row['transformer_capacity']) && $row['transformer_capacity'] !== null ? (string)$row['transformer_capacity'] : null,
+        'number_of_meters' => isset($row['number_of_meters']) && is_numeric($row['number_of_meters']) ? (int)$row['number_of_meters'] : null,
+        'baseline_kwh' => isset($row['baseline_kwh']) && is_numeric($row['baseline_kwh']) ? (float)$row['baseline_kwh'] : null,
+        'engineer_approved' => (bool)($row['engineer_approved'] ?? false),
+        'baseline_locked' => (bool)($row['baseline_locked'] ?? false),
+        'baseline_source' => isset($row['baseline_source']) && $row['baseline_source'] !== null ? (string)$row['baseline_source'] : null,
+        'energy_updated_at' => isset($row['updated_at']) && $row['updated_at'] !== null
+            ? gmdate('Y-m-d H:i:s', strtotime((string)$row['updated_at']))
+            : null,
+    ];
+}
+
 function frs_energy_tables_exist(PDO $pdo): bool
 {
     try {
@@ -587,9 +624,104 @@ function frs_energy_pull_recommendations(PDO $pdo): array
 }
 
 /**
+ * Pull facility energy profiles (updated_since watermark) into the local
+ * cache. Unlike frs_energy_pull_recommendations(), no reverse facility-id
+ * mapping lookup is needed: the Energy endpoint already scopes its response
+ * to CPRF-mapped facilities and returns facility_external_ref, which IS the
+ * CPRF facility_id directly.
+ *
+ * @return array{success: bool, upserted: int, error: ?string}
+ */
+function frs_energy_pull_profiles(PDO $pdo): array
+{
+    $state = frs_energy_load_sync_state($pdo);
+    $query = ['per_page' => 100];
+    if (!empty($state['last_profile_pull_at'])) {
+        $query['updated_since'] = $state['last_profile_pull_at'];
+    }
+
+    $upserted = 0;
+    $maxUpdatedAt = null;
+    $page = 1;
+    do {
+        $query['page'] = $page;
+        $result = fetchEnergyFacilityProfiles($query);
+        if (!$result['success']) {
+            return ['success' => false, 'upserted' => $upserted, 'error' => $result['error']];
+        }
+        $rows = $result['data']['data'] ?? [];
+        $stmt = $pdo->prepare('
+            INSERT INTO energy_profile_cache
+                (facility_id, electric_meter_no, utility_provider, contract_account_no,
+                 main_energy_source, backup_power, transformer_capacity, number_of_meters,
+                 baseline_kwh, engineer_approved, baseline_locked, baseline_source,
+                 energy_updated_at, synced_at)
+            VALUES
+                (:facility_id, :electric_meter_no, :utility_provider, :contract_account_no,
+                 :main_energy_source, :backup_power, :transformer_capacity, :number_of_meters,
+                 :baseline_kwh, :engineer_approved, :baseline_locked, :baseline_source,
+                 :energy_updated_at, NOW())
+            ON DUPLICATE KEY UPDATE
+                electric_meter_no = VALUES(electric_meter_no),
+                utility_provider = VALUES(utility_provider),
+                contract_account_no = VALUES(contract_account_no),
+                main_energy_source = VALUES(main_energy_source),
+                backup_power = VALUES(backup_power),
+                transformer_capacity = VALUES(transformer_capacity),
+                number_of_meters = VALUES(number_of_meters),
+                baseline_kwh = VALUES(baseline_kwh),
+                engineer_approved = VALUES(engineer_approved),
+                baseline_locked = VALUES(baseline_locked),
+                baseline_source = VALUES(baseline_source),
+                energy_updated_at = VALUES(energy_updated_at),
+                synced_at = NOW()
+        ');
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $parsed = frs_energy_parse_profile_row($row);
+            if ($parsed === null) {
+                continue;
+            }
+            $stmt->execute([
+                'facility_id' => $parsed['facility_id'],
+                'electric_meter_no' => $parsed['electric_meter_no'],
+                'utility_provider' => $parsed['utility_provider'],
+                'contract_account_no' => $parsed['contract_account_no'],
+                'main_energy_source' => $parsed['main_energy_source'],
+                'backup_power' => $parsed['backup_power'],
+                'transformer_capacity' => $parsed['transformer_capacity'],
+                'number_of_meters' => $parsed['number_of_meters'],
+                'baseline_kwh' => $parsed['baseline_kwh'],
+                'engineer_approved' => $parsed['engineer_approved'] ? 1 : 0,
+                'baseline_locked' => $parsed['baseline_locked'] ? 1 : 0,
+                'baseline_source' => $parsed['baseline_source'],
+                'energy_updated_at' => $parsed['energy_updated_at'],
+            ]);
+            $upserted++;
+
+            if ($parsed['energy_updated_at'] !== null) {
+                if ($maxUpdatedAt === null || strtotime($parsed['energy_updated_at']) > strtotime($maxUpdatedAt)) {
+                    $maxUpdatedAt = $parsed['energy_updated_at'];
+                }
+            }
+        }
+        $hasNext = !empty($result['data']['next_page_url']);
+        $page++;
+    } while ($hasNext && $page <= 10);
+
+    if ($maxUpdatedAt !== null) {
+        $pdo->prepare('UPDATE energy_sync_state SET last_profile_pull_at = :w WHERE id = 1')->execute(['w' => $maxUpdatedAt]);
+    }
+
+    return ['success' => true, 'upserted' => $upserted, 'error' => null];
+}
+
+/**
  * Full sync: retry pending/failed pushes, then pull recommendations.
  *
- * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, errors: string[], ran_at: string}
+ * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, profiles_upserted: int, errors: string[], ran_at: string}
  */
 function frs_energy_run_sync(PDO $pdo): array
 {
@@ -624,6 +756,11 @@ function frs_energy_run_sync(PDO $pdo): array
         $errors[] = 'Recommendations pull: ' . $pull['error'];
     }
 
+    $profilePull = frs_energy_pull_profiles($pdo);
+    if (!$profilePull['success'] && $profilePull['error']) {
+        $errors[] = 'Facility profiles pull: ' . $profilePull['error'];
+    }
+
     // Read the previous run's failure streak before it's overwritten below,
     // so we can detect the run that crosses the "keeps failing" threshold.
     $previousSummary = frs_energy_load_sync_state($pdo)['last_summary'];
@@ -636,6 +773,7 @@ function frs_energy_run_sync(PDO $pdo): array
         'push_failed' => $pushFailed,
         'auto_mapped' => $autoMap['mapped'],
         'recommendations_upserted' => $pull['upserted'],
+        'profiles_upserted' => $profilePull['upserted'],
         'errors' => $errors,
         'ran_at' => date('c'),
         'consecutive_failures' => $consecutiveFailures,
@@ -670,21 +808,21 @@ function frs_energy_run_sync(PDO $pdo): array
     $save->execute(['summary' => json_encode($summary)]);
 
     require_once __DIR__ . '/audit.php';
-    logAudit('Ran Energy integration sync', 'Energy Efficiency', "pushed={$pushed} failed={$pushFailed} recos={$pull['upserted']}");
+    logAudit('Ran Energy integration sync', 'Energy Efficiency', "pushed={$pushed} failed={$pushFailed} recos={$pull['upserted']} profiles={$profilePull['upserted']}");
 
     return $summary;
 }
 
-/** @return array{last_pull_at: ?string, last_push_at: ?string, last_summary: ?array} */
+/** @return array{last_pull_at: ?string, last_push_at: ?string, last_profile_pull_at: ?string, last_summary: ?array} */
 function frs_energy_load_sync_state(PDO $pdo): array
 {
     try {
-        $row = $pdo->query('SELECT last_pull_at, last_push_at, last_summary FROM energy_sync_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
+        $row = $pdo->query('SELECT last_pull_at, last_push_at, last_profile_pull_at, last_summary FROM energy_sync_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         $row = false;
     }
     if ($row === false) {
-        return ['last_pull_at' => null, 'last_push_at' => null, 'last_summary' => null];
+        return ['last_pull_at' => null, 'last_push_at' => null, 'last_profile_pull_at' => null, 'last_summary' => null];
     }
     $summary = null;
     if (!empty($row['last_summary'])) {
@@ -694,6 +832,7 @@ function frs_energy_load_sync_state(PDO $pdo): array
     return [
         'last_pull_at' => $row['last_pull_at'] ?: null,
         'last_push_at' => $row['last_push_at'] ?: null,
+        'last_profile_pull_at' => $row['last_profile_pull_at'] ?: null,
         'last_summary' => $summary,
     ];
 }

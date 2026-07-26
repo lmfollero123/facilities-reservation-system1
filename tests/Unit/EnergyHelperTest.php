@@ -73,4 +73,74 @@ final class EnergyHelperTest extends TestCase
         $this->assertSame('July reading', $payload['notes']);
         $this->assertSame('Juan Dela Cruz', $payload['recorded_by_name']);
     }
+
+    public function test_parse_profile_row_maps_all_fields(): void
+    {
+        $row = [
+            'facility_external_ref' => 501,
+            'energy_facility_id' => 14,
+            'electric_meter_no' => 'MTR-0042',
+            'utility_provider' => 'Meralco',
+            'contract_account_no' => '1234-5678',
+            'main_energy_source' => 'Grid',
+            'backup_power' => 'Generator',
+            'transformer_capacity' => '75 kVA',
+            'number_of_meters' => 3,
+            'baseline_kwh' => '7820.00',
+            'engineer_approved' => true,
+            'baseline_locked' => true,
+            'baseline_source' => 'Manual entry',
+            'updated_at' => '2026-07-26T08:00:00+00:00',
+        ];
+
+        $parsed = frs_energy_parse_profile_row($row);
+
+        $this->assertSame(501, $parsed['facility_id']);
+        $this->assertSame('MTR-0042', $parsed['electric_meter_no']);
+        $this->assertSame('Meralco', $parsed['utility_provider']);
+        $this->assertSame('1234-5678', $parsed['contract_account_no']);
+        $this->assertSame('Grid', $parsed['main_energy_source']);
+        $this->assertSame('Generator', $parsed['backup_power']);
+        $this->assertSame('75 kVA', $parsed['transformer_capacity']);
+        $this->assertSame(3, $parsed['number_of_meters']);
+        $this->assertSame(7820.0, $parsed['baseline_kwh']);
+        $this->assertTrue($parsed['engineer_approved']);
+        $this->assertTrue($parsed['baseline_locked']);
+        $this->assertSame('Manual entry', $parsed['baseline_source']);
+        $this->assertSame('2026-07-26 08:00:00', $parsed['energy_updated_at']);
+    }
+
+    public function test_parse_profile_row_handles_null_optional_fields(): void
+    {
+        $row = [
+            'facility_external_ref' => 501,
+            'electric_meter_no' => null,
+            'utility_provider' => null,
+            'contract_account_no' => null,
+            'main_energy_source' => null,
+            'backup_power' => null,
+            'transformer_capacity' => null,
+            'number_of_meters' => null,
+            'baseline_kwh' => null,
+            'engineer_approved' => false,
+            'baseline_locked' => false,
+            'baseline_source' => null,
+            'updated_at' => null,
+        ];
+
+        $parsed = frs_energy_parse_profile_row($row);
+
+        $this->assertSame(501, $parsed['facility_id']);
+        $this->assertNull($parsed['electric_meter_no']);
+        $this->assertNull($parsed['baseline_kwh']);
+        $this->assertFalse($parsed['engineer_approved']);
+        $this->assertFalse($parsed['baseline_locked']);
+        $this->assertNull($parsed['energy_updated_at']);
+    }
+
+    public function test_parse_profile_row_returns_null_without_facility_external_ref(): void
+    {
+        $this->assertNull(frs_energy_parse_profile_row(['utility_provider' => 'Meralco']));
+        $this->assertNull(frs_energy_parse_profile_row(['facility_external_ref' => 'not-a-number']));
+    }
 }

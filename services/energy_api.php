@@ -154,6 +154,17 @@ function fetchEnergyRecommendations(array $query = []): array
 }
 
 /**
+ * Fetch facility energy profiles (raw Laravel paginator array in 'data').
+ *
+ * @param array<string, mixed> $query e.g. ['updated_since' => '...', 'page' => 1, 'per_page' => 100]
+ * @return array{success: bool, data: ?array<string, mixed>, error: ?string, http_code: int}
+ */
+function fetchEnergyFacilityProfiles(array $query = []): array
+{
+    return energy_api_request('GET', '/api/v1/cprf/facility-profiles', null, $query);
+}
+
+/**
  * Push one facility meter reading.
  *
  * @param array<string, mixed> $payload from frs_energy_build_reading_payload()
