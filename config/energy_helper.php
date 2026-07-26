@@ -138,7 +138,7 @@ function frs_energy_parse_profile_row(array $row): ?array
         'baseline_locked' => (bool)($row['baseline_locked'] ?? false),
         'baseline_source' => isset($row['baseline_source']) && $row['baseline_source'] !== null ? (string)$row['baseline_source'] : null,
         'energy_updated_at' => isset($row['updated_at']) && $row['updated_at'] !== null
-            ? gmdate('Y-m-d H:i:s', strtotime((string)$row['updated_at']))
+            ? date('Y-m-d H:i:s', strtotime((string)$row['updated_at']))
             : null,
     ];
 }

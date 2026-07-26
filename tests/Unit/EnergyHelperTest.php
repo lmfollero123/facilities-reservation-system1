@@ -107,7 +107,11 @@ final class EnergyHelperTest extends TestCase
         $this->assertTrue($parsed['engineer_approved']);
         $this->assertTrue($parsed['baseline_locked']);
         $this->assertSame('Manual entry', $parsed['baseline_source']);
-        $this->assertSame('2026-07-26 08:00:00', $parsed['energy_updated_at']);
+        // Input is UTC (+00:00 offset); this app converts all stored timestamps to
+        // Manila-local (UTC+8) per its global date_default_timezone_set('Asia/Manila')
+        // convention, matching how every other timestamp in this codebase is stored/
+        // displayed — so 08:00 UTC becomes 16:00 local.
+        $this->assertSame('2026-07-26 16:00:00', $parsed['energy_updated_at']);
     }
 
     public function test_parse_profile_row_handles_null_optional_fields(): void
