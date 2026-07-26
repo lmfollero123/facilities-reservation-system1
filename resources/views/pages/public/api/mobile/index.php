@@ -19,6 +19,7 @@ require_once dirname(__DIR__, 6) . '/config/app.php';
 require_once dirname(__DIR__, 6) . '/config/database.php';
 require_once dirname(__DIR__, 6) . '/config/security.php';
 require_once dirname(__DIR__, 6) . '/config/mobile_auth.php';
+require_once dirname(__DIR__, 6) . '/config/culiat_streets.php';
 
 /**
  * @param array<string, mixed> $data
@@ -215,7 +216,22 @@ if ($route === 'auth/login' && $method === 'POST') {
         mobile_error('Your account is not active yet.', 403, 'inactive');
     }
     if (isset($user['email_verified']) && !(int) $user['email_verified']) {
-        mobile_error('Please verify your email on the website before using the app.', 403, 'email_unverified');
+        $verifyResult = frs_begin_login_email_verification($pdo, $user);
+        if (!$verifyResult['ok']) {
+            mobile_error(
+                $verifyResult['error'] ?? 'Email verification is required before you can sign in.',
+                403,
+                'email_unverified'
+            );
+        }
+        mobile_json([
+            'ok' => true,
+            'requires_email_verification' => true,
+            'user_id' => (int) $user['id'],
+            'message' => $verifyResult['info'] === 'existing_code'
+                ? 'Your verification code is still valid. Enter the code from your email.'
+                : 'A new verification code has been sent to your email.',
+        ]);
     }
 
     $needsOtp = function_exists('frs_login_requires_second_factor') && frs_login_requires_second_factor($user);
@@ -472,16 +488,27 @@ if ($route === 'auth/reset-password' && $method === 'POST') {
     mobile_json(['ok' => true, 'message' => 'Password updated. You can sign in now.']);
 }
 
+if ($route === 'meta/culiat-streets' && $method === 'GET') {
+    mobile_json(['ok' => true, 'streets' => frs_culiat_streets()]);
+}
+
 if ($route === 'auth/register' && $method === 'POST') {
     $body = mobile_body();
     $name = trim((string) ($body['name'] ?? ''));
     $email = strtolower(trim((string) ($body['email'] ?? '')));
     $password = (string) ($body['password'] ?? '');
     $mobile = trim((string) ($body['mobile'] ?? ''));
-    $address = trim((string) ($body['address'] ?? ''));
+    $street = trim((string) ($body['street'] ?? ''));
+    $houseNumber = trim((string) ($body['house_number'] ?? ''));
 
     if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) {
         mobile_error('Name, valid email, and password (min 8) are required.', 422, 'validation');
+    }
+    if ($street === '' || !frs_is_valid_culiat_street($street)) {
+        mobile_error('Please select a valid street.', 422, 'validation');
+    }
+    if ($houseNumber === '') {
+        mobile_error('House number is required.', 422, 'validation');
     }
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
     $exists->execute([$email]);
@@ -489,11 +516,11 @@ if ($route === 'auth/register' && $method === 'POST') {
         mobile_error('An account with that email already exists.', 409, 'email_taken');
     }
 
+    $address = frs_build_culiat_address($houseNumber, $street);
     $pwdHash = password_hash($password, PASSWORD_DEFAULT);
-    // Minimal resident registration — may require email verification via website
     try {
         $cols = ['name', 'email', 'password_hash', 'role', 'status'];
-        $vals = [$name, $email, $pwdHash, 'Resident', 'pending'];
+        $vals = [$name, $email, $pwdHash, 'Resident', 'active'];
         // optional columns
         $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'mobile'");
         if ($check && $check->fetch()) {
@@ -505,6 +532,16 @@ if ($route === 'auth/register' && $method === 'POST') {
             $cols[] = 'address';
             $vals[] = $address !== '' ? $address : null;
         }
+        $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'street'");
+        if ($check && $check->fetch()) {
+            $cols[] = 'street';
+            $vals[] = $street;
+        }
+        $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'house_number'");
+        if ($check && $check->fetch()) {
+            $cols[] = 'house_number';
+            $vals[] = $houseNumber;
+        }
         $placeholders = implode(',', array_fill(0, count($cols), '?'));
         $pdo->prepare('INSERT INTO users (' . implode(',', $cols) . ') VALUES (' . $placeholders . ')')
             ->execute($vals);
@@ -513,17 +550,158 @@ if ($route === 'auth/register' && $method === 'POST') {
         mobile_error('Registration failed. Please try the website.', 500, 'register_failed');
     }
 
+    $userId = (int) $pdo->lastInsertId();
+
+    try {
+        frs_send_email_verification($pdo, $userId, $email, $name);
+    } catch (Throwable $e) {
+        error_log('Mobile register email verification: ' . $e->getMessage());
+    }
+
     mobile_json([
         'ok' => true,
-        'message' => 'Account created. Please verify your email / await activation, then sign in.',
-        'requires_activation' => true,
+        'message' => 'Account created. We sent a 6-digit verification code to your email.',
+        'user_id' => $userId,
     ], 201);
+}
+
+if ($route === 'auth/verify-email' && $method === 'POST') {
+    $body = mobile_body();
+    $userId = (int) ($body['user_id'] ?? 0);
+    $code = trim((string) ($body['code'] ?? ''));
+    $deviceName = isset($body['device_name']) ? substr((string) $body['device_name'], 0, 120) : null;
+
+    if ($userId <= 0 || $code === '') {
+        mobile_error('user_id and code are required.', 422, 'validation');
+    }
+    if (!checkEmailVerifyRateLimit($userId)) {
+        mobile_error('Too many incorrect attempts. Please wait 15 minutes or resend the code.', 429, 'rate_limited');
+    }
+
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        mobile_error('We could not find that account. Please register again.', 404, 'not_found');
+    }
+
+    if (!empty($user['email_verified'])) {
+        $tokens = frs_mobile_issue_token_pair($pdo, $user, $deviceName);
+        mobile_json(array_merge(['ok' => true, 'otp_required' => false], $tokens));
+    }
+    if (!frs_email_verification_code_is_valid($pdo, $userId)) {
+        mobile_error('Your verification code has expired. Tap Resend code to get a new one.', 410, 'code_expired');
+    }
+    $hash = (string) ($user['email_verification_code_hash'] ?? '');
+    if ($hash === '' || !password_verify($code, $hash)) {
+        recordEmailVerifyRateLimitFailure($userId);
+        mobile_error('The verification code you entered is incorrect.', 422, 'invalid_code');
+    }
+
+    $pdo->prepare(
+        'UPDATE users SET email_verified = 1, email_verified_at = NOW(),
+         email_verification_code_hash = NULL, email_verification_expires_at = NULL WHERE id = ?'
+    )->execute([$userId]);
+
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $tokens = frs_mobile_issue_token_pair($pdo, $user, $deviceName);
+    mobile_json(array_merge(['ok' => true, 'otp_required' => false], $tokens));
+}
+
+if ($route === 'auth/resend-verification-email' && $method === 'POST') {
+    $body = mobile_body();
+    $userId = (int) ($body['user_id'] ?? 0);
+    if ($userId <= 0) {
+        mobile_error('user_id is required.', 422, 'validation');
+    }
+
+    $stmt = $pdo->prepare('SELECT id, email, name, email_verified FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        mobile_error('We could not find that account. Please register again.', 404, 'not_found');
+    }
+    if (!empty($user['email_verified'])) {
+        mobile_json(['ok' => true, 'already_verified' => true, 'message' => 'This email is already verified. Please sign in.']);
+    }
+
+    $cooldown = (int) EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS;
+    $ttl = (int) EMAIL_VERIFICATION_CODE_TTL_SECONDS;
+    $check = $pdo->prepare(
+        "SELECT (email_verification_expires_at IS NULL
+            OR TIMESTAMPDIFF(SECOND, DATE_SUB(email_verification_expires_at, INTERVAL {$ttl} SECOND), NOW()) >= {$cooldown}
+        ) AS can_resend FROM users WHERE id = ?"
+    );
+    $check->execute([$userId]);
+    $canResend = (bool) ($check->fetch(PDO::FETCH_ASSOC)['can_resend'] ?? true);
+    if (!$canResend) {
+        mobile_error('Please wait a moment before requesting another code.', 429, 'cooldown');
+    }
+
+    try {
+        frs_send_email_verification($pdo, $userId, (string) $user['email'], (string) $user['name']);
+    } catch (Throwable $e) {
+        error_log('Mobile resend verification: ' . $e->getMessage());
+        mobile_error('Unable to send a new verification code right now. Please try again later.', 500, 'send_failed');
+    }
+
+    mobile_json(['ok' => true, 'message' => 'A new verification code has been sent to your email.']);
+}
+
+function frs_mobile_valid_id_status(PDO $pdo, int $userId): ?array
+{
+    $stmt = $pdo->prepare(
+        "SELECT file_name, uploaded_at FROM user_documents
+         WHERE user_id = ? AND document_type = 'valid_id' AND is_archived = 0
+         ORDER BY uploaded_at DESC LIMIT 1"
+    );
+    $stmt->execute([$userId]);
+    $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $doc ? ['file_name' => $doc['file_name'], 'uploaded_at' => $doc['uploaded_at']] : null;
 }
 
 // ---------- ME ----------
 if ($route === 'me' && $method === 'GET') {
     $user = mobile_require_user($pdo);
-    mobile_json(['ok' => true, 'user' => frs_mobile_user_public($user)]);
+    $payload = frs_mobile_user_public($user);
+    $payload['valid_id'] = frs_mobile_valid_id_status($pdo, (int) $user['id']);
+    mobile_json(['ok' => true, 'user' => $payload]);
+}
+
+if ($route === 'me/documents/valid-id' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $uid = (int) $user['id'];
+
+    if (frs_mobile_valid_id_status($pdo, $uid) !== null) {
+        mobile_error(
+            'You have already uploaded a valid ID document. Please wait for admin verification.',
+            409,
+            'already_uploaded'
+        );
+    }
+
+    if (empty($_FILES['valid_id']['name']) || ($_FILES['valid_id']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        mobile_error('A valid ID file is required (PDF, JPG, or PNG, max 5MB).', 422, 'validation');
+    }
+
+    require_once dirname(__DIR__, 6) . '/config/secure_documents.php';
+    $result = saveDocumentToSecureStorage($_FILES['valid_id'], $uid, 'valid_id');
+    if (!$result['success']) {
+        mobile_error($result['error'] ?: 'Failed to upload valid ID.', 422, 'upload_failed');
+    }
+
+    $pdo->prepare(
+        'INSERT INTO user_documents (user_id, document_type, file_path, file_name, file_size) VALUES (?, ?, ?, ?, ?)'
+    )->execute([$uid, 'valid_id', $result['file_path'], basename($result['file_path']), (int) $_FILES['valid_id']['size']]);
+
+    mobile_json([
+        'ok' => true,
+        'message' => 'Valid ID uploaded successfully. Your document is pending admin verification.',
+        'valid_id' => frs_mobile_valid_id_status($pdo, $uid),
+    ], 201);
 }
 
 if ($route === 'me' && in_array($method, ['PATCH', 'PUT'], true)) {

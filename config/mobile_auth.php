@@ -68,6 +68,7 @@ if (!function_exists('frs_mobile_user_public')) {
             'status' => (string) ($user['status'] ?? 'active'),
             'profile_picture' => $pic,
             'avatar_url' => $avatarUrl,
+            'is_verified' => (bool) ($user['is_verified'] ?? false),
         ];
     }
 }
