@@ -148,6 +148,7 @@ function frs_energy_tables_exist(PDO $pdo): bool
     try {
         $pdo->query('SELECT 1 FROM energy_meter_readings LIMIT 1');
         $pdo->query('SELECT 1 FROM energy_facility_map LIMIT 1');
+        $pdo->query('SELECT 1 FROM energy_profile_cache LIMIT 1');
         return true;
     } catch (Throwable $e) {
         return false;
