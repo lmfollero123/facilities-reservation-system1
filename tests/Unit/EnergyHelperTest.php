@@ -147,4 +147,12 @@ final class EnergyHelperTest extends TestCase
         $this->assertNull(frs_energy_parse_profile_row(['utility_provider' => 'Meralco']));
         $this->assertNull(frs_energy_parse_profile_row(['facility_external_ref' => 'not-a-number']));
     }
+
+    public function test_parse_profile_row_handles_malformed_updated_at(): void
+    {
+        $row = ['facility_external_ref' => 501, 'updated_at' => 'not a valid date'];
+        $parsed = frs_energy_parse_profile_row($row);
+        $this->assertNotNull($parsed);
+        $this->assertNull($parsed['energy_updated_at']);
+    }
 }

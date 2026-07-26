@@ -124,6 +124,16 @@ function frs_energy_parse_profile_row(array $row): ?array
         return null;
     }
 
+    // strtotime() returns false (not a warning) on an unparseable or empty
+    // string; date() would then throw a TypeError under strict_types since
+    // it expects ?int. Treat a malformed updated_at as absent rather than
+    // crashing the whole sync cycle on one bad row from the partner API.
+    $energyUpdatedAt = null;
+    if (isset($row['updated_at']) && $row['updated_at'] !== null) {
+        $ts = strtotime((string)$row['updated_at']);
+        $energyUpdatedAt = $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
+    }
+
     return [
         'facility_id' => (int)$row['facility_external_ref'],
         'electric_meter_no' => isset($row['electric_meter_no']) && $row['electric_meter_no'] !== null ? (string)$row['electric_meter_no'] : null,
@@ -137,9 +147,7 @@ function frs_energy_parse_profile_row(array $row): ?array
         'engineer_approved' => (bool)($row['engineer_approved'] ?? false),
         'baseline_locked' => (bool)($row['baseline_locked'] ?? false),
         'baseline_source' => isset($row['baseline_source']) && $row['baseline_source'] !== null ? (string)$row['baseline_source'] : null,
-        'energy_updated_at' => isset($row['updated_at']) && $row['updated_at'] !== null
-            ? date('Y-m-d H:i:s', strtotime((string)$row['updated_at']))
-            : null,
+        'energy_updated_at' => $energyUpdatedAt,
     ];
 }
 
