@@ -408,22 +408,9 @@ ob_start();
 }
 </style>
 
-<script>
-(function () {
-    document.querySelectorAll('#faq .faq-question').forEach(function (q) {
-        function toggle() {
-            var expanded = q.getAttribute('aria-expanded') === 'true';
-            q.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-        }
-        q.addEventListener('click', toggle);
-        q.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-        });
-    });
-})();
-</script>
-
 <?php
+// Accordion click/keyboard handling is wired up centrally in public/js/public-navigation.js
+// (initFaqAccordion) so it runs on both a direct page load and an in-site AJAX navigation.
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
 ?>

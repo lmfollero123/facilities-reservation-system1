@@ -245,6 +245,31 @@
         });
     }
 
+    function initFaqAccordion(root) {
+        const container = root || document.querySelector(MAIN_SEL);
+        if (!container) {
+            return;
+        }
+        const faq = container.querySelector('#faq');
+        if (!faq || faq.dataset.frsFaqBound === '1') {
+            return;
+        }
+        faq.dataset.frsFaqBound = '1';
+        faq.querySelectorAll('.faq-question').forEach(function (q) {
+            function toggle() {
+                const expanded = q.getAttribute('aria-expanded') === 'true';
+                q.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            }
+            q.addEventListener('click', toggle);
+            q.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle();
+                }
+            });
+        });
+    }
+
     function initContactForm(root) {
         const container = root || document.querySelector(MAIN_SEL);
         if (!container) {
@@ -370,6 +395,7 @@
         initFacilityCalendarClicks(main);
         initContactForm(main);
         initFacilityMap(main);
+        initFaqAccordion(main);
         document.dispatchEvent(new CustomEvent('frs:public-page-loaded', {
             bubbles: true,
             detail: { path: window.location.pathname },
@@ -595,6 +621,7 @@
     initAnnouncementsSort(initialMain);
     initFacilityCalendarClicks(initialMain);
     initContactForm(initialMain);
+    initFaqAccordion(initialMain);
 
     window.frsPublicNavigate = navigate;
 })();
