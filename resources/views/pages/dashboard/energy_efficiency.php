@@ -217,7 +217,7 @@ if ($hasTables && $tab === 'recommendations') {
     $sql = '
         SELECT c.*, f.name AS facility_name
         FROM energy_recommendations_cache c
-        LEFT JOIN facilities f ON f.id = c.facility_id
+        JOIN facilities f ON f.id = c.facility_id
         WHERE c.status = \'approved\'
         ' . ($filterFacility > 0 ? 'AND c.facility_id = :fid' : '') . '
         ' . ($filterYear > 0 ? 'AND c.year = :fy AND c.month = :fm' : '') . '
