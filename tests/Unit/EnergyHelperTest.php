@@ -79,6 +79,7 @@ final class EnergyHelperTest extends TestCase
         $row = [
             'facility_external_ref' => 501,
             'energy_facility_id' => 14,
+            'main_meter_name' => 'Bernardo Court Main Meter',
             'electric_meter_no' => 'MTR-0042',
             'utility_provider' => 'Meralco',
             'contract_account_no' => '1234-5678',
@@ -96,6 +97,7 @@ final class EnergyHelperTest extends TestCase
         $parsed = frs_energy_parse_profile_row($row);
 
         $this->assertSame(501, $parsed['facility_id']);
+        $this->assertSame('Bernardo Court Main Meter', $parsed['main_meter_name']);
         $this->assertSame('MTR-0042', $parsed['electric_meter_no']);
         $this->assertSame('Meralco', $parsed['utility_provider']);
         $this->assertSame('1234-5678', $parsed['contract_account_no']);
@@ -118,6 +120,7 @@ final class EnergyHelperTest extends TestCase
     {
         $row = [
             'facility_external_ref' => 501,
+            'main_meter_name' => null,
             'electric_meter_no' => null,
             'utility_provider' => null,
             'contract_account_no' => null,
@@ -135,6 +138,7 @@ final class EnergyHelperTest extends TestCase
         $parsed = frs_energy_parse_profile_row($row);
 
         $this->assertSame(501, $parsed['facility_id']);
+        $this->assertNull($parsed['main_meter_name']);
         $this->assertNull($parsed['electric_meter_no']);
         $this->assertNull($parsed['baseline_kwh']);
         $this->assertFalse($parsed['engineer_approved']);

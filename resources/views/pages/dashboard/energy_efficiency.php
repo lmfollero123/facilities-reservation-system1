@@ -249,7 +249,7 @@ $profiles = [];
 if ($hasTables && $tab === 'profiles') {
     $profiles = $pdo->query('
         SELECT f.id AS facility_id, f.name AS facility_name,
-               p.electric_meter_no, p.utility_provider, p.contract_account_no, p.main_energy_source,
+               p.main_meter_name, p.electric_meter_no, p.utility_provider, p.contract_account_no, p.main_energy_source,
                p.backup_power, p.transformer_capacity, p.number_of_meters, p.baseline_kwh,
                p.engineer_approved, p.baseline_locked, p.baseline_source, p.energy_updated_at
         FROM facilities f
@@ -618,7 +618,7 @@ ob_start();
         <?php else: ?>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:1rem;">
                 <?php foreach ($profiles as $p): ?>
-                    <?php $hasProfile = $p['utility_provider'] !== null || $p['baseline_kwh'] !== null || $p['electric_meter_no'] !== null; ?>
+                    <?php $hasProfile = $p['main_meter_name'] !== null || $p['utility_provider'] !== null || $p['baseline_kwh'] !== null || $p['electric_meter_no'] !== null; ?>
                     <article class="booking-card" style="margin:0;">
                         <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:baseline; justify-content:space-between; margin-bottom:0.6rem;">
                             <strong><?= htmlspecialchars((string)$p['facility_name']); ?></strong>
@@ -635,6 +635,7 @@ ob_start();
                             <p style="color:#8b95b5; margin:0;">No energy profile set yet — the Energy team hasn't configured this facility.</p>
                         <?php else: ?>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem 1rem; font-size:0.9rem;">
+                                <div style="grid-column:1 / -1;"><span style="color:#8b95b5;">Main Meter Name</span><br><strong><?= htmlspecialchars((string)($p['main_meter_name'] ?? '—')); ?></strong></div>
                                 <div><span style="color:#8b95b5;">Utility Provider</span><br><?= htmlspecialchars((string)($p['utility_provider'] ?? '—')); ?></div>
                                 <div><span style="color:#8b95b5;">Contract Acct.</span><br><?= htmlspecialchars((string)($p['contract_account_no'] ?? '—')); ?></div>
                                 <div><span style="color:#8b95b5;">Electric Meter No.</span><br><?= htmlspecialchars((string)($p['electric_meter_no'] ?? '—')); ?></div>

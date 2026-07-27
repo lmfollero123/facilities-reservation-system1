@@ -112,7 +112,7 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
  * tested independently of the pull orchestration in frs_energy_pull_profiles().
  *
  * @param array<string, mixed> $row one row from GET /api/v1/cprf/facility-profiles
- * @return array{facility_id: int, electric_meter_no: ?string, utility_provider: ?string,
+ * @return array{facility_id: int, main_meter_name: ?string, electric_meter_no: ?string, utility_provider: ?string,
  *   contract_account_no: ?string, main_energy_source: ?string, backup_power: ?string,
  *   transformer_capacity: ?string, number_of_meters: ?int, baseline_kwh: ?float,
  *   engineer_approved: bool, baseline_locked: bool, baseline_source: ?string,
@@ -136,6 +136,7 @@ function frs_energy_parse_profile_row(array $row): ?array
 
     return [
         'facility_id' => (int)$row['facility_external_ref'],
+        'main_meter_name' => isset($row['main_meter_name']) && $row['main_meter_name'] !== null ? (string)$row['main_meter_name'] : null,
         'electric_meter_no' => isset($row['electric_meter_no']) && $row['electric_meter_no'] !== null ? (string)$row['electric_meter_no'] : null,
         'utility_provider' => isset($row['utility_provider']) && $row['utility_provider'] !== null ? (string)$row['utility_provider'] : null,
         'contract_account_no' => isset($row['contract_account_no']) && $row['contract_account_no'] !== null ? (string)$row['contract_account_no'] : null,
@@ -650,11 +651,16 @@ function frs_energy_pull_recommendations(PDO $pdo): array
  */
 function frs_energy_pull_profiles(PDO $pdo): array
 {
-    $state = frs_energy_load_sync_state($pdo);
+    // Always refresh the complete profile feed. Several values returned by
+    // Energy are computed from related records (for example,
+    // engineer_approved comes from the selected main meter), so the payload
+    // can legitimately change after an Energy-side code deployment without
+    // the facility/profile updated_at changing. An updated_since watermark
+    // would permanently leave those cached values stale in CPRF.
+    //
+    // The endpoint is paginated and this integration already caps the pull
+    // at 10 pages of 100 rows, so a full idempotent upsert remains bounded.
     $query = ['per_page' => 100];
-    if (!empty($state['last_profile_pull_at'])) {
-        $query['updated_since'] = $state['last_profile_pull_at'];
-    }
 
     $upserted = 0;
     $maxUpdatedAt = null;
@@ -668,16 +674,17 @@ function frs_energy_pull_profiles(PDO $pdo): array
         $rows = $result['data']['data'] ?? [];
         $stmt = $pdo->prepare('
             INSERT INTO energy_profile_cache
-                (facility_id, electric_meter_no, utility_provider, contract_account_no,
+                (facility_id, main_meter_name, electric_meter_no, utility_provider, contract_account_no,
                  main_energy_source, backup_power, transformer_capacity, number_of_meters,
                  baseline_kwh, engineer_approved, baseline_locked, baseline_source,
                  energy_updated_at, synced_at)
             VALUES
-                (:facility_id, :electric_meter_no, :utility_provider, :contract_account_no,
+                (:facility_id, :main_meter_name, :electric_meter_no, :utility_provider, :contract_account_no,
                  :main_energy_source, :backup_power, :transformer_capacity, :number_of_meters,
                  :baseline_kwh, :engineer_approved, :baseline_locked, :baseline_source,
                  :energy_updated_at, NOW())
             ON DUPLICATE KEY UPDATE
+                main_meter_name = VALUES(main_meter_name),
                 electric_meter_no = VALUES(electric_meter_no),
                 utility_provider = VALUES(utility_provider),
                 contract_account_no = VALUES(contract_account_no),
@@ -702,6 +709,7 @@ function frs_energy_pull_profiles(PDO $pdo): array
             }
             $stmt->execute([
                 'facility_id' => $parsed['facility_id'],
+                'main_meter_name' => $parsed['main_meter_name'],
                 'electric_meter_no' => $parsed['electric_meter_no'],
                 'utility_provider' => $parsed['utility_provider'],
                 'contract_account_no' => $parsed['contract_account_no'],

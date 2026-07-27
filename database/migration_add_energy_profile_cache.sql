@@ -7,6 +7,7 @@ USE facilities_reservation;
 CREATE TABLE IF NOT EXISTS energy_profile_cache (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     facility_id INT UNSIGNED NOT NULL,
+    main_meter_name VARCHAR(255) NULL,
     electric_meter_no VARCHAR(100) NULL,
     utility_provider VARCHAR(100) NULL,
     contract_account_no VARCHAR(100) NULL,
