@@ -738,8 +738,8 @@ ob_start();
         <input type="date" id="end_date" name="end_date" class="booking-form-control" value="<?= htmlspecialchars($endDateFilter); ?>">
     </div>
     <div style="grid-column: 1 / -1; display:flex; gap:0.5rem; flex-wrap:wrap; min-width:0;">
-        <button type="submit" class="btn-primary" style="flex:1 1 8rem; min-width:8rem;">Apply Filters</button>
-        <a href="<?= base_path(); ?>/dashboard" class="btn-outline" style="flex:1 1 8rem; min-width:8rem; text-align:center; text-decoration:none;">Reset</a>
+        <button type="submit" class="btn-primary" style="flex:0 1 11rem; min-width:8rem;">Apply Filters</button>
+        <a href="<?= base_path(); ?>/dashboard" class="btn-outline" style="flex:0 1 11rem; min-width:8rem; text-align:center; text-decoration:none;">Reset</a>
     </div>
 </form>
 
