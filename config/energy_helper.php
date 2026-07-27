@@ -527,6 +527,13 @@ function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = nul
     ");
     $ok->execute(['remote_id' => $remoteId, 'id' => $readingId]);
 
+    // Update here, not only inside frs_energy_run_sync()'s batch loop —
+    // a reading pushed immediately on save (the add/edit-reading flow)
+    // never touches that loop, so "Last push" would otherwise never
+    // reflect an immediate push, only a batch Sync Now that found
+    // something already pending.
+    $pdo->prepare('UPDATE energy_sync_state SET last_push_at = NOW() WHERE id = 1')->execute();
+
     return ['success' => true, 'error' => null];
 }
 
@@ -756,9 +763,8 @@ function frs_energy_run_sync(PDO $pdo): array
             }
         }
     }
-    if ($pushed > 0) {
-        $pdo->prepare('UPDATE energy_sync_state SET last_push_at = NOW() WHERE id = 1')->execute();
-    }
+    // last_push_at is now updated inside frs_energy_push_reading() itself
+    // on every successful push, so no separate update is needed here.
 
     $pull = frs_energy_pull_recommendations($pdo);
     if (!$pull['success'] && $pull['error']) {

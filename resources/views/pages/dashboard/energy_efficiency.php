@@ -144,11 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
         } else {
             $summary = frs_energy_run_sync($pdo);
             $message = sprintf(
-                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated.%s',
+                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d facility profile(s) updated.%s',
                 $summary['pushed'],
                 $summary['push_failed'],
                 $summary['recommendations_upserted'],
-                $summary['errors'] !== [] ? ' First issue: ' . $summary['errors'][0] : ''
+                $summary['profiles_upserted'],
+                $summary['errors'] !== [] ? ' Issues: ' . implode(' | ', $summary['errors']) : ''
             );
             $messageType = $summary['errors'] === [] ? 'success' : 'error';
         }
@@ -296,6 +297,7 @@ ob_start();
                     Configured.
                     Last push: <?= htmlspecialchars($syncState['last_push_at'] ?? 'never'); ?> ·
                     Last recommendations pull: <?= htmlspecialchars($syncState['last_pull_at'] ?? 'never'); ?> ·
+                    Last profile pull: <?= htmlspecialchars($syncState['last_profile_pull_at'] ?? 'never'); ?> ·
                     Unsynced readings: <?= (int)$pendingCount; ?>
                 <?php endif; ?>
             </p>
