@@ -11354,6 +11354,41 @@ html[data-theme="dark"] .book-facility-compact h2 {
     color: var(--text-primary);
 }
 
+.booking-hub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 2px solid var(--border-color, #e0e6ed);
+    margin-bottom: 1.25rem;
+}
+
+.booking-hub-tab {
+    display: inline-block;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-secondary, #6b7280);
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.booking-hub-tab:hover {
+    color: var(--gov-blue, #6384d2);
+    background: var(--bg-tertiary, #f4f6fa);
+}
+
+.booking-hub-tab.is-active {
+    background: var(--bg-secondary, #fff);
+    border-color: var(--border-color, #e0e6ed);
+    border-bottom-color: var(--bg-secondary, #fff);
+    color: var(--gov-blue-dark, #285ccd);
+    margin-bottom: -2px;
+}
+
 html[data-theme="dark"] .booking-hub-tabs {
     border-bottom-color: var(--border-color);
 }
