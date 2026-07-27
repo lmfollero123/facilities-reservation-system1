@@ -490,7 +490,8 @@ ob_start();
                             <?php endif; ?>
                         </div>
                         <a href="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>"
-                            data-frs-partial="bo-calendar"
+                            data-bo-modal-close
+                            data-frs-partial-url="<?= htmlspecialchars(blackout_filter_url($filterYear, $calMonth, $filterFacility)); ?>"
                             class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                             aria-label="Close">
                             <i class="bi bi-x-lg"></i>
