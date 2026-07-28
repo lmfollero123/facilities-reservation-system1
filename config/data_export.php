@@ -10,6 +10,18 @@ require_once __DIR__ . '/audit.php';
 // Export file expiration (7 days)
 define('DATA_EXPORT_EXPIRATION_DAYS', 7);
 
+if (!function_exists('app_root_path')) {
+    // Defined independently rather than requiring app.php: app.php unconditionally
+    // pulls in security.php, which starts a session -- fine for web requests, but
+    // this file is also loaded from CLI cron scripts (archive_documents.php),
+    // where that produces "headers already sent" / session warnings. Guarded so
+    // it's a no-op when app.php has already defined it (e.g. web request context).
+    function app_root_path(): string
+    {
+        return dirname(__DIR__);
+    }
+}
+
 /**
  * Export user data (full export)
  */

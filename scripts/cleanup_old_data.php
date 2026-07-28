@@ -149,30 +149,39 @@ if ($type === 'all' || $type === 'unverified_users') {
     echo "Retention: {$retentionHours} hours since registration\n";
 
     $stmt = $pdo->prepare(
-        "SELECT COUNT(*) as count 
-         FROM users 
+        "SELECT id
+         FROM users
          WHERE (email_verified = 0 OR email_verified IS NULL)
            AND created_at < DATE_SUB(NOW(), INTERVAL {$retentionHours} HOUR)"
     );
     $stmt->execute();
-    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+    $unverifiedIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $count = count($unverifiedIds);
 
     echo "Found {$count} unverified user accounts older than {$retentionHours} hours\n";
 
     if ($dryRun) {
         echo "[DRY RUN] Would delete {$count} unverified accounts\n";
     } else {
-        if ($count > 0) {
-            $delStmt = $pdo->prepare(
-                "DELETE FROM users 
-                 WHERE (email_verified = 0 OR email_verified IS NULL)
-                   AND created_at < DATE_SUB(NOW(), INTERVAL {$retentionHours} HOUR)"
-            );
-            $delStmt->execute();
-            $deleted = $delStmt->rowCount();
-            echo "Deleted {$deleted} unverified user accounts\n";
-            $totalDeleted += $deleted;
+        // Delete one row at a time: an unverified signup can still have linked
+        // records (e.g. a reservation made before their verification lapsed),
+        // and a single bulk DELETE would abort the whole batch -- and every
+        // cleanup step after this one in the script -- on the first FK conflict.
+        $delStmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
+        $deleted = 0;
+        $skipped = 0;
+        foreach ($unverifiedIds as $userId) {
+            try {
+                $delStmt->execute([$userId]);
+                $deleted++;
+            } catch (PDOException $e) {
+                $skipped++;
+                echo "  Skipped user #{$userId}: has linked records ({$e->getMessage()})\n";
+            }
         }
+        echo "Deleted {$deleted} unverified user accounts";
+        echo $skipped > 0 ? ", skipped {$skipped} with linked records\n" : "\n";
+        $totalDeleted += $deleted;
     }
     echo "\n";
 }

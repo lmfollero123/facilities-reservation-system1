@@ -5435,12 +5435,14 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
 }
 
 .btn.btn-danger {
+    background: #e53935;
     border-color: #e53935;
-    color: #e53935;
+    color: #fff;
 }
 
 .btn.btn-danger:hover {
-    background: #e53935;
+    background: #c62828;
+    border-color: #c62828;
     color: #fff;
 }
 

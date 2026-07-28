@@ -400,14 +400,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$facilityTab = ($_GET['tab'] ?? 'active') === 'deleted' ? 'deleted' : 'active';
+
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
-$totalFacilities = (int)$pdo->query('SELECT COUNT(*) FROM facilities')->fetchColumn();
+$activeFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status != 'deleted'")->fetchColumn();
+$deletedFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status = 'deleted'")->fetchColumn();
+
+$totalFacilities = $facilityTab === 'deleted' ? $deletedFacilityCount : $activeFacilityCount;
 $totalPages = max(1, (int)ceil($totalFacilities / $perPage));
 
-$facilitiesStmt = $pdo->prepare('SELECT *, latitude, longitude, operating_hours FROM facilities ORDER BY updated_at DESC LIMIT :limit OFFSET :offset');
+$facilitiesStmt = $pdo->prepare(
+    "SELECT *, latitude, longitude, operating_hours FROM facilities
+     WHERE status " . ($facilityTab === 'deleted' ? "= 'deleted'" : "!= 'deleted'") . "
+     ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+);
 $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
@@ -494,16 +503,25 @@ ob_start();
         <?php endif; ?>
     </div>
 
+    <nav class="booking-hub-tabs" aria-label="Facility list sections" style="margin-bottom: 1rem;">
+        <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active" data-frs-partial="facility-list">
+            Active Facilities (<?= $activeFacilityCount; ?>)
+        </a>
+        <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted" data-frs-partial="facility-list">
+            Deleted Facilities (<?= $deletedFacilityCount; ?>)
+        </a>
+    </nav>
+
     <section class="collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
-            <span>Facilities</span>
+            <span><?= $facilityTab === 'deleted' ? 'Deleted Facilities' : 'Facilities'; ?></span>
             <span class="chevron">▼</span>
         </button>
         <div class="collapsible-body" id="facilities-list">
             <div data-frs-partial-id="facility-list" data-frs-partial-root>
             <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
-                    <p>No facilities added yet. Click "Add Facility" to add your first facility.</p>
+                    <p><?= $facilityTab === 'deleted' ? 'No deleted facilities.' : 'No facilities added yet. Click "Add Facility" to add your first facility.'; ?></p>
                 </article>
             <?php else: ?>
                 <?php foreach ($facilities as $facility): ?>
@@ -579,11 +597,11 @@ ob_start();
                 <?php if ($totalPages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
                         <?php endif; ?>
                         <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                         <?php if ($page < $totalPages): ?>
-                            <a href="?page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>

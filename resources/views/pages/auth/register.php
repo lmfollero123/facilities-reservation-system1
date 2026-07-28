@@ -253,8 +253,7 @@ ob_start();
 ?>
 <section class="auth-split auth-split-register">
     <aside class="auth-split-brand" aria-hidden="false">
-        <div class="auth-split-brand-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-decor" aria-hidden="true"></div>
+        <?php include __DIR__ . '/../../components/auth_brand_illustration.php'; ?>
         <div class="auth-split-brand-inner">
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
                 <i class="bi bi-arrow-left"></i> Back to website
@@ -268,8 +267,6 @@ ob_start();
     </aside>
 
     <div class="auth-split-form-panel">
-        <div class="auth-split-form-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-form-overlay" aria-hidden="true"></div>
         <div class="auth-split-form-inner is-wide">
             <div class="auth-split-form-top">
                 <div class="auth-split-logo-text">
@@ -317,7 +314,10 @@ ob_start();
 
                     <label>
                         Email address *
-                        <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        <div class="auth-split-field">
+                            <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
+                            <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        </div>
                     </label>
 
                     <label>
@@ -341,6 +341,7 @@ ob_start();
                     <label>
                         Password *
                         <div class="auth-split-field">
+                            <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
                             <input name="password" id="registerPassword" type="password" placeholder="Create a strong password" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
                             <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="Show password">
                                 <i class="bi bi-eye"></i>
@@ -367,6 +368,7 @@ ob_start();
                 </div>
 
                 <button class="btn-primary" type="submit" id="submitBtn">Create account</button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Securely processed by Barangay Culiat CPRFS</p>
             </form>
         </div>
     </div>
