@@ -32,7 +32,12 @@ $failed = 0;
 foreach ($tables as $table) {
     try {
         echo "Optimizing table: {$table}... ";
-        $pdo->exec("OPTIMIZE TABLE `{$table}`");
+        // OPTIMIZE TABLE returns a result set (Table/Op/Msg_type/Msg_text), not
+        // just an affected-row count -- exec() doesn't fetch it, which leaves
+        // the connection stuck on a pending result and makes every subsequent
+        // query in this loop fail with "unbuffered queries are active". query()
+        // + closeCursor() actually consumes the result before moving on.
+        $pdo->query("OPTIMIZE TABLE `{$table}`")->closeCursor();
         echo "✓ Done\n";
         $optimized++;
     } catch (Exception $e) {
