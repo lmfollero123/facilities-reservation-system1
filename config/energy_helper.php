@@ -699,16 +699,16 @@ function frs_energy_push_recommendation_progress(
 }
 
 /**
- * Pull the complete recommendation list of all statuses into the local cache,
- * resolving CPRF facilities via the mapping table. Pulling all statuses (not
- * just approved) lets status changes reach the cache, while the complete list
- * lets us remove cached rows that were deleted in Energy.
+ * Pull the complete approved recommendation list into the local cache,
+ * resolving CPRF facilities via the mapping table. Draft, dismissed, and
+ * for-review recommendations never cross into Facilities. Because every
+ * approved page is reconciled, revoked or deleted rows are removed locally.
  *
  * @return array{success: bool, upserted: int, deleted: int, error: ?string}
  */
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
-    $query = ['status' => 'all', 'per_page' => 100];
+    $query = ['status' => 'approved', 'per_page' => 100];
 
     // Reverse map: energy_facility_id => CPRF facility_id
     $reverse = [];
