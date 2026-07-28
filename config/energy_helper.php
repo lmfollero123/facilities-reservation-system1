@@ -568,6 +568,107 @@ function frs_energy_should_use_recommendation_watermark(?string $lastPullAt, int
     return $cachedCount > 0 && trim((string)$lastPullAt) !== '';
 }
 
+/**
+ * Validate and normalize a Facilities-side recommendation progress update.
+ *
+ * @return array{implementation_status: string, actual_savings_kwh: ?float, implementation_notes: ?string}
+ */
+function frs_energy_parse_recommendation_progress(array $input): array
+{
+    $status = trim((string)($input['implementation_status'] ?? ''));
+    if (!in_array($status, ['pending', 'in_progress', 'implemented'], true)) {
+        throw new InvalidArgumentException('Choose a valid implementation status.');
+    }
+
+    $actual = $input['actual_savings_kwh'] ?? null;
+    if ($actual === '') {
+        $actual = null;
+    }
+    if ($actual !== null && (!is_numeric($actual) || (float)$actual < 0)) {
+        throw new InvalidArgumentException('Actual savings must be zero or greater.');
+    }
+
+    $notes = trim((string)($input['implementation_notes'] ?? ''));
+    if (strlen($notes) > 5000) {
+        throw new InvalidArgumentException('Implementation notes may not exceed 5,000 characters.');
+    }
+
+    return [
+        'implementation_status' => $status,
+        'actual_savings_kwh' => $actual !== null ? round((float)$actual, 2) : null,
+        'implementation_notes' => $notes !== '' ? $notes : null,
+    ];
+}
+
+/**
+ * Push one cached recommendation's implementation progress to Energy, then
+ * mirror the confirmed remote state locally.
+ *
+ * @return array{success: bool, error: ?string}
+ */
+function frs_energy_push_recommendation_progress(
+    PDO $pdo,
+    int $cacheId,
+    array $input,
+    ?int $updatedBy
+): array {
+    $payload = frs_energy_parse_recommendation_progress($input);
+    $stmt = $pdo->prepare('
+        SELECT energy_recommendation_id, status, implementation_status
+        FROM energy_recommendations_cache
+        WHERE id = :id
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $cacheId]);
+    $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($cached === false) {
+        return ['success' => false, 'error' => 'Recommendation not found.'];
+    }
+    if ((string)$cached['status'] !== 'approved') {
+        return ['success' => false, 'error' => 'Only approved recommendations can be implemented.'];
+    }
+    if ((string)($cached['implementation_status'] ?? 'pending') === 'verified') {
+        return ['success' => false, 'error' => 'This recommendation is already verified by Energy.'];
+    }
+
+    $result = updateEnergyRecommendationImplementation(
+        (int)$cached['energy_recommendation_id'],
+        $payload
+    );
+    if (!$result['success']) {
+        return ['success' => false, 'error' => $result['error']];
+    }
+
+    $remote = $result['data']['recommendation'] ?? [];
+    $implementedAt = null;
+    if (!empty($remote['implemented_at'])) {
+        $timestamp = strtotime((string)$remote['implemented_at']);
+        $implementedAt = $timestamp !== false ? date('Y-m-d H:i:s', $timestamp) : null;
+    }
+
+    $update = $pdo->prepare('
+        UPDATE energy_recommendations_cache
+        SET implementation_status = :implementation_status,
+            actual_savings_kwh = :actual_savings_kwh,
+            implementation_notes = :implementation_notes,
+            implemented_at = :implemented_at,
+            implementation_updated_by = :implementation_updated_by,
+            implementation_updated_at = NOW(),
+            fetched_at = NOW()
+        WHERE id = :id
+    ');
+    $update->execute([
+        'implementation_status' => (string)($remote['implementation_status'] ?? $payload['implementation_status']),
+        'actual_savings_kwh' => $remote['actual_savings_kwh'] ?? $payload['actual_savings_kwh'],
+        'implementation_notes' => $remote['implementation_notes'] ?? $payload['implementation_notes'],
+        'implemented_at' => $implementedAt,
+        'implementation_updated_by' => $updatedBy,
+        'id' => $cacheId,
+    ]);
+
+    return ['success' => true, 'error' => null];
+}
+
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
     $state = frs_energy_load_sync_state($pdo);
@@ -599,11 +700,13 @@ function frs_energy_pull_recommendations(PDO $pdo): array
             INSERT INTO energy_recommendations_cache
                 (energy_recommendation_id, energy_facility_id, facility_id, year, month,
                  generated_message, engineer_recommendation, status, expected_savings_kwh,
-                 target_date, reviewed_at, fetched_at)
+                 target_date, implementation_status, actual_savings_kwh,
+                 implementation_notes, implemented_at, verified_at, reviewed_at, fetched_at)
             VALUES
                 (:remote_id, :energy_facility_id, :facility_id, :year, :month,
                  :generated_message, :engineer_recommendation, :status, :expected_savings_kwh,
-                 :target_date, :reviewed_at, NOW())
+                 :target_date, :implementation_status, :actual_savings_kwh,
+                 :implementation_notes, :implemented_at, :verified_at, :reviewed_at, NOW())
             ON DUPLICATE KEY UPDATE
                 energy_facility_id = VALUES(energy_facility_id),
                 facility_id = VALUES(facility_id),
@@ -614,6 +717,11 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 status = VALUES(status),
                 expected_savings_kwh = VALUES(expected_savings_kwh),
                 target_date = VALUES(target_date),
+                implementation_status = VALUES(implementation_status),
+                actual_savings_kwh = VALUES(actual_savings_kwh),
+                implementation_notes = VALUES(implementation_notes),
+                implemented_at = VALUES(implemented_at),
+                verified_at = VALUES(verified_at),
                 reviewed_at = VALUES(reviewed_at),
                 fetched_at = NOW()
         ');
@@ -624,6 +732,12 @@ function frs_energy_pull_recommendations(PDO $pdo): array
             $energyFacilityId = (int)($row['facility']['id'] ?? 0);
             $reviewedAt = isset($row['reviewed_at']) && $row['reviewed_at'] !== null
                 ? date('Y-m-d H:i:s', strtotime((string)$row['reviewed_at']))
+                : null;
+            $implementedAt = !empty($row['implemented_at']) && strtotime((string)$row['implemented_at']) !== false
+                ? date('Y-m-d H:i:s', strtotime((string)$row['implemented_at']))
+                : null;
+            $verifiedAt = !empty($row['verified_at']) && strtotime((string)$row['verified_at']) !== false
+                ? date('Y-m-d H:i:s', strtotime((string)$row['verified_at']))
                 : null;
             $stmt->execute([
                 'remote_id' => (int)$row['id'],
@@ -636,6 +750,11 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 'status' => (string)($row['status'] ?? 'approved'),
                 'expected_savings_kwh' => isset($row['expected_savings_kwh']) && is_numeric($row['expected_savings_kwh']) ? (float)$row['expected_savings_kwh'] : null,
                 'target_date' => !empty($row['target_date']) ? (string)$row['target_date'] : null,
+                'implementation_status' => (string)($row['implementation_status'] ?? 'pending'),
+                'actual_savings_kwh' => isset($row['actual_savings_kwh']) && is_numeric($row['actual_savings_kwh']) ? (float)$row['actual_savings_kwh'] : null,
+                'implementation_notes' => isset($row['implementation_notes']) && $row['implementation_notes'] !== null ? (string)$row['implementation_notes'] : null,
+                'implemented_at' => $implementedAt,
+                'verified_at' => $verifiedAt,
                 'reviewed_at' => $reviewedAt,
             ]);
             $upserted++;

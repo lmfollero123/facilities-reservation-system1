@@ -87,6 +87,27 @@ final class EnergyHelperTest extends TestCase
         $this->assertTrue(frs_energy_should_use_recommendation_watermark('2026-07-26 03:51:41', 2));
     }
 
+    public function test_recommendation_progress_input_is_normalized(): void
+    {
+        $parsed = frs_energy_parse_recommendation_progress([
+            'implementation_status' => 'implemented',
+            'actual_savings_kwh' => '84.567',
+            'implementation_notes' => '  Lighting schedule corrected.  ',
+        ]);
+
+        $this->assertSame('implemented', $parsed['implementation_status']);
+        $this->assertSame(84.57, $parsed['actual_savings_kwh']);
+        $this->assertSame('Lighting schedule corrected.', $parsed['implementation_notes']);
+    }
+
+    public function test_recommendation_progress_rejects_verification_from_facilities(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        frs_energy_parse_recommendation_progress([
+            'implementation_status' => 'verified',
+        ]);
+    }
+
     public function test_parse_profile_row_maps_all_fields(): void
     {
         $row = [

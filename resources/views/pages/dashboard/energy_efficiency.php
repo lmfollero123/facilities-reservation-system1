@@ -156,6 +156,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
             );
             $messageType = $summary['errors'] === [] ? 'success' : 'error';
         }
+    } elseif ($_POST['action'] === 'update_recommendation' && $canUpdate) {
+        $tab = 'recommendations';
+        try {
+            if (!$syncEnabled) {
+                throw new RuntimeException('Sync is disabled. Enable Energy sync before updating progress.');
+            }
+            $result = frs_energy_push_recommendation_progress(
+                $pdo,
+                (int)($_POST['recommendation_id'] ?? 0),
+                $_POST,
+                (int)($_SESSION['user_id'] ?? 0) ?: null
+            );
+            if (!$result['success']) {
+                throw new RuntimeException((string)$result['error']);
+            }
+            $message = 'Implementation progress saved and synced to the Energy system.';
+            $messageType = 'success';
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to update recommendation: ' . $e->getMessage();
+            $messageType = 'error';
+        }
     }
 }
 
@@ -563,6 +587,52 @@ ob_start();
                         <?php if (!empty($reco['target_date'])): ?>Target: <?= htmlspecialchars((string)$reco['target_date']); ?> · <?php endif; ?>
                         Fetched: <?= htmlspecialchars((string)$reco['fetched_at']); ?>
                     </small>
+                    <?php
+                    $implementationStatus = (string)($reco['implementation_status'] ?? 'pending');
+                    $implementationLabels = [
+                        'pending' => 'Pending',
+                        'in_progress' => 'In Progress',
+                        'implemented' => 'Implemented',
+                        'verified' => 'Verified by Energy',
+                    ];
+                    ?>
+                    <div style="margin-top:0.9rem; padding-top:0.9rem; border-top:1px solid #edf2f7;">
+                        <strong>Implementation: <?= htmlspecialchars($implementationLabels[$implementationStatus] ?? ucfirst($implementationStatus)); ?></strong>
+                        <?php if ($reco['actual_savings_kwh'] !== null): ?>
+                            <span style="color:#0d7a43;"> &middot; Actual savings: <?= number_format((float)$reco['actual_savings_kwh'], 2); ?> kWh</span>
+                        <?php endif; ?>
+                        <?php if (!empty($reco['implementation_notes'])): ?>
+                            <p style="margin:0.45rem 0; color:#56627a;"><?= nl2br(htmlspecialchars((string)$reco['implementation_notes'])); ?></p>
+                        <?php endif; ?>
+
+                        <?php if ($canUpdate && $implementationStatus !== 'verified'): ?>
+                            <form method="POST" action="<?= htmlspecialchars($tabUrl('recommendations')); ?>" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:0.65rem; align-items:end; margin-top:0.75rem;">
+                                <?= csrf_field(); ?>
+                                <input type="hidden" name="action" value="update_recommendation">
+                                <input type="hidden" name="recommendation_id" value="<?= (int)$reco['id']; ?>">
+                                <label>
+                                    Progress Status
+                                    <select name="implementation_status" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                                        <?php foreach (['pending' => 'Pending', 'in_progress' => 'In Progress', 'implemented' => 'Implemented'] as $value => $label): ?>
+                                            <option value="<?= $value; ?>" <?= $implementationStatus === $value ? 'selected' : ''; ?>><?= $label; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <label>
+                                    Actual Savings (kWh)
+                                    <input type="number" name="actual_savings_kwh" min="0" step="0.01" value="<?= $reco['actual_savings_kwh'] !== null ? htmlspecialchars((string)$reco['actual_savings_kwh']) : ''; ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                                </label>
+                                <label>
+                                    Implementation Notes
+                                    <textarea name="implementation_notes" rows="2" maxlength="5000" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"><?= htmlspecialchars((string)($reco['implementation_notes'] ?? '')); ?></textarea>
+                                </label>
+                                <button type="submit" class="btn-primary" <?= $syncEnabled ? '' : 'disabled'; ?>>Save Progress</button>
+                            </form>
+                            <small style="display:block; margin-top:0.45rem; color:#8b95b5;">Facilities records the action here. Final verification stays with the Energy engineer.</small>
+                        <?php elseif ($implementationStatus === 'verified'): ?>
+                            <small style="display:block; margin-top:0.45rem; color:#0d7a43;">Final verification was completed in the Energy system.</small>
+                        <?php endif; ?>
+                    </div>
                 </article>
             <?php endforeach; ?>
         <?php endif; ?>
