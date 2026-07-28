@@ -57,8 +57,11 @@ final class EnergyHelperTest extends TestCase
             'reading_date' => '2026-07-21',
             'previous_reading_kwh' => '500.00',
             'current_reading_kwh' => '620.00',
+            'consumption_kwh' => '120.00',
+            'rate_per_kwh' => '12.35',
             'notes' => 'July reading',
             'recorded_by_name' => 'Juan Dela Cruz',
+            'recorded_by_email' => 'juan@example.test',
         ];
 
         $payload = frs_energy_build_reading_payload($reading, 9);
@@ -68,10 +71,20 @@ final class EnergyHelperTest extends TestCase
         $this->assertSame(7, $payload['month']);
         $this->assertSame(500.0, $payload['previous_reading_kwh']);
         $this->assertSame(620.0, $payload['current_reading_kwh']);
+        $this->assertSame(12.35, $payload['rate_per_kwh']);
+        $this->assertSame(1482.0, $payload['energy_cost']);
         $this->assertSame('2026-07-21', $payload['reading_date']);
         $this->assertSame('CPRF-42', $payload['external_ref']);
         $this->assertSame('July reading', $payload['notes']);
         $this->assertSame('Juan Dela Cruz', $payload['recorded_by_name']);
+        $this->assertSame('juan@example.test', $payload['recorded_by_email']);
+    }
+
+    public function test_recommendation_pull_rebuilds_an_empty_cache(): void
+    {
+        $this->assertFalse(frs_energy_should_use_recommendation_watermark('2026-07-26 03:51:41', 0));
+        $this->assertFalse(frs_energy_should_use_recommendation_watermark(null, 2));
+        $this->assertTrue(frs_energy_should_use_recommendation_watermark('2026-07-26 03:51:41', 2));
     }
 
     public function test_parse_profile_row_maps_all_fields(): void

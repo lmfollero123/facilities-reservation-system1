@@ -84,7 +84,8 @@ function frs_energy_suggest_match(string $facilityName, array $energyFacilities)
  * Map a local energy_meter_readings row to the push endpoint's request body.
  *
  * @param array<string, mixed> $reading local row (id, year, month, reading_date,
- *   previous_reading_kwh, current_reading_kwh, optional notes/recorded_by_name)
+ *   previous_reading_kwh, current_reading_kwh, rate_per_kwh,
+ *   optional notes/recorded_by_name/recorded_by_email)
  */
 function frs_energy_build_reading_payload(array $reading, int $energyFacilityId): array
 {
@@ -95,6 +96,8 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
         'previous_reading_kwh' => (float)$reading['previous_reading_kwh'],
         'current_reading_kwh' => (float)$reading['current_reading_kwh'],
         'reading_date' => (string)$reading['reading_date'],
+        'rate_per_kwh' => (float)$reading['rate_per_kwh'],
+        'energy_cost' => round((float)$reading['consumption_kwh'] * (float)$reading['rate_per_kwh'], 2),
         'external_ref' => 'CPRF-' . (int)$reading['id'],
     ];
     if (!empty($reading['notes'])) {
@@ -102,6 +105,9 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
     }
     if (!empty($reading['recorded_by_name'])) {
         $payload['recorded_by_name'] = (string)$reading['recorded_by_name'];
+    }
+    if (!empty($reading['recorded_by_email'])) {
+        $payload['recorded_by_email'] = (string)$reading['recorded_by_email'];
     }
     return $payload;
 }
@@ -287,8 +293,8 @@ function frs_energy_is_latest_reading(PDO $pdo, array $reading): bool
  * continuity); the first-ever reading uses the submitted previous value.
  *
  * @param array{facility_id: int, year: int, month: int, reading_date: string,
- *   previous_reading_kwh: float, current_reading_kwh: float, notes: ?string,
- *   recorded_by: ?int} $data
+ *   previous_reading_kwh: float, current_reading_kwh: float,
+ *   rate_per_kwh: float, notes: ?string, recorded_by: ?int} $data
  * @return int new reading id
  * @throws InvalidArgumentException on invalid values or duplicate period
  */
@@ -298,6 +304,9 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
         if (!isset($data[$key]) || !is_numeric($data[$key])) {
             throw new InvalidArgumentException('Meter readings must be numeric values.');
         }
+    }
+    if (!isset($data['rate_per_kwh']) || !is_numeric($data['rate_per_kwh']) || (float)$data['rate_per_kwh'] <= 0) {
+        throw new InvalidArgumentException('Rate per kWh must be greater than zero.');
     }
 
     $facilityId = (int)$data['facility_id'];
@@ -329,9 +338,9 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
 
     $stmt = $pdo->prepare('
         INSERT INTO energy_meter_readings
-            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, notes, recorded_by, sync_status)
+            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, rate_per_kwh, notes, recorded_by, sync_status)
         VALUES
-            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :notes, :recorded_by, \'pending\')
+            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :rate_per_kwh, :notes, :recorded_by, \'pending\')
     ');
     try {
         $stmt->execute([
@@ -342,6 +351,7 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
             'previous_kwh' => $previous,
             'current_kwh' => $current,
             'consumption_kwh' => $consumption,
+            'rate_per_kwh' => round((float)$data['rate_per_kwh'], 2),
             'notes' => $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null,
             'recorded_by' => $data['recorded_by'],
         ]);
@@ -369,8 +379,8 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
  * Marks the row 'pending' so the partner API push re-syncs the correction
  * (an idempotent upsert on their side).
  *
- * @param array{current_reading_kwh: mixed, reading_date: string, notes: ?string,
- *   previous_reading_kwh?: mixed} $data
+ * @param array{current_reading_kwh: mixed, rate_per_kwh: mixed,
+ *   reading_date: string, notes: ?string, previous_reading_kwh?: mixed} $data
  * @throws InvalidArgumentException on invalid values or when not the latest reading
  */
 function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
@@ -389,7 +399,11 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
     if (!isset($data['current_reading_kwh']) || !is_numeric($data['current_reading_kwh'])) {
         throw new InvalidArgumentException('Meter readings must be numeric values.');
     }
+    if (!isset($data['rate_per_kwh']) || !is_numeric($data['rate_per_kwh']) || (float)$data['rate_per_kwh'] <= 0) {
+        throw new InvalidArgumentException('Rate per kWh must be greater than zero.');
+    }
     $current = (float)$data['current_reading_kwh'];
+    $ratePerKwh = round((float)$data['rate_per_kwh'], 2);
 
     $facilityId = (int)$reading['facility_id'];
     $earlier = $pdo->prepare('
@@ -420,6 +434,7 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
         SET previous_reading_kwh = :previous_kwh,
             current_reading_kwh = :current_kwh,
             consumption_kwh = :consumption_kwh,
+            rate_per_kwh = :rate_per_kwh,
             reading_date = :reading_date,
             notes = :notes,
             sync_status = \'pending\',
@@ -431,6 +446,7 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
         'previous_kwh' => $previous,
         'current_kwh' => $current,
         'consumption_kwh' => $consumption,
+        'rate_per_kwh' => $ratePerKwh,
         'reading_date' => (string)$data['reading_date'],
         'notes' => $notes,
         'id' => $readingId,
@@ -491,7 +507,7 @@ function frs_energy_pending_count(PDO $pdo): int
 function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = null): array
 {
     $stmt = $pdo->prepare('
-        SELECT r.*, u.name AS recorded_by_name
+        SELECT r.*, u.name AS recorded_by_name, u.email AS recorded_by_email
         FROM energy_meter_readings r
         LEFT JOIN users u ON u.id = r.recorded_by
         WHERE r.id = :id
@@ -547,11 +563,19 @@ function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = nul
  *
  * @return array{success: bool, upserted: int, error: ?string}
  */
+function frs_energy_should_use_recommendation_watermark(?string $lastPullAt, int $cachedCount): bool
+{
+    return $cachedCount > 0 && trim((string)$lastPullAt) !== '';
+}
+
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
     $state = frs_energy_load_sync_state($pdo);
     $query = ['status' => 'all', 'per_page' => 100];
-    if (!empty($state['last_pull_at'])) {
+    $cachedCount = (int)$pdo->query('SELECT COUNT(*) FROM energy_recommendations_cache')->fetchColumn();
+    // If the cache was cleared/restored independently of energy_sync_state,
+    // ignore the stale watermark and rebuild from the complete remote feed.
+    if (frs_energy_should_use_recommendation_watermark($state['last_pull_at'] ?? null, $cachedCount)) {
         $query['updated_since'] = $state['last_pull_at'];
     }
 

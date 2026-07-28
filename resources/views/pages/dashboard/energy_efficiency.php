@@ -58,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
                 'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
                 'previous_reading_kwh' => (float)($_POST['previous_reading_kwh'] ?? 0),
                 'current_reading_kwh' => (float)($_POST['current_reading_kwh'] ?? 0),
+                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
                 'notes' => trim((string)($_POST['notes'] ?? '')),
                 'recorded_by' => (int)($_SESSION['user_id'] ?? 0) ?: null,
             ]);
@@ -84,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
             frs_energy_update_reading($pdo, $readingId, [
                 'current_reading_kwh' => $_POST['current_reading_kwh'] ?? null,
                 'previous_reading_kwh' => $_POST['previous_reading_kwh'] ?? null,
+                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
                 'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
                 'notes' => trim((string)($_POST['notes'] ?? '')),
             ]);
@@ -355,6 +357,11 @@ ob_start();
                     Current Meter Reading (kWh)
                     <input type="number" step="0.01" min="0" name="current_reading_kwh" id="energy-edit-curr-input" required value="<?= htmlspecialchars((string)$editReading['current_reading_kwh']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
                 </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Rate per kWh (PHP)
+                    <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="energy-edit-rate-input" required value="<?= htmlspecialchars(number_format((float)($editReading['rate_per_kwh'] ?? 12), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <small style="color:#8b95b5;">Electricity tariff used to calculate the energy cost.</small>
+                </label>
                 <p id="energy-edit-consumption-preview" style="margin-top:0.5rem; color:#0066cc; font-weight:600;"></p>
                 <label style="margin-top:0.75rem; display:block;">
                     Notes (optional)
@@ -370,16 +377,19 @@ ob_start();
                 'use strict';
                 var prev = document.getElementById('energy-edit-prev-input');
                 var curr = document.getElementById('energy-edit-curr-input');
+                var rate = document.getElementById('energy-edit-rate-input');
                 var preview = document.getElementById('energy-edit-consumption-preview');
-                if (!prev || !curr || !preview) return;
+                if (!prev || !curr || !rate || !preview) return;
                 function updatePreview() {
-                    var p = parseFloat(prev.value), c = parseFloat(curr.value);
+                    var p = parseFloat(prev.value), c = parseFloat(curr.value), r = parseFloat(rate.value);
                     preview.textContent = (!isNaN(p) && !isNaN(c) && c >= p)
                         ? 'Consumption: ' + (c - p).toFixed(2) + ' kWh'
+                            + (!isNaN(r) && r > 0 ? ' | Estimated cost: PHP ' + ((c - p) * r).toFixed(2) : '')
                         : '';
                 }
                 prev.addEventListener('input', updatePreview);
                 curr.addEventListener('input', updatePreview);
+                rate.addEventListener('input', updatePreview);
                 updatePreview();
             })();
             </script>
@@ -397,7 +407,7 @@ ob_start();
                         <option value="">— Select facility —</option>
                         <?php foreach ($facilities as $f): ?>
                             <?php $last = $latestReadings[(int)$f['id']] ?? null; ?>
-                            <option value="<?= (int)$f['id']; ?>" data-prev="<?= $last !== null ? htmlspecialchars((string)$last['current_reading_kwh']) : ''; ?>">
+                            <option value="<?= (int)$f['id']; ?>" data-prev="<?= $last !== null ? htmlspecialchars((string)$last['current_reading_kwh']) : ''; ?>" data-rate="<?= $last !== null ? htmlspecialchars((string)($last['rate_per_kwh'] ?? '12.00')) : '12.00'; ?>">
                                 <?= htmlspecialchars($f['name']); ?><?= isset($mapping[(int)$f['id']]) ? '' : ' (unmapped)'; ?>
                             </option>
                         <?php endforeach; ?>
@@ -420,6 +430,11 @@ ob_start();
                     Current Meter Reading (kWh)
                     <input type="number" step="0.01" min="0" name="current_reading_kwh" id="energy-curr-input" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
                 </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Rate per kWh (PHP)
+                    <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="energy-rate-input" required value="12.00" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <small style="color:#8b95b5;">Enter the applicable electricity tariff for this billing period.</small>
+                </label>
                 <p id="energy-consumption-preview" style="margin-top:0.5rem; color:#0066cc; font-weight:600;"></p>
                 <label style="margin-top:0.75rem; display:block;">
                     Notes (optional)
@@ -433,23 +448,28 @@ ob_start();
                 var sel = document.getElementById('energy-facility-select');
                 var prev = document.getElementById('energy-prev-input');
                 var curr = document.getElementById('energy-curr-input');
+                var rate = document.getElementById('energy-rate-input');
                 var preview = document.getElementById('energy-consumption-preview');
-                if (!sel || !prev || !curr || !preview) return;
+                if (!sel || !prev || !curr || !rate || !preview) return;
                 function updatePreview() {
-                    var p = parseFloat(prev.value), c = parseFloat(curr.value);
+                    var p = parseFloat(prev.value), c = parseFloat(curr.value), r = parseFloat(rate.value);
                     preview.textContent = (!isNaN(p) && !isNaN(c) && c >= p)
                         ? 'Consumption: ' + (c - p).toFixed(2) + ' kWh'
+                            + (!isNaN(r) && r > 0 ? ' | Estimated cost: PHP ' + ((c - p) * r).toFixed(2) : '')
                         : '';
                 }
                 sel.addEventListener('change', function () {
                     var opt = sel.options[sel.selectedIndex];
                     var last = opt ? opt.getAttribute('data-prev') : '';
+                    var lastRate = opt ? opt.getAttribute('data-rate') : '';
                     if (last) { prev.value = last; prev.readOnly = true; }
                     else { prev.value = ''; prev.readOnly = false; }
+                    rate.value = lastRate || '12.00';
                     updatePreview();
                 });
                 prev.addEventListener('input', updatePreview);
                 curr.addEventListener('input', updatePreview);
+                rate.addEventListener('input', updatePreview);
             })();
             </script>
         </section>
@@ -463,7 +483,7 @@ ob_start();
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
-                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Sync</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
+                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Rate</th><th>Estimated Cost</th><th>Sync</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($latestReadings as $r): ?>
@@ -471,6 +491,8 @@ ob_start();
                                     <td><?= htmlspecialchars((string)$r['facility_name']); ?></td>
                                     <td><?= htmlspecialchars(($monthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
                                     <td><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh</td>
+                                    <td>PHP <?= number_format((float)($r['rate_per_kwh'] ?? 12), 2); ?>/kWh</td>
+                                    <td>PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 12), 2); ?></td>
                                     <td>
                                         <span class="status-badge <?= $r['sync_status'] === 'synced' ? 'active' : ($r['sync_status'] === 'failed' ? 'offline' : 'maintenance'); ?>"
                                               <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>

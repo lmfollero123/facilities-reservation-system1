@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS energy_meter_readings (
     previous_reading_kwh DECIMAL(14,2) NOT NULL,
     current_reading_kwh DECIMAL(14,2) NOT NULL,
     consumption_kwh DECIMAL(14,2) NOT NULL,
+    rate_per_kwh DECIMAL(10,2) NOT NULL DEFAULT 12.00,
     notes TEXT NULL,
     recorded_by INT UNSIGNED NULL,
     sync_status ENUM('pending','synced','failed') NOT NULL DEFAULT 'pending',
