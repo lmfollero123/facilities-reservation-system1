@@ -17,6 +17,7 @@ body.auth-split-page {
 }
 
 .auth-split-page .guest-content {
+    position: relative;
     padding: 0 !important;
     margin: 0 !important;
     height: 100vh;
@@ -24,7 +25,59 @@ body.auth-split-page {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(160deg, #f0f5f3 0%, #e6f2ee 100%);
+    overflow: hidden;
+    background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.8) 1.5px, transparent 0) 0 0 / 34px 34px,
+        linear-gradient(160deg, #f0f5f3 0%, #e6f2ee 100%);
+}
+
+/* Large floating accents behind the card -- z-index:0 + the card's own
+   z-index:1 below guarantee these never paint over it regardless of DOM
+   order. Fixed (not absolute) so they stay anchored to the viewport, not
+   the (possibly taller-than-viewport) content box. */
+.auth-split-page .guest-content::before,
+.auth-split-page .guest-content::after {
+    content: "";
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(1px);
+}
+
+.auth-split-page .guest-content::before {
+    width: min(46vw, 620px);
+    height: min(46vw, 620px);
+    top: -14%;
+    left: -10%;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0) 70%);
+    animation: authBgFloat1 18s ease-in-out infinite;
+}
+
+.auth-split-page .guest-content::after {
+    width: min(50vw, 680px);
+    height: min(50vw, 680px);
+    bottom: -18%;
+    right: -12%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.18) 0%, rgba(251, 191, 36, 0) 70%);
+    animation: authBgFloat2 22s ease-in-out infinite;
+}
+
+@keyframes authBgFloat1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(3vw, 2vh) scale(1.06); }
+}
+
+@keyframes authBgFloat2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-2.5vw, -2vh) scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-split-page .guest-content::before,
+    .auth-split-page .guest-content::after {
+        animation: none;
+    }
 }
 
 .auth-split-page #mainNav,
@@ -37,6 +90,8 @@ body.auth-split-page {
 
 /* ── Floating card ── */
 .auth-split {
+    position: relative;
+    z-index: 1;
     display: flex;
     width: min(96vw, 1360px);
     height: min(94dvh, 820px);
@@ -819,7 +874,17 @@ body.auth-split-page {
 
 /* Dark mode */
 [data-theme="dark"] .auth-split-page .guest-content {
-    background: linear-gradient(160deg, #0b1120 0%, #0f172a 100%);
+    background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.06) 1.5px, transparent 0) 0 0 / 34px 34px,
+        linear-gradient(160deg, #0b1120 0%, #0f172a 100%);
+}
+
+[data-theme="dark"] .auth-split-page .guest-content::before {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.28) 0%, rgba(16, 185, 129, 0) 70%);
+}
+
+[data-theme="dark"] .auth-split-page .guest-content::after {
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.16) 0%, rgba(251, 191, 36, 0) 70%);
 }
 
 [data-theme="dark"] .auth-split {
