@@ -125,6 +125,19 @@ final class EnergyHelperTest extends TestCase
         $this->assertSame(0, (int)$pdo->query('SELECT COUNT(*) FROM energy_recommendations_cache')->fetchColumn());
     }
 
+    public function test_recommendations_only_resolve_for_mapped_facilities(): void
+    {
+        $reverseMap = [
+            39 => 3,
+            41 => 8,
+        ];
+
+        $this->assertSame(3, frs_energy_resolve_mapped_facility_id($reverseMap, 39));
+        $this->assertSame(8, frs_energy_resolve_mapped_facility_id($reverseMap, 41));
+        $this->assertNull(frs_energy_resolve_mapped_facility_id($reverseMap, 29));
+        $this->assertNull(frs_energy_resolve_mapped_facility_id($reverseMap, 0));
+    }
+
     public function test_recommendation_progress_input_is_normalized(): void
     {
         $parsed = frs_energy_parse_recommendation_progress([

@@ -581,6 +581,23 @@ function frs_energy_prune_missing_recommendations(PDO $pdo, array $remoteIds): i
 }
 
 /**
+ * Resolve an Energy facility to its mapped CPRF facility. Unmapped Energy
+ * facilities must never be cached or displayed in CPRF.
+ *
+ * @param array<int, int> $reverseMap energy_facility_id => CPRF facility_id
+ */
+function frs_energy_resolve_mapped_facility_id(array $reverseMap, int $energyFacilityId): ?int
+{
+    if ($energyFacilityId <= 0 || !isset($reverseMap[$energyFacilityId])) {
+        return null;
+    }
+
+    $facilityId = (int) $reverseMap[$energyFacilityId];
+
+    return $facilityId > 0 ? $facilityId : null;
+}
+
+/**
  * Validate and normalize a Facilities-side recommendation progress update.
  *
  * @return array{implementation_status: string, actual_savings_kwh: ?float, implementation_notes: ?string}
@@ -742,8 +759,12 @@ function frs_energy_pull_recommendations(PDO $pdo): array
             if (!is_array($row) || !isset($row['id'])) {
                 continue;
             }
-            $remoteIds[] = (int)$row['id'];
             $energyFacilityId = (int)($row['facility']['id'] ?? 0);
+            $localFacilityId = frs_energy_resolve_mapped_facility_id($reverse, $energyFacilityId);
+            if ($localFacilityId === null) {
+                continue;
+            }
+            $remoteIds[] = (int)$row['id'];
             $reviewedAt = isset($row['reviewed_at']) && $row['reviewed_at'] !== null
                 ? date('Y-m-d H:i:s', strtotime((string)$row['reviewed_at']))
                 : null;
@@ -756,7 +777,7 @@ function frs_energy_pull_recommendations(PDO $pdo): array
             $stmt->execute([
                 'remote_id' => (int)$row['id'],
                 'energy_facility_id' => $energyFacilityId,
-                'facility_id' => $reverse[$energyFacilityId] ?? null,
+                'facility_id' => $localFacilityId,
                 'year' => (int)($row['year'] ?? 0),
                 'month' => (int)($row['month'] ?? 0),
                 'generated_message' => (string)($row['generated_message'] ?? ''),
