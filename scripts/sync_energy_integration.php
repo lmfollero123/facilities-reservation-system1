@@ -98,6 +98,7 @@ try {
         'pushed' => $summary['pushed'],
         'push_failed' => $summary['push_failed'],
         'recommendations_upserted' => $summary['recommendations_upserted'],
+        'recommendations_deleted' => $summary['recommendations_deleted'],
         'errors' => $verbose ? $summary['errors'] : array_slice($summary['errors'], 0, 3),
         'ran_at' => $summary['ran_at'],
     ], $summary['success'] ? 0 : 1);

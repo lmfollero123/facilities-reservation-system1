@@ -555,17 +555,29 @@ function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = nul
 }
 
 /**
- * Pull recommendations of all statuses (updated_since watermark) into the
- * local cache, resolving CPRF facilities via the mapping table. Pulling all
- * statuses (not just 'approved') lets status changes made on the Energy
- * side (e.g. an engineer un-approving a recommendation) reach the cache;
- * the display layer is responsible for filtering to approved-only.
+ * Delete cached recommendations that are no longer present in the complete
+ * Energy response. Call this only after every remote page was fetched.
  *
- * @return array{success: bool, upserted: int, error: ?string}
+ * @param array<int, int|string> $remoteIds
  */
-function frs_energy_should_use_recommendation_watermark(?string $lastPullAt, int $cachedCount): bool
+function frs_energy_prune_missing_recommendations(PDO $pdo, array $remoteIds): int
 {
-    return $cachedCount > 0 && trim((string)$lastPullAt) !== '';
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $remoteIds),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if ($ids === []) {
+        return (int) $pdo->exec('DELETE FROM energy_recommendations_cache');
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare(
+        'DELETE FROM energy_recommendations_cache WHERE energy_recommendation_id NOT IN (' . $placeholders . ')'
+    );
+    $stmt->execute($ids);
+
+    return $stmt->rowCount();
 }
 
 /**
@@ -669,16 +681,17 @@ function frs_energy_push_recommendation_progress(
     return ['success' => true, 'error' => null];
 }
 
+/**
+ * Pull the complete recommendation list of all statuses into the local cache,
+ * resolving CPRF facilities via the mapping table. Pulling all statuses (not
+ * just approved) lets status changes reach the cache, while the complete list
+ * lets us remove cached rows that were deleted in Energy.
+ *
+ * @return array{success: bool, upserted: int, deleted: int, error: ?string}
+ */
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
-    $state = frs_energy_load_sync_state($pdo);
     $query = ['status' => 'all', 'per_page' => 100];
-    $cachedCount = (int)$pdo->query('SELECT COUNT(*) FROM energy_recommendations_cache')->fetchColumn();
-    // If the cache was cleared/restored independently of energy_sync_state,
-    // ignore the stale watermark and rebuild from the complete remote feed.
-    if (frs_energy_should_use_recommendation_watermark($state['last_pull_at'] ?? null, $cachedCount)) {
-        $query['updated_since'] = $state['last_pull_at'];
-    }
 
     // Reverse map: energy_facility_id => CPRF facility_id
     $reverse = [];
@@ -687,13 +700,13 @@ function frs_energy_pull_recommendations(PDO $pdo): array
     }
 
     $upserted = 0;
-    $maxUpdatedAt = null;
+    $remoteIds = [];
     $page = 1;
     do {
         $query['page'] = $page;
         $result = fetchEnergyRecommendations($query);
         if (!$result['success']) {
-            return ['success' => false, 'upserted' => $upserted, 'error' => $result['error']];
+            return ['success' => false, 'upserted' => $upserted, 'deleted' => 0, 'error' => $result['error']];
         }
         $rows = $result['data']['data'] ?? [];
         $stmt = $pdo->prepare('
@@ -729,6 +742,7 @@ function frs_energy_pull_recommendations(PDO $pdo): array
             if (!is_array($row) || !isset($row['id'])) {
                 continue;
             }
+            $remoteIds[] = (int)$row['id'];
             $energyFacilityId = (int)($row['facility']['id'] ?? 0);
             $reviewedAt = isset($row['reviewed_at']) && $row['reviewed_at'] !== null
                 ? date('Y-m-d H:i:s', strtotime((string)$row['reviewed_at']))
@@ -758,29 +772,26 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 'reviewed_at' => $reviewedAt,
             ]);
             $upserted++;
-
-            if (isset($row['updated_at']) && $row['updated_at'] !== null) {
-                $rowUpdatedAt = (string)$row['updated_at'];
-                if ($maxUpdatedAt === null || strtotime($rowUpdatedAt) > strtotime($maxUpdatedAt)) {
-                    $maxUpdatedAt = $rowUpdatedAt;
-                }
-            }
         }
         $hasNext = !empty($result['data']['next_page_url']);
         $page++;
     } while ($hasNext && $page <= 10);
 
-    // Use the remote's own updated_at watermark rather than our clock, to
-    // avoid missing rows on the next pull due to clock skew between this
-    // server and the Energy system. If no rows were fetched, leave the
-    // watermark unchanged (re-fetching the newest row next time is harmless
-    // since the upsert above is idempotent).
-    if ($maxUpdatedAt !== null) {
-        $watermark = date('Y-m-d H:i:s', strtotime($maxUpdatedAt));
-        $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = :w WHERE id = 1')->execute(['w' => $watermark]);
+    if ($hasNext) {
+        return [
+            'success' => false,
+            'upserted' => $upserted,
+            'deleted' => 0,
+            'error' => 'Recommendation pull exceeded the 1,000-row safety limit; local deletions were skipped.',
+        ];
     }
 
-    return ['success' => true, 'upserted' => $upserted, 'error' => null];
+    // Prune only after a complete, successful response. This prevents an API
+    // outage or a truncated page set from deleting valid local cache rows.
+    $deleted = frs_energy_prune_missing_recommendations($pdo, $remoteIds);
+    $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = NOW() WHERE id = 1')->execute();
+
+    return ['success' => true, 'upserted' => $upserted, 'deleted' => $deleted, 'error' => null];
 }
 
 /**
@@ -911,7 +922,7 @@ function frs_energy_backfill_recommendation_facility_ids(PDO $pdo): int
 /**
  * Full sync: retry pending/failed pushes, then pull recommendations.
  *
- * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, profiles_upserted: int, errors: string[], ran_at: string}
+ * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, recommendations_deleted: int, profiles_upserted: int, errors: string[], ran_at: string}
  */
 function frs_energy_run_sync(PDO $pdo): array
 {
@@ -967,6 +978,7 @@ function frs_energy_run_sync(PDO $pdo): array
         'auto_mapped' => $autoMap['mapped'],
         'recommendations_backfilled' => $backfilled,
         'recommendations_upserted' => $pull['upserted'],
+        'recommendations_deleted' => $pull['deleted'],
         'profiles_upserted' => $profilePull['upserted'],
         'errors' => $errors,
         'ran_at' => date('c'),

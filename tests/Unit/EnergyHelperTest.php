@@ -80,11 +80,49 @@ final class EnergyHelperTest extends TestCase
         $this->assertSame('juan@example.test', $payload['recorded_by_email']);
     }
 
-    public function test_recommendation_pull_rebuilds_an_empty_cache(): void
+    public function test_missing_remote_recommendations_are_pruned_from_cache(): void
     {
-        $this->assertFalse(frs_energy_should_use_recommendation_watermark('2026-07-26 03:51:41', 0));
-        $this->assertFalse(frs_energy_should_use_recommendation_watermark(null, 2));
-        $this->assertTrue(frs_energy_should_use_recommendation_watermark('2026-07-26 03:51:41', 2));
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('PDO SQLite is required for this test.');
+        }
+
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->exec('
+            CREATE TABLE energy_recommendations_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                energy_recommendation_id INTEGER NOT NULL UNIQUE
+            )
+        ');
+        $pdo->exec('
+            INSERT INTO energy_recommendations_cache (energy_recommendation_id)
+            VALUES (10), (20), (30)
+        ');
+
+        $deleted = frs_energy_prune_missing_recommendations($pdo, [10, 30]);
+
+        $this->assertSame(1, $deleted);
+        $this->assertSame(
+            [10, 30],
+            array_map(
+                'intval',
+                $pdo->query('SELECT energy_recommendation_id FROM energy_recommendations_cache ORDER BY energy_recommendation_id')
+                    ->fetchAll(PDO::FETCH_COLUMN)
+            )
+        );
+    }
+
+    public function test_empty_remote_recommendation_list_clears_cache(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('PDO SQLite is required for this test.');
+        }
+
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->exec('CREATE TABLE energy_recommendations_cache (energy_recommendation_id INTEGER NOT NULL)');
+        $pdo->exec('INSERT INTO energy_recommendations_cache VALUES (10), (20)');
+
+        $this->assertSame(2, frs_energy_prune_missing_recommendations($pdo, []));
+        $this->assertSame(0, (int)$pdo->query('SELECT COUNT(*) FROM energy_recommendations_cache')->fetchColumn());
     }
 
     public function test_recommendation_progress_input_is_normalized(): void

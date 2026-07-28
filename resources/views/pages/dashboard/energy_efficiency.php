@@ -146,10 +146,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
         } else {
             $summary = frs_energy_run_sync($pdo);
             $message = sprintf(
-                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d recommendation(s) re-linked to a facility, %d facility profile(s) updated.%s',
+                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d deleted, %d recommendation(s) re-linked to a facility, %d facility profile(s) updated.%s',
                 $summary['pushed'],
                 $summary['push_failed'],
                 $summary['recommendations_upserted'],
+                $summary['recommendations_deleted'],
                 $summary['recommendations_backfilled'] ?? 0,
                 $summary['profiles_upserted'],
                 $summary['errors'] !== [] ? ' Issues: ' . implode(' | ', $summary['errors']) : ''
