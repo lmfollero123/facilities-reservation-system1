@@ -144,10 +144,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
         } else {
             $summary = frs_energy_run_sync($pdo);
             $message = sprintf(
-                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d facility profile(s) updated.%s',
+                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d recommendation(s) re-linked to a facility, %d facility profile(s) updated.%s',
                 $summary['pushed'],
                 $summary['push_failed'],
                 $summary['recommendations_upserted'],
+                $summary['recommendations_backfilled'] ?? 0,
                 $summary['profiles_upserted'],
                 $summary['errors'] !== [] ? ' Issues: ' . implode(' | ', $summary['errors']) : ''
             );
@@ -218,7 +219,7 @@ if ($hasTables && $tab === 'recommendations') {
     $sql = '
         SELECT c.*, f.name AS facility_name
         FROM energy_recommendations_cache c
-        JOIN facilities f ON f.id = c.facility_id
+        LEFT JOIN facilities f ON f.id = c.facility_id
         WHERE c.status = \'approved\'
         ' . ($filterFacility > 0 ? 'AND c.facility_id = :fid' : '') . '
         ' . ($filterYear > 0 ? 'AND c.year = :fy AND c.month = :fm' : '') . '

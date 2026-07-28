@@ -743,6 +743,29 @@ function frs_energy_pull_profiles(PDO $pdo): array
 }
 
 /**
+ * Re-resolve facility_id for cached recommendations left NULL because their
+ * Energy-side facility wasn't mapped yet at pull time. frs_energy_pull_recommendations()
+ * only re-fetches rows whose remote updated_at has moved past the last
+ * watermark, so a recommendation cached before its facility was mapped can
+ * stay orphaned (facility_id NULL, invisible in the Recommendations tab)
+ * indefinitely even after the mapping is added later — this closes that gap
+ * on every sync, independent of the incremental pull window.
+ *
+ * @return int number of cache rows fixed
+ */
+function frs_energy_backfill_recommendation_facility_ids(PDO $pdo): int
+{
+    $stmt = $pdo->prepare('
+        UPDATE energy_recommendations_cache c
+        JOIN energy_facility_map m ON m.energy_facility_id = c.energy_facility_id
+        SET c.facility_id = m.facility_id
+        WHERE c.facility_id IS NULL
+    ');
+    $stmt->execute();
+    return $stmt->rowCount();
+}
+
+/**
  * Full sync: retry pending/failed pushes, then pull recommendations.
  *
  * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, profiles_upserted: int, errors: string[], ran_at: string}
@@ -757,6 +780,10 @@ function frs_energy_run_sync(PDO $pdo): array
     // facilities can push within the same run. Non-fatal: when the Energy
     // API is unreachable the push/pull steps below surface the error.
     $autoMap = frs_energy_auto_map_by_external_ref($pdo);
+
+    // Fix any previously orphaned recommendation rows now that the mapping
+    // table is current (see function doc above).
+    $backfilled = frs_energy_backfill_recommendation_facility_ids($pdo);
 
     $pending = $pdo->query("SELECT id FROM energy_meter_readings WHERE sync_status IN ('pending','failed') ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
     $mapping = frs_energy_get_mapping($pdo);
@@ -795,6 +822,7 @@ function frs_energy_run_sync(PDO $pdo): array
         'pushed' => $pushed,
         'push_failed' => $pushFailed,
         'auto_mapped' => $autoMap['mapped'],
+        'recommendations_backfilled' => $backfilled,
         'recommendations_upserted' => $pull['upserted'],
         'profiles_upserted' => $profilePull['upserted'],
         'errors' => $errors,
@@ -831,7 +859,7 @@ function frs_energy_run_sync(PDO $pdo): array
     $save->execute(['summary' => json_encode($summary)]);
 
     require_once __DIR__ . '/audit.php';
-    logAudit('Ran Energy integration sync', 'Energy Efficiency', "pushed={$pushed} failed={$pushFailed} recos={$pull['upserted']} profiles={$profilePull['upserted']}");
+    logAudit('Ran Energy integration sync', 'Energy Efficiency', "pushed={$pushed} failed={$pushFailed} recos={$pull['upserted']} backfilled={$backfilled} profiles={$profilePull['upserted']}");
 
     return $summary;
 }
