@@ -1761,6 +1761,8 @@ ul.bcf-scroll-select-menu {
     font-weight: 700;
     border-radius: 0 0 6px 6px;
     margin-top: 4px;
+    padding: 0 2px;
+    overflow: hidden;
 }
 
 .demand-strip.demand-low {
@@ -1784,9 +1786,12 @@ ul.bcf-scroll-select-menu {
 }
 
 .demand-score {
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 700;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .holiday-indicator {
@@ -2231,8 +2236,8 @@ ul.bcf-scroll-select-menu {
                                     elseif ($demand['score'] >= 51) $demandClass = 'demand-high';
                                     elseif ($demand['score'] >= 26) $demandClass = 'demand-medium';
                                     ?>
-                                    <div class="demand-strip <?= $demandClass; ?>" title="Demand: <?= $demand['score']; ?>% (<?= $demand['classification']; ?>)">
-                                        <span class="demand-score"><?= $demand['score']; ?>%</span>
+                                    <div class="demand-strip <?= $demandClass; ?>" title="Demand: <?= $demand['classification']; ?> (<?= $demand['score']; ?>%)">
+                                        <span class="demand-score"><?= htmlspecialchars($demand['classification']); ?></span>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -2539,7 +2544,7 @@ ul.bcf-scroll-select-menu {
                     <span>⚠️</span> High Demand Warning
                 </h4>
                 <p style="margin:0; color:#856404; font-size:0.85rem;">
-                    This time slot has high historical demand (Risk Score: <?= $conflictWarning['risk_score']; ?>%). 
+                    This time slot has high historical demand (Demand Level: <?= $conflictWarning['risk_score'] >= 76 ? 'Very High' : 'High'; ?>).
                     Consider booking well in advance or selecting an alternative time.
                 </p>
             </div>
@@ -3825,25 +3830,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const confidence = data.demand_confidence;
         
         let color = '#166534';
-        let label = 'Low Demand';
-        
+        let label = 'Low';
+
         if (score >= 76) {
             color = '#dc2626';
-            label = 'Very High Demand';
+            label = 'Very High';
         } else if (score >= 51) {
             color = '#9a3412';
-            label = 'High Demand';
+            label = 'High';
         } else if (score >= 26) {
             color = '#92400e';
-            label = 'Medium Demand';
+            label = 'Medium';
         }
         
         demandPrediction.style.display = 'block';
         demandPrediction.style.color = color;
-        demandPrediction.innerHTML = `<strong>Predicted Demand:</strong> ${score}% (${label})`;
-        
+        demandPrediction.innerHTML = `<strong>Predicted Demand:</strong> ${label}`;
+
         if (confidence) {
-            demandPrediction.innerHTML += ` • Confidence: ${confidence}%`;
+            const confidenceLabel = confidence >= 66 ? 'High' : (confidence >= 33 ? 'Medium' : 'Low');
+            demandPrediction.innerHTML += ` • Confidence: ${confidenceLabel}`;
         }
         
         // Show alternative suggestions if demand is high
@@ -3860,7 +3866,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         month: 'short', 
                         day: 'numeric' 
                     });
-                    li.innerHTML = `<strong>${formattedDate}</strong> • ${alt.time_slot} (${alt.score}% ${alt.classification}) - ${alt.reason}`;
+                    li.innerHTML = `<strong>${formattedDate}</strong> • ${alt.time_slot} (${alt.classification} demand) - ${alt.reason}`;
                     demandAlternativesList.appendChild(li);
                 });
             }
@@ -3940,8 +3946,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (riskScore !== null && riskScore !== undefined) {
             riskLine.style.display = 'block';
+            const riskLabel = riskScore >= 76 ? 'Very High' : (riskScore >= 51 ? 'High' : (riskScore >= 26 ? 'Medium' : 'Low'));
             const parts = [];
-            parts.push(`Risk score: ${riskScore}`);
+            parts.push(`Risk level: ${riskLabel}`);
             if (eventLabel) parts.push(`Event/Holiday: ${eventLabel}`);
             riskLine.textContent = parts.join(' • ');
         } else {
