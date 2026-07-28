@@ -253,8 +253,7 @@ ob_start();
 ?>
 <section class="auth-split auth-split-register">
     <aside class="auth-split-brand" aria-hidden="false">
-        <div class="auth-split-brand-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-decor" aria-hidden="true"></div>
+        <?php include __DIR__ . '/../../components/auth_brand_illustration.php'; ?>
         <div class="auth-split-brand-inner">
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
                 <i class="bi bi-arrow-left"></i> Back to website
@@ -268,8 +267,6 @@ ob_start();
     </aside>
 
     <div class="auth-split-form-panel">
-        <div class="auth-split-form-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-form-overlay" aria-hidden="true"></div>
         <div class="auth-split-form-inner is-wide">
             <div class="auth-split-form-top">
                 <div class="auth-split-logo-text">
