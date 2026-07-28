@@ -284,14 +284,60 @@ body.auth-split-page {
     align-items: center;
     justify-content: center;
     padding: 1.5rem 2.5rem;
-    background: #fff;
+    background:
+        radial-gradient(circle at 6px 6px, rgba(5, 150, 105, 0.08) 1.4px, transparent 0)
+            0 0 / 26px 26px,
+        #fff;
     border-radius: 22px;
     min-height: 0;
     overflow: hidden;
 }
 
+/* Soft floating accents filling otherwise-empty corners; clipped by the
+   panel's own rounded edge (overflow:hidden above) and kept low-opacity so
+   they read as texture, not decoration competing with the form. */
+.auth-split-form-panel::before,
+.auth-split-form-panel::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.auth-split-form-panel::before {
+    width: 280px;
+    height: 280px;
+    top: -90px;
+    right: -70px;
+    background: radial-gradient(circle, rgba(5, 150, 105, 0.12) 0%, rgba(5, 150, 105, 0) 70%);
+    animation: authBlobFloat 11s ease-in-out infinite;
+}
+
+.auth-split-form-panel::after {
+    width: 340px;
+    height: 340px;
+    bottom: -110px;
+    left: -90px;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.1) 0%, rgba(251, 191, 36, 0) 70%);
+    animation: authBlobFloat 14s ease-in-out infinite reverse;
+}
+
+@keyframes authBlobFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-16px, 14px) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-split-form-panel::before,
+    .auth-split-form-panel::after {
+        animation: none;
+    }
+}
+
 .auth-split-form-inner {
     position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 440px;
     height: 100%;
@@ -303,6 +349,18 @@ body.auth-split-page {
     overflow-x: hidden;
     padding: 0.25rem 0.25rem 0;
     scrollbar-width: thin;
+    animation: authFormIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes authFormIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-split-form-inner {
+        animation: none;
+    }
 }
 
 .auth-split-form-inner.is-wide {
@@ -411,6 +469,21 @@ body.auth-split-page {
     position: relative;
 }
 
+.auth-split-field-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.95rem;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.auth-split-field:has(.auth-split-field-icon) input {
+    padding-left: 2.6rem !important;
+}
+
 .auth-split-form input:not([type="checkbox"]):not([type="file"]),
 .auth-split-form select,
 .auth-split-form textarea {
@@ -497,6 +570,22 @@ body.auth-split-page {
 
 .auth-split-forgot a:hover {
     text-decoration: underline;
+}
+
+.auth-split-trust {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 1.1rem 0 0;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.auth-split-trust i {
+    color: #059669;
 }
 
 /* Register-specific sections */

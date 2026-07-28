@@ -314,7 +314,10 @@ ob_start();
 
                     <label>
                         Email address *
-                        <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        <div class="auth-split-field">
+                            <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
+                            <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        </div>
                     </label>
 
                     <label>
@@ -338,6 +341,7 @@ ob_start();
                     <label>
                         Password *
                         <div class="auth-split-field">
+                            <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
                             <input name="password" id="registerPassword" type="password" placeholder="Create a strong password" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
                             <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="Show password">
                                 <i class="bi bi-eye"></i>
@@ -364,6 +368,7 @@ ob_start();
                 </div>
 
                 <button class="btn-primary" type="submit" id="submitBtn">Create account</button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Securely processed by Barangay Culiat CPRFS</p>
             </form>
         </div>
     </div>

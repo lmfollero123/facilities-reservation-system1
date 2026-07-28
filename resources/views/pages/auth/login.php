@@ -285,6 +285,7 @@ ob_start();
                 <label>
                     Email Address
                     <div class="auth-split-field">
+                        <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
                         <input name="email" type="email" placeholder="official@lgu.gov.ph" required autofocus value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
                     </div>
                 </label>
@@ -292,6 +293,7 @@ ob_start();
                 <label>
                     Password
                     <div class="auth-split-field">
+                        <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
                         <input name="password" type="password" placeholder="Enter your password" required>
                     </div>
                 </label>
@@ -301,6 +303,7 @@ ob_start();
                 </div>
 
                 <button class="btn-primary" type="submit">Login Now</button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Protected under the Data Privacy Act of 2012 (RA 10173)</p>
             </form>
         </div>
     </div>
