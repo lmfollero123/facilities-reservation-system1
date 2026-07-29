@@ -84,7 +84,8 @@ function frs_energy_suggest_match(string $facilityName, array $energyFacilities)
  * Map a local energy_meter_readings row to the push endpoint's request body.
  *
  * @param array<string, mixed> $reading local row (id, year, month, reading_date,
- *   previous_reading_kwh, current_reading_kwh, optional notes/recorded_by_name)
+ *   previous_reading_kwh, current_reading_kwh, rate_per_kwh,
+ *   optional notes/recorded_by_name/recorded_by_email)
  */
 function frs_energy_build_reading_payload(array $reading, int $energyFacilityId): array
 {
@@ -95,6 +96,8 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
         'previous_reading_kwh' => (float)$reading['previous_reading_kwh'],
         'current_reading_kwh' => (float)$reading['current_reading_kwh'],
         'reading_date' => (string)$reading['reading_date'],
+        'rate_per_kwh' => (float)$reading['rate_per_kwh'],
+        'energy_cost' => round((float)$reading['consumption_kwh'] * (float)$reading['rate_per_kwh'], 2),
         'external_ref' => 'CPRF-' . (int)$reading['id'],
     ];
     if (!empty($reading['notes'])) {
@@ -102,6 +105,9 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
     }
     if (!empty($reading['recorded_by_name'])) {
         $payload['recorded_by_name'] = (string)$reading['recorded_by_name'];
+    }
+    if (!empty($reading['recorded_by_email'])) {
+        $payload['recorded_by_email'] = (string)$reading['recorded_by_email'];
     }
     return $payload;
 }
@@ -287,8 +293,8 @@ function frs_energy_is_latest_reading(PDO $pdo, array $reading): bool
  * continuity); the first-ever reading uses the submitted previous value.
  *
  * @param array{facility_id: int, year: int, month: int, reading_date: string,
- *   previous_reading_kwh: float, current_reading_kwh: float, notes: ?string,
- *   recorded_by: ?int} $data
+ *   previous_reading_kwh: float, current_reading_kwh: float,
+ *   rate_per_kwh: float, notes: ?string, recorded_by: ?int} $data
  * @return int new reading id
  * @throws InvalidArgumentException on invalid values or duplicate period
  */
@@ -298,6 +304,9 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
         if (!isset($data[$key]) || !is_numeric($data[$key])) {
             throw new InvalidArgumentException('Meter readings must be numeric values.');
         }
+    }
+    if (!isset($data['rate_per_kwh']) || !is_numeric($data['rate_per_kwh']) || (float)$data['rate_per_kwh'] <= 0) {
+        throw new InvalidArgumentException('Rate per kWh must be greater than zero.');
     }
 
     $facilityId = (int)$data['facility_id'];
@@ -329,9 +338,9 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
 
     $stmt = $pdo->prepare('
         INSERT INTO energy_meter_readings
-            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, notes, recorded_by, sync_status)
+            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, rate_per_kwh, notes, recorded_by, sync_status)
         VALUES
-            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :notes, :recorded_by, \'pending\')
+            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :rate_per_kwh, :notes, :recorded_by, \'pending\')
     ');
     try {
         $stmt->execute([
@@ -342,6 +351,7 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
             'previous_kwh' => $previous,
             'current_kwh' => $current,
             'consumption_kwh' => $consumption,
+            'rate_per_kwh' => round((float)$data['rate_per_kwh'], 2),
             'notes' => $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null,
             'recorded_by' => $data['recorded_by'],
         ]);
@@ -369,8 +379,8 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
  * Marks the row 'pending' so the partner API push re-syncs the correction
  * (an idempotent upsert on their side).
  *
- * @param array{current_reading_kwh: mixed, reading_date: string, notes: ?string,
- *   previous_reading_kwh?: mixed} $data
+ * @param array{current_reading_kwh: mixed, rate_per_kwh: mixed,
+ *   reading_date: string, notes: ?string, previous_reading_kwh?: mixed} $data
  * @throws InvalidArgumentException on invalid values or when not the latest reading
  */
 function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
@@ -389,7 +399,11 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
     if (!isset($data['current_reading_kwh']) || !is_numeric($data['current_reading_kwh'])) {
         throw new InvalidArgumentException('Meter readings must be numeric values.');
     }
+    if (!isset($data['rate_per_kwh']) || !is_numeric($data['rate_per_kwh']) || (float)$data['rate_per_kwh'] <= 0) {
+        throw new InvalidArgumentException('Rate per kWh must be greater than zero.');
+    }
     $current = (float)$data['current_reading_kwh'];
+    $ratePerKwh = round((float)$data['rate_per_kwh'], 2);
 
     $facilityId = (int)$reading['facility_id'];
     $earlier = $pdo->prepare('
@@ -420,6 +434,7 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
         SET previous_reading_kwh = :previous_kwh,
             current_reading_kwh = :current_kwh,
             consumption_kwh = :consumption_kwh,
+            rate_per_kwh = :rate_per_kwh,
             reading_date = :reading_date,
             notes = :notes,
             sync_status = \'pending\',
@@ -431,6 +446,7 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
         'previous_kwh' => $previous,
         'current_kwh' => $current,
         'consumption_kwh' => $consumption,
+        'rate_per_kwh' => $ratePerKwh,
         'reading_date' => (string)$data['reading_date'],
         'notes' => $notes,
         'id' => $readingId,
@@ -491,7 +507,7 @@ function frs_energy_pending_count(PDO $pdo): int
 function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = null): array
 {
     $stmt = $pdo->prepare('
-        SELECT r.*, u.name AS recorded_by_name
+        SELECT r.*, u.name AS recorded_by_name, u.email AS recorded_by_email
         FROM energy_meter_readings r
         LEFT JOIN users u ON u.id = r.recorded_by
         WHERE r.id = :id
@@ -539,21 +555,160 @@ function frs_energy_push_reading(PDO $pdo, int $readingId, ?array $mapping = nul
 }
 
 /**
- * Pull recommendations of all statuses (updated_since watermark) into the
- * local cache, resolving CPRF facilities via the mapping table. Pulling all
- * statuses (not just 'approved') lets status changes made on the Energy
- * side (e.g. an engineer un-approving a recommendation) reach the cache;
- * the display layer is responsible for filtering to approved-only.
+ * Delete cached recommendations that are no longer present in the complete
+ * Energy response. Call this only after every remote page was fetched.
  *
- * @return array{success: bool, upserted: int, error: ?string}
+ * @param array<int, int|string> $remoteIds
+ */
+function frs_energy_prune_missing_recommendations(PDO $pdo, array $remoteIds): int
+{
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $remoteIds),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if ($ids === []) {
+        return (int) $pdo->exec('DELETE FROM energy_recommendations_cache');
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare(
+        'DELETE FROM energy_recommendations_cache WHERE energy_recommendation_id NOT IN (' . $placeholders . ')'
+    );
+    $stmt->execute($ids);
+
+    return $stmt->rowCount();
+}
+
+/**
+ * Resolve an Energy facility to its mapped CPRF facility. Unmapped Energy
+ * facilities must never be cached or displayed in CPRF.
+ *
+ * @param array<int, int> $reverseMap energy_facility_id => CPRF facility_id
+ */
+function frs_energy_resolve_mapped_facility_id(array $reverseMap, int $energyFacilityId): ?int
+{
+    if ($energyFacilityId <= 0 || !isset($reverseMap[$energyFacilityId])) {
+        return null;
+    }
+
+    $facilityId = (int) $reverseMap[$energyFacilityId];
+
+    return $facilityId > 0 ? $facilityId : null;
+}
+
+/**
+ * Validate and normalize a Facilities-side recommendation progress update.
+ *
+ * @return array{implementation_status: string, actual_savings_kwh: ?float, implementation_notes: ?string}
+ */
+function frs_energy_parse_recommendation_progress(array $input): array
+{
+    $status = trim((string)($input['implementation_status'] ?? ''));
+    if (!in_array($status, ['pending', 'in_progress', 'implemented'], true)) {
+        throw new InvalidArgumentException('Choose a valid implementation status.');
+    }
+
+    $actual = $input['actual_savings_kwh'] ?? null;
+    if ($actual === '') {
+        $actual = null;
+    }
+    if ($actual !== null && (!is_numeric($actual) || (float)$actual < 0)) {
+        throw new InvalidArgumentException('Actual savings must be zero or greater.');
+    }
+
+    $notes = trim((string)($input['implementation_notes'] ?? ''));
+    if (strlen($notes) > 5000) {
+        throw new InvalidArgumentException('Implementation notes may not exceed 5,000 characters.');
+    }
+
+    return [
+        'implementation_status' => $status,
+        'actual_savings_kwh' => $actual !== null ? round((float)$actual, 2) : null,
+        'implementation_notes' => $notes !== '' ? $notes : null,
+    ];
+}
+
+/**
+ * Push one cached recommendation's implementation progress to Energy, then
+ * mirror the confirmed remote state locally.
+ *
+ * @return array{success: bool, error: ?string}
+ */
+function frs_energy_push_recommendation_progress(
+    PDO $pdo,
+    int $cacheId,
+    array $input,
+    ?int $updatedBy
+): array {
+    $payload = frs_energy_parse_recommendation_progress($input);
+    $stmt = $pdo->prepare('
+        SELECT energy_recommendation_id, status, implementation_status
+        FROM energy_recommendations_cache
+        WHERE id = :id
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $cacheId]);
+    $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($cached === false) {
+        return ['success' => false, 'error' => 'Recommendation not found.'];
+    }
+    if ((string)$cached['status'] !== 'approved') {
+        return ['success' => false, 'error' => 'Only approved recommendations can be implemented.'];
+    }
+    if ((string)($cached['implementation_status'] ?? 'pending') === 'verified') {
+        return ['success' => false, 'error' => 'This recommendation is already verified by Energy.'];
+    }
+
+    $result = updateEnergyRecommendationImplementation(
+        (int)$cached['energy_recommendation_id'],
+        $payload
+    );
+    if (!$result['success']) {
+        return ['success' => false, 'error' => $result['error']];
+    }
+
+    $remote = $result['data']['recommendation'] ?? [];
+    $implementedAt = null;
+    if (!empty($remote['implemented_at'])) {
+        $timestamp = strtotime((string)$remote['implemented_at']);
+        $implementedAt = $timestamp !== false ? date('Y-m-d H:i:s', $timestamp) : null;
+    }
+
+    $update = $pdo->prepare('
+        UPDATE energy_recommendations_cache
+        SET implementation_status = :implementation_status,
+            actual_savings_kwh = :actual_savings_kwh,
+            implementation_notes = :implementation_notes,
+            implemented_at = :implemented_at,
+            implementation_updated_by = :implementation_updated_by,
+            implementation_updated_at = NOW(),
+            fetched_at = NOW()
+        WHERE id = :id
+    ');
+    $update->execute([
+        'implementation_status' => (string)($remote['implementation_status'] ?? $payload['implementation_status']),
+        'actual_savings_kwh' => $remote['actual_savings_kwh'] ?? $payload['actual_savings_kwh'],
+        'implementation_notes' => $remote['implementation_notes'] ?? $payload['implementation_notes'],
+        'implemented_at' => $implementedAt,
+        'implementation_updated_by' => $updatedBy,
+        'id' => $cacheId,
+    ]);
+
+    return ['success' => true, 'error' => null];
+}
+
+/**
+ * Pull the complete approved recommendation list into the local cache,
+ * resolving CPRF facilities via the mapping table. Draft, dismissed, and
+ * for-review recommendations never cross into Facilities. Because every
+ * approved page is reconciled, revoked or deleted rows are removed locally.
+ *
+ * @return array{success: bool, upserted: int, deleted: int, error: ?string}
  */
 function frs_energy_pull_recommendations(PDO $pdo): array
 {
-    $state = frs_energy_load_sync_state($pdo);
-    $query = ['status' => 'all', 'per_page' => 100];
-    if (!empty($state['last_pull_at'])) {
-        $query['updated_since'] = $state['last_pull_at'];
-    }
+    $query = ['status' => 'approved', 'per_page' => 100];
 
     // Reverse map: energy_facility_id => CPRF facility_id
     $reverse = [];
@@ -562,24 +717,26 @@ function frs_energy_pull_recommendations(PDO $pdo): array
     }
 
     $upserted = 0;
-    $maxUpdatedAt = null;
+    $remoteIds = [];
     $page = 1;
     do {
         $query['page'] = $page;
         $result = fetchEnergyRecommendations($query);
         if (!$result['success']) {
-            return ['success' => false, 'upserted' => $upserted, 'error' => $result['error']];
+            return ['success' => false, 'upserted' => $upserted, 'deleted' => 0, 'error' => $result['error']];
         }
         $rows = $result['data']['data'] ?? [];
         $stmt = $pdo->prepare('
             INSERT INTO energy_recommendations_cache
                 (energy_recommendation_id, energy_facility_id, facility_id, year, month,
                  generated_message, engineer_recommendation, status, expected_savings_kwh,
-                 target_date, reviewed_at, fetched_at)
+                 target_date, implementation_status, actual_savings_kwh,
+                 implementation_notes, implemented_at, verified_at, reviewed_at, fetched_at)
             VALUES
                 (:remote_id, :energy_facility_id, :facility_id, :year, :month,
                  :generated_message, :engineer_recommendation, :status, :expected_savings_kwh,
-                 :target_date, :reviewed_at, NOW())
+                 :target_date, :implementation_status, :actual_savings_kwh,
+                 :implementation_notes, :implemented_at, :verified_at, :reviewed_at, NOW())
             ON DUPLICATE KEY UPDATE
                 energy_facility_id = VALUES(energy_facility_id),
                 facility_id = VALUES(facility_id),
@@ -590,6 +747,11 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 status = VALUES(status),
                 expected_savings_kwh = VALUES(expected_savings_kwh),
                 target_date = VALUES(target_date),
+                implementation_status = VALUES(implementation_status),
+                actual_savings_kwh = VALUES(actual_savings_kwh),
+                implementation_notes = VALUES(implementation_notes),
+                implemented_at = VALUES(implemented_at),
+                verified_at = VALUES(verified_at),
                 reviewed_at = VALUES(reviewed_at),
                 fetched_at = NOW()
         ');
@@ -598,13 +760,24 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 continue;
             }
             $energyFacilityId = (int)($row['facility']['id'] ?? 0);
+            $localFacilityId = frs_energy_resolve_mapped_facility_id($reverse, $energyFacilityId);
+            if ($localFacilityId === null) {
+                continue;
+            }
+            $remoteIds[] = (int)$row['id'];
             $reviewedAt = isset($row['reviewed_at']) && $row['reviewed_at'] !== null
                 ? date('Y-m-d H:i:s', strtotime((string)$row['reviewed_at']))
+                : null;
+            $implementedAt = !empty($row['implemented_at']) && strtotime((string)$row['implemented_at']) !== false
+                ? date('Y-m-d H:i:s', strtotime((string)$row['implemented_at']))
+                : null;
+            $verifiedAt = !empty($row['verified_at']) && strtotime((string)$row['verified_at']) !== false
+                ? date('Y-m-d H:i:s', strtotime((string)$row['verified_at']))
                 : null;
             $stmt->execute([
                 'remote_id' => (int)$row['id'],
                 'energy_facility_id' => $energyFacilityId,
-                'facility_id' => $reverse[$energyFacilityId] ?? null,
+                'facility_id' => $localFacilityId,
                 'year' => (int)($row['year'] ?? 0),
                 'month' => (int)($row['month'] ?? 0),
                 'generated_message' => (string)($row['generated_message'] ?? ''),
@@ -612,32 +785,34 @@ function frs_energy_pull_recommendations(PDO $pdo): array
                 'status' => (string)($row['status'] ?? 'approved'),
                 'expected_savings_kwh' => isset($row['expected_savings_kwh']) && is_numeric($row['expected_savings_kwh']) ? (float)$row['expected_savings_kwh'] : null,
                 'target_date' => !empty($row['target_date']) ? (string)$row['target_date'] : null,
+                'implementation_status' => (string)($row['implementation_status'] ?? 'pending'),
+                'actual_savings_kwh' => isset($row['actual_savings_kwh']) && is_numeric($row['actual_savings_kwh']) ? (float)$row['actual_savings_kwh'] : null,
+                'implementation_notes' => isset($row['implementation_notes']) && $row['implementation_notes'] !== null ? (string)$row['implementation_notes'] : null,
+                'implemented_at' => $implementedAt,
+                'verified_at' => $verifiedAt,
                 'reviewed_at' => $reviewedAt,
             ]);
             $upserted++;
-
-            if (isset($row['updated_at']) && $row['updated_at'] !== null) {
-                $rowUpdatedAt = (string)$row['updated_at'];
-                if ($maxUpdatedAt === null || strtotime($rowUpdatedAt) > strtotime($maxUpdatedAt)) {
-                    $maxUpdatedAt = $rowUpdatedAt;
-                }
-            }
         }
         $hasNext = !empty($result['data']['next_page_url']);
         $page++;
     } while ($hasNext && $page <= 10);
 
-    // Use the remote's own updated_at watermark rather than our clock, to
-    // avoid missing rows on the next pull due to clock skew between this
-    // server and the Energy system. If no rows were fetched, leave the
-    // watermark unchanged (re-fetching the newest row next time is harmless
-    // since the upsert above is idempotent).
-    if ($maxUpdatedAt !== null) {
-        $watermark = date('Y-m-d H:i:s', strtotime($maxUpdatedAt));
-        $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = :w WHERE id = 1')->execute(['w' => $watermark]);
+    if ($hasNext) {
+        return [
+            'success' => false,
+            'upserted' => $upserted,
+            'deleted' => 0,
+            'error' => 'Recommendation pull exceeded the 1,000-row safety limit; local deletions were skipped.',
+        ];
     }
 
-    return ['success' => true, 'upserted' => $upserted, 'error' => null];
+    // Prune only after a complete, successful response. This prevents an API
+    // outage or a truncated page set from deleting valid local cache rows.
+    $deleted = frs_energy_prune_missing_recommendations($pdo, $remoteIds);
+    $pdo->prepare('UPDATE energy_sync_state SET last_pull_at = NOW() WHERE id = 1')->execute();
+
+    return ['success' => true, 'upserted' => $upserted, 'deleted' => $deleted, 'error' => null];
 }
 
 /**
@@ -768,7 +943,7 @@ function frs_energy_backfill_recommendation_facility_ids(PDO $pdo): int
 /**
  * Full sync: retry pending/failed pushes, then pull recommendations.
  *
- * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, profiles_upserted: int, errors: string[], ran_at: string}
+ * @return array{success: bool, pushed: int, push_failed: int, recommendations_upserted: int, recommendations_deleted: int, profiles_upserted: int, errors: string[], ran_at: string}
  */
 function frs_energy_run_sync(PDO $pdo): array
 {
@@ -824,6 +999,7 @@ function frs_energy_run_sync(PDO $pdo): array
         'auto_mapped' => $autoMap['mapped'],
         'recommendations_backfilled' => $backfilled,
         'recommendations_upserted' => $pull['upserted'],
+        'recommendations_deleted' => $pull['deleted'],
         'profiles_upserted' => $profilePull['upserted'],
         'errors' => $errors,
         'ran_at' => date('c'),

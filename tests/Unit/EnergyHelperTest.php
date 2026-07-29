@@ -57,8 +57,11 @@ final class EnergyHelperTest extends TestCase
             'reading_date' => '2026-07-21',
             'previous_reading_kwh' => '500.00',
             'current_reading_kwh' => '620.00',
+            'consumption_kwh' => '120.00',
+            'rate_per_kwh' => '12.35',
             'notes' => 'July reading',
             'recorded_by_name' => 'Juan Dela Cruz',
+            'recorded_by_email' => 'juan@example.test',
         ];
 
         $payload = frs_energy_build_reading_payload($reading, 9);
@@ -68,10 +71,92 @@ final class EnergyHelperTest extends TestCase
         $this->assertSame(7, $payload['month']);
         $this->assertSame(500.0, $payload['previous_reading_kwh']);
         $this->assertSame(620.0, $payload['current_reading_kwh']);
+        $this->assertSame(12.35, $payload['rate_per_kwh']);
+        $this->assertSame(1482.0, $payload['energy_cost']);
         $this->assertSame('2026-07-21', $payload['reading_date']);
         $this->assertSame('CPRF-42', $payload['external_ref']);
         $this->assertSame('July reading', $payload['notes']);
         $this->assertSame('Juan Dela Cruz', $payload['recorded_by_name']);
+        $this->assertSame('juan@example.test', $payload['recorded_by_email']);
+    }
+
+    public function test_missing_remote_recommendations_are_pruned_from_cache(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('PDO SQLite is required for this test.');
+        }
+
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->exec('
+            CREATE TABLE energy_recommendations_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                energy_recommendation_id INTEGER NOT NULL UNIQUE
+            )
+        ');
+        $pdo->exec('
+            INSERT INTO energy_recommendations_cache (energy_recommendation_id)
+            VALUES (10), (20), (30)
+        ');
+
+        $deleted = frs_energy_prune_missing_recommendations($pdo, [10, 30]);
+
+        $this->assertSame(1, $deleted);
+        $this->assertSame(
+            [10, 30],
+            array_map(
+                'intval',
+                $pdo->query('SELECT energy_recommendation_id FROM energy_recommendations_cache ORDER BY energy_recommendation_id')
+                    ->fetchAll(PDO::FETCH_COLUMN)
+            )
+        );
+    }
+
+    public function test_empty_remote_recommendation_list_clears_cache(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('PDO SQLite is required for this test.');
+        }
+
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->exec('CREATE TABLE energy_recommendations_cache (energy_recommendation_id INTEGER NOT NULL)');
+        $pdo->exec('INSERT INTO energy_recommendations_cache VALUES (10), (20)');
+
+        $this->assertSame(2, frs_energy_prune_missing_recommendations($pdo, []));
+        $this->assertSame(0, (int)$pdo->query('SELECT COUNT(*) FROM energy_recommendations_cache')->fetchColumn());
+    }
+
+    public function test_recommendations_only_resolve_for_mapped_facilities(): void
+    {
+        $reverseMap = [
+            39 => 3,
+            41 => 8,
+        ];
+
+        $this->assertSame(3, frs_energy_resolve_mapped_facility_id($reverseMap, 39));
+        $this->assertSame(8, frs_energy_resolve_mapped_facility_id($reverseMap, 41));
+        $this->assertNull(frs_energy_resolve_mapped_facility_id($reverseMap, 29));
+        $this->assertNull(frs_energy_resolve_mapped_facility_id($reverseMap, 0));
+    }
+
+    public function test_recommendation_progress_input_is_normalized(): void
+    {
+        $parsed = frs_energy_parse_recommendation_progress([
+            'implementation_status' => 'implemented',
+            'actual_savings_kwh' => '84.567',
+            'implementation_notes' => '  Lighting schedule corrected.  ',
+        ]);
+
+        $this->assertSame('implemented', $parsed['implementation_status']);
+        $this->assertSame(84.57, $parsed['actual_savings_kwh']);
+        $this->assertSame('Lighting schedule corrected.', $parsed['implementation_notes']);
+    }
+
+    public function test_recommendation_progress_rejects_verification_from_facilities(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        frs_energy_parse_recommendation_progress([
+            'implementation_status' => 'verified',
+        ]);
     }
 
     public function test_parse_profile_row_maps_all_fields(): void

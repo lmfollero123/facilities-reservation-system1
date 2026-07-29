@@ -154,6 +154,21 @@ function fetchEnergyRecommendations(array $query = []): array
 }
 
 /**
+ * Push Facilities-side implementation progress to the Energy system.
+ *
+ * @param array<string, mixed> $payload
+ * @return array{success: bool, data: ?array<string, mixed>, error: ?string, http_code: int}
+ */
+function updateEnergyRecommendationImplementation(int $recommendationId, array $payload): array
+{
+    return energy_api_request(
+        'PATCH',
+        '/api/v1/cprf/recommendations/' . $recommendationId . '/implementation',
+        $payload
+    );
+}
+
+/**
  * Fetch facility energy profiles (raw Laravel paginator array in 'data').
  *
  * @param array<string, mixed> $query e.g. ['updated_since' => '...', 'page' => 1, 'per_page' => 100]
