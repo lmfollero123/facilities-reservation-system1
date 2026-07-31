@@ -15,9 +15,29 @@ function uman_api_base_url(): string
     return rtrim($url, '/');
 }
 
+/**
+ * Shared key loader — accepts both CPRF's `UMAN_API_KEY` (primary on CPRF .env) and the UMAN
+ * server's alternate `UMAN_INTEGRATION_API_KEY` name, plus env_value(), getenv(),
+ * and $_ENV[] so every loading strategies covered no matter how the deploy injects them.
+ *
+ * Prevents the classic "CPRF sets env A, UMAN expects env B" 401 drift on live.
+ */
 function uman_api_key(): string
 {
-    return trim((string)(function_exists('env_value') ? env_value('UMAN_API_KEY', '') : (getenv('UMAN_API_KEY') ?: '')));
+    $candidates = [];
+    if (function_exists('env_value')) {
+        $candidates[] = (string)env_value('UMAN_API_KEY', '');
+        $candidates[] = (string)env_value('UMAN_INTEGRATION_API_KEY', '');
+    }
+    $candidates[] = (string)getenv('UMAN_API_KEY');
+    $candidates[] = (string)getenv('UMAN_INTEGRATION_API_KEY');
+    if (isset($_ENV['UMAN_API_KEY'])) $candidates[] = (string)$_ENV['UMAN_API_KEY'];
+    if (isset($_ENV['UMAN_INTEGRATION_API_KEY'])) $candidates[] = (string)$_ENV['UMAN_INTEGRATION_API_KEY'];
+    foreach ($candidates as $v) {
+        $v = trim($v);
+        if ($v !== '') return $v;
+    }
+    return '';
 }
 
 /**
@@ -43,6 +63,7 @@ function uman_api_get(string $path, array $query = []): array
         CURLOPT_HTTPHEADER => [
             'Accept: application/json',
             'User-Agent: CPRF-Facilities-Reservation/1.0',
+            'X-API-Key: ' . $apiKey,
         ],
     ]);
 
@@ -58,7 +79,13 @@ function uman_api_get(string $path, array $query = []): array
     }
 
     if ($httpCode === 401) {
-        return ['data' => [], 'error' => 'Unauthorized: UMAN API key may be incorrect', 'http_code' => $httpCode];
+        $decoded = json_decode((string)$response, true);
+        $detail = is_array($decoded) && !empty($decoded['error']) ? (string)$decoded['error'] : '';
+        return [
+            'data' => [],
+            'error' => 'Unauthorized: UMAN rejected the API key. ' . ($detail ?: 'Check that the same shared key is set on BOTH sides (CPRF .env UMAN_API_KEY and UMAN server env UMAN_INTEGRATION_API_KEY / UMAN_API_KEY).'),
+            'http_code' => $httpCode,
+        ];
     }
 
     if ($httpCode === 404) {
@@ -107,6 +134,7 @@ function uman_api_post(string $path, array $body): array
             'Accept: application/json',
             'Content-Type: application/json',
             'User-Agent: CPRF-Facilities-Reservation/1.0',
+            'X-API-Key: ' . $apiKey,
         ],
     ]);
 
@@ -124,8 +152,13 @@ function uman_api_post(string $path, array $body): array
         return ['data' => [], 'error' => 'Invalid JSON from UMAN (HTTP ' . $httpCode . ')'];
     }
 
-    if (empty($json['success'])) {
-        return ['data' => [], 'error' => (string)($json['error'] ?? $json['message'] ?? 'UMAN request failed')];
+    if ($httpCode === 401 || empty($json['success'])) {
+        $detail = (string)($json['error'] ?? $json['message'] ?? 'UMAN request failed');
+        if ($httpCode === 401) {
+            $detail = 'Unauthorized: UMAN rejected the API key. ' . $detail
+                   . ' Verify both sides use the same shared key (CPRF UMAN_API_KEY ↔ UMAN server UMAN_INTEGRATION_API_KEY/UMAN_API_KEY).';
+        }
+        return ['data' => [], 'error' => $detail];
     }
 
     return ['data' => $json, 'error' => null];
