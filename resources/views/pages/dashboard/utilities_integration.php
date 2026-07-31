@@ -57,11 +57,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $messageType = 'error';
         } else {
             $result = submitUMANAssetRequest($facilityId, $facilityName, $assetType, $quantity, $notes);
+            $ref = (string)($result['data']['request_ref'] ?? '');
             if (!empty($result['error'])) {
-                $message = 'Unable to submit request to UMAN: ' . $result['error'];
-                $messageType = 'error';
+                $queuedRef = '';
+                if ($hasUmanTables) {
+                    $queuedRef = 'CPRF-Q-' . date('YmdHis') . '-' . $facilityId;
+                    frs_record_uman_asset_request($pdo, $facilityId, $assetType, $quantity, $notes, $queuedRef, 'queued');
+                }
+                $message = 'UMAN temporarily unavailable — request queued locally' . ($queuedRef !== '' ? " (ref {$queuedRef})" : '')
+                         . '. Error: ' . $result['error'];
+                $messageType = 'warning';
             } else {
-                $ref = (string)($result['data']['request_ref'] ?? '');
                 if ($hasUmanTables && $ref !== '') {
                     frs_record_uman_asset_request($pdo, $facilityId, $assetType, $quantity, $notes, $ref, 'pending');
                 }
@@ -80,16 +86,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 frs_sync_local_uman_requests($pdo);
 
+$apiKeyConfigured = uman_api_key() !== '';
+
 $assetsResult = fetchUMANAssets(true);
 $umanAssets = $assetsResult['data'] ?? [];
 $apiError = $assetsResult['error'] ?? null;
-$connected = $apiError === null && uman_api_key() !== '';
+$assetsConnected = $apiError === null && $apiKeyConfigured;
 
 $requestsResult = fetchUMANAssetRequests();
 $remoteRequests = $requestsResult['data'] ?? [];
 if (!empty($requestsResult['error']) && $apiError === null) {
     $apiError = $requestsResult['error'];
 }
+$requestsConnected = empty($requestsResult['error']) && $apiKeyConfigured;
+
+$connected = $apiKeyConfigured;
+$catalogLive = $assetsConnected && $requestsConnected;
 
 $localRequests = [];
 if ($hasUmanTables) {
@@ -121,9 +133,10 @@ if ($hasUmanTables) {
 
 $integrationStatus = [
     'connected' => $connected,
+    'catalog_live' => $catalogLive,
     'preview' => !$connected,
     'last_sync' => $connected ? date('Y-m-d H:i:s') : null,
-    'sync_status' => $connected ? 'live' : 'disconnected',
+    'sync_status' => $catalogLive ? 'live' : ($apiKeyConfigured ? 'request_only' : 'disconnected'),
     'asset_count' => count($umanAssets),
     'pending_requests' => count(array_filter($remoteRequests, fn($r) => ($r['status'] ?? '') === 'pending')),
 ];
@@ -137,9 +150,27 @@ ob_start();
     <?= frs_page_title('UMAN Utilities Management Integration', 'Request utility assets from UMAN and assign approved equipment to facilities via Facility Management.'); ?>
 </div>
 
-<?php if ($message): ?>
-    <div class="message <?= htmlspecialchars($messageType); ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.25rem;background:<?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>;color:<?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>;">
+<?php if ($message):
+    $msgBg = $messageType === 'success' ? '#ecfdf5' : ($messageType === 'warning' ? '#fffbeb' : '#fef2f2');
+    $msgFg = $messageType === 'success' ? '#047857' : ($messageType === 'warning' ? '#92400e' : '#b91c1c');
+    $msgBd = $messageType === 'success' ? '#a7f3d0' : ($messageType === 'warning' ? '#fde68a' : '#fecaca');
+?>
+    <div class="message <?= htmlspecialchars($messageType); ?>" style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:<?= $msgBg; ?>;color:<?= $msgFg; ?>;border:1px solid <?= $msgBd; ?>;">
         <?= htmlspecialchars($message); ?>
+    </div>
+<?php endif; ?>
+
+<?php if (!$apiKeyConfigured): ?>
+    <div style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;">
+        <strong style="display:block;margin-bottom:0.25rem;">UMAN API key not configured</strong>
+        Set <code>UMAN_API_KEY</code> in your <code>.env</code> file to submit asset requests.
+    </div>
+<?php elseif (!$catalogLive): ?>
+    <div style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;">
+        <strong style="display:block;margin-bottom:0.25rem;">Request-only mode</strong>
+        Asset catalog and request sync couldn't load from UMAN
+        <?php if (!empty($apiError)): ?>: <em><?= htmlspecialchars($apiError); ?></em><?php endif; ?>.
+        You can still submit requests — they will be queued and synced automatically when UMAN is reachable.
     </div>
 <?php endif; ?>
 
@@ -176,7 +207,9 @@ ob_start();
                 Notes (optional)
                 <textarea name="notes" rows="2" placeholder="e.g., For convention hall events, portable unit preferred" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
             </label>
-            <button type="submit" class="btn-primary" style="margin-top:1rem;" <?= $connected ? '' : 'disabled'; ?>>Submit Request to UMAN</button>
+            <button type="submit" class="btn-primary" style="margin-top:1rem;" <?= $apiKeyConfigured ? '' : 'disabled title="Configure UMAN_API_KEY in .env first"'; ?>>
+                <?= $apiKeyConfigured ? 'Submit Request to UMAN' : 'UMAN API key not configured'; ?>
+            </button>
         </form>
     </section>
 
@@ -199,7 +232,7 @@ ob_start();
 </div>
 
 <section class="booking-card" style="margin-top:1.5rem;">
-    <h2>UMAN Asset Catalog <?= $connected ? '' : '<small style="font-weight:500;color:#8b95b5;">(connect API to load)</small>'; ?></h2>
+    <h2>UMAN Asset Catalog <?= $catalogLive ? '' : '<small style="font-weight:500;color:#8b95b5;">(catalog offline — requests still work)</small>'; ?></h2>
     <?php if (empty($umanAssets)): ?>
         <p style="color:#8b95b5; text-align:center; padding:2rem;">
             <?= $apiError ? htmlspecialchars($apiError) : 'No assets returned from UMAN.'; ?>
