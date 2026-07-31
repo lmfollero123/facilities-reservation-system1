@@ -41,7 +41,8 @@ function frs_integrations_auth_ok(): bool
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '', '/');
-$path = preg_replace('#^.*/api/integrations/?#', '', $path);
+// Match both document-root (/api/integrations/...) and subdirectory (.../api/integrations/...) deploys.
+$path = preg_replace('#^(?:.*/)?api/integrations/?#', '', $path);
 $path = trim((string)$path, '/');
 
 if ($path === '' && $method === 'GET') {
