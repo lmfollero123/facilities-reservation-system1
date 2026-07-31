@@ -1,6 +1,16 @@
 <?php
 /**
  * UMAN Integration page — Utilities Management (assets & equipment), not billing.
+ *
+ * v2 Quick wins:
+ *  1. Asset Type dropdown is populated from LIVE UMAN asset_types endpoint
+ *     (falls back to static 9-item array if API is offline).
+ *  2. Catalog table rows are clickable "Request this asset" — prefills the form
+ *     with asset_type, asset_type_id, requested_asset_code, responsible_office.
+ *  3. 5 new specificity fields added: urgency, date_needed, booking_ref,
+ *     event_purpose, responsible_office (plus hidden exact_match toggle).
+ *  4. All new specific fields are sent to UMAN's POST intake (schema expanded
+ *     on both sides in asset-requests.php) and stored locally.
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -26,7 +36,11 @@ $message = '';
 $messageType = '';
 $hasUmanTables = frs_uman_tables_exist($pdo);
 
-$equipmentTypes = [
+if ($hasUmanTables) {
+    frs_ensure_uman_requests_schema_v2($pdo);
+}
+
+$STATIC_EQUIPMENT_TYPES = [
     'Sound System',
     'Projector & AV',
     'Air Conditioning',
@@ -43,10 +57,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
     } elseif ($_POST['action'] === 'request_asset') {
-        $facilityId = (int)($_POST['facility_id'] ?? 0);
-        $assetType = trim((string)($_POST['asset_type'] ?? ''));
-        $quantity = max(1, (int)($_POST['quantity'] ?? 1));
-        $notes = trim((string)($_POST['notes'] ?? ''));
+        $facilityId   = (int)($_POST['facility_id'] ?? 0);
+        $assetType    = trim((string)($_POST['asset_type'] ?? ''));
+        $quantity     = max(1, (int)($_POST['quantity'] ?? 1));
+        $notes        = trim((string)($_POST['notes'] ?? ''));
+
+        $assetTypeId      = !empty($_POST['asset_type_id']) ? (int)$_POST['asset_type_id'] : null;
+        $reqCode          = trim((string)($_POST['requested_asset_code'] ?? '')) ?: null;
+        $exactMatch       = !empty($_POST['exact_match']);
+        $urgency          = trim((string)($_POST['urgency'] ?? ''));
+        $dateNeeded       = trim((string)($_POST['date_needed'] ?? '')) ?: null;
+        $bookingRef       = trim((string)($_POST['booking_ref'] ?? '')) ?: null;
+        $eventPurpose     = trim((string)($_POST['event_purpose'] ?? '')) ?: null;
+        $responsibleOffice = trim((string)($_POST['responsible_office'] ?? '')) ?: null;
+
+        if (!in_array($urgency, ['Routine', 'Priority', 'Emergency'], true)) {
+            $urgency = 'Routine';
+        }
 
         $facStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
         $facStmt->execute([$facilityId]);
@@ -56,22 +83,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $message = 'Please select a facility and asset type.';
             $messageType = 'error';
         } else {
-            $result = submitUMANAssetRequest($facilityId, $facilityName, $assetType, $quantity, $notes);
+            $extras = [
+                'asset_type_id'        => $assetTypeId,
+                'requested_asset_code' => $reqCode,
+                'exact_match'          => $exactMatch,
+                'urgency'              => $urgency,
+                'date_needed'          => $dateNeeded,
+                'booking_ref'          => $bookingRef,
+                'event_purpose'        => $eventPurpose,
+                'responsible_office'   => $responsibleOffice,
+            ];
+
+            $result = submitUMANAssetRequest($facilityId, $facilityName, $assetType, $quantity, $notes, $extras);
             $ref = (string)($result['data']['request_ref'] ?? '');
+
             if (!empty($result['error'])) {
                 $queuedRef = '';
                 if ($hasUmanTables) {
                     $queuedRef = 'CPRF-Q-' . date('YmdHis') . '-' . $facilityId;
-                    frs_record_uman_asset_request($pdo, $facilityId, $assetType, $quantity, $notes, $queuedRef, 'queued');
+                    frs_record_uman_asset_request(
+                        $pdo, $facilityId, $assetType, $quantity, $notes,
+                        $queuedRef, 'queued', $extras
+                    );
                 }
-                $message = 'UMAN temporarily unavailable — request queued locally' . ($queuedRef !== '' ? " (ref {$queuedRef})" : '')
+                $message = 'UMAN temporarily unavailable — request queued locally'
+                         . ($queuedRef !== '' ? " (ref {$queuedRef})" : '')
                          . '. Error: ' . $result['error'];
                 $messageType = 'warning';
             } else {
                 if ($hasUmanTables && $ref !== '') {
-                    frs_record_uman_asset_request($pdo, $facilityId, $assetType, $quantity, $notes, $ref, 'pending');
+                    frs_record_uman_asset_request(
+                        $pdo, $facilityId, $assetType, $quantity, $notes,
+                        $ref, 'pending', $extras
+                    );
                 }
-                $message = 'Asset request submitted to UMAN' . ($ref !== '' ? " (ref: {$ref})" : '') . '.';
+                $extraFlags = [];
+                if ($urgency !== 'Routine')        $extraFlags[] = $urgency;
+                if ($dateNeeded)                    $extraFlags[] = "need by {$dateNeeded}";
+                if ($reqCode)                       $extraFlags[] = ($exactMatch ? 'exact ' : 'prefers ') . $reqCode;
+                if ($responsibleOffice)             $extraFlags[] = "route: {$responsibleOffice}";
+                $flagStr = $extraFlags ? ' [' . implode(' · ', $extraFlags) . ']' : '';
+                $message = 'Asset request submitted to UMAN'
+                         . ($ref !== '' ? " (ref: {$ref})" : '')
+                         . $flagStr . '.';
                 $messageType = 'success';
             }
         }
@@ -102,6 +156,35 @@ $requestsConnected = empty($requestsResult['error']) && $apiKeyConfigured;
 
 $connected = $apiKeyConfigured;
 $catalogLive = $assetsConnected && $requestsConnected;
+
+$typesResult = fetchUMANAssetTypes();
+$liveTypes = $typesResult['data'] ?? [];
+$typesApiError = $typesResult['error'] ?? null;
+$typesConnected = empty($typesApiError) && $apiKeyConfigured && !empty($liveTypes);
+
+$equipmentTypes = [];
+if ($typesConnected) {
+    foreach ($liveTypes as $t) {
+        $equipmentTypes[] = [
+            'id'          => (int)($t['id'] ?? 0),
+            'name'        => (string)($t['name'] ?? ''),
+            'description' => (string)($t['description'] ?? ''),
+            'asset_count' => (int)($t['asset_count'] ?? 0),
+            'operational_count' => (int)($t['operational_count'] ?? 0),
+        ];
+    }
+    usort($equipmentTypes, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+} else {
+    foreach ($STATIC_EQUIPMENT_TYPES as $name) {
+        $equipmentTypes[] = [
+            'id' => 0,
+            'name' => $name,
+            'description' => '',
+            'asset_count' => 0,
+            'operational_count' => 0,
+        ];
+    }
+}
 
 $localRequests = [];
 if ($hasUmanTables) {
@@ -174,39 +257,108 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<div class="booking-wrapper">
+<div class="booking-wrapper" id="request-form-wrapper">
     <section class="booking-card">
         <h2>Request Asset from UMAN</h2>
-        <p style="color:#8b95b5; margin-bottom:1rem;">Submit an equipment/utility asset request to the Utilities Management system for a specific facility.</p>
-        <form method="POST" class="booking-form">
+        <p style="color:#8b95b5; margin-bottom:1rem;">Submit an equipment/utility asset request to the Utilities Management system. <em style="color:#059669;">Tip: click any asset row in the catalog below to prefill this form with a specific unit.</em></p>
+        <form method="POST" class="booking-form" id="uman-asset-form">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="request_asset">
-            <label>
-                Facility
-                <select name="facility_id" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                    <option value="">— Select facility —</option>
-                    <?php foreach ($facilities as $f): ?>
-                        <option value="<?= (int)$f['id']; ?>"><?= htmlspecialchars($f['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
+            <input type="hidden" name="asset_type_id" id="f_asset_type_id" value="">
+            <input type="hidden" name="requested_asset_code" id="f_requested_asset_code" value="">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                <label>
+                    Facility *
+                    <select name="facility_id" id="f_facility_id" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <option value="">— Select facility —</option>
+                        <?php foreach ($facilities as $f): ?>
+                            <option value="<?= (int)$f['id']; ?>"><?= htmlspecialchars($f['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+
+                <label>
+                    Asset / Equipment Type *
+                    <select name="asset_type" id="f_asset_type" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <option value="">— Select type —</option>
+                        <?php foreach ($equipmentTypes as $t):
+                            $countStr = $typesConnected && $t['asset_count'] > 0
+                                ? " ({$t['operational_count']}/{$t['asset_count']} oper.)"
+                                : '';
+                            $title = $t['description'] !== '' ? ' title="' . htmlspecialchars($t['description']) . '"' : '';
+                            $dataId = $t['id'] > 0 ? " data-id=\"{$t['id']}\"" : '';
+                        ?>
+                            <option value="<?= htmlspecialchars($t['name']); ?>"<?= $dataId . $title; ?>><?= htmlspecialchars($t['name'] . $countStr); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
+                <label style="display:block;">
+                    Quantity
+                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <label style="display:block;">
+                    Urgency
+                    <select name="urgency" id="f_urgency" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <option value="Routine">Routine (3–5 days)</option>
+                        <option value="Priority">Priority (1–2 days)</option>
+                        <option value="Emergency">Emergency (same day)</option>
+                    </select>
+                </label>
+                <label style="display:block;">
+                    Date Needed
+                    <input type="date" name="date_needed" id="f_date_needed" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;" min="<?= date('Y-m-d'); ?>">
+                </label>
+            </div>
+
+            <div id="pinned-asset-banner" style="margin-top:0.75rem;padding:0.6rem 0.85rem;border-radius:8px;background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;font-size:0.9rem;display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+                    <div>
+                        <strong style="color:#155e75;">Pinned specific asset:</strong>
+                        <span id="pinned-asset-name">—</span>
+                        <span id="pinned-asset-code" style="margin-left:0.4rem;padding:0.1rem 0.4rem;border-radius:4px;background:#cffafe;color:#0e7490;font-family:monospace;font-size:0.8rem;"></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                        <label style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:#155e75;white-space:nowrap;">
+                            <input type="checkbox" name="exact_match" id="f_exact_match" style="width:auto;margin:0;">
+                            Exact unit only
+                        </label>
+                        <button type="button" id="btn-clear-pin" style="padding:0.2rem 0.5rem;border-radius:4px;border:1px solid #a5f3fc;background:#fff;color:#0e7490;font-size:0.8rem;cursor:pointer;">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
+                <label style="display:block;">
+                    Booking Reference (optional)
+                    <input type="text" name="booking_ref" id="f_booking_ref" placeholder="e.g., RES-2026-0812-007" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <label style="display:block;">
+                    Responsible Office (optional)
+                    <input type="text" name="responsible_office" id="f_responsible_office" placeholder="e.g., Barangay Engineering Office" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+            </div>
+
             <label style="margin-top:0.75rem; display:block;">
-                Asset / Equipment Type
-                <select name="asset_type" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                    <option value="">— Select type —</option>
-                    <?php foreach ($equipmentTypes as $type): ?>
-                        <option value="<?= htmlspecialchars($type); ?>"><?= htmlspecialchars($type); ?></option>
-                    <?php endforeach; ?>
-                </select>
+                Event / Purpose (optional)
+                <input type="text" name="event_purpose" id="f_event_purpose" placeholder="e.g., Graduation ceremony, Barangay assembly" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
             </label>
-            <label style="margin-top:0.75rem; display:block;">
-                Quantity
-                <input type="number" name="quantity" min="1" max="99" value="1" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-            </label>
+
             <label style="margin-top:0.75rem; display:block;">
                 Notes (optional)
-                <textarea name="notes" rows="2" placeholder="e.g., For convention hall events, portable unit preferred" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
+                <textarea name="notes" id="f_notes" rows="2" placeholder="e.g., For convention hall events, portable unit preferred" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
             </label>
+
+            <div style="margin-top:0.75rem;padding:0.55rem 0.8rem;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:0.82rem;">
+                <?= $typesConnected
+                    ? '<strong>Live catalog:</strong> asset types and operational counts pulled directly from UMAN.'
+                    : '<strong>Fallback list:</strong> using a static 9-type list — UMAN asset-types endpoint was unreachable' . (!empty($typesApiError) ? ' (' . htmlspecialchars($typesApiError) . ')' : '') . '.';
+                ?>
+            </div>
+
             <button type="submit" class="btn-primary" style="margin-top:1rem;" <?= $apiKeyConfigured ? '' : 'disabled title="Configure UMAN_API_KEY in .env first"'; ?>>
                 <?= $apiKeyConfigured ? 'Submit Request to UMAN' : 'UMAN API key not configured'; ?>
             </button>
@@ -228,6 +380,14 @@ ob_start();
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
+
+        <form method="POST" style="margin-top:1.25rem;padding-top:1rem;border-top:1px dashed #e0e6ed;">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="sync_requests">
+            <button type="submit" class="btn-outline" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer;">
+                ⟳ Sync Request Status from UMAN
+            </button>
+        </form>
     </aside>
 </div>
 
@@ -238,8 +398,11 @@ ob_start();
             <?= $apiError ? htmlspecialchars($apiError) : 'No assets returned from UMAN.'; ?>
         </p>
     <?php else: ?>
+        <div style="margin-bottom:0.6rem;font-size:0.85rem;color:#64748b;">
+            💡 <strong>Tip:</strong> click any row to prefill the request form with that specific asset.
+        </div>
         <div class="table-responsive">
-            <table class="table">
+            <table class="table" id="asset-catalog-table">
                 <thead>
                     <tr>
                         <th>Code</th>
@@ -247,16 +410,42 @@ ob_start();
                         <th>Type</th>
                         <th>Status</th>
                         <th>Location</th>
+                        <th>Responsible Office</th>
+                        <th style="width:80px;"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($umanAssets as $asset): ?>
-                        <tr>
-                            <td><strong><?= htmlspecialchars((string)($asset['asset_code'] ?? '')); ?></strong></td>
-                            <td><?= htmlspecialchars((string)($asset['name'] ?? '')); ?></td>
-                            <td><?= htmlspecialchars((string)($asset['asset_type'] ?? '')); ?></td>
-                            <td><span class="status-badge active"><?= htmlspecialchars((string)($asset['condition_status'] ?? '')); ?></span></td>
-                            <td><?= htmlspecialchars((string)($asset['location'] ?? '')); ?></td>
+                    <?php foreach ($umanAssets as $asset):
+                        $code = (string)($asset['asset_code'] ?? '');
+                        $name = (string)($asset['name'] ?? '');
+                        $type = (string)($asset['asset_type'] ?? '');
+                        $cond = (string)($asset['condition_status'] ?? '');
+                        $loc  = (string)($asset['location'] ?? '');
+                        $resp = (string)($asset['responsible_office'] ?? '');
+                        $typeId = (int)($asset['asset_type_id'] ?? 0);
+                        $rowClickable = $cond === 'Operational';
+                    ?>
+                        <tr class="uman-catalog-row"
+                            data-code="<?= htmlspecialchars($code); ?>"
+                            data-name="<?= htmlspecialchars($name); ?>"
+                            data-type="<?= htmlspecialchars($type); ?>"
+                            data-type-id="<?= $typeId; ?>"
+                            data-resp="<?= htmlspecialchars($resp); ?>"
+                            style="<?= $rowClickable ? 'cursor:pointer;' : 'opacity:0.75;' ?>"
+                            title="<?= $rowClickable ? 'Click to request this specific asset' : 'Asset not operational — click to view only' ?>">
+                            <td><strong style="font-family:monospace;"><?= htmlspecialchars($code); ?></strong></td>
+                            <td><?= htmlspecialchars($name); ?></td>
+                            <td><?= htmlspecialchars($type); ?></td>
+                            <td><span class="status-badge active"><?= htmlspecialchars($cond); ?></span></td>
+                            <td><?= htmlspecialchars($loc); ?></td>
+                            <td><?= htmlspecialchars($resp); ?></td>
+                            <td>
+                                <?php if ($rowClickable): ?>
+                                    <button type="button" class="uman-pin-btn"
+                                        style="padding:0.25rem 0.6rem;border-radius:6px;border:1px solid #059669;background:#d1fae5;color:#059669;font-size:0.78rem;cursor:pointer;white-space:nowrap;"
+                                        aria-label="Request this asset">Use this</button>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -279,21 +468,46 @@ ob_start();
                     <tr>
                         <th>Reference</th>
                         <th>Facility</th>
-                        <th>Asset Type</th>
+                        <th>Asset</th>
                         <th>Qty</th>
+                        <th>Urgency</th>
+                        <th>Need By</th>
                         <th>Status</th>
                         <th>Date</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($displayRequests as $req): ?>
+                    <?php foreach ($displayRequests as $req):
+                        $ref  = (string)($req['uman_request_ref'] ?? $req['request_ref'] ?? '—');
+                        $fac  = (string)($req['facility_name'] ?? '');
+                        $type = (string)($req['asset_type'] ?? '');
+                        $code = (string)($req['requested_asset_code'] ?? '');
+                        $qty  = (int)($req['quantity'] ?? 1);
+                        $urg  = (string)($req['urgency'] ?? 'Routine');
+                        $need = !empty($req['date_needed']) ? date('M d, Y', strtotime((string)$req['date_needed'])) : '—';
+                        $stat = (string)($req['status'] ?? 'pending');
+                        $when = date('M d, Y', strtotime((string)($req['created_at'] ?? 'now')));
+
+                        $assetLabel = $type;
+                        if ($code !== '') {
+                            $assetLabel .= ' <span style="font-size:0.75rem;padding:0.08rem 0.3rem;border-radius:3px;background:#f1f5f9;color:#475569;font-family:monospace;">' . htmlspecialchars($code) . '</span>';
+                        }
+
+                        $urgColor = match($urg) {
+                            'Emergency' => '#dc2626',
+                            'Priority'  => '#d97706',
+                            default     => '#64748b',
+                        };
+                    ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars((string)($req['uman_request_ref'] ?? $req['request_ref'] ?? '—')); ?></strong></td>
-                            <td><?= htmlspecialchars((string)($req['facility_name'] ?? '')); ?></td>
-                            <td><?= htmlspecialchars((string)($req['asset_type'] ?? '')); ?></td>
-                            <td><?= (int)($req['quantity'] ?? 1); ?></td>
-                            <td><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst((string)($req['status'] ?? 'pending'))); ?></span></td>
-                            <td><?= htmlspecialchars(date('M d, Y', strtotime((string)($req['created_at'] ?? 'now')))); ?></td>
+                            <td><strong><?= htmlspecialchars($ref); ?></strong></td>
+                            <td><?= htmlspecialchars($fac); ?></td>
+                            <td><?= $assetLabel; ?></td>
+                            <td><?= $qty; ?></td>
+                            <td><span style="color:<?= $urgColor; ?>;font-weight:600;"><?= htmlspecialchars($urg); ?></span></td>
+                            <td><?= htmlspecialchars($need); ?></td>
+                            <td><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst($stat)); ?></span></td>
+                            <td><?= htmlspecialchars($when); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -301,6 +515,83 @@ ob_start();
         </div>
     <?php endif; ?>
 </section>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const banner     = $('pinned-asset-banner');
+    const pinName    = $('pinned-asset-name');
+    const pinCode    = $('pinned-asset-code');
+    const fTypeId    = $('f_asset_type_id');
+    const fCode      = $('f_requested_asset_code');
+    const fType      = $('f_asset_type');
+    const fExact     = $('f_exact_match');
+    const fResp      = $('f_responsible_office');
+    const fQty       = $('f_quantity');
+    const btnClear   = $('btn-clear-pin');
+    const typeOpts   = fType ? Array.from(fType.querySelectorAll('option')) : [];
+
+    function pickTypeOption(typeName, typeId) {
+        if (!fType) return;
+        let matched = null;
+        if (typeId > 0) {
+            matched = typeOpts.find(o => Number(o.dataset.id) === Number(typeId));
+        }
+        if (!matched) {
+            const norm = (typeName || '').toString().trim().toLowerCase();
+            matched = typeOpts.find(o => o.value.trim().toLowerCase() === norm);
+        }
+        if (matched) matched.selected = true;
+    }
+
+    function pinAsset(payload) {
+        fTypeId.value = payload.typeId || '';
+        fCode.value   = payload.code   || '';
+        pickTypeOption(payload.type, payload.typeId);
+        if (payload.resp && fResp && fResp.value.trim() === '') {
+            fResp.value = payload.resp;
+        }
+        if (pinName) pinName.textContent = payload.name || '—';
+        if (pinCode) pinCode.textContent = payload.code ? '#' + payload.code : '';
+        if (banner) {
+            banner.style.display = 'block';
+        }
+        if (fQty) fQty.value = 1;
+        if (fExact) fExact.checked = false;
+        document.getElementById('request-form-wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearPin() {
+        fTypeId.value = '';
+        fCode.value   = '';
+        if (fExact) fExact.checked = false;
+        if (banner) banner.style.display = 'none';
+    }
+
+    if (btnClear) btnClear.addEventListener('click', clearPin);
+
+    document.querySelectorAll('.uman-catalog-row').forEach(function (row) {
+        const handler = function (ev) {
+            if (ev.target && ev.target.classList && ev.target.classList.contains('uman-pin-btn')) {
+                ev.preventDefault();
+            }
+            const ds = row.dataset || {};
+            pinAsset({
+                code:   ds.code   || '',
+                name:   ds.name   || '',
+                type:   ds.type   || '',
+                typeId: Number(ds.typeId) || 0,
+                resp:   ds.resp   || '',
+            });
+        };
+        row.addEventListener('click', handler);
+        const btn = row.querySelector('.uman-pin-btn');
+        if (btn) btn.addEventListener('click', handler);
+    });
+})();
+</script>
 
 <?php
 $content = ob_get_clean();

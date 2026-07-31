@@ -423,6 +423,7 @@ $facilitiesStmt->execute();
 $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $equipmentByFacility = [];
+$allowedEquipmentByFacility = [];
 if ($hasUmanEquipment && $facilities !== []) {
     $equipmentByFacility = frs_get_facility_equipment_map(
         $pdo,
@@ -432,6 +433,13 @@ if ($hasUmanEquipment && $facilities !== []) {
         $fid = (int)$facRow['id'];
         $facRow['equipment'] = $equipmentByFacility[$fid] ?? [];
         $facRow['equipment_ids'] = array_map(static fn($e) => (int)$e['uman_asset_id'], $facRow['equipment']);
+
+        $allowed = frs_uman_allowed_assets_for_facility($pdo, $fid, $umanAssetsIndexed);
+        $allowedEquipmentByFacility[$fid] = $allowed;
+        // Convert to a plain zero-indexed array for the JSON payload that
+        // editFacility() receives. Using the array_keys/values structure
+        // guarantees zero-indexed encoding on the wire.
+        $facRow['allowed_equipment'] = array_values($allowed);
     }
     unset($facRow);
 }
@@ -745,36 +753,29 @@ ob_start();
                         <textarea name="amenities" id="form-amenities" placeholder="e.g., Restrooms, parking area, wheelchair access"></textarea>
                     </label>
                     <?php if ($hasUmanEquipment): ?>
+                    <input type="hidden" name="facility_equipment_context_id" id="form-facility-equipment-context-id" value="0">
                     <div style="margin-top:1rem; padding:1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
                         <label style="display:block; font-weight:600; margin-bottom:0.5rem;">
                             UMAN Equipment / Utility Assets
-                            <?= frs_field_tip('Select assets from UMAN Utilities Management assigned to this facility. Request new assets via UMAN Integration.'); ?>
+                            <?= frs_field_tip('Equipment shown here is GATED by the Request → UMAN Approve/Fulfill workflow. Only assets UMAN has explicitly approved or fulfilled for this specific facility appear in this list.'); ?>
                         </label>
-                        <?php if (empty($umanAssetsCatalog)): ?>
+                        <?php if (empty($umanAssetsCatalog) && uman_api_key() === ''): ?>
                             <p style="color:#8b95b5; font-size:0.9rem; margin:0;">
                                 No assets loaded from UMAN. Configure <code>UMAN_API_KEY</code> or submit requests in
                                 <a href="<?= base_path(); ?>/dashboard/utilities-integration">UMAN Integration</a>.
                             </p>
                         <?php else: ?>
                             <div id="equipment-checklist" style="max-height:220px; overflow-y:auto; display:grid; gap:0.5rem;">
-                                <?php foreach ($umanAssetsCatalog as $asset): ?>
-                                    <?php
-                                    $aid = (int)($asset['id'] ?? 0);
-                                    if ($aid <= 0) {
-                                        continue;
-                                    }
-                                    $code = (string)($asset['asset_code'] ?? '');
-                                    $type = (string)($asset['asset_type'] ?? '');
-                                    ?>
-                                    <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
-                                        <input type="checkbox" name="equipment_ids[]" value="<?= $aid; ?>" class="equipment-checkbox" style="margin-top:0.2rem;">
-                                        <span>
-                                            <strong><?= htmlspecialchars((string)($asset['name'] ?? '')); ?></strong>
-                                            <small style="color:#64748b; display:block;"><?= htmlspecialchars($code); ?> · <?= htmlspecialchars($type); ?> · <?= htmlspecialchars((string)($asset['condition_status'] ?? '')); ?></small>
-                                        </span>
-                                    </label>
-                                <?php endforeach; ?>
+                                <div id="equipment-checklist-slot-empty" style="padding:1rem; text-align:center; color:#8b95b5; font-size:0.9rem; border:1px dashed #cbd5e1; border-radius:6px; background:#fff;">
+                                    <div style="margin-bottom:0.35rem;">Equipment options appear after UMAN approves or fulfills a request for this facility.</div>
+                                    <a href="<?= base_path(); ?>/dashboard/utilities-integration" style="color:#0066cc; font-weight:600; text-decoration:underline;">Submit a UMAN request &rarr;</a>
+                                </div>
                             </div>
+                            <p style="margin:0.6rem 0 0; font-size:0.8rem; color:#64748b;">
+                                💡 <strong>Flow:</strong> 1) <a href="<?= base_path(); ?>/dashboard/utilities-integration" style="color:#059669;">UMAN Integration</a> → request asset for this facility.
+                                2) UMAN staff fulfills the request (sets status + assigns a specific asset).
+                                3) Click <em>"Sync Request Status from UMAN"</em> (or revisit this page) — the asset auto-appears above.
+                            </p>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -934,6 +935,11 @@ ob_start();
 </div>
 
 <script>
+// Server-rendered config used by equipment-checklist reset() so UMAN
+// Integration URLs are always correct relative to base_path().
+window.FACILITY_MANAGEMENT_CONFIG = {
+    utilitiesUrl: <?= json_encode(base_path() . '/dashboard/utilities-integration', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
+};
 // Move facility modal to body so position:fixed works (parent transforms break it)
 (function() {
     const modal = document.getElementById('facilityModal');
@@ -1050,9 +1056,58 @@ function editFacility(payload) {
     document.getElementById('form-amenities').value = facility.amenities || '';
     document.getElementById('form-rules').value = facility.rules || '';
 
-    document.querySelectorAll('.equipment-checkbox').forEach(cb => {
-        cb.checked = Array.isArray(facility.equipment_ids) && facility.equipment_ids.includes(parseInt(cb.value, 10));
-    });
+    // Render the equipment checklist dynamically for this facility:
+    // show ONLY items that are (a) already auto-assigned to this facility
+    // from fulfilled UMAN requests, or (b) approved requests with a
+    // fulfilled_asset_id for this specific facility. Full-catalog checkboxes
+    // were gated off in the v2 integration fix.
+    (function () {
+        const ctxId = document.getElementById('form-facility-equipment-context-id');
+        if (ctxId) ctxId.value = String(facility.id || 0);
+        const slot = document.getElementById('equipment-checklist');
+        const emptyTpl = document.getElementById('equipment-checklist-slot-empty');
+        if (!slot) return;
+
+        const allowed = Array.isArray(facility.allowed_equipment) ? facility.allowed_equipment : [];
+        const checked = Array.isArray(facility.equipment_ids) ? facility.equipment_ids.map(Number) : [];
+
+        if (allowed.length === 0) {
+            slot.innerHTML = '';
+            if (emptyTpl) slot.appendChild(emptyTpl.content ? emptyTpl.content.cloneNode(true) : (() => {
+                const d = document.createElement('div');
+                d.innerHTML = emptyTpl.outerHTML;
+                return d.firstChild;
+            })());
+            return;
+        }
+
+        slot.innerHTML = '';
+        allowed.forEach((row) => {
+            const aid = Number(row.uman_asset_id) || 0;
+            if (aid <= 0) return;
+            const code = row.asset_code || '';
+            const type = row.asset_type || '';
+            const cond = row.condition_status || '';
+            const name = row.asset_name || ('UMAN Asset #' + aid);
+            const isChecked = checked.includes(aid);
+            const srcTag = row.source === 'fulfilled_req'
+                ? '<span style="margin-left:0.3rem;padding:0.08rem 0.35rem;border-radius:3px;background:#dcfce7;color:#166534;font-size:0.72rem;">Fulfilled</span>'
+                : '';
+            const label = document.createElement('label');
+            label.style.cssText = 'display:flex; align-items:flex-start; gap:0.5rem; font-size:0.9rem; cursor:pointer;';
+            label.innerHTML =
+                '<input type="checkbox" name="equipment_ids[]" value="' + aid + '" class="equipment-checkbox" style="margin-top:0.2rem;"' + (isChecked ? ' checked' : '') + '>' +
+                '<span>' +
+                    '<strong>' + escapeHtml(name) + '</strong>' + srcTag +
+                    '<small style="color:#64748b; display:block;">' + escapeHtml(code) + (code ? ' · ' : '') + escapeHtml(type) + (type ? ' · ' : '') + escapeHtml(cond) + '</small>' +
+                '</span>';
+            slot.appendChild(label);
+        });
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+    })();
 
     document.getElementById('form-status').value = facility.status || 'available';
     document.getElementById('form-operating-hours').value = facility.operating_hours || '';
@@ -1117,7 +1172,24 @@ function resetFacilityForm() {
     setVal('form-capacity', '');
     setVal('form-amenities', '');
     setVal('form-rules', '');
-    document.querySelectorAll('.equipment-checkbox').forEach(cb => { cb.checked = false; });
+
+    // Reset equipment checklist to the "new facility" empty state (no
+    // allow-list items yet because the facility doesn't exist in the DB —
+    // requests can only be attached after the row is saved with an ID).
+    (function () {
+        const ctxId = document.getElementById('form-facility-equipment-context-id');
+        if (ctxId) ctxId.value = '0';
+        const slot = document.getElementById('equipment-checklist');
+        if (!slot) return;
+        slot.innerHTML = '';
+        const placeholder = document.createElement('div');
+        placeholder.setAttribute('style', 'padding:1rem; text-align:center; color:#8b95b5; font-size:0.9rem; border:1px dashed #cbd5e1; border-radius:6px; background:#fff;');
+        placeholder.innerHTML =
+            '<div style="margin-bottom:0.35rem;">Equipment options appear after this facility is created and a UMAN request is approved/fulfilled for it.</div>' +
+            '<a href="' + window.FACILITY_MANAGEMENT_CONFIG.utilitiesUrl + '" style="color:#0066cc; font-weight:600; text-decoration:underline;">Submit a UMAN request &rarr;</a>';
+        slot.appendChild(placeholder);
+    })();
+
     setVal('form-status', 'available');
     setVal('form-operating-hours', '');
     setChecked('form-auto-approve', false);
