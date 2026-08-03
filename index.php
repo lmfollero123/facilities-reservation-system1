@@ -193,6 +193,7 @@ if ($path === 'announcements') {
         'calendar-export' => 'calendar_export_ics.php',
         'reports' => 'reports.php',
         'user-management' => 'user_management.php',
+        'resident-profile' => 'resident_profile.php',
         'document-management' => 'document_management.php',
         'contact' => 'contact.php',
         'contact-info' => 'contact_info_manage.php',
