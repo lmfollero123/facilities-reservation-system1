@@ -140,24 +140,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
             }
         }
         $tab = 'mapping';
-    } elseif ($_POST['action'] === 'sync_now' && $canUpdate) {
-        if (!$syncEnabled) {
-            $message = 'Sync is disabled (ENERGY_SYNC_ENABLED=false).';
-            $messageType = 'error';
-        } else {
-            $summary = frs_energy_run_sync($pdo);
-            $message = sprintf(
-                'Sync finished: %d reading(s) pushed, %d failed, %d recommendation(s) updated, %d deleted, %d recommendation(s) re-linked to a facility, %d facility profile(s) updated.%s',
-                $summary['pushed'],
-                $summary['push_failed'],
-                $summary['recommendations_upserted'],
-                $summary['recommendations_deleted'],
-                $summary['recommendations_backfilled'] ?? 0,
-                $summary['profiles_upserted'],
-                $summary['errors'] !== [] ? ' Issues: ' . implode(' | ', $summary['errors']) : ''
-            );
-            $messageType = $summary['errors'] === [] ? 'success' : 'error';
-        }
     } elseif ($_POST['action'] === 'update_recommendation' && $canUpdate) {
         $tab = 'recommendations';
         try {
@@ -188,7 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
 $facilities = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
 $mapping = $hasTables ? frs_energy_get_mapping($pdo) : [];
 $syncState = $hasTables ? frs_energy_load_sync_state($pdo) : ['last_pull_at' => null, 'last_push_at' => null, 'last_summary' => null];
-$configured = energy_api_base_url() !== '' && energy_api_token() !== '';
 
 $latestReadings = [];
 $pendingCount = 0;
@@ -332,34 +313,6 @@ ob_start();
         <p style="color:#8b95b5;">Run <code>database/migration_add_energy_integration.sql</code> to create the energy integration tables.</p>
     </section>
 <?php else: ?>
-
-<section class="booking-card" style="margin-bottom:1.25rem;">
-    <div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center; justify-content:space-between;">
-        <div>
-            <h2 style="margin-bottom:0.25rem;">Connection</h2>
-            <p style="color:#8b95b5; margin:0;">
-                <?php if (!$configured): ?>
-                    Not configured — set <code>ENERGY_API_URL</code> and <code>ENERGY_API_TOKEN</code> in .env.
-                <?php elseif (!$syncEnabled): ?>
-                    Configured, but sync is disabled (<code>ENERGY_SYNC_ENABLED=false</code>).
-                <?php else: ?>
-                    Configured.
-                    Last push: <?= htmlspecialchars($syncState['last_push_at'] ?? 'never'); ?> ·
-                    Last recommendations pull: <?= htmlspecialchars($syncState['last_pull_at'] ?? 'never'); ?> ·
-                    Last profile pull: <?= htmlspecialchars($syncState['last_profile_pull_at'] ?? 'never'); ?> ·
-                    Unsynced readings: <?= (int)$pendingCount; ?>
-                <?php endif; ?>
-            </p>
-        </div>
-        <?php if ($canUpdate): ?>
-            <form method="POST" action="<?= htmlspecialchars($tabUrl($tab)); ?>">
-                <?= csrf_field(); ?>
-                <input type="hidden" name="action" value="sync_now">
-                <button type="submit" class="btn-primary" <?= ($configured && $syncEnabled) ? '' : 'disabled'; ?>>Sync Now</button>
-            </form>
-        <?php endif; ?>
-    </div>
-</section>
 
 <nav class="booking-hub-tabs" aria-label="Energy sections">
     <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('readings')); ?>">Meter Readings</a>
@@ -520,14 +473,15 @@ ob_start();
             </script>
         </section>
         <?php endif; ?>
+    </div>
 
-        <section class="booking-card">
-            <h2>Latest Readings per Facility</h2>
-            <?php if ($latestReadings === []): ?>
-                <p style="color:#8b95b5; text-align:center; padding:2rem;">No readings recorded yet.</p>
-            <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table">
+    <section class="booking-card ee-readings-card">
+        <h2>Latest Readings per Facility</h2>
+        <?php if ($latestReadings === []): ?>
+            <p style="color:#8b95b5; text-align:center; padding:2rem;">No readings recorded yet.</p>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table ee-readings-table">
                         <thead>
                             <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Rate</th><th>Estimated Cost</th><th>Sync</th><th>Energy Review</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
                         </thead>
@@ -581,7 +535,6 @@ ob_start();
                 </div>
             <?php endif; ?>
         </section>
-    </div>
 
 <?php elseif ($tab === 'recommendations'): ?>
     <section class="booking-card">
@@ -791,6 +744,22 @@ ob_start();
 <?php endif; ?>
 
 <?php endif; // hasTables ?>
+
+<script>
+(function () {
+    'use strict';
+    document.querySelectorAll('.ee-readings-card .table-responsive').forEach(function (el) {
+        function sync() {
+            el.classList.toggle('is-scrollable', el.scrollWidth > el.clientWidth + 1);
+        }
+        sync();
+        window.addEventListener('resize', sync);
+        el.addEventListener('scroll', function () {
+            el.classList.toggle('is-scroll-end', el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+        });
+    });
+})();
+</script>
 
 <?php
 $content = ob_get_clean();

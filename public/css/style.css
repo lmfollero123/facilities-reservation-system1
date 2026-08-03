@@ -4955,6 +4955,32 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     width: 100%;
 }
 
+/* Compact reference table (e.g. energy_efficiency.php "Latest Readings") —
+   full-width, denser rows, and a real scroll affordance instead of relying
+   on the user to discover a hidden horizontal scrollbar. */
+.ee-readings-card { margin-top: 1.25rem; }
+.ee-readings-table th,
+.ee-readings-table td { padding: 0.5rem 0.65rem; font-size: 0.85rem; }
+.ee-readings-card .table-responsive {
+    position: relative;
+}
+.ee-readings-card .table-responsive.is-scrollable::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 28px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--bg-secondary, var(--gov-white)) 90%);
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+.ee-readings-card .table-responsive.is-scrollable.is-scroll-end::after {
+    opacity: 0;
+}
+html[data-theme="dark"] .ee-readings-card .table-responsive.is-scrollable::after {
+    background: linear-gradient(to right, transparent, var(--bg-secondary, #1e293b) 90%);
+}
+
 /* Tablet (≥481px): Single column with increased gap for better form visibility */
 @media (min-width: 481px) {
     .booking-wrapper {
