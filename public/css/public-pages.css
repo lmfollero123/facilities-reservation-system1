@@ -6,18 +6,18 @@
 /* ===== Modern Public Navbar – LIGHT MODE (default): light bar, dark text ===== */
 /* Solid bar, no glassmorphism. Dark mode overrides in dark-mode-public.css. */
 #mainNav.public-navbar-modern {
-    background: #ffffff !important;
+    background: #0f172a !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
     transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled {
-    background: #ffffff !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+    background: #0f172a !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
 .public-navbar-modern .navbar-brand.public-nav-brand {
@@ -33,35 +33,46 @@
 
 .public-navbar-modern .brand-name {
     font-size: 1rem;
-    font-weight: 600;
-    color: #1e293b !important;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #f1f5f9 !important;
 }
 
 .public-navbar-modern .brand-accent {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #059669 !important;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #34d399 !important;
+    display: block;
 }
 
 .public-navbar-modern .nav-link {
-    color: #334155 !important;
-    font-weight: 500;
+    color: #e2e8f0 !important;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding-bottom: 0.35rem !important;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .public-navbar-modern .nav-link:hover,
 .public-navbar-modern .nav-link.active {
-    color: #047857 !important;
-    text-decoration: underline !important;
+    color: #34d399 !important;
+    text-decoration: none !important;
+    border-bottom-color: #34d399;
 }
 
 .public-navbar-modern .navbar-datetime,
 .public-navbar-modern #navbar-date,
 .public-navbar-modern #navbar-time {
-    color: #334155 !important;
+    color: #e2e8f0 !important;
 }
 
 .public-navbar-modern .theme-toggle-nav {
-    color: #475569;
+    color: #e2e8f0;
 }
 
 .public-nav-actions {
@@ -89,28 +100,34 @@
 }
 
 .public-btn-login {
-    color: #1e293b !important;
-    background: transparent !important;
-    border: 2px solid #64748b;
+    color: #e2e8f0 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 2px solid rgba(226, 232, 240, 0.5);
     padding: 0.5rem 1.25rem;
-    font-weight: 600;
-    border-radius: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
     text-decoration: none !important;
 }
 
 .public-btn-login:hover {
-    background: rgba(30, 41, 59, 0.06) !important;
-    border-color: #475569;
-    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: #e2e8f0;
+    color: #ffffff !important;
 }
 
 .public-btn-register {
     background: linear-gradient(135deg, #059669, #047857) !important;
     color: #ffffff !important;
     border: none;
-    padding: 0.5rem 1.25rem;
-    font-weight: 600;
-    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
     text-decoration: none !important;
 }
 
