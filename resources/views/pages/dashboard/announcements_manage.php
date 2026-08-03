@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/upload_helper.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
+require_once __DIR__ . '/../../../../config/announcement_categories.php';
 require_once __DIR__ . '/../../../../config/cimm_maintenance_announcements.php';
 require_once __DIR__ . '/../../../../config/blackout_announcements.php';
 
@@ -272,8 +273,15 @@ ob_start();
                                 <?php endif; ?>
                             </td>
                             <td>
+                                <?php
+                                $rowFallbackImage = empty($announcement['image_path'])
+                                    ? frs_announcement_fallback_image($announcement['title'] ?? '', $announcement['message'] ?? '')
+                                    : null;
+                                ?>
                                 <?php if (!empty($announcement['image_path'])): ?>
                                     <img src="<?= htmlspecialchars($base . $announcement['image_path']); ?>" alt="Announcement" style="max-width: 60px; max-height: 60px; object-fit: cover; border-radius: 4px;">
+                                <?php elseif ($rowFallbackImage !== null): ?>
+                                    <img src="<?= htmlspecialchars($base . $rowFallbackImage); ?>" alt="Announcement" style="max-width: 60px; max-height: 60px; object-fit: cover; border-radius: 4px;" title="Auto fallback image">
                                 <?php else: ?>
                                     <span class="text-muted small">No image</span>
                                 <?php endif; ?>

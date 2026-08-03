@@ -65,10 +65,13 @@ ob_start();
             <?php foreach ($announcements as $i => $item):
                 $hcCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
                 $hcDate = date('M j, Y', strtotime($item['created_at']));
+                $hcFallback = frs_announcement_fallback_image($item['title'] ?? '', $item['message'] ?? '');
             ?>
                 <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="hc-slide<?= $i === 0 ? ' is-active' : ''; ?>">
                     <?php if (!empty($item['image_path'])): ?>
                         <div class="hc-slide-img" style="background-image:url('<?= htmlspecialchars($base . $item['image_path']); ?>');"></div>
+                    <?php elseif ($hcFallback !== null): ?>
+                        <div class="hc-slide-img" style="background-image:url('<?= htmlspecialchars($base . $hcFallback); ?>');"></div>
                     <?php else: ?>
                         <div class="hc-slide-img" style="background:<?= htmlspecialchars($hcCategory['bgColor']); ?>;"></div>
                     <?php endif; ?>
@@ -167,7 +170,10 @@ ob_start();
             $restAnnouncements = array_slice($announcements, 1, 3);
             $featCategory = getAnnouncementCategory($featuredAnnouncement['title'] ?? '', $featuredAnnouncement['message'] ?? '', $featuredAnnouncement['type'] ?? 'system');
             $featDate = date('M j, Y', strtotime($featuredAnnouncement['created_at']));
-            $featImg = !empty($featuredAnnouncement['image_path']) ? $base . $featuredAnnouncement['image_path'] : $defaultImage;
+            $featFallback = frs_announcement_fallback_image($featuredAnnouncement['title'] ?? '', $featuredAnnouncement['message'] ?? '');
+            $featImg = !empty($featuredAnnouncement['image_path'])
+                ? $base . $featuredAnnouncement['image_path']
+                : ($featFallback !== null ? $base . $featFallback : $defaultImage);
         ?>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="lg:col-span-2 relative rounded-2xl overflow-hidden group home-animate block" style="min-height:360px;">
@@ -184,7 +190,10 @@ ob_start();
                 <?php foreach ($restAnnouncements as $index => $item):
                     $rCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
                     $rDate = date('M j, Y', strtotime($item['created_at']));
-                    $rImg = !empty($item['image_path']) ? $base . $item['image_path'] : $defaultImage;
+                    $rFallback = frs_announcement_fallback_image($item['title'] ?? '', $item['message'] ?? '');
+                    $rImg = !empty($item['image_path'])
+                        ? $base . $item['image_path']
+                        : ($rFallback !== null ? $base . $rFallback : $defaultImage);
                 ?>
                     <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="home-announcement-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> flex gap-3 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-3">
                         <div class="w-20 h-20 flex-shrink-0 rounded-lg bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($rImg); ?>');"></div>
