@@ -157,7 +157,7 @@ ob_start();
                 <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">Announcements & Updates</h2>
                 <p class="text-gray-600 text-lg mt-2">Latest advisories from Barangay Culiat</p>
             </div>
-            <a href="<?= $base; ?>/announcements" class="inline-flex items-center text-emerald-700 font-semibold hover:text-emerald-800">
+            <a href="<?= $base; ?>/announcements" class="inline-flex items-center whitespace-nowrap text-emerald-700 font-semibold hover:text-emerald-800">
                 See all
                 <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>

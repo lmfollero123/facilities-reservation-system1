@@ -12038,3 +12038,10 @@ html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f3f4f6"] {
     background: var(--bg-tertiary) !important;
     border-color: var(--border-color) !important;
 }
+/* Maintenance fallback photo (geralt-maintenance-2422167_1920.jpg) is a wide
+   1920x937 landscape shot; the subject (excavator + sign) sits in the lower
+   half, so a plain center crop in a square/narrow slot only shows flat sky.
+   Attribute-selects the URL directly -- works everywhere this image is
+   used (background-image divs and <img> tags alike) with no markup changes. */
+[style*="geralt-maintenance"] { background-position: center 75% !important; }
+img[src*="geralt-maintenance"] { object-position: center 75% !important; }
