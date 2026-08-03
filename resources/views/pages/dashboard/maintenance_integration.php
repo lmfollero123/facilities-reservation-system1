@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../../../config/integration_status.php';
 $pdo = db();
 $base = base_path();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
+$dashboardContentClass = 'integrations-modern';
 $canSubmit = frs_can_create($role, 'maintenance') || frs_can_update($role, 'maintenance');
 
 $activeTab = preg_replace('/[^a-z_]/', '', (string)($_GET['tab'] ?? 'schedules'));
@@ -315,28 +316,28 @@ ob_start();
                             $statusDisplay = ucfirst(str_replace('_', ' ', $schedule['status']));
                         ?>
                             <tr>
-                                <td><strong><?= htmlspecialchars($schedule['id']); ?></strong></td>
-                                <td><?= htmlspecialchars($schedule['facility_name']); ?></td>
-                                <td><?= htmlspecialchars($schedule['maintenance_type']); ?></td>
-                                <td>
+                                <td data-label="Maintenance ID"><strong><?= htmlspecialchars($schedule['id']); ?></strong></td>
+                                <td data-label="Facility"><?= htmlspecialchars($schedule['facility_name']); ?></td>
+                                <td data-label="Type"><?= htmlspecialchars($schedule['maintenance_type']); ?></td>
+                                <td data-label="Scheduled Date">
                                     <?= date('M d, Y', strtotime($schedule['scheduled_start'])); ?><br>
                                     <small style="color: #8b95b5;">
-                                        <?= date('H:i', strtotime($schedule['scheduled_start'])); ?> - 
+                                        <?= date('H:i', strtotime($schedule['scheduled_start'])); ?> -
                                         <?= date('H:i', strtotime($schedule['scheduled_end'])); ?>
                                     </small>
                                 </td>
-                                <td><?= htmlspecialchars($schedule['estimated_duration']); ?></td>
-                                <td class="td-badge">
+                                <td data-label="Duration"><?= htmlspecialchars($schedule['estimated_duration']); ?></td>
+                                <td class="td-badge" data-label="Priority">
                                     <span class="status-badge status-badge--cell <?= $priorityClass; ?>" style="text-transform: capitalize;" title="<?= htmlspecialchars($schedule['priority']); ?>">
                                         <?= htmlspecialchars($schedule['priority']); ?>
                                     </span>
                                 </td>
-                                <td class="td-badge">
+                                <td class="td-badge" data-label="Status">
                                     <span class="status-badge status-badge--cell <?= $statusClass; ?>" title="<?= htmlspecialchars($statusDisplay); ?>">
                                         <?= $statusDisplay; ?>
                                     </span>
                                 </td>
-                                <td>
+                                <td data-label="Affected">
                                     <?php if ($schedule['affected_reservations'] > 0): ?>
                                         <span style="color: #dc3545; font-weight: 600;">
                                             <?= $schedule['affected_reservations']; ?> reservation(s)
@@ -345,7 +346,7 @@ ob_start();
                                         <span style="color: #8b95b5;">None</span>
                                     <?php endif; ?>
                                 </td>
-                                <td>
+                                <td data-label="Action">
                                     <button class="btn-outline" onclick="viewMaintenanceDetails('<?= htmlspecialchars($schedule['id']); ?>')" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
                                         View Details
                                     </button>
@@ -516,16 +517,16 @@ ob_start();
                 <tbody>
                     <?php foreach ($mockMaintenanceHistory as $history): ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($history['id']); ?></strong></td>
-                            <td><?= htmlspecialchars($history['facility_name']); ?></td>
-                            <td><?= htmlspecialchars($history['maintenance_type']); ?></td>
-                            <td><?= date('M d, Y H:i', strtotime($history['completed_at'])); ?></td>
-                            <td><?= htmlspecialchars($history['duration']); ?></td>
-                            <td><?= htmlspecialchars($history['technician']); ?></td>
-                            <td>
+                            <td data-label="Maintenance ID"><strong><?= htmlspecialchars($history['id']); ?></strong></td>
+                            <td data-label="Facility"><?= htmlspecialchars($history['facility_name']); ?></td>
+                            <td data-label="Type"><?= htmlspecialchars($history['maintenance_type']); ?></td>
+                            <td data-label="Completed Date"><?= date('M d, Y H:i', strtotime($history['completed_at'])); ?></td>
+                            <td data-label="Duration"><?= htmlspecialchars($history['duration']); ?></td>
+                            <td data-label="Technician"><?= htmlspecialchars($history['technician']); ?></td>
+                            <td data-label="Status">
                                 <span class="status-badge active">Completed</span>
                             </td>
-                            <td>
+                            <td data-label="Action">
                                 <button class="btn-outline" onclick="viewMaintenanceHistory('<?= htmlspecialchars($history['id']); ?>')" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
                                     View Details
                                 </button>

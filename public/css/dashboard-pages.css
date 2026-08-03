@@ -1142,3 +1142,52 @@
     color: var(--text-secondary, #5b6888);
 }
 
+/* Maintenance page tab nav — .mi-tabs/.mi-tab had no CSS anywhere before
+   this; modeled on the existing .booking-hub-tab pattern for visual
+   consistency with the energy page's tab bar. */
+.integrations-modern .mi-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 2px solid var(--border-color, #e0e6ed);
+    margin-bottom: 1.25rem;
+}
+
+.integrations-modern .mi-tab {
+    display: inline-block;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-secondary, #5b6888);
+    background: transparent;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.integrations-modern .mi-tab:hover {
+    color: var(--primary-color, #0047ab);
+    background: var(--bg-tertiary, #f9fafc);
+}
+
+.integrations-modern .mi-tab.active {
+    background: var(--bg-secondary, #fff);
+    border-color: var(--border-color, #e0e6ed);
+    border-bottom-color: var(--bg-secondary, #fff);
+    color: var(--primary-color, #0047ab);
+    margin-bottom: -2px;
+}
+
+@media (max-width: 480px) {
+    .integrations-modern .mi-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .integrations-modern .mi-tab {
+        flex: 0 0 auto;
+    }
+}
+
