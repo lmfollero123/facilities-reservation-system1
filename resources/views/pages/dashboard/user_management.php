@@ -1187,15 +1187,15 @@ ob_start();
 .um-toolbar label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: #475569; }
 .um-toolbar select, .um-search input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; background: #fff; }
 .um-filter-btn { padding: 0.55rem 1rem; white-space: nowrap; }
-.um-user-list { display: flex; flex-direction: column; gap: 0.85rem; }
-.um-user-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr); gap: 1rem; padding: 1rem 1.1rem; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
-.um-user-main { display: flex; gap: 0.85rem; min-width: 0; }
-.um-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.um-user-list { display: flex; flex-direction: column; gap: 0.55rem; }
+.um-user-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr); gap: 0.75rem; padding: 0.65rem 0.85rem; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.um-user-main { display: flex; gap: 0.65rem; min-width: 0; }
+.um-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 0.85rem; }
 .um-user-info { min-width: 0; }
 .um-user-title { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.um-user-title h3 { margin: 0; font-size: 1.05rem; color: #0f172a; }
-.um-email { margin: 0.15rem 0 0.5rem; color: #64748b; font-size: 0.9rem; word-break: break-word; }
-.um-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+.um-user-title h3 { margin: 0; font-size: 0.95rem; color: #0f172a; }
+.um-email { margin: 0.1rem 0 0.35rem; color: #64748b; font-size: 0.82rem; word-break: break-word; }
+.um-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.3rem; }
 .um-badge { display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
 .um-badge-role { background: #eef2ff; color: #3730a3; }
 .um-badge-active { background: #dcfce7; color: #166534; }
@@ -1206,7 +1206,7 @@ ob_start();
 .um-badge-muted { background: #f1f5f9; color: #64748b; }
 .um-badge-self { background: #dbeafe; color: #1d4ed8; }
 .um-meta { margin: 0; font-size: 0.8rem; color: #94a3b8; }
-.um-violations { margin-top: 0.65rem; padding-top: 0.65rem; border-top: 1px dashed #e2e8f0; }
+.um-violations { margin-top: 0.45rem; padding-top: 0.45rem; border-top: 1px dashed #e2e8f0; }
 .um-violations-head { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .um-badge-violation { background: #fff7ed; color: #c2410c; }
 .um-badge-violation-high { background: #fee2e2; color: #991b1b; }
@@ -1220,7 +1220,7 @@ ob_start();
 .um-violation-sev-high .um-violation-severity, .um-violation-sev-critical .um-violation-severity { color: #b91c1c; }
 .um-violation-desc { margin: 0.3rem 0 0; font-size: 0.8rem; color: #334155; line-height: 1.4; }
 .um-violation-meta { margin: 0.25rem 0 0; font-size: 0.75rem; color: #94a3b8; }
-.um-user-side { display: flex; flex-direction: column; gap: 0.65rem; border-left: 1px solid #eef2f7; padding-left: 1rem; }
+.um-user-side { display: flex; flex-direction: column; gap: 0.5rem; border-left: 1px solid #eef2f7; padding-left: 0.85rem; }
 .um-role-label { font-size: 0.82rem; color: #475569; display: flex; flex-direction: column; gap: 0.35rem; }
 .um-role-form select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 8px; border: 1px solid #d7deed; }
 .um-docs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
