@@ -198,3 +198,170 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* Reservation hero — new carousel hero, independent of .home-hero (used by
+   auth pages via .auth-page-hero, which must not change). */
+.reservation-hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 7rem 1.5rem 5rem;
+}
+.reservation-hero-slides { position: absolute; inset: 0; }
+.reservation-hero-slide {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+.reservation-hero-slide.is-active { opacity: 1; }
+.reservation-hero-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(6, 20, 15, 0.35) 0%, rgba(6, 20, 15, 0.55) 55%, rgba(6, 20, 15, 0.85) 100%);
+}
+.reservation-hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 56rem;
+    margin: 0 auto;
+    text-align: center;
+    color: #fff;
+}
+.reservation-hero-eyebrow {
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0 0 1rem;
+}
+.reservation-hero-title {
+    font-family: 'Merriweather', Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    margin: 0;
+    letter-spacing: 0.01em;
+}
+.reservation-hero-rule {
+    width: 6rem;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.8);
+    margin: 1.5rem auto;
+    border-radius: 999px;
+}
+.reservation-hero-lead {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: rgba(255, 255, 255, 0.92);
+    max-width: 46rem;
+    margin: 0 auto 2.25rem;
+}
+.reservation-hero-ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+}
+.reservation-hero-cta {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.9rem 2rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.reservation-hero-cta-solid {
+    background: #059669;
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(5, 150, 105, 0.35);
+}
+.reservation-hero-cta-solid:hover { background: #047857; transform: translateY(-2px); }
+.reservation-hero-cta-outline {
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    color: #fff;
+}
+.reservation-hero-cta-outline:hover { background: rgba(255, 255, 255, 0.15); }
+.reservation-hero-dots {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: flex;
+    gap: 0.5rem;
+}
+.reservation-hero-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s ease;
+}
+.reservation-hero-dot.is-active { background: #fff; }
+@media (max-width: 640px) {
+    .reservation-hero-title { font-size: clamp(2rem, 10vw, 3rem); }
+}
+
+/* Floating Community Updates widget (home hero only) */
+.hc-widget {
+    position: absolute;
+    top: 6.5rem;
+    right: 2rem;
+    z-index: 3;
+    width: 300px;
+    background: rgba(15, 23, 20, 0.55);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 1rem;
+    color: #fff;
+}
+.hc-widget-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+.hc-widget-title { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.8); }
+.hc-widget-toggle {
+    background: rgba(255, 255, 255, 0.12);
+    border: none;
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.hc-widget-toggle[aria-pressed="false"] { opacity: 0.5; }
+.hc-widget-body { position: relative; min-height: 190px; }
+.hc-slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    text-decoration: none;
+    color: #fff;
+}
+.hc-slide.is-active { display: flex; }
+.hc-slide-img { height: 110px; border-radius: 10px; background-size: cover; background-position: center; margin-bottom: 0.6rem; }
+.hc-slide-tag { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; }
+.hc-slide-title { font-size: 0.92rem; line-height: 1.35; margin-bottom: 0.3rem; }
+.hc-slide-date { font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); }
+.hc-widget-dots { display: flex; gap: 0.4rem; justify-content: center; margin: 0.75rem 0 0.5rem; }
+.hc-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); }
+.hc-dot.is-active { background: #fff; }
+.hc-widget-hint { margin: 0; font-size: 0.72rem; text-align: center; color: rgba(255, 255, 255, 0.6); }
+@media (max-width: 1024px) {
+    .hc-widget {
+        position: static;
+        width: 100%;
+        max-width: 360px;
+        margin: 2rem auto 0;
+    }
+}

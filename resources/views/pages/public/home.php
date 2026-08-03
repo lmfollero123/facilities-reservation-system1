@@ -32,35 +32,83 @@ $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Default fallback image
 $defaultImage = $base . '/public/img/cityhall.jpeg';
 
+$heroSlides = [];
+foreach ($featuredFacilities as $f) {
+    if (!empty($f['image_path'])) {
+        $heroSlides[] = $base . $f['image_path'];
+    }
+    if (count($heroSlides) >= 3) {
+        break;
+    }
+}
+if ($heroSlides === []) {
+    $heroSlides[] = $base . '/public/uploads/Main%20Bg.jpg';
+}
+
 ob_start();
 ?>
 
-<!-- Hero Section - Full viewport, Main Bg with blur + green tint overlay -->
-<section class="home-hero relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16 overflow-hidden">
-    <div class="home-hero-bg" style="background-image: url('<?= $base; ?>/public/uploads/Main%20Bg.jpg');"></div>
-    <div class="home-hero-overlay"></div>
-    <div class="relative z-10 max-w-5xl mx-auto text-center flex-1 flex flex-col items-center justify-center">
-        <h1 class="home-animate visible text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight">
-            Barangay Culiat Public Facilities Reservation System
-        </h1>
-        <div class="home-animate visible h-1 w-24 bg-emerald-600 rounded-full mx-auto mt-6 mb-8" style="transition-delay: 0.1s;"></div>
-        <p class="home-animate visible text-lg sm:text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto mb-10" style="transition-delay: 0.15s;">
-            Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.
+<!-- Hero Section - photo carousel, serif title, Tagalog copy -->
+<section class="reservation-hero" aria-label="Barangay Culiat facilities reservation portal">
+    <div class="reservation-hero-slides">
+        <?php foreach ($heroSlides as $i => $slide): ?>
+            <div class="reservation-hero-slide<?= $i === 0 ? ' is-active' : ''; ?>" style="background-image:url('<?= htmlspecialchars($slide); ?>');"></div>
+        <?php endforeach; ?>
+    </div>
+    <div class="reservation-hero-gradient"></div>
+
+    <div class="reservation-hero-content">
+        <p class="reservation-hero-eyebrow">District 6, Quezon City &middot; Public Facilities Reservation Portal</p>
+        <h1 class="reservation-hero-title">Barangay Culiat</h1>
+        <div class="reservation-hero-rule"></div>
+        <p class="reservation-hero-lead">
+            Malugod na pagbati! Ang Sistema ng Reserbasyon ng Pasilidad ng Barangay Culiat ay dinisenyo upang mapadali ang pag-book ng mga pampublikong pasilidad &mdash; mula sa covered court hanggang sa multi-purpose hall &mdash; nang mabilis, ligtas, at maayos. Sa pamamagitan ng aming online portal, maaari kang mag-book, subaybayan ang katayuan ng iyong reservation, at makatanggap ng abiso, lahat sa iisang lugar.
         </p>
-        <div class="home-animate visible flex flex-wrap gap-4 justify-center" style="transition-delay: 0.2s;">
-            <a href="<?= $base; ?>/facilities" class="inline-flex items-center px-8 py-4 bg-emerald-600 text-white font-semibold rounded-lg shadow-lg hover:bg-emerald-700 hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 text-base sm:text-lg">
-                Browse Facilities
-            </a>
-            <a href="<?= $base; ?>/register" class="inline-flex items-center px-8 py-4 border-2 border-emerald-600 text-emerald-700 font-semibold rounded-lg hover:bg-emerald-50 transition-all duration-200 text-base sm:text-lg">
-                Create Account
-            </a>
+        <div class="reservation-hero-ctas">
+            <a href="<?= $base; ?>/facilities" class="reservation-hero-cta reservation-hero-cta-solid">Browse Facilities</a>
+            <a href="<?= $base; ?>/register" class="reservation-hero-cta reservation-hero-cta-outline">Create Account</a>
         </div>
     </div>
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-10">
-        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-        </svg>
+
+    <?php if (!empty($announcements)): ?>
+    <aside class="hc-widget" aria-label="Community updates">
+        <div class="hc-widget-head">
+            <span class="hc-widget-title">Community Updates</span>
+            <button type="button" class="hc-widget-toggle" id="hcAutoToggle" aria-pressed="true">&#9679; Slide</button>
+        </div>
+        <div class="hc-widget-body">
+            <?php foreach ($announcements as $i => $item):
+                $hcCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
+                $hcDate = date('M j, Y', strtotime($item['created_at']));
+            ?>
+                <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="hc-slide<?= $i === 0 ? ' is-active' : ''; ?>">
+                    <?php if (!empty($item['image_path'])): ?>
+                        <div class="hc-slide-img" style="background-image:url('<?= htmlspecialchars($base . $item['image_path']); ?>');"></div>
+                    <?php else: ?>
+                        <div class="hc-slide-img" style="background:<?= htmlspecialchars($hcCategory['bgColor']); ?>;"></div>
+                    <?php endif; ?>
+                    <span class="hc-slide-tag" style="color:<?= htmlspecialchars($hcCategory['color']); ?>;"><?= htmlspecialchars(ucfirst($hcCategory['type'])); ?></span>
+                    <strong class="hc-slide-title"><?= htmlspecialchars((string)($item['title'] ?? 'Announcement')); ?></strong>
+                    <span class="hc-slide-date"><?= htmlspecialchars($hcDate); ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <div class="hc-widget-dots">
+            <?php foreach ($announcements as $i => $item): ?>
+                <span class="hc-dot<?= $i === 0 ? ' is-active' : ''; ?>"></span>
+            <?php endforeach; ?>
+        </div>
+        <p class="hc-widget-hint">Tap card to open section</p>
+    </aside>
+    <?php endif; ?>
+
+    <?php if (count($heroSlides) > 1): ?>
+    <div class="reservation-hero-dots" role="tablist" aria-label="Hero background slides">
+        <?php foreach ($heroSlides as $i => $slide): ?>
+            <button type="button" class="reservation-hero-dot<?= $i === 0 ? ' is-active' : ''; ?>" data-slide-index="<?= $i; ?>" aria-label="Slide <?= $i + 1; ?>"></button>
+        <?php endforeach; ?>
     </div>
+    <?php endif; ?>
 </section>
 
 <!-- How It Works Section -->
@@ -377,6 +425,57 @@ ob_start();
         </div>
     </div>
 </section>
+
+<script>
+(function () {
+    'use strict';
+    var slides = document.querySelectorAll('.reservation-hero-slide');
+    var dots = document.querySelectorAll('.reservation-hero-dot');
+    if (slides.length > 1) {
+        var index = 0;
+        var show = function (i) {
+            slides.forEach(function (s, idx) { s.classList.toggle('is-active', idx === i); });
+            dots.forEach(function (d, idx) { d.classList.toggle('is-active', idx === i); });
+            index = i;
+        };
+        dots.forEach(function (d) {
+            d.addEventListener('click', function () {
+                show(parseInt(d.getAttribute('data-slide-index'), 10));
+            });
+        });
+        setInterval(function () { show((index + 1) % slides.length); }, 6000);
+    }
+
+    var hcSlides = document.querySelectorAll('.hc-slide');
+    var hcDots = document.querySelectorAll('.hc-dot');
+    var toggle = document.getElementById('hcAutoToggle');
+    if (hcSlides.length > 0) {
+        var hcIndex = 0;
+        var autoOn = true;
+        var timer = null;
+        var hcShow = function (i) {
+            hcSlides.forEach(function (s, idx) { s.classList.toggle('is-active', idx === i); });
+            hcDots.forEach(function (d, idx) { d.classList.toggle('is-active', idx === i); });
+            hcIndex = i;
+        };
+        var stopAuto = function () { if (timer) { clearInterval(timer); timer = null; } };
+        var startAuto = function () {
+            stopAuto();
+            if (hcSlides.length > 1) {
+                timer = setInterval(function () { hcShow((hcIndex + 1) % hcSlides.length); }, 5000);
+            }
+        };
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                autoOn = !autoOn;
+                toggle.setAttribute('aria-pressed', autoOn ? 'true' : 'false');
+                if (autoOn) { startAuto(); } else { stopAuto(); }
+            });
+        }
+        startAuto();
+    }
+})();
+</script>
 
 <?php
 $content = ob_get_clean();
