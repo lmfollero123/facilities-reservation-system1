@@ -143,7 +143,7 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
     <?php include __DIR__ . '/../components/navbar_dashboard.php'; ?>
-    <section class="dashboard-content dashboard-fade-in">
+    <section class="dashboard-content dashboard-fade-in <?= htmlspecialchars($dashboardContentClass ?? '', ENT_QUOTES, 'UTF-8'); ?>">
         <?= $content ?? ''; ?>
     </section>
 </div>

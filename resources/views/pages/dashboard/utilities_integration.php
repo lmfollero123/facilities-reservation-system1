@@ -31,6 +31,7 @@ require_once __DIR__ . '/../../../../services/uman_api.php';
 
 $pdo = db();
 $pageTitle = 'UMAN Integration | LGU Facilities Reservation';
+$dashboardContentClass = 'integrations-modern';
 
 $message = '';
 $messageType = '';
@@ -267,10 +268,10 @@ ob_start();
             <input type="hidden" name="asset_type_id" id="f_asset_type_id" value="">
             <input type="hidden" name="requested_asset_code" id="f_requested_asset_code" value="">
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+            <div class="integration-form-row integration-form-row--2">
                 <label>
                     Facility *
-                    <select name="facility_id" id="f_facility_id" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <select name="facility_id" id="f_facility_id" required class="integration-field">
                         <option value="">— Select facility —</option>
                         <?php foreach ($facilities as $f): ?>
                             <option value="<?= (int)$f['id']; ?>"><?= htmlspecialchars($f['name']); ?></option>
@@ -280,7 +281,7 @@ ob_start();
 
                 <label>
                     Asset / Equipment Type *
-                    <select name="asset_type" id="f_asset_type" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <select name="asset_type" id="f_asset_type" required class="integration-field">
                         <option value="">— Select type —</option>
                         <?php foreach ($equipmentTypes as $t):
                             $countStr = $typesConnected && $t['asset_count'] > 0
@@ -295,22 +296,22 @@ ob_start();
                 </label>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
-                <label style="display:block;">
+            <div class="integration-form-row integration-form-row--3">
+                <label>
                     Quantity
-                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" class="integration-field">
                 </label>
-                <label style="display:block;">
+                <label>
                     Urgency
-                    <select name="urgency" id="f_urgency" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <select name="urgency" id="f_urgency" class="integration-field">
                         <option value="Routine">Routine (3–5 days)</option>
                         <option value="Priority">Priority (1–2 days)</option>
                         <option value="Emergency">Emergency (same day)</option>
                     </select>
                 </label>
-                <label style="display:block;">
+                <label>
                     Date Needed
-                    <input type="date" name="date_needed" id="f_date_needed" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;" min="<?= date('Y-m-d'); ?>">
+                    <input type="date" name="date_needed" id="f_date_needed" class="integration-field" min="<?= date('Y-m-d'); ?>">
                 </label>
             </div>
 
@@ -433,12 +434,12 @@ ob_start();
                             data-resp="<?= htmlspecialchars($resp); ?>"
                             style="<?= $rowClickable ? 'cursor:pointer;' : 'opacity:0.75;' ?>"
                             title="<?= $rowClickable ? 'Click to request this specific asset' : 'Asset not operational — click to view only' ?>">
-                            <td><strong style="font-family:monospace;"><?= htmlspecialchars($code); ?></strong></td>
-                            <td><?= htmlspecialchars($name); ?></td>
-                            <td><?= htmlspecialchars($type); ?></td>
-                            <td><span class="status-badge active"><?= htmlspecialchars($cond); ?></span></td>
-                            <td><?= htmlspecialchars($loc); ?></td>
-                            <td><?= htmlspecialchars($resp); ?></td>
+                            <td data-label="Code"><strong style="font-family:monospace;"><?= htmlspecialchars($code); ?></strong></td>
+                            <td data-label="Name"><?= htmlspecialchars($name); ?></td>
+                            <td data-label="Type"><?= htmlspecialchars($type); ?></td>
+                            <td data-label="Status"><span class="status-badge active"><?= htmlspecialchars($cond); ?></span></td>
+                            <td data-label="Location"><?= htmlspecialchars($loc); ?></td>
+                            <td data-label="Responsible Office"><?= htmlspecialchars($resp); ?></td>
                             <td>
                                 <?php if ($rowClickable): ?>
                                     <button type="button" class="uman-pin-btn"
@@ -500,14 +501,14 @@ ob_start();
                         };
                     ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($ref); ?></strong></td>
-                            <td><?= htmlspecialchars($fac); ?></td>
-                            <td><?= $assetLabel; ?></td>
-                            <td><?= $qty; ?></td>
-                            <td><span style="color:<?= $urgColor; ?>;font-weight:600;"><?= htmlspecialchars($urg); ?></span></td>
-                            <td><?= htmlspecialchars($need); ?></td>
-                            <td><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst($stat)); ?></span></td>
-                            <td><?= htmlspecialchars($when); ?></td>
+                            <td data-label="Reference"><strong><?= htmlspecialchars($ref); ?></strong></td>
+                            <td data-label="Facility"><?= htmlspecialchars($fac); ?></td>
+                            <td data-label="Asset"><?= $assetLabel; ?></td>
+                            <td data-label="Qty"><?= $qty; ?></td>
+                            <td data-label="Urgency"><span style="color:<?= $urgColor; ?>;font-weight:600;"><?= htmlspecialchars($urg); ?></span></td>
+                            <td data-label="Need By"><?= htmlspecialchars($need); ?></td>
+                            <td data-label="Status"><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst($stat)); ?></span></td>
+                            <td data-label="Date"><?= htmlspecialchars($when); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

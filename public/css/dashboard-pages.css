@@ -1082,3 +1082,63 @@
     }
 }
 
+/* ============================================================
+   Integrations Modern UI
+   Scoped to pages that set $dashboardContentClass =
+   'integrations-modern' before including dashboard_layout.php.
+   Inert everywhere else — see
+   docs/superpowers/specs/2026-08-03-integrations-modern-ui-design.md
+   ============================================================ */
+
+.integrations-modern .page-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color, #e0e6ed);
+    margin-bottom: 1.5rem;
+}
+
+.integrations-modern .booking-card {
+    border: 1px solid var(--border-light, #f0f2f5);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.integrations-modern .booking-card:hover {
+    box-shadow: 0 12px 28px var(--shadow-hover, rgba(0, 0, 0, 0.12));
+}
+
+/* Responsive field grid — replaces ad hoc inline grid-template-columns
+   that didn't collapse on mobile. */
+.integrations-modern .integration-form-row {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.integrations-modern .integration-form-row--2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.integrations-modern .integration-form-row--3 {
+    grid-template-columns: 1fr 1fr 1fr;
+    margin-top: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .integrations-modern .integration-form-row--2,
+    .integrations-modern .integration-form-row--3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Field sizing only — border/background/color stay owned by the global
+   input/select tag rules in style.css so dark mode keeps working. */
+.integrations-modern .integration-field {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 6px;
+}
+
+.integrations-modern label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-secondary, #5b6888);
+}
+
