@@ -197,6 +197,18 @@ if ($hasTables) {
         }
     }
 
+    $curYear = (int)date('Y');
+    $curMonth = (int)date('n');
+    $readFacilityIdsThisMonth = [];
+    foreach ($rows as $row) {
+        if ((int)$row['year'] === $curYear && (int)$row['month'] === $curMonth) {
+            $readFacilityIdsThisMonth[(int)$row['facility_id']] = true;
+        }
+    }
+    $facilitiesMissingThisMonth = array_values(array_filter($facilities, function ($f) use ($readFacilityIdsThisMonth) {
+        return $f['status'] !== 'deleted' && !isset($readFacilityIdsThisMonth[(int)$f['id']]);
+    }));
+
     $approvedRows = $pdo->query("
         SELECT facility_id, year, month
         FROM energy_recommendations_cache
@@ -473,6 +485,27 @@ ob_start();
             </script>
         </section>
         <?php endif; ?>
+
+        <section class="booking-card ee-missing-card">
+            <h2>Missing This Month</h2>
+            <p style="color:#8b95b5; margin:0 0 0.75rem;"><?= htmlspecialchars(date('F Y')); ?> readings not yet recorded.</p>
+            <?php if ($facilitiesMissingThisMonth === []): ?>
+                <p class="ee-missing-empty"><i class="bi bi-check-circle-fill"></i> All facilities are up to date.</p>
+            <?php else: ?>
+                <ul class="ee-missing-list">
+                    <?php foreach ($facilitiesMissingThisMonth as $f): ?>
+                        <li>
+                            <button type="button" class="ee-missing-item" data-facility-id="<?= (int)$f['id']; ?>">
+                                <?= htmlspecialchars($f['name']); ?>
+                                <?php if (!isset($mapping[(int)$f['id']])): ?>
+                                    <span class="ee-missing-tag">unmapped</span>
+                                <?php endif; ?>
+                            </button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </section>
     </div>
 
     <section class="booking-card ee-readings-card">
@@ -756,6 +789,17 @@ ob_start();
         window.addEventListener('resize', sync);
         el.addEventListener('scroll', function () {
             el.classList.toggle('is-scroll-end', el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+        });
+    });
+
+    document.querySelectorAll('.ee-missing-item').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var sel = document.getElementById('energy-facility-select');
+            if (!sel) return;
+            sel.value = btn.getAttribute('data-facility-id');
+            sel.dispatchEvent(new Event('change'));
+            sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            sel.focus();
         });
     });
 })();

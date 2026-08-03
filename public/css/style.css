@@ -4955,6 +4955,36 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     width: 100%;
 }
 
+/* "Missing This Month" nudge panel (energy_efficiency.php) — narrow-column
+   actionable checklist, sits beside the meter-reading form. */
+.ee-missing-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.ee-missing-item {
+    width: 100%;
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    background: var(--bg-secondary, #fff);
+    color: var(--text-primary, #1e293b);
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ee-missing-item:hover { border-color: var(--gov-blue); background: rgba(99, 132, 210, 0.08); }
+.ee-missing-tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #fef3c7;
+    color: #92400e;
+}
+.ee-missing-empty { color: #0d7a43; font-weight: 600; margin: 0; }
+html[data-theme="dark"] .ee-missing-item { border-color: var(--border-color, #334155); background: var(--bg-tertiary, #0f172a); color: var(--text-primary, #f1f5f9); }
+html[data-theme="dark"] .ee-missing-tag { background: #78350f; color: #fde68a; }
+
 /* Compact reference table (e.g. energy_efficiency.php "Latest Readings") —
    full-width, denser rows, and a real scroll affordance instead of relying
    on the user to discover a hidden horizontal scrollbar. */
