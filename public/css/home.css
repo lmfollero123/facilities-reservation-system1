@@ -210,17 +210,13 @@
     overflow: hidden;
     padding: 7rem 1.5rem 5rem;
 }
-.reservation-hero-slides { position: absolute; inset: 0; }
-.reservation-hero-slide {
+.reservation-hero-bg {
     position: absolute;
     inset: 0;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    opacity: 0;
-    transition: opacity 1.2s ease;
 }
-.reservation-hero-slide.is-active { opacity: 1; }
 .reservation-hero-gradient {
     position: absolute;
     inset: 0;
@@ -289,26 +285,6 @@
     color: #fff;
 }
 .reservation-hero-cta-outline:hover { background: rgba(255, 255, 255, 0.15); }
-.reservation-hero-dots {
-    position: absolute;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2;
-    display: flex;
-    gap: 0.5rem;
-}
-.reservation-hero-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.4);
-    cursor: pointer;
-    padding: 0;
-    transition: background 0.2s ease;
-}
-.reservation-hero-dot.is-active { background: #fff; }
 @media (max-width: 640px) {
     .reservation-hero-title { font-size: clamp(2rem, 10vw, 3rem); }
 }

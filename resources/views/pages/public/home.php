@@ -32,29 +32,14 @@ $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Default fallback image
 $defaultImage = $base . '/public/img/cityhall.jpeg';
 
-$heroSlides = [];
-foreach ($featuredFacilities as $f) {
-    if (!empty($f['image_path'])) {
-        $heroSlides[] = $base . $f['image_path'];
-    }
-    if (count($heroSlides) >= 3) {
-        break;
-    }
-}
-if ($heroSlides === []) {
-    $heroSlides[] = $base . '/public/uploads/Main%20Bg.jpg';
-}
+$heroImage = $base . '/public/img/756975060_2502390913534018_3600429775912430720_n.jpg';
 
 ob_start();
 ?>
 
-<!-- Hero Section - photo carousel, serif title, Tagalog copy -->
+<!-- Hero Section - static photo, serif title, Tagalog copy -->
 <section class="reservation-hero" aria-label="Barangay Culiat facilities reservation portal">
-    <div class="reservation-hero-slides">
-        <?php foreach ($heroSlides as $i => $slide): ?>
-            <div class="reservation-hero-slide<?= $i === 0 ? ' is-active' : ''; ?>" style="background-image:url('<?= htmlspecialchars($slide); ?>');"></div>
-        <?php endforeach; ?>
-    </div>
+    <div class="reservation-hero-bg" style="background-image:url('<?= htmlspecialchars($heroImage); ?>');"></div>
     <div class="reservation-hero-gradient"></div>
 
     <div class="reservation-hero-content">
@@ -100,14 +85,6 @@ ob_start();
         </div>
         <p class="hc-widget-hint">Tap card to open section</p>
     </aside>
-    <?php endif; ?>
-
-    <?php if (count($heroSlides) > 1): ?>
-    <div class="reservation-hero-dots" role="tablist" aria-label="Hero background slides">
-        <?php foreach ($heroSlides as $i => $slide): ?>
-            <button type="button" class="reservation-hero-dot<?= $i === 0 ? ' is-active' : ''; ?>" data-slide-index="<?= $i; ?>" aria-label="Slide <?= $i + 1; ?>"></button>
-        <?php endforeach; ?>
-    </div>
     <?php endif; ?>
 </section>
 
@@ -433,23 +410,6 @@ ob_start();
 <script>
 (function () {
     'use strict';
-    var slides = document.querySelectorAll('.reservation-hero-slide');
-    var dots = document.querySelectorAll('.reservation-hero-dot');
-    if (slides.length > 1) {
-        var index = 0;
-        var show = function (i) {
-            slides.forEach(function (s, idx) { s.classList.toggle('is-active', idx === i); });
-            dots.forEach(function (d, idx) { d.classList.toggle('is-active', idx === i); });
-            index = i;
-        };
-        dots.forEach(function (d) {
-            d.addEventListener('click', function () {
-                show(parseInt(d.getAttribute('data-slide-index'), 10));
-            });
-        });
-        setInterval(function () { show((index + 1) % slides.length); }, 6000);
-    }
-
     var hcSlides = document.querySelectorAll('.hc-slide');
     var hcDots = document.querySelectorAll('.hc-dot');
     var toggle = document.getElementById('hcAutoToggle');
