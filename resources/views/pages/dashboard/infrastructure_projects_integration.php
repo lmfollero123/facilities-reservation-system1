@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../services/ipms_api.php';
 $pdo = db();
 $pageTitle = 'Infrastructure Projects (IPMS) | LGU Facilities Reservation';
+$dashboardContentClass = 'integrations-modern';
 
 $canSync = in_array($role, ['Admin', 'Staff'], true);
 $configured = ipms_api_key() !== '';
@@ -131,9 +132,9 @@ ob_start();
                     <tbody>
                         <?php foreach ($activeIpmsProjects as $p): ?>
                             <tr>
-                                <td><strong><?= htmlspecialchars($p['facility_name']); ?></strong></td>
-                                <td><?= htmlspecialchars($p['label'] !== '' ? $p['label'] : 'Infrastructure project'); ?></td>
-                                <td>
+                                <td data-label="Facility"><strong><?= htmlspecialchars($p['facility_name']); ?></strong></td>
+                                <td data-label="Project"><?= htmlspecialchars($p['label'] !== '' ? $p['label'] : 'Infrastructure project'); ?></td>
+                                <td data-label="Blocked dates">
                                     <?= date('M d, Y', strtotime($p['start_date'])); ?>
                                     <?php if ($p['end_date'] !== $p['start_date']): ?>
                                         &ndash; <?= date('M d, Y', strtotime($p['end_date'])); ?>
@@ -172,13 +173,13 @@ ob_start();
                 <tbody>
                     <?php foreach ($needsReview as $item): ?>
                         <tr>
-                            <td>
+                            <td data-label="Project">
                                 <strong><?= htmlspecialchars((string)($item['name'] ?? '')); ?></strong><br>
                                 <small style="color:#8b95b5;"><?= htmlspecialchars((string)($item['project_code'] ?? '')); ?></small>
                             </td>
-                            <td><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', (string)($item['status'] ?? '')))); ?></span></td>
-                            <td><?= htmlspecialchars((string)($item['location'] ?? '')); ?></td>
-                            <td><?= (int)($item['best_score'] ?? 0); ?>/100</td>
+                            <td data-label="Status"><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', (string)($item['status'] ?? '')))); ?></span></td>
+                            <td data-label="Reported location"><?= htmlspecialchars((string)($item['location'] ?? '')); ?></td>
+                            <td data-label="Best match confidence"><?= (int)($item['best_score'] ?? 0); ?>/100</td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -209,12 +210,12 @@ ob_start();
                     <tbody>
                         <?php foreach ($upcomingProjects as $p): ?>
                             <tr>
-                                <td>
+                                <td data-label="Project">
                                     <strong><?= htmlspecialchars((string)($p['name'] ?? '')); ?></strong><br>
                                     <small style="color:#8b95b5;"><?= htmlspecialchars((string)($p['project_code'] ?? '')); ?></small>
                                 </td>
-                                <td><span class="status-badge offline"><?= htmlspecialchars(ucfirst((string)($p['status'] ?? ''))); ?></span></td>
-                                <td>
+                                <td data-label="Status"><span class="status-badge offline"><?= htmlspecialchars(ucfirst((string)($p['status'] ?? ''))); ?></span></td>
+                                <td data-label="Likely facility">
                                     <?php if (!empty($p['matched_facility_id'])): ?>
                                         <?php $fid = (int)$p['matched_facility_id']; ?>
                                         <?= htmlspecialchars($facilityNameById[$fid] ?? ('Facility #' . $fid)); ?>
@@ -222,7 +223,7 @@ ob_start();
                                         <em style="color:#8b95b5;">Not matched — <?= htmlspecialchars((string)($p['location'] ?? '')); ?></em>
                                     <?php endif; ?>
                                 </td>
-                                <td><?= !empty($p['start_date']) ? date('M d, Y', strtotime((string)$p['start_date'])) : '—'; ?></td>
+                                <td data-label="Expected start"><?= !empty($p['start_date']) ? date('M d, Y', strtotime((string)$p['start_date'])) : '—'; ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
