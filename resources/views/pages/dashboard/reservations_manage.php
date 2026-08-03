@@ -893,7 +893,7 @@ ob_start();
                                 <td data-label="Requester">
                                     <span class="ra-cell-primary">
                                         <?php if (!empty($reservation['requester_id'])): ?>
-                                            <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                            <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
                                         <?php else: ?>
                                             <?= htmlspecialchars((string)$reservation['requester']); ?>
                                         <?php endif; ?>
@@ -1057,7 +1057,7 @@ ob_start();
                             <td data-label="Requester">
                                 <span class="ra-cell-primary">
                                     <?php if (!empty($reservation['requester_id'])): ?>
-                                        <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                        <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
                                     <?php else: ?>
                                         <?= htmlspecialchars((string)$reservation['requester']); ?>
                                     <?php endif; ?>
@@ -2032,7 +2032,7 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                             </header>
                             <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong>
                                 <?php if (!empty($record['requester_id'])): ?>
-                                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$record['requester_id']); ?>"><?= htmlspecialchars($record['requester']); ?></a>
+                                    <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$record['requester_id']); ?>"><?= htmlspecialchars($record['requester']); ?></a>
                                 <?php else: ?>
                                     <?= htmlspecialchars($record['requester']); ?>
                                 <?php endif; ?>
@@ -2431,6 +2431,24 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     font-weight: 600;
     color: #1e293b;
     line-height: 1.35;
+}
+.ra-resident-link {
+    color: var(--gov-blue-dark);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--gov-blue);
+}
+.ra-resident-link:hover,
+.ra-resident-link:focus-visible {
+    color: var(--gov-blue);
+    border-bottom-style: solid;
+}
+html[data-theme="dark"] .ra-resident-link {
+    color: var(--gov-blue-light);
+    border-bottom-color: var(--gov-blue-light);
+}
+html[data-theme="dark"] .ra-resident-link:hover,
+html[data-theme="dark"] .ra-resident-link:focus-visible {
+    color: #fff;
 }
 .ra-cell-meta {
     display: block;

@@ -200,6 +200,7 @@ ob_start();
                 <p style="margin:0.25rem 0 0; color:#6b7280;"><?= htmlspecialchars($viewedUser['address'] ?? '—'); ?></p>
             </div>
             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <span class="status-badge <?= htmlspecialchars(strtolower((string)$viewedUser['role'])); ?>"><?= htmlspecialchars((string)$viewedUser['role']); ?></span>
                 <span class="status-badge <?= $viewedUser['status'] === 'active' ? 'active' : ($viewedUser['status'] === 'locked' ? 'offline' : 'pending'); ?>"><?= htmlspecialchars(ucfirst((string)$viewedUser['status'])); ?></span>
                 <span class="status-badge <?= $viewedUser['is_verified'] ? 'active' : 'pending'; ?>"><?= $viewedUser['is_verified'] ? 'Verified' : 'Unverified'; ?></span>
             </div>
@@ -213,29 +214,29 @@ ob_start();
                 <form method="POST" style="display:inline;">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" value="reset_password">
-                    <button type="submit" class="btn-secondary" onclick="return confirm('Reset this user\'s password?')">Reset Password</button>
+                    <button type="submit" class="btn-outline" onclick="return confirm('Reset this user\'s password?')">Reset Password</button>
                 </form>
                 <?php if ($viewedUser['status'] === 'locked'): ?>
                     <form method="POST" style="display:inline;">
                         <?= csrf_field(); ?>
                         <input type="hidden" name="action" value="unlock">
-                        <button type="submit" class="btn-secondary">Unlock Account</button>
+                        <button type="submit" class="btn-outline">Unlock Account</button>
                     </form>
                 <?php elseif ((int)$currentUserId !== $viewedUserId): ?>
-                    <form method="POST" style="display:inline;" onsubmit="return confirm('Lock this account?')">
+                    <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return confirm('Lock this account?')">
                         <?= csrf_field(); ?>
                         <input type="hidden" name="action" value="lock">
-                        <input type="text" name="lock_reason" placeholder="Reason (optional)" style="padding:0.4rem;">
-                        <button type="submit" class="btn-secondary">Lock Account</button>
+                        <input type="text" name="lock_reason" placeholder="Reason (optional)" style="padding:0.6rem;">
+                        <button type="submit" class="btn-outline">Lock Account</button>
                     </form>
                 <?php endif; ?>
             <?php endif; ?>
             <?php if ($canDeleteUsers && (int)$currentUserId !== $viewedUserId): ?>
-                <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this account permanently?')">
+                <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return confirm('Delete this account permanently?')">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" value="delete">
-                    <input type="text" name="delete_reason" placeholder="Deletion reason (min 10 chars)" required minlength="10" style="padding:0.4rem; min-width:220px;">
-                    <button type="submit" class="btn-secondary" style="color:#b23030;">Delete Account</button>
+                    <input type="text" name="delete_reason" placeholder="Deletion reason (min 10 chars)" required minlength="10" style="padding:0.6rem; min-width:220px;">
+                    <button type="submit" class="btn btn-danger">Delete Account</button>
                 </form>
             <?php endif; ?>
         </div>
