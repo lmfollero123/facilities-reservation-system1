@@ -192,7 +192,7 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
                 $title,
                 $message,
                 $facilityId,
-                $facility['image_path'] ?? null
+                !empty($facility['image_path']) ? $facility['image_path'] : '/public/img/geralt-maintenance-2422167_1920.jpg'
             );
             if ($notificationId === null) {
                 $result['errors'][] = "Failed to save announcement for {$cimmId}";
