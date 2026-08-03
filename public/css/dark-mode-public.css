@@ -20,9 +20,9 @@
 }
 
 [data-theme="dark"] #mainNav.public-navbar-modern {
-    background: #0f172a !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
     border-bottom-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -94,9 +94,9 @@
 
 /* When scrolled in dark mode: keep navbar DARK (override public-pages white) and keep text light */
 [data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled {
-    background: #0f172a !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
     border-bottom-color: rgba(255, 255, 255, 0.08) !important;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
 }

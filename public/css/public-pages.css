@@ -3,19 +3,24 @@
  * Loaded when Tailwind is used on public pages
  */
 
-/* ===== Modern Public Navbar – LIGHT MODE (default): light bar, dark text ===== */
-/* Solid bar, no glassmorphism. Dark mode overrides in dark-mode-public.css. */
+/* ===== Modern Public Navbar: dark frosted glass (matches reference LGU site) ===== */
+/* Translucent dark tint + blur, so whatever's behind (hero photo, page bg)
+   shows through softly instead of a flat opaque bar. Same treatment applies
+   in both light and dark theme -- dark-mode-public.css only adjusts text/
+   button colors, not this glass effect. */
 #mainNav.public-navbar-modern {
-    background: #0f172a !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
     transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled {
-    background: #0f172a !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
 }
