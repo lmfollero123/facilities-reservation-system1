@@ -171,52 +171,56 @@ ob_start();
 <!-- Announcements Section -->
 <?php if (!empty($announcements)): ?>
 <section class="py-16 sm:py-20 px-4 sm:px-6 lg:px-8" style="background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);">
-    <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-16 home-animate">
-            <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">Announcements & Updates</h2>
-            <div class="h-1 w-16 bg-emerald-600 rounded-full mx-auto mt-4 mb-4"></div>
-            <p class="text-gray-600 text-lg">Latest advisories from Barangay Culiat</p>
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-10 home-animate">
+            <div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">Announcements & Updates</h2>
+                <p class="text-gray-600 text-lg mt-2">Latest advisories from Barangay Culiat</p>
+            </div>
+            <a href="<?= $base; ?>/announcements" class="inline-flex items-center text-emerald-700 font-semibold hover:text-emerald-800">
+                See all
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+            </a>
         </div>
-        
-        <div class="space-y-6">
-            <?php foreach ($announcements as $index => $item): 
-                $category = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
-                $dateFormatted = date('M d, Y', strtotime($item['created_at']));
-                $messageSummary = htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 120, '…'));
-                $hasLink = !empty($item['link']);
-                $hasImage = !empty($item['image_path']);
-            ?>
-                <div class="home-announcement-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div class="flex items-center justify-between px-5 py-4" style="background-color: <?= $category['bgColor']; ?>; border-left: 4px solid <?= $category['color']; ?>;">
-                        <span class="font-semibold uppercase text-sm tracking-wider" style="color: <?= $category['color']; ?>;">
-                            <?= ucfirst($category['type']); ?>
-                        </span>
-                        <span class="text-gray-500 text-sm"><?= $dateFormatted; ?></span>
-                    </div>
-                    
-                    <?php if ($hasImage): ?>
-                    <div class="home-announcement-img h-48 sm:h-56 overflow-hidden">
-                        <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>" class="w-full h-full object-cover">
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="p-6">
-                        <h3 class="text-xl font-bold text-gray-900 mb-3"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h3>
-                        <p class="text-gray-600 mb-4"><?= $messageSummary; ?></p>
-                        
-                        <?php if ($hasLink): ?>
-                        <a href="<?= htmlspecialchars($base . $item['link']); ?>" class="inline-flex items-center text-emerald-600 font-semibold hover:text-emerald-700">
-                            Read More
-                            <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                            </svg>
-                        </a>
-                        <?php endif; ?>
-                    </div>
+
+        <?php
+            $featuredAnnouncement = $announcements[0];
+            $restAnnouncements = array_slice($announcements, 1, 3);
+            $featCategory = getAnnouncementCategory($featuredAnnouncement['title'] ?? '', $featuredAnnouncement['message'] ?? '', $featuredAnnouncement['type'] ?? 'system');
+            $featDate = date('M j, Y', strtotime($featuredAnnouncement['created_at']));
+            $featImg = !empty($featuredAnnouncement['image_path']) ? $base . $featuredAnnouncement['image_path'] : $defaultImage;
+        ?>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="lg:col-span-2 relative rounded-2xl overflow-hidden group home-animate block" style="min-height:360px;">
+                <div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style="background-image:url('<?= htmlspecialchars($featImg); ?>');"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
+                <div class="absolute bottom-0 left-0 p-6 sm:p-8 text-white">
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mb-3 text-white" style="background:<?= htmlspecialchars($featCategory['color']); ?>;"><?= htmlspecialchars($featCategory['type']); ?></span>
+                    <h3 class="text-2xl sm:text-3xl font-bold mb-2"><?= htmlspecialchars($featuredAnnouncement['title'] ?? 'Announcement'); ?></h3>
+                    <p class="text-white/80 text-sm"><?= htmlspecialchars($featDate); ?></p>
                 </div>
-            <?php endforeach; ?>
+            </a>
+
+            <div class="flex flex-col gap-4">
+                <?php foreach ($restAnnouncements as $index => $item):
+                    $rCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
+                    $rDate = date('M j, Y', strtotime($item['created_at']));
+                    $rImg = !empty($item['image_path']) ? $base . $item['image_path'] : $defaultImage;
+                ?>
+                    <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="home-announcement-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> flex gap-3 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-3">
+                        <div class="w-20 h-20 flex-shrink-0 rounded-lg bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($rImg); ?>');"></div>
+                        <div class="flex-1 min-w-0">
+                            <span class="text-xs font-bold uppercase tracking-wide" style="color:<?= htmlspecialchars($rCategory['color']); ?>;"><?= htmlspecialchars($rCategory['type']); ?></span>
+                            <h4 class="text-sm font-bold text-gray-900 line-clamp-2 mt-0.5"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h4>
+                            <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($rDate); ?></p>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
-        
+
         <div class="text-center mt-12 home-animate">
             <a href="<?= $base; ?>/announcements" class="inline-flex items-center px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg shadow-lg hover:bg-emerald-700 hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
                 View All Announcements
