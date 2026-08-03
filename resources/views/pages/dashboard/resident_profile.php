@@ -156,3 +156,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $viewedUser = $userStmt->fetch(PDO::FETCH_ASSOC);
     }
 }
+
+$reservationsStmt = $pdo->prepare(
+    'SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
+     FROM reservations r
+     LEFT JOIN facilities f ON r.facility_id = f.id
+     WHERE r.user_id = :user_id
+     ORDER BY r.reservation_date DESC, r.id DESC
+     LIMIT 20'
+);
+$reservationsStmt->execute(['user_id' => $viewedUserId]);
+$recentReservations = $reservationsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$violations = getUserViolations($viewedUserId);
+
+$canUpdateUsers = frs_can_update($actorRole, 'users');
+$canDeleteUsers = frs_can_delete($actorRole, 'users');
+$base = base_path();
+$profilePicUrl = !empty($viewedUser['profile_picture']) ? $base . $viewedUser['profile_picture'] : null;
+$initials = '';
+foreach (explode(' ', (string)$viewedUser['name']) as $part) {
+    if ($part !== '') { $initials .= strtoupper($part[0]); }
+    if (strlen($initials) >= 2) { break; }
+}
+
+ob_start();
+?>
+<div class="dashboard-content">
+    <?= frs_page_title('Resident Profile', 'View account details, reservation history, and violations.'); ?>
+
+    <?php if ($message !== ''): ?>
+        <div class="alert alert-<?= $messageType === 'error' ? 'danger' : 'success'; ?>"><?= htmlspecialchars($message); ?></div>
+    <?php endif; ?>
+
+    <section class="booking-card">
+        <div style="display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap;">
+            <div style="width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:1.5rem; <?= $profilePicUrl ? 'background-image:url(' . htmlspecialchars($profilePicUrl) . '); background-size:cover; background-position:center;' : 'background:linear-gradient(135deg, #2563eb, #1d4ed8);'; ?>">
+                <?php if (!$profilePicUrl): ?><?= htmlspecialchars($initials ?: '?'); ?><?php endif; ?>
+            </div>
+            <div style="flex:1; min-width:200px;">
+                <h2 style="margin:0 0 0.25rem;"><?= htmlspecialchars($viewedUser['name']); ?></h2>
+                <p style="margin:0; color:#6b7280;"><?= htmlspecialchars($viewedUser['email']); ?> · <?= htmlspecialchars($viewedUser['mobile'] ?? '—'); ?></p>
+                <p style="margin:0.25rem 0 0; color:#6b7280;"><?= htmlspecialchars($viewedUser['address'] ?? '—'); ?></p>
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <span class="status-badge <?= $viewedUser['status'] === 'active' ? 'active' : ($viewedUser['status'] === 'locked' ? 'offline' : 'pending'); ?>"><?= htmlspecialchars(ucfirst((string)$viewedUser['status'])); ?></span>
+                <span class="status-badge <?= $viewedUser['is_verified'] ? 'active' : 'pending'; ?>"><?= $viewedUser['is_verified'] ? 'Verified' : 'Unverified'; ?></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="booking-card">
+        <h3 style="margin-top:0;">Account Actions</h3>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <?php if ($canUpdateUsers): ?>
+                <form method="POST" style="display:inline;">
+                    <?= csrf_field(); ?>
+                    <input type="hidden" name="action" value="reset_password">
+                    <button type="submit" class="btn-secondary" onclick="return confirm('Reset this user\'s password?')">Reset Password</button>
+                </form>
+                <?php if ($viewedUser['status'] === 'locked'): ?>
+                    <form method="POST" style="display:inline;">
+                        <?= csrf_field(); ?>
+                        <input type="hidden" name="action" value="unlock">
+                        <button type="submit" class="btn-secondary">Unlock Account</button>
+                    </form>
+                <?php elseif ((int)$currentUserId !== $viewedUserId): ?>
+                    <form method="POST" style="display:inline;" onsubmit="return confirm('Lock this account?')">
+                        <?= csrf_field(); ?>
+                        <input type="hidden" name="action" value="lock">
+                        <input type="text" name="lock_reason" placeholder="Reason (optional)" style="padding:0.4rem;">
+                        <button type="submit" class="btn-secondary">Lock Account</button>
+                    </form>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if ($canDeleteUsers && (int)$currentUserId !== $viewedUserId): ?>
+                <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this account permanently?')">
+                    <?= csrf_field(); ?>
+                    <input type="hidden" name="action" value="delete">
+                    <input type="text" name="delete_reason" placeholder="Deletion reason (min 10 chars)" required minlength="10" style="padding:0.4rem; min-width:220px;">
+                    <button type="submit" class="btn-secondary" style="color:#b23030;">Delete Account</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="booking-card">
+        <h3 style="margin-top:0;">Recent Reservations</h3>
+        <?php if ($recentReservations === []): ?>
+            <p style="color:#8b95b5;">No reservations found.</p>
+        <?php else: ?>
+            <table class="table">
+                <thead><tr><th>Facility</th><th>Date</th><th>Time</th><th>Status</th></tr></thead>
+                <tbody>
+                    <?php foreach ($recentReservations as $res): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)($res['facility_name'] ?? '—')); ?></td>
+                            <td><?= htmlspecialchars((string)$res['reservation_date']); ?></td>
+                            <td><?= htmlspecialchars((string)$res['time_slot']); ?></td>
+                            <td><span class="status-badge <?= htmlspecialchars((string)$res['status']); ?>"><?= htmlspecialchars(ucfirst((string)$res['status'])); ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <p><a href="<?= htmlspecialchars($base . '/dashboard/reservations-manage?requester_id=' . $viewedUserId); ?>">View all reservations for this resident →</a></p>
+        <?php endif; ?>
+    </section>
+
+    <section class="booking-card">
+        <h3 style="margin-top:0;">Violations History</h3>
+        <?php if ($violations === []): ?>
+            <p style="color:#8b95b5;">No violations recorded.</p>
+        <?php else: ?>
+            <table class="table">
+                <thead><tr><th>Type</th><th>Severity</th><th>Facility</th><th>Recorded</th><th>Description</th></tr></thead>
+                <tbody>
+                    <?php foreach ($violations as $v): ?>
+                        <tr>
+                            <td><?= htmlspecialchars(frs_violation_type_label((string)$v['violation_type'])); ?></td>
+                            <td><span class="status-badge <?= in_array($v['severity'], ['high', 'critical'], true) ? 'offline' : 'pending'; ?>"><?= htmlspecialchars(ucfirst((string)$v['severity'])); ?></span></td>
+                            <td><?= htmlspecialchars((string)($v['facility_name'] ?? '—')); ?></td>
+                            <td><?= htmlspecialchars((string)$v['created_at']); ?></td>
+                            <td><?= htmlspecialchars((string)($v['description'] ?? '—')); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </section>
+</div>
+<?php
+$content = ob_get_clean();
+include __DIR__ . '/../../layouts/dashboard_layout.php';
