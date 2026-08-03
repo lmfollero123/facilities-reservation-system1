@@ -4795,6 +4795,16 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     position: relative;
 }
 
+/* Base rule: .table-responsive must always scroll horizontally when its
+   content is wider than its container, regardless of viewport size — a
+   narrow sibling column (e.g. .booking-wrapper's 2fr/1fr split) can squeeze
+   this below any table's natural width even on desktop. */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 /* Mobile (≤480px): Stack tables as cards for better readability */
 @media (max-width: 480px) {
     .table-responsive {
