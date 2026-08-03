@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
                 ? frs_energy_push_reading($pdo, $readingId)
                 : ['success' => false, 'error' => 'Sync disabled — reading saved locally as pending.'];
             if ($push['success']) {
-                $message = 'Reading saved and pushed to the Energy system.';
+                $message = 'Reading saved and pushed to the Energy system. Waiting for Energy Admin approval.';
                 $messageType = 'success';
             } else {
                 $message = 'Reading saved locally. Push to Energy system pending: ' . (string)$push['error'];
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
                 ? frs_energy_push_reading($pdo, $readingId)
                 : ['success' => false, 'error' => 'Sync disabled — reading saved locally as pending.'];
             if ($push['success']) {
-                $message = 'Reading corrected and re-pushed to the Energy system.';
+                $message = 'Reading corrected and re-pushed to the Energy system. Waiting for Energy Admin approval.';
                 $messageType = 'success';
             } else {
                 $message = 'Reading corrected. Push pending: ' . (string)$push['error'];
@@ -192,6 +192,8 @@ $configured = energy_api_base_url() !== '' && energy_api_token() !== '';
 
 $latestReadings = [];
 $pendingCount = 0;
+$hasSyncedReadings = false;
+$approvedRecommendationPeriods = [];
 if ($hasTables) {
     $rows = $pdo->query('
         SELECT r.*, f.name AS facility_name, u.name AS recorded_by_name
@@ -209,6 +211,21 @@ if ($hasTables) {
         if (in_array($row['sync_status'], ['pending', 'failed'], true)) {
             $pendingCount++;
         }
+        if ($row['sync_status'] === 'synced') {
+            $hasSyncedReadings = true;
+        }
+    }
+
+    $approvedRows = $pdo->query("
+        SELECT facility_id, year, month
+        FROM energy_recommendations_cache
+        WHERE status = 'approved'
+          AND facility_id IS NOT NULL
+        GROUP BY facility_id, year, month
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($approvedRows as $approvedRow) {
+        $key = (int)$approvedRow['facility_id'] . '-' . (int)$approvedRow['year'] . '-' . (int)$approvedRow['month'];
+        $approvedRecommendationPeriods[$key] = true;
     }
 }
 
@@ -512,7 +529,7 @@ ob_start();
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
-                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Rate</th><th>Estimated Cost</th><th>Sync</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
+                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Rate</th><th>Estimated Cost</th><th>Sync</th><th>Energy Review</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($latestReadings as $r): ?>
@@ -527,6 +544,19 @@ ob_start();
                                               <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>
                                             <?= htmlspecialchars(ucfirst((string)$r['sync_status'])); ?>
                                         </span>
+                                    </td>
+                                    <td data-label="Energy Review">
+                                        <?php
+                                        $reviewKey = (int)$r['facility_id'] . '-' . (int)$r['year'] . '-' . (int)$r['month'];
+                                        $hasApprovedRecommendation = isset($approvedRecommendationPeriods[$reviewKey]);
+                                        ?>
+                                        <?php if ($r['sync_status'] !== 'synced'): ?>
+                                            <span style="color:#8b95b5;">Not submitted yet</span>
+                                        <?php elseif ($hasApprovedRecommendation): ?>
+                                            <span class="status-badge active">Approved</span>
+                                        <?php else: ?>
+                                            <span class="status-badge maintenance" style="white-space:nowrap;">Waiting for Energy Admin approval</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td data-label="Recorded By"><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
                                     <?php if ($canUpdate || $canDelete): ?>
@@ -572,7 +602,14 @@ ob_start();
         </div>
         <p style="color:#8b95b5;">Engineer-approved advice from the LGU Energy system. Last pulled: <?= htmlspecialchars($syncState['last_pull_at'] ?? 'never'); ?>.</p>
         <?php if ($recommendations === []): ?>
-            <p style="color:#8b95b5; text-align:center; padding:2rem;">No recommendations cached yet. Use Sync Now after readings have been pushed and reviewed in the Energy system.</p>
+            <?php if ($hasSyncedReadings): ?>
+                <div style="max-width:620px; margin:1.25rem auto 0; padding:1.25rem 1.5rem; border:1px solid #f0d9a8; border-radius:12px; background:#fffaf0; text-align:center;">
+                    <div style="font-weight:700; color:#9a5b00; margin-bottom:0.35rem;">Waiting for Energy Admin approval</div>
+                    <p style="color:#7b6848; margin:0;">Your monthly record was submitted successfully. Approved recommendations will appear here automatically after you run Sync Now.</p>
+                </div>
+            <?php else: ?>
+                <p style="color:#8b95b5; text-align:center; padding:2rem;">No recommendations yet. Submit a monthly meter reading first.</p>
+            <?php endif; ?>
         <?php else: ?>
             <?php foreach ($recommendations as $reco): ?>
                 <article style="border:1px solid #edf2f7; border-radius:8px; padding:1rem; margin-bottom:0.9rem;">
