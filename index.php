@@ -116,6 +116,8 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/public/payment_return.php';
 } elseif ($path === 'sso/consume') {
     require_once __DIR__ . '/resources/views/pages/auth/sso_consume.php';
+} elseif ($path === 'change-password-required') {
+    require_once __DIR__ . '/resources/views/pages/auth/change_password_required.php';
 } elseif ($path === 'dashboard' || strpos($path, 'dashboard/') === 0) {
     // Extract dashboard sub-path early (used for auth + routing)
     $dashboardPath = str_replace('dashboard/', '', $path);
@@ -164,6 +166,12 @@ if ($path === 'announcements') {
         $protocol = $isLocal ? 'http' : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
         $redirectUrl = $protocol . '://' . $host . base_path() . '/login';
         header('Location: ' . $redirectUrl);
+        exit;
+    }
+
+    // Block dashboard access until an admin-forced password reset is completed
+    if (!empty($_SESSION['must_change_password'])) {
+        header('Location: ' . base_path() . '/change-password-required');
         exit;
     }
     

@@ -311,7 +311,7 @@ ob_start();
                     </thead>
                     <tbody id="maintenanceTableBody">
                         <?php foreach ($upcomingPaginated as $schedule): 
-                            $priorityClass = $schedule['priority'] === 'high' ? 'offline' : ($schedule['priority'] === 'medium' ? 'maintenance' : 'active');
+                            $priorityClass = in_array($schedule['priority'], ['high', 'critical'], true) ? 'offline' : ($schedule['priority'] === 'medium' ? 'maintenance' : 'active');
                             $statusClass = $schedule['status'] === 'in_progress' ? 'maintenance' : ($schedule['status'] === 'completed' ? 'active' : 'offline');
                             $statusDisplay = ucfirst(str_replace('_', ' ', $schedule['status']));
                         ?>

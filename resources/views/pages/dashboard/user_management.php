@@ -362,8 +362,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     $newPassword = bin2hex(random_bytes(6)); // 12 character hex string
                     $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
                     
-                    // Update password in database
-                    $stmt = $pdo->prepare('UPDATE users SET password_hash = :password_hash, failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    // Update password in database; force the user to set their own
+                    // password on next login instead of keeping the admin-generated one.
+                    $stmt = $pdo->prepare('UPDATE users SET password_hash = :password_hash, must_change_password = 1, failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
                     $stmt->execute(['password_hash' => $newPasswordHash, 'id' => $userId]);
                     
                     logAudit('Reset user password', 'User Management', $userInfo['name'] . ' (' . $userInfo['email'] . ')');

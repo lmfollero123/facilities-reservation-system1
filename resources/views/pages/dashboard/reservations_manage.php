@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/flash_helper.php';
+require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -455,6 +456,34 @@ $pendingStmt->bindValue(':pending_offset', $pendingOffset, PDO::PARAM_INT);
 $pendingStmt->execute();
 $pendingReservations = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Violation summary per requester, so staff can see risky requesters before approving
+// (mirrors the per-user violation check already shown on the reservation-detail page).
+$pendingViolationSummary = [];
+$pendingRequesterIds = array_values(array_unique(array_map(
+    fn($r) => (int)$r['requester_id'],
+    $pendingReservations
+)));
+if (!empty($pendingRequesterIds)) {
+    $placeholders = implode(',', array_fill(0, count($pendingRequesterIds), '?'));
+    $violationSummaryStmt = $pdo->prepare(
+        "SELECT user_id,
+                COUNT(*) AS total,
+                SUM(severity = 'critical') AS critical_count,
+                SUM(severity = 'high') AS high_count
+         FROM user_violations
+         WHERE user_id IN ($placeholders)
+         GROUP BY user_id"
+    );
+    $violationSummaryStmt->execute($pendingRequesterIds);
+    foreach ($violationSummaryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $pendingViolationSummary[(int)$row['user_id']] = [
+            'total' => (int)$row['total'],
+            'critical' => (int)$row['critical_count'],
+            'high' => (int)$row['high_count'],
+        ];
+    }
+}
+
 // Counts for filter tabs (same search scope, no status sub-filter)
 $pendingBaseWhere = ['r.status IN ("' . implode('", "', $pendingStatuses) . '")'];
 $pendingBaseParams = [];
@@ -863,6 +892,22 @@ ob_start();
                                 </td>
                                 <td data-label="Requester">
                                     <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                    <?php
+                                        $requesterViolations = $pendingViolationSummary[(int)$reservation['requester_id']] ?? null;
+                                    ?>
+                                    <?php if ($requesterViolations && $requesterViolations['total'] > 0): ?>
+                                        <?php
+                                            $violationBadgeClass = ($requesterViolations['critical'] > 0 || $requesterViolations['high'] > 0)
+                                                ? 'ra-violation-badge ra-violation-badge--severe'
+                                                : 'ra-violation-badge';
+                                            $violationTitle = $requesterViolations['total'] . ' violation(s) on record'
+                                                . ($requesterViolations['critical'] > 0 ? ', ' . $requesterViolations['critical'] . ' critical' : '')
+                                                . ($requesterViolations['high'] > 0 ? ', ' . $requesterViolations['high'] . ' high severity' : '');
+                                        ?>
+                                        <span class="<?= $violationBadgeClass; ?>" title="<?= htmlspecialchars($violationTitle); ?>">
+                                            ⚠ <?= $requesterViolations['total']; ?> violation<?= $requesterViolations['total'] > 1 ? 's' : ''; ?><?= ($requesterViolations['critical'] > 0 || $requesterViolations['high'] > 0) ? ' (severe)' : ''; ?>
+                                        </span>
+                                    <?php endif; ?>
                                     <?php if ($submittedLabel !== ''): ?>
                                         <span class="ra-cell-meta">Submitted <?= htmlspecialchars($submittedLabel); ?></span>
                                     <?php endif; ?>
@@ -2438,6 +2483,16 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     font-size: 0.68rem;
     font-weight: 700;
     vertical-align: middle;
+}
+.ra-violation-badge {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #9a6b00;
+}
+.ra-violation-badge--severe {
+    color: #b91c1c;
 }
 .ra-payment-note {
     font-size: 0.78rem;

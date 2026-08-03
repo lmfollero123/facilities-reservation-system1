@@ -482,10 +482,16 @@ $historyStmt = $pdo->prepare(
 $historyStmt->execute(['id' => $reservationId]);
 $history = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get payment information for this reservation
-$paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, status, provider_event_id, created_at FROM payments WHERE reservation_id = :reservation_id ORDER BY created_at DESC LIMIT 1');
-$paymentStmt->execute(['reservation_id' => $reservationId]);
-$payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+// Get payment information for this reservation (payments table is optional —
+// only present when the payment-module migration has been applied)
+$payment = null;
+try {
+    $paymentStmt = $pdo->prepare('SELECT id, amount, reference_no, status, provider_event_id, created_at FROM payments WHERE reservation_id = :reservation_id ORDER BY created_at DESC LIMIT 1');
+    $paymentStmt->execute(['reservation_id' => $reservationId]);
+    $payment = $paymentStmt->fetch(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log('Reservation detail payment lookup RES-' . $reservationId . ': ' . $e->getMessage());
+}
 
 $reservationIsPast = frs_reservation_slot_has_passed(
     (string)$reservation['reservation_date'],
