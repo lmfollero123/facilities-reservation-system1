@@ -20,7 +20,7 @@
 }
 
 [data-theme="dark"] #mainNav.public-navbar-modern {
-    background: rgba(15, 23, 42, 0.55) !important;
+    background: rgba(15, 23, 42, 0.82) !important;
     backdrop-filter: blur(14px) !important;
     -webkit-backdrop-filter: blur(14px) !important;
     border-bottom-color: rgba(255, 255, 255, 0.08) !important;
@@ -34,6 +34,7 @@
 [data-theme="dark"] #mainNav.public-navbar-modern #navbar-date,
 [data-theme="dark"] #mainNav.public-navbar-modern #navbar-time {
     color: #e2e8f0 !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 [data-theme="dark"] #mainNav.public-navbar-modern .brand-name {
@@ -94,7 +95,7 @@
 
 /* When scrolled in dark mode: keep navbar DARK (override public-pages white) and keep text light */
 [data-theme="dark"] #mainNav.public-navbar-modern.navbar-scrolled {
-    background: rgba(15, 23, 42, 0.75) !important;
+    background: rgba(15, 23, 42, 0.92) !important;
     backdrop-filter: blur(14px) !important;
     -webkit-backdrop-filter: blur(14px) !important;
     border-bottom-color: rgba(255, 255, 255, 0.08) !important;
