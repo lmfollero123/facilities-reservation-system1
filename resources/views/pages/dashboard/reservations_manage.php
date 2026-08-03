@@ -663,7 +663,7 @@ $modalTotalPages = max(1, ceil($modalTotal / $modalPerPage));
 
 // Fetch modal reservations
 $modalHistoryStmt = $pdo->prepare(
-    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.name AS requester
+    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.id AS requester_id, u.name AS requester
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -891,7 +891,13 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td data-label="Requester">
-                                    <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                    <span class="ra-cell-primary">
+                                        <?php if (!empty($reservation['requester_id'])): ?>
+                                            <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars((string)$reservation['requester']); ?>
+                                        <?php endif; ?>
+                                    </span>
                                     <?php
                                         $requesterViolations = $pendingViolationSummary[(int)$reservation['requester_id']] ?? null;
                                     ?>
@@ -1049,7 +1055,13 @@ ob_start();
                         ?>
                         <tr class="ra-queue-row">
                             <td data-label="Requester">
-                                <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                <span class="ra-cell-primary">
+                                    <?php if (!empty($reservation['requester_id'])): ?>
+                                        <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars((string)$reservation['requester']); ?>
+                                    <?php endif; ?>
+                                </span>
                                 <span class="ra-cell-meta"><?= htmlspecialchars((string)$reservation['requester_email']); ?></span>
                             </td>
                             <td data-label="Facility">
@@ -2018,7 +2030,13 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $record['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                 </div>
                             </header>
-                            <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong> <?= htmlspecialchars($record['requester']); ?></p>
+                            <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong>
+                                <?php if (!empty($record['requester_id'])): ?>
+                                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$record['requester_id']); ?>"><?= htmlspecialchars($record['requester']); ?></a>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($record['requester']); ?>
+                                <?php endif; ?>
+                            </p>
                             <?php if ($timeline): ?>
                                 <ul class="timeline" style="margin: 0; padding-left: 1.25rem;">
                                     <?php foreach ($timeline as $event): ?>
