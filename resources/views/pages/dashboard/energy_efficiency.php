@@ -25,6 +25,7 @@ require_once __DIR__ . '/../../../../config/energy_helper.php';
 
 $pdo = db();
 $pageTitle = 'Energy Efficiency | LGU Facilities Reservation';
+$dashboardContentClass = 'integrations-modern';
 
 $canCreate = frs_can_create($role, 'energy');
 $canUpdate = frs_can_update($role, 'energy');
@@ -516,20 +517,20 @@ ob_start();
                         <tbody>
                             <?php foreach ($latestReadings as $r): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars((string)$r['facility_name']); ?></td>
-                                    <td><?= htmlspecialchars(($monthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
-                                    <td><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh</td>
-                                    <td>PHP <?= number_format((float)($r['rate_per_kwh'] ?? 12), 2); ?>/kWh</td>
-                                    <td>PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 12), 2); ?></td>
-                                    <td>
+                                    <td data-label="Facility"><?= htmlspecialchars((string)$r['facility_name']); ?></td>
+                                    <td data-label="Period"><?= htmlspecialchars(($monthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
+                                    <td data-label="Consumption"><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh</td>
+                                    <td data-label="Rate">PHP <?= number_format((float)($r['rate_per_kwh'] ?? 12), 2); ?>/kWh</td>
+                                    <td data-label="Estimated Cost">PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 12), 2); ?></td>
+                                    <td data-label="Sync">
                                         <span class="status-badge <?= $r['sync_status'] === 'synced' ? 'active' : ($r['sync_status'] === 'failed' ? 'offline' : 'maintenance'); ?>"
                                               <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>
                                             <?= htmlspecialchars(ucfirst((string)$r['sync_status'])); ?>
                                         </span>
                                     </td>
-                                    <td><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
+                                    <td data-label="Recorded By"><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
                                     <?php if ($canUpdate || $canDelete): ?>
-                                    <td style="white-space:nowrap;">
+                                    <td data-label="Actions" style="white-space:nowrap;">
                                         <?php if ($canUpdate): ?>
                                             <a href="<?= htmlspecialchars($tabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
                                         <?php endif; ?>
@@ -663,8 +664,8 @@ ob_start();
                             $selectedId = $current['energy_facility_id'] ?? ($suggested['id'] ?? 0);
                             ?>
                             <tr>
-                                <td><?= htmlspecialchars($f['name']); ?></td>
-                                <td>
+                                <td data-label="CPRF Facility"><?= htmlspecialchars($f['name']); ?></td>
+                                <td data-label="Energy-System Facility">
                                     <form method="POST" action="<?= htmlspecialchars($tabUrl('mapping')); ?>" style="display:flex; gap:0.5rem; align-items:center;">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="save_mapping">
@@ -681,7 +682,7 @@ ob_start();
                                         <button type="submit" class="btn-primary" style="padding:0.4rem 0.9rem;">Save</button>
                                     </form>
                                 </td>
-                                <td>
+                                <td data-label="Status">
                                     <?php if ($current !== null): ?>
                                         <span class="status-badge active">Mapped</span>
                                     <?php elseif ($suggested !== null): ?>
