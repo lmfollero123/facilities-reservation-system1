@@ -186,6 +186,7 @@ $miTabQs = static function (array $extra = []) use ($filterBand): string {
         modalDesc.textContent = 'Submit a maintenance request for ' + activePayload.facility_name
             + ' on ' + activePayload.window + '. CIMM will review and schedule.';
         notesEl.value = '';
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
         modal.classList.add('open');
     }
 
