@@ -73,6 +73,25 @@ if (!function_exists('frs_page_title')) {
     }
 }
 
+if (!function_exists('frs_role_badge')) {
+    /**
+     * Small colored role badge (Admin/Staff/Resident), reusing the same
+     * .status-badge.admin/.staff/.resident classes already styled for
+     * light/dark mode elsewhere in the app.
+     */
+    function frs_role_badge(?string $role): string
+    {
+        $role = trim((string)$role);
+        if ($role === '') {
+            return '';
+        }
+        $class = htmlspecialchars(strtolower($role), ENT_QUOTES, 'UTF-8');
+        $label = htmlspecialchars(strtoupper($role), ENT_QUOTES, 'UTF-8');
+
+        return '<span class="status-badge ' . $class . ' ra-role-badge">' . $label . '</span>';
+    }
+}
+
 if (!function_exists('frs_facility_placeholder_image')) {
     /**
      * Type-aware fallback photo for a facility with no uploaded image_path.

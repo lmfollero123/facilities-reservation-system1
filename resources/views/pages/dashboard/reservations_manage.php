@@ -13,6 +13,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reserva
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/ui_helpers.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
@@ -440,7 +441,7 @@ $pendingTotalPages = max(1, (int)ceil($pendingTotal / $pendingPerPage));
 $pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, r.postponed_at,
        r.expected_attendees, r.is_commercial, r.created_at,
        f.id AS facility_id, f.name AS facility, f.capacity_threshold, f.base_rate,
-       u.id AS requester_id, u.name AS requester, u.email AS requester_email, u.mobile AS requester_mobile
+       u.id AS requester_id, u.name AS requester, u.role AS requester_role, u.email AS requester_email, u.mobile AS requester_mobile
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -574,7 +575,7 @@ $approvedTotal = (int)$approvedCountStmt->fetchColumn();
 $approvedTotalPages = max(1, (int)ceil($approvedTotal / $approvedPerPage));
 
 // Get approved reservations
-$approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.facility_id, f.name AS facility, u.name AS requester, u.email AS requester_email
+$approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.facility_id, f.name AS facility, u.name AS requester, u.role AS requester_role, u.email AS requester_email
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -663,7 +664,7 @@ $modalTotalPages = max(1, ceil($modalTotal / $modalPerPage));
 
 // Fetch modal reservations
 $modalHistoryStmt = $pdo->prepare(
-    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.id AS requester_id, u.name AS requester
+    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.id AS requester_id, u.name AS requester, u.role AS requester_role
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -892,6 +893,7 @@ ob_start();
                                 </td>
                                 <td data-label="Requester">
                                     <span class="ra-cell-primary">
+                                        <?= frs_role_badge($reservation['requester_role'] ?? null); ?>
                                         <?php if (!empty($reservation['requester_id'])): ?>
                                             <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
                                         <?php else: ?>
@@ -1056,6 +1058,7 @@ ob_start();
                         <tr class="ra-queue-row">
                             <td data-label="Requester">
                                 <span class="ra-cell-primary">
+                                    <?= frs_role_badge($reservation['requester_role'] ?? null); ?>
                                     <?php if (!empty($reservation['requester_id'])): ?>
                                         <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
                                     <?php else: ?>
@@ -2031,6 +2034,7 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                                 </div>
                             </header>
                             <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong>
+                                <?= frs_role_badge($record['requester_role'] ?? null); ?>
                                 <?php if (!empty($record['requester_id'])): ?>
                                     <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$record['requester_id']); ?>"><?= htmlspecialchars($record['requester']); ?></a>
                                 <?php else: ?>
@@ -2431,6 +2435,13 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     font-weight: 600;
     color: #1e293b;
     line-height: 1.35;
+}
+.ra-role-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
 }
 .ra-resident-link {
     color: var(--gov-blue-dark);
