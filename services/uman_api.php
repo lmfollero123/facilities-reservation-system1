@@ -412,7 +412,13 @@ function frs_ensure_facility_equipment_schema_v2(PDO $pdo): void
  */
 function frs_uman_write_custody_event(PDO $pdo, int $facilityId, int $umanAssetId, array $data): string
 {
-    frs_ensure_facility_equipment_schema_v2($pdo);
+    // NOTE: do not call frs_ensure_facility_equipment_schema_v2() here. All
+    // callers already ensure the schema once before opening their PDO
+    // transaction; running its ALTER TABLE/CREATE TABLE statements again
+    // from inside an open transaction triggers MySQL's implicit-commit-on-DDL
+    // behavior (fires even when the DDL itself errors as "already exists"),
+    // silently closing the transaction early and causing the subsequent
+    // $pdo->commit() to throw "There is no active transaction".
 
     $eventRef = (string)($data['event_ref'] ?? '');
     if ($eventRef === '') {
