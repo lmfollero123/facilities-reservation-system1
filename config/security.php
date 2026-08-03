@@ -678,6 +678,9 @@ function frs_complete_authenticated_login(array $user): void
     $_SESSION['user_org'] = $user['role'];
     $_SESSION['last_activity'] = time();
 
+    require_once __DIR__ . '/audit.php';
+    logAudit('Login', 'Authentication', ($user['name'] ?? 'Unknown') . ' (' . ($user['email'] ?? 'unknown') . ')');
+
     unset(
         $_SESSION['pending_otp_user_id'],
         $_SESSION['pending_otp_email'],

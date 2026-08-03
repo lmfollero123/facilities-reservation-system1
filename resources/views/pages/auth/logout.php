@@ -14,6 +14,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // back to the SSO hub instead of this system's own login page.
     $returnToMainLgu = !empty($_SESSION['sso_from_mainlgu']);
 
+    require_once __DIR__ . '/../../../../config/audit.php';
+    $logoutUserName = $_SESSION['user_name'] ?? 'Unknown';
+    $logoutUserEmail = $_SESSION['user_email'] ?? 'unknown';
+    logAudit('Logout', 'Authentication', $logoutUserName . ' (' . $logoutUserEmail . ')');
+
     session_unset();
     session_destroy();
 
