@@ -481,6 +481,64 @@ function frs_cimm_save_managed_maintenance_ids(array $ids): void
 }
 
 /**
+ * Path to the sticky schedule→facility match pins (see frs_cimm_load_schedule_pins()).
+ */
+function frs_cimm_schedule_pins_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/cimm_schedule_facility_pins.json';
+}
+
+/**
+ * Sticky schedule→facility matches, keyed by the schedule's stable id
+ * (e.g. "CIMM-S-18", "CIMM-R-9" from mapCIMMToCPRF()).
+ *
+ * Why this exists: when a CIMM schedule/report has no authoritative
+ * cprf_facility_id of its own, cimmResolveScheduleFacilityId() falls back to
+ * fuzzy name/location text matching against our facilities table. That
+ * fallback used to run fresh on every single sync — so renaming a facility,
+ * or editing its address, could shift the winning fuzzy match to a
+ * DIFFERENT facility on the very next sync, silently moving the
+ * "under maintenance" flag onto the wrong facility. Pinning the first
+ * successful resolution and reusing it on later syncs (see
+ * syncFacilitiesFromCIMM()) makes the association immune to unrelated
+ * edits — the only way it changes is if CIMM itself later supplies a real
+ * cprf_facility_id, or the pinned facility is deleted.
+ *
+ * @return array<string, int> schedule stable id => facility_id
+ */
+function frs_cimm_load_schedule_pins(): array
+{
+    $path = frs_cimm_schedule_pins_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return [];
+    }
+    $out = [];
+    foreach ($data as $scheduleId => $facilityId) {
+        $scheduleId = trim((string)$scheduleId);
+        $facilityId = (int)$facilityId;
+        if ($scheduleId !== '' && $facilityId > 0) {
+            $out[$scheduleId] = $facilityId;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param array<string, int> $pins schedule stable id => facility_id
+ */
+function frs_cimm_save_schedule_pins(array $pins): void
+{
+    $path = frs_cimm_schedule_pins_path();
+    file_put_contents($path, json_encode($pins, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+/**
  * Fetch CIMM schedules, sync facilities/blackouts, persist last-run metadata.
  *
  * @return array{success: bool, fetched: int, mapped: int, summary: array<string,mixed>, error: ?string, ran_at: string}
@@ -608,8 +666,29 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
     $facilitiesWentToMaintenance = [];
     $facilitiesWentToAvailable = [];
 
+    // Sticky schedule→facility matches (see frs_cimm_load_schedule_pins() doc
+    // comment): once a schedule with no cprf_facility_id of its own has been
+    // fuzzy-matched to a facility, that pin is reused on later syncs instead
+    // of re-guessing — so renaming/re-addressing an unrelated facility can't
+    // silently steal another facility's "under maintenance" flag.
+    $schedulePins = frs_cimm_load_schedule_pins();
+    $pinsChanged = false;
+
     foreach ($mappedSchedules as $schedule) {
-        $facilityId = cimmResolveScheduleFacilityId($schedule, $facilities);
+        $scheduleId = trim((string)($schedule['id'] ?? ''));
+        $hasOwnFacilityId = (int)($schedule['cprf_facility_id'] ?? 0) > 0;
+
+        if (!$hasOwnFacilityId && $scheduleId !== ''
+            && isset($schedulePins[$scheduleId], $facilityById[$schedulePins[$scheduleId]])) {
+            $facilityId = $schedulePins[$scheduleId];
+        } else {
+            $facilityId = cimmResolveScheduleFacilityId($schedule, $facilities);
+            if ($facilityId && $scheduleId !== '' && ($schedulePins[$scheduleId] ?? null) !== $facilityId) {
+                $schedulePins[$scheduleId] = $facilityId;
+                $pinsChanged = true;
+            }
+        }
+
         if (!$facilityId) {
             $summary['unmatched_schedule_count']++;
             continue;
@@ -621,6 +700,10 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         if (cimmIsActiveMaintenanceSchedule($schedule, $now)) {
             $activeMaintenanceFacilityIds[$facilityId] = true;
         }
+    }
+
+    if ($pinsChanged) {
+        frs_cimm_save_schedule_pins($schedulePins);
     }
 
     try {

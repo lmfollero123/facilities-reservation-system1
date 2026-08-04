@@ -68,7 +68,7 @@ $navLinks = [
 <!-- Mobile Sidebar Menu -->
 <aside class="mobile-nav-sidebar" id="mobileNavSidebar">
     <div class="mobile-nav-header">
-        <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
+        <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 44px; width: auto; object-fit: contain;">
         <span>Menu</span>
         <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
     </div>
