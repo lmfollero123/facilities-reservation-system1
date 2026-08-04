@@ -25,6 +25,34 @@
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* style.css's #mainNav.navbar-scrolled .nav-link (and brand/datetime) rules
+   have no :not(.public-navbar-modern) guard on text color, unlike its
+   background rule -- redeclare here at matching specificity so scrolling
+   doesn't revert this navbar's text back to style.css's dark defaults. */
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-brand,
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-brand span,
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link,
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-datetime,
+#mainNav.public-navbar-modern.navbar-scrolled #navbar-date,
+#mainNav.public-navbar-modern.navbar-scrolled #navbar-time {
+    color: #e2e8f0 !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled .brand-name {
+    color: #f1f5f9 !important;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled .brand-accent {
+    color: #34d399 !important;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link:hover,
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link.active {
+    color: #34d399 !important;
+    border-bottom-color: #34d399;
+}
+
 #mainNav.public-navbar-modern .navbar-brand.public-nav-brand {
     display: flex !important;
     align-items: center;
