@@ -209,6 +209,10 @@ ob_start();
 .mi-cimm-info li { margin-bottom:0.25rem; }
 .mi-sync-meta { margin:0; font-size:0.82rem; color:#0369a1; }
 .mi-sync-warn { margin:0.35rem 0 0; color:#b45309; font-weight:600; }
+.mi-schedule-layout { grid-template-columns: 1fr !important; }
+.mi-calendar-toolbar { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; }
+.mi-open-schedules-btn { display:inline-flex; align-items:center; gap:0.45rem; padding:0.55rem 1rem; font-weight:700; }
+#upcomingSchedulesModal .modal-dialog { max-width: 1100px; width: 94%; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -269,11 +273,132 @@ ob_start();
 <?php endif; ?> -->
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
-<div class="booking-wrapper">
-    <!-- Upcoming Maintenance Schedules -->
-    <section class="booking-card">
+<div class="booking-wrapper mi-schedule-layout">
+    <!-- Maintenance Calendar (New Design) -->
+    <aside class="booking-card maintenance-calendar-wrapper">
+        <div class="mi-calendar-toolbar">
+            <button type="button" class="btn-outline mi-open-schedules-btn" onclick="openUpcomingSchedulesModal()">
+                📋 View Upcoming Schedules
+            </button>
+        </div>
+        <h2>Maintenance Calendar</h2>
+
+        <!-- Mobile Controls (Mobile Only) -->
+        <div class="mobile-controls" id="mobileListControls" style="display:none;">
+            <input id="mobileScheduleSearch" type="text" placeholder="Search schedules...">
+            <button id="mobileToCalendarBtn" class="mobile-calendar-btn">📅</button>
+        </div>
+        <div class="mobile-controls" id="mobileCalendarControls" style="display:none;">
+            <button id="mobilePrevMonth" class="mobile-toggle-btn">&#8592;</button>
+            <span id="mobileMonthLabel" title="Click to jump date"></span>
+            <button id="mobileToListBtn" class="mobile-schedule-btn">📋</button>
+            <button id="mobileNextMonth" class="mobile-toggle-btn">&#8594;</button>
+        </div>
+
+        <!-- Calendar View -->
+        <div id="calendarView">
+            <div class="calendar-header">
+                <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
+                <span id="monthLabel" title="Click to jump date"></span>
+                <div style="display:flex; gap:8px;">
+                    <button id="toListBtn" class="schedule-btn" title="Schedule List">📋</button>
+                    <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
+                </div>
+            </div>
+            <div class="calendar-weekdays">
+                <div>Sunday</div>
+                <div>Monday</div>
+                <div>Tuesday</div>
+                <div>Wednesday</div>
+                <div>Thursday</div>
+                <div>Friday</div>
+                <div>Saturday</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-details-card">
+                <div class="calendar-details" id="calendarDetails">
+                    Select a date to view schedule.
+                </div>
+                <div class="scroll-indicator">⌄</div>
+            </div>
+        </div>
+
+        <!-- List View -->
+        <div id="scheduleView" class="hidden">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input id="scheduleSearch" type="text" placeholder="Search by task, location, category, status, or date..." style="flex:1;">
+                <button id="toCalendarBtn" class="calendar-btn" title="Calendar View">📅</button>
+            </div>
+            <div id="scheduleListHolder">
+                <?php if (empty($mockMaintenanceSchedules)): ?>
+                    <p id="noScheduleMsg">No scheduled maintenance.</p>
+                <?php else:
+                    foreach ($mockMaintenanceSchedules as $row):
+                        $scheduleDate = date('Y-m-d', strtotime($row['scheduled_start'] ?? 'now'));
+                ?>
+                    <div class="schedule-item"
+                        data-task="<?= htmlspecialchars(strtolower($row['maintenance_type'] ?? $row['task'] ?? '')) ?>"
+                        data-location="<?= htmlspecialchars(strtolower($row['facility_name'] ?? $row['location'] ?? '')) ?>"
+                        data-category="<?= htmlspecialchars(strtolower($row['category'] ?? '')) ?>"
+                        data-status="<?= htmlspecialchars(strtolower($row['status_label'] ?? $row['status'] ?? '')) ?>"
+                        data-priority="<?= htmlspecialchars(strtolower($row['priority'] ?? '')) ?>"
+                        data-date="<?= htmlspecialchars(strtolower(date("F d, Y", strtotime($scheduleDate)) . '|' . $scheduleDate)) ?>">
+                        <div>
+                            <strong><?= htmlspecialchars($row['maintenance_type'] ?? $row['task'] ?? 'Maintenance') ?></strong><br>
+                            <?= htmlspecialchars($row['facility_name'] ?? $row['location'] ?? '') ?><br>
+                            <?php if (!empty($row['category'])): ?>
+                                <span class="badge badge-category"><?= htmlspecialchars($row['category']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="schedule-date">
+                            <?= date("F d, Y", strtotime($scheduleDate)) ?><br>
+                            <?php
+                                $priorityClass = 'badge-priority-low';
+                                $priorityLower = strtolower($row['priority'] ?? '');
+                                if ($priorityLower === 'medium') {
+                                    $priorityClass = 'badge-priority-medium';
+                                } elseif ($priorityLower === 'high') {
+                                    $priorityClass = 'badge-priority-high';
+                                } elseif ($priorityLower === 'critical') {
+                                    $priorityClass = 'badge-priority-critical';
+                                }
+
+                                $statusClass = 'badge-status-planned';
+                                $statusLower = strtolower($row['status_label'] ?? $row['status'] ?? '');
+                                if ($statusLower === 'completed') {
+                                    $statusClass = 'badge-status-completed';
+                                } elseif ($statusLower === 'in progress' || $statusLower === 'in_progress') {
+                                    $statusClass = 'badge-status-in-progress';
+                                } elseif ($statusLower === 'delayed') {
+                                    $statusClass = 'badge-status-delayed';
+                                } elseif ($statusLower === 'scheduled') {
+                                    $statusClass = 'badge-status-scheduled';
+                                }
+                            ?>
+                            <?php if (!empty($row['status_label'])): ?>
+                                <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($row['status_label']) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($row['priority'])): ?>
+                                <span class="badge <?= $priorityClass ?>"><?= htmlspecialchars($row['priority']) ?> priority</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                    <p id="noResultMsg" style="display:none;">No matching data or result.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<!-- Upcoming Maintenance Schedules Modal -->
+<div id="upcomingSchedulesModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="border-radius: 8px; padding: 2rem; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Upcoming Maintenance Schedules</h2>
+            <h2 style="margin:0;">Upcoming Maintenance Schedules</h2>
+            <button onclick="closeUpcomingSchedulesModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
             <div style="display: flex; gap: 0.5rem;">
                 <select id="filterStatus" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
                     <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
@@ -380,118 +505,7 @@ ob_start();
                 </div>
             </div>
         <?php endif; ?>
-    </section>
-
-    <!-- Maintenance Calendar (New Design) -->
-    <aside class="booking-card maintenance-calendar-wrapper">
-        <h2>Maintenance Calendar</h2>
-        
-        <!-- Mobile Controls (Mobile Only) -->
-        <div class="mobile-controls" id="mobileListControls" style="display:none;">
-            <input id="mobileScheduleSearch" type="text" placeholder="Search schedules...">
-            <button id="mobileToCalendarBtn" class="mobile-calendar-btn">📅</button>
-        </div>
-        <div class="mobile-controls" id="mobileCalendarControls" style="display:none;">
-            <button id="mobilePrevMonth" class="mobile-toggle-btn">&#8592;</button>
-            <span id="mobileMonthLabel" title="Click to jump date"></span>
-            <button id="mobileToListBtn" class="mobile-schedule-btn">📋</button>
-            <button id="mobileNextMonth" class="mobile-toggle-btn">&#8594;</button>
-        </div>
-
-        <!-- Calendar View -->
-        <div id="calendarView">
-            <div class="calendar-header">
-                <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
-                <span id="monthLabel" title="Click to jump date"></span>
-                <div style="display:flex; gap:8px;">
-                    <button id="toListBtn" class="schedule-btn" title="Schedule List">📋</button>
-                    <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
-                </div>
-            </div>
-            <div class="calendar-weekdays">
-                <div>Sunday</div>
-                <div>Monday</div>
-                <div>Tuesday</div>
-                <div>Wednesday</div>
-                <div>Thursday</div>
-                <div>Friday</div>
-                <div>Saturday</div>
-            </div>
-            <div class="calendar-grid" id="calendarGrid"></div>
-            <div class="calendar-details-card">
-                <div class="calendar-details" id="calendarDetails">
-                    Select a date to view schedule.
-                </div>
-                <div class="scroll-indicator">⌄</div>
-            </div>
-        </div>
-        
-        <!-- List View -->
-        <div id="scheduleView" class="hidden">
-            <div style="display:flex; gap:10px; align-items:center;">
-                <input id="scheduleSearch" type="text" placeholder="Search by task, location, category, status, or date..." style="flex:1;">
-                <button id="toCalendarBtn" class="calendar-btn" title="Calendar View">📅</button>
-            </div>
-            <div id="scheduleListHolder">
-                <?php if (empty($mockMaintenanceSchedules)): ?>
-                    <p id="noScheduleMsg">No scheduled maintenance.</p>
-                <?php else: 
-                    foreach ($mockMaintenanceSchedules as $row): 
-                        $scheduleDate = date('Y-m-d', strtotime($row['scheduled_start'] ?? 'now'));
-                ?>
-                    <div class="schedule-item"
-                        data-task="<?= htmlspecialchars(strtolower($row['maintenance_type'] ?? $row['task'] ?? '')) ?>"
-                        data-location="<?= htmlspecialchars(strtolower($row['facility_name'] ?? $row['location'] ?? '')) ?>"
-                        data-category="<?= htmlspecialchars(strtolower($row['category'] ?? '')) ?>"
-                        data-status="<?= htmlspecialchars(strtolower($row['status_label'] ?? $row['status'] ?? '')) ?>"
-                        data-priority="<?= htmlspecialchars(strtolower($row['priority'] ?? '')) ?>"
-                        data-date="<?= htmlspecialchars(strtolower(date("F d, Y", strtotime($scheduleDate)) . '|' . $scheduleDate)) ?>">
-                        <div>
-                            <strong><?= htmlspecialchars($row['maintenance_type'] ?? $row['task'] ?? 'Maintenance') ?></strong><br>
-                            <?= htmlspecialchars($row['facility_name'] ?? $row['location'] ?? '') ?><br>
-                            <?php if (!empty($row['category'])): ?>
-                                <span class="badge badge-category"><?= htmlspecialchars($row['category']) ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="schedule-date">
-                            <?= date("F d, Y", strtotime($scheduleDate)) ?><br>
-                            <?php
-                                $priorityClass = 'badge-priority-low';
-                                $priorityLower = strtolower($row['priority'] ?? '');
-                                if ($priorityLower === 'medium') {
-                                    $priorityClass = 'badge-priority-medium';
-                                } elseif ($priorityLower === 'high') {
-                                    $priorityClass = 'badge-priority-high';
-                                } elseif ($priorityLower === 'critical') {
-                                    $priorityClass = 'badge-priority-critical';
-                                }
-
-                                $statusClass = 'badge-status-planned';
-                                $statusLower = strtolower($row['status_label'] ?? $row['status'] ?? '');
-                                if ($statusLower === 'completed') {
-                                    $statusClass = 'badge-status-completed';
-                                } elseif ($statusLower === 'in progress' || $statusLower === 'in_progress') {
-                                    $statusClass = 'badge-status-in-progress';
-                                } elseif ($statusLower === 'delayed') {
-                                    $statusClass = 'badge-status-delayed';
-                                } elseif ($statusLower === 'scheduled') {
-                                    $statusClass = 'badge-status-scheduled';
-                                }
-                            ?>
-                            <?php if (!empty($row['status_label'])): ?>
-                                <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($row['status_label']) ?></span>
-                            <?php endif; ?>
-                            <?php if (!empty($row['priority'])): ?>
-                                <span class="badge <?= $priorityClass ?>"><?= htmlspecialchars($row['priority']) ?> priority</span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                    <p id="noResultMsg" style="display:none;">No matching data or result.</p>
-                <?php endif; ?>
-            </div>
-        </div>
-    </aside>
+    </div>
 </div>
 
 <!-- Maintenance History Section -->
@@ -663,6 +677,20 @@ function closeMaintenanceModal() {
 document.getElementById('maintenanceModal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeMaintenanceModal();
+    }
+});
+
+function openUpcomingSchedulesModal() {
+    document.getElementById('upcomingSchedulesModal').style.display = 'flex';
+}
+
+function closeUpcomingSchedulesModal() {
+    document.getElementById('upcomingSchedulesModal').style.display = 'none';
+}
+
+document.getElementById('upcomingSchedulesModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeUpcomingSchedulesModal();
     }
 });
 

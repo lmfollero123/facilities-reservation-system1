@@ -94,7 +94,7 @@ ob_start();
     <?= frs_page_title('Audit Trail', 'Searchable log of who changed reservations, facilities, and accounts.'); ?>
 </div>
 
-<div class="booking-wrapper">
+<div class="booking-wrapper" style="grid-template-columns: 1fr;">
     <section class="booking-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h2 style="margin: 0;">Activity Log</h2>
@@ -221,21 +221,6 @@ ob_start();
             <?php endif; ?>
         <?php endif; ?>
     </section>
-
-    <aside class="booking-card">
-        <h3 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Statistics</h3>
-        <ul class="audit-list" style="margin:0;">
-            <?php
-            $totalStmt = $pdo->query('SELECT COUNT(*) FROM audit_log');
-            $totalEntries = (int)$totalStmt->fetchColumn();
-
-            $todayStmt = $pdo->query('SELECT COUNT(*) FROM audit_log WHERE DATE(created_at) = CURDATE()');
-            $todayEntries = (int)$todayStmt->fetchColumn();
-            ?>
-            <li><strong><?= $totalEntries; ?></strong> total entries logged</li>
-            <li><strong><?= $todayEntries; ?></strong> entries today</li>
-        </ul>
-    </aside>
 </div>
 <?php
 $content = ob_get_clean();
