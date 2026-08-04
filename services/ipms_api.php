@@ -453,6 +453,166 @@ function frs_ipms_save_managed_maintenance_ids(array $ids): void
 }
 
 /**
+ * Path to the sticky project→facility match pins (see frs_ipms_load_schedule_pins()).
+ */
+function frs_ipms_schedule_pins_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/ipms_project_facility_pins.json';
+}
+
+/**
+ * Sticky project→facility matches, keyed by a stable project id (project_code,
+ * falling back to "IPMS-{project_id}" when no code is given).
+ *
+ * IPMS has no authoritative facility id at all (unlike CIMM) — every project
+ * is matched purely by fuzzy name/location text (see ipmsMatchFacilityId()).
+ * That match used to be re-derived fresh on every sync, so renaming a
+ * facility or editing its address could shift a project's best-scoring
+ * match to a DIFFERENT facility on the next sync, silently moving the
+ * "under maintenance" flag onto the wrong one (same class of bug fixed for
+ * CIMM in services/cimm_api.php). Pinning the first successful match and
+ * reusing it on later syncs makes the association immune to unrelated
+ * facility edits — it only changes if the pinned facility is deleted.
+ *
+ * @return array<string, int> project stable id => facility_id
+ */
+function frs_ipms_load_schedule_pins(): array
+{
+    $path = frs_ipms_schedule_pins_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return [];
+    }
+    $out = [];
+    foreach ($data as $projectKey => $facilityId) {
+        $projectKey = trim((string)$projectKey);
+        $facilityId = (int)$facilityId;
+        if ($projectKey !== '' && $facilityId > 0) {
+            $out[$projectKey] = $facilityId;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param array<string, int> $pins project stable id => facility_id
+ */
+function frs_ipms_save_schedule_pins(array $pins): void
+{
+    $path = frs_ipms_schedule_pins_path();
+    file_put_contents($path, json_encode($pins, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+/**
+ * Stable identity for a normalized IPMS project — prefers project_code
+ * (human-assigned, stable across syncs) and falls back to project_id.
+ */
+function ipmsProjectStableKey(array $project): string
+{
+    $code = trim((string)($project['project_code'] ?? ''));
+    if ($code !== '') {
+        return $code;
+    }
+    $id = (int)($project['project_id'] ?? 0);
+    return $id > 0 ? ('IPMS-' . $id) : '';
+}
+
+/**
+ * Path to the list of IPMS projects staff have explicitly marked "not a
+ * facility" from the New Facility Candidates section.
+ */
+function frs_ipms_dismissed_projects_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/ipms_dismissed_projects.json';
+}
+
+/**
+ * @return array<int, string> list of dismissed project stable keys
+ */
+function frs_ipms_load_dismissed_projects(): array
+{
+    $path = frs_ipms_dismissed_projects_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return [];
+    }
+    $out = [];
+    foreach ($data as $key) {
+        $key = trim((string)$key);
+        if ($key !== '') {
+            $out[] = $key;
+        }
+    }
+    return array_values(array_unique($out));
+}
+
+/**
+ * @param array<int, string> $keys
+ */
+function frs_ipms_save_dismissed_projects(array $keys): void
+{
+    $path = frs_ipms_dismissed_projects_path();
+    $clean = array_values(array_unique(array_filter(array_map(
+        static fn($k) => trim((string)$k),
+        $keys
+    ), static fn($k) => $k !== '')));
+    file_put_contents($path, json_encode($clean, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+/**
+ * Narrow the `needs_review` list (unmatched projects from the last sync) down
+ * to projects that look like a brand-new public facility ready to be added:
+ * status `completion_inspection` (the last stage before a project presumably
+ * exits the IPMS feed — IPMS has no observed explicit "completed" status) and
+ * not already dismissed by staff.
+ *
+ * @param array<int, array<string, mixed>> $needsReview from $summary['needs_review']
+ * @return array<int, array{project_key: string, name: string, location: string,
+ *                            latitude: ?float, longitude: ?float, status: string}>
+ */
+function frs_ipms_new_facility_candidates(array $needsReview): array
+{
+    $dismissed = array_flip(frs_ipms_load_dismissed_projects());
+    $candidates = [];
+
+    foreach ($needsReview as $item) {
+        $status = strtolower(trim((string)($item['status'] ?? '')));
+        if ($status !== 'completion_inspection') {
+            continue;
+        }
+
+        $projectKey = ipmsProjectStableKey([
+            'project_code' => $item['project_code'] ?? '',
+            'project_id' => $item['project_id'] ?? 0,
+        ]);
+        if ($projectKey === '' || isset($dismissed[$projectKey])) {
+            continue;
+        }
+
+        $candidates[] = [
+            'project_key' => $projectKey,
+            'name' => (string)($item['name'] ?? ''),
+            'location' => (string)($item['location'] ?? ''),
+            'latitude' => isset($item['latitude']) && $item['latitude'] !== null ? (float)$item['latitude'] : null,
+            'longitude' => isset($item['longitude']) && $item['longitude'] !== null ? (float)$item['longitude'] : null,
+            'status' => $status,
+        ];
+    }
+
+    return $candidates;
+}
+
+/**
  * Sync facility maintenance status and blackout dates from active (blocking-status) IPMS projects.
  *
  * Rules (mirrors the CIMM sync in services/cimm_api.php):
@@ -502,13 +662,32 @@ function syncFacilitiesFromIPMS(PDO $pdo, array $activeProjects): array
     $facilitiesWentToMaintenance = [];
     $facilitiesWentToAvailable = [];
 
+    // Sticky project→facility matches (see frs_ipms_load_schedule_pins() doc
+    // comment): once a project has been fuzzy-matched to a facility, that pin
+    // is reused on later syncs instead of re-guessing — so renaming/re-
+    // addressing an unrelated facility can't silently steal another
+    // facility's "under maintenance" flag.
+    $projectPins = frs_ipms_load_schedule_pins();
+    $pinsChanged = false;
+
     foreach ($activeProjects as $project) {
         if (!ipmsIsBlockingStatus((string)($project['status'] ?? ''))) {
             continue;
         }
 
-        $match = ipmsMatchFacilityId($project, $facilities);
-        $facilityId = $match['facility_id'];
+        $projectKey = ipmsProjectStableKey($project);
+
+        if ($projectKey !== '' && isset($projectPins[$projectKey], $facilityById[$projectPins[$projectKey]])) {
+            $facilityId = $projectPins[$projectKey];
+            $match = ['facility_id' => $facilityId, 'score' => 100];
+        } else {
+            $match = ipmsMatchFacilityId($project, $facilities);
+            $facilityId = $match['facility_id'];
+            if ($facilityId && $projectKey !== '') {
+                $projectPins[$projectKey] = $facilityId;
+                $pinsChanged = true;
+            }
+        }
 
         if (!$facilityId) {
             $summary['unmatched_project_count']++;
@@ -519,6 +698,8 @@ function syncFacilitiesFromIPMS(PDO $pdo, array $activeProjects): array
                 'location' => $project['location'],
                 'status' => $project['status'],
                 'best_score' => $match['score'],
+                'latitude' => $project['latitude'] ?? null,
+                'longitude' => $project['longitude'] ?? null,
             ];
             continue;
         }
@@ -526,6 +707,10 @@ function syncFacilitiesFromIPMS(PDO $pdo, array $activeProjects): array
         $summary['matched_project_count']++;
         $matchedProjectsForBlackout[] = ['facility_id' => $facilityId, 'project' => $project];
         $activeMaintenanceFacilityIds[$facilityId] = true;
+    }
+
+    if ($pinsChanged) {
+        frs_ipms_save_schedule_pins($projectPins);
     }
 
     try {
