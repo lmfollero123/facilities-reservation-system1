@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../services/uman_api.php';
+require_once __DIR__ . '/../../../../services/ipms_api.php';
 $pdo = db();
 $hasUmanEquipment = frs_uman_tables_exist($pdo);
 $umanAssetsCatalog = [];
@@ -505,7 +506,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         : [];
                     frs_save_facility_equipment($pdo, $newFacilityId, $selectedEquipment, $umanAssetsIndexed);
                 }
-                
+
+                $ipmsProjectKey = trim((string)($_POST['ipms_project_key'] ?? ''));
+                if ($newFacilityId > 0 && $ipmsProjectKey !== '') {
+                    $pins = frs_ipms_load_schedule_pins();
+                    $pins[$ipmsProjectKey] = $newFacilityId;
+                    frs_ipms_save_schedule_pins($pins);
+                }
+
                 $message = 'Facility added successfully.';
             }
             $messageType = 'success';
@@ -794,6 +802,7 @@ ob_start();
                 <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="facility_id" id="facility_id">
+                    <input type="hidden" name="ipms_project_key" id="form-ipms-project-key" value="">
                     <label>
                         Facility Name
                         <div class="input-wrapper">
@@ -920,12 +929,20 @@ ob_start();
                     </label>
                     <label>
                         Operating Hours
-                        <div class="input-wrapper">
-                            <span class="input-icon">🕐</span>
-                            <input type="text" name="operating_hours" id="form-operating-hours" placeholder="e.g., 09:00-16:00 or 8:00 AM - 4:00 PM">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="input-wrapper" style="flex:1;">
+                                <span class="input-icon">🕐</span>
+                                <input type="time" id="form-operating-hours-start" onchange="syncOperatingHours()">
+                            </div>
+                            <span style="color:#8b95b5;">to</span>
+                            <div class="input-wrapper" style="flex:1;">
+                                <span class="input-icon">🕐</span>
+                                <input type="time" id="form-operating-hours-end" onchange="syncOperatingHours()">
+                            </div>
                         </div>
+                        <input type="hidden" name="operating_hours" id="form-operating-hours">
                         <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                            Facility operating hours. Format: HH:MM-HH:MM (24-hour) or HH:MM AM/PM - HH:MM AM/PM. Example: "09:00-16:00" or "8:00 AM - 4:00 PM". Leave blank for default (8:00 AM - 9:00 PM).
+                            Pick a start and end time. Leave both blank for default (8:00 AM - 9:00 PM).
                         </small>
                     </label>
 
@@ -1255,6 +1272,57 @@ document.addEventListener('click', (e) => {
         document.body.appendChild(modal);
     }
 })();
+
+// Combine the two <input type="time"> pickers into the "HH:MM-HH:MM" string
+// the backend expects (see config/occupancy_monitoring.php / extension_helpers.php
+// parseOperatingHours()). Leaves the hidden field blank (= facility default
+// hours) unless both start and end are set.
+function syncOperatingHours() {
+    const start = document.getElementById('form-operating-hours-start');
+    const end = document.getElementById('form-operating-hours-end');
+    const hidden = document.getElementById('form-operating-hours');
+    if (!start || !end || !hidden) return;
+    hidden.value = (start.value && end.value) ? (start.value + '-' + end.value) : '';
+}
+
+// Parse a stored operating_hours string (24-hour "HH:MM-HH:MM" or 12-hour
+// "h:MM AM/PM - h:MM AM/PM") back into the two <input type="time"> pickers,
+// which only accept 24-hour "HH:MM" values.
+function setOperatingHoursFields(stored) {
+    const start = document.getElementById('form-operating-hours-start');
+    const end = document.getElementById('form-operating-hours-end');
+    const hidden = document.getElementById('form-operating-hours');
+    if (!start || !end || !hidden) return;
+
+    const raw = String(stored || '').trim();
+    let startVal = '';
+    let endVal = '';
+
+    let m = raw.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (m) {
+        startVal = m[1].padStart(5, '0');
+        endVal = m[2].padStart(5, '0');
+    } else {
+        m = raw.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+        if (m) {
+            const to24 = function (t) {
+                const parts = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/);
+                if (!parts) return '';
+                let h = parseInt(parts[1], 10);
+                const min = parts[2];
+                const ampm = parts[3];
+                if (ampm === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
+                return String(h).padStart(2, '0') + ':' + min;
+            };
+            startVal = to24(m[1]);
+            endVal = to24(m[2]);
+        }
+    }
+
+    start.value = startVal;
+    end.value = endVal;
+    hidden.value = raw;
+}
 
 function openFacilityModal(resetForm = true) {
     const modal = document.getElementById('facilityModal');
@@ -1621,7 +1689,7 @@ function editFacility(payload) {
     })();
 
     document.getElementById('form-status').value = facility.status || 'available';
-    document.getElementById('form-operating-hours').value = facility.operating_hours || '';
+    setOperatingHoursFields(facility.operating_hours || '');
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
@@ -1701,7 +1769,10 @@ function resetFacilityForm() {
         slot.appendChild(placeholder);
     })();
 
+    setVal('form-ipms-project-key', '');
     setVal('form-status', 'available');
+    setVal('form-operating-hours-start', '');
+    setVal('form-operating-hours-end', '');
     setVal('form-operating-hours', '');
     setChecked('form-auto-approve', false);
     setVal('form-capacity-threshold', '');
@@ -1754,6 +1825,25 @@ function resetFacilityForm() {
         }
     }
 }
+
+function prefillFromIpmsCandidate() {
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('prefill_name');
+    const location = params.get('prefill_location');
+    const lat = params.get('prefill_lat');
+    const lng = params.get('prefill_lng');
+    const ipmsKey = params.get('prefill_ipms_key');
+    if (!name && !location && !ipmsKey) return;
+
+    openFacilityModal(true);
+    if (name) document.getElementById('form-name').value = name;
+    if (location) document.getElementById('form-location').value = location;
+    if (lat) document.getElementById('form-latitude').value = lat;
+    if (lng) document.getElementById('form-longitude').value = lng;
+    if (ipmsKey) document.getElementById('form-ipms-project-key').value = ipmsKey;
+}
+
+document.addEventListener('DOMContentLoaded', prefillFromIpmsCandidate);
 
 // Map functionality
 let facilityMap = null;
