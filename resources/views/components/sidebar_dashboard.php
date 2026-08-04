@@ -200,7 +200,7 @@ $sidebarAvatarInitial = function_exists('mb_substr')
 
 <aside class="sidebar">
     <div class="brand">
-        <img src="<?= $base; ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
+        <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
         <span>Facilities</span>
         <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close sidebar">✕</button>
     </div>

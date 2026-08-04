@@ -327,7 +327,7 @@ This document provides a comprehensive index of all code files in the Facilities
 **Purpose**: Static images (logos, icons, placeholder images)
 
 **Contents**:
-- `infragov-logo.png` - Application logo
+- `brgy-culiat-logo.png` - Application logo
 - Facility images (stored in uploads/facilities/)
 
 ### uploads/

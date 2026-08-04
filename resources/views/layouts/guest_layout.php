@@ -160,7 +160,7 @@ if ($isAuthSplitPage) {
     ?>
     <link rel="stylesheet" href="<?= $base; ?>/public/css/auth-pages.css?v=<?= $authCssVersion; ?>">
     <?php endif; ?>
-    <link rel="icon" href="<?= $base; ?>/public/img/infragov-logo.png?v=<?= file_exists($appRoot . '/public/img/infragov-logo.png') ? filemtime($appRoot . '/public/img/infragov-logo.png') : time(); ?>" type="image/png">
+    <link rel="icon" href="<?= $base; ?>/public/img/brgy-culiat-logo.png?v=<?= file_exists($appRoot . '/public/img/brgy-culiat-logo.png') ? filemtime($appRoot . '/public/img/brgy-culiat-logo.png') : time(); ?>" type="image/png">
     <?php if (!empty($useTailwind)): 
         $homeCssPath = $appRoot . '/public/css/home.css';
         $tailwindPath = $appRoot . '/public/css/tailwind.css';

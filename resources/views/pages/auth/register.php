@@ -258,7 +258,7 @@ ob_start();
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
                 <i class="bi bi-arrow-left"></i> Back to website
             </a>
-            <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
+            <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
             <h2>Reserving Spaces,<br>Serving Community.</h2>
             <p>Join the Barangay Culiat Public Facilities Reservation System. Book courts, halls, and community spaces — made for Culiat residents.</p>
             <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
@@ -361,7 +361,7 @@ ob_start();
         <div class="auth-split-form-inner is-wide">
             <div class="auth-split-form-top">
                 <div class="auth-split-logo-text">
-                    <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="">
+                    <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="">
                     <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
                 </div>
                 <h1>Create an account</h1>
