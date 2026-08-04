@@ -3,26 +3,18 @@
  * Loaded when Tailwind is used on public pages
  */
 
-/* ===== Modern Public Navbar: dark frosted glass (matches reference LGU site) ===== */
-/* Translucent dark tint + blur, so whatever's behind (hero photo, page bg)
-   shows through softly instead of a flat opaque bar. Same treatment applies
-   in both light and dark theme -- dark-mode-public.css only adjusts text/
-   button colors, not this glass effect. */
-#mainNav.public-navbar-modern {
-    background: rgba(15, 23, 42, 0.82) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
-    transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-
+/* ===== Modern Public Navbar: transparent + light blur (matches reference site's
+   actual bg-transparent backdrop-blur-sm -- no dark tint at all). Legibility
+   over busy photos comes from text-shadow, not a background tint. Same
+   treatment on scroll -- no separate darker/opaque scrolled look. ===== */
+#mainNav.public-navbar-modern,
 #mainNav.public-navbar-modern.navbar-scrolled {
-    background: rgba(15, 23, 42, 0.92) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
+    background: transparent !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: none !important;
+    transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 /* style.css's #mainNav.navbar-scrolled .nav-link (and brand/datetime) rules
@@ -65,6 +57,7 @@
 }
 
 #mainNav.public-navbar-modern .brand-name {
+    font-family: 'Cinzel', serif;
     font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.02em;
@@ -73,6 +66,7 @@
 }
 
 #mainNav.public-navbar-modern .brand-accent {
+    font-family: 'Cinzel', serif;
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.08em;
@@ -83,8 +77,9 @@
 }
 
 #mainNav.public-navbar-modern .nav-link {
+    font-family: 'Cinzel', serif;
     color: #e2e8f0 !important;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 0.88rem;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -173,16 +168,21 @@
     transform: translateY(-1px);
 }
 
-/* Light mode scrolled – same light bar, keep dark text (no extra overrides needed) */
+/* Scrolled state uses the same transparent/light-text treatment as default now
+   (no separate opaque/white scrolled bar) -- login button and theme toggle
+   need their own scrolled-state color rules since #mainNav.navbar-scrolled
+   .theme-toggle-nav is styled elsewhere in style.css with no guard against
+   this navbar, same specificity trap as the nav-link/brand text had. */
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login {
-    color: #1e293b !important;
-    border-color: #64748b !important;
+    color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.5) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login:hover {
-    background: rgba(30, 41, 59, 0.06) !important;
-    border-color: #475569 !important;
-    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: #e2e8f0 !important;
+    color: #ffffff !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-register {
@@ -191,15 +191,15 @@
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav {
-    color: #475569 !important;
-    border: 1px solid #cbd5e1;
-    background: rgba(0, 0, 0, 0.04);
+    color: #e2e8f0 !important;
+    border: 1px solid rgba(226, 232, 240, 0.4);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav:hover {
-    background: rgba(30, 41, 59, 0.08) !important;
-    color: #1e293b !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
 }
 
 /* ===== Page Header Hero (green section with icon, title, tagline) ===== */
