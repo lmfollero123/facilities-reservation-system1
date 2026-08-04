@@ -25,18 +25,18 @@
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
-.public-navbar-modern .navbar-brand.public-nav-brand {
+#mainNav.public-navbar-modern .navbar-brand.public-nav-brand {
     display: flex !important;
     align-items: center;
     gap: 0.75rem;
 }
 
-.public-navbar-modern .public-nav-brand img {
+#mainNav.public-navbar-modern .public-nav-brand img {
     height: 38px;
     width: auto;
 }
 
-.public-navbar-modern .brand-name {
+#mainNav.public-navbar-modern .brand-name {
     font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.02em;
@@ -44,7 +44,7 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.public-navbar-modern .brand-accent {
+#mainNav.public-navbar-modern .brand-accent {
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.08em;
@@ -54,7 +54,7 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.public-navbar-modern .nav-link {
+#mainNav.public-navbar-modern .nav-link {
     color: #e2e8f0 !important;
     font-weight: 700;
     font-size: 0.88rem;
@@ -66,20 +66,20 @@
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.public-navbar-modern .nav-link:hover,
-.public-navbar-modern .nav-link.active {
+#mainNav.public-navbar-modern .nav-link:hover,
+#mainNav.public-navbar-modern .nav-link.active {
     color: #34d399 !important;
     text-decoration: none !important;
     border-bottom-color: #34d399;
 }
 
-.public-navbar-modern .navbar-datetime,
-.public-navbar-modern #navbar-date,
-.public-navbar-modern #navbar-time {
+#mainNav.public-navbar-modern .navbar-datetime,
+#mainNav.public-navbar-modern #navbar-date,
+#mainNav.public-navbar-modern #navbar-time {
     color: #e2e8f0 !important;
 }
 
-.public-navbar-modern .theme-toggle-nav {
+#mainNav.public-navbar-modern .theme-toggle-nav {
     color: #e2e8f0;
 }
 
@@ -99,7 +99,7 @@
 }
 
 /* Theme toggle - add spacing from nav links and Login/Register */
-.public-navbar-modern .nav-item-theme {
+#mainNav.public-navbar-modern .nav-item-theme {
     margin-right: 1rem;
 }
 
