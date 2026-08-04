@@ -13,6 +13,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'infrast
 }
 
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../services/ipms_api.php';
 $pdo = db();
 $pageTitle = 'Infrastructure Projects (IPMS) | LGU Facilities Reservation';
@@ -21,6 +22,21 @@ $dashboardContentClass = 'integrations-modern';
 $canSync = in_array($role, ['Admin', 'Staff'], true);
 $configured = ipms_api_key() !== '';
 
+if ($canSync && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'dismiss_candidate') {
+    if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+        http_response_code(403);
+        die('Invalid request.');
+    }
+    $projectKey = trim((string)($_POST['project_key'] ?? ''));
+    if ($projectKey !== '') {
+        $dismissed = frs_ipms_load_dismissed_projects();
+        $dismissed[] = $projectKey;
+        frs_ipms_save_dismissed_projects($dismissed);
+    }
+    header('Location: ' . base_path() . '/dashboard/infrastructure-projects');
+    exit;
+}
+
 $state = frs_ipms_load_sync_state();
 $lastSyncAt = $state['last_sync_at'] ?? null;
 $summary = is_array($state['last_summary'] ?? null) ? $state['last_summary'] : [];
@@ -28,6 +44,7 @@ $needsReview = is_array($summary['needs_review'] ?? null) ? $summary['needs_revi
 $upcomingProjects = is_array($summary['upcoming_projects'] ?? null) ? $summary['upcoming_projects'] : [];
 $syncErrors = is_array($summary['errors'] ?? null) ? $summary['errors'] : [];
 $barangay = (string)($summary['barangay'] ?? '');
+$newFacilityCandidates = frs_ipms_new_facility_candidates($needsReview);
 
 // Facilities currently blocked by an IPMS-synced blackout — this is the ground truth of what's
 // actually blocking bookings right now, independent of what the last sync summary happened to say.
@@ -148,6 +165,61 @@ ob_start();
             </div>
         <?php endif; ?>
     </section>
+
+    <!-- New facility candidates -->
+    <?php if (!empty($newFacilityCandidates)): ?>
+    <section class="booking-card" style="grid-column: 1 / -1; border: 1px solid #0d9488;">
+        <h2 style="margin-bottom:0.5rem;">
+            🏗️ New Facility Candidates
+            <small style="font-weight:500; color:#8b95b5;">(<?= count($newFacilityCandidates); ?>)</small>
+        </h2>
+        <p style="color:#8b95b5; margin-bottom:1rem;">
+            These IPMS projects are in final completion inspection and don't match an existing facility —
+            likely a brand-new public facility. Review and add it, or mark it as not a facility
+            (e.g. road/drainage work) to stop it showing up here.
+        </p>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Reported location</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($newFacilityCandidates as $c): ?>
+                        <tr>
+                            <td data-label="Project"><strong><?= htmlspecialchars($c['name']); ?></strong></td>
+                            <td data-label="Reported location"><?= htmlspecialchars($c['location']); ?></td>
+                            <td data-label="Action">
+                                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                    <?php
+                                    $prefillParams = [
+                                        'prefill_name' => $c['name'],
+                                        'prefill_location' => $c['location'],
+                                        'prefill_ipms_key' => $c['project_key'],
+                                    ];
+                                    if ($c['latitude'] !== null) $prefillParams['prefill_lat'] = $c['latitude'];
+                                    if ($c['longitude'] !== null) $prefillParams['prefill_lng'] = $c['longitude'];
+                                    $addUrl = base_path() . '/dashboard/facility-management?' . http_build_query($prefillParams);
+                                    ?>
+                                    <a href="<?= htmlspecialchars($addUrl); ?>" class="btn-primary" style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Add as Facility</a>
+                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Mark this project as not a facility? It will stop appearing here.');">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="action" value="dismiss_candidate">
+                                        <input type="hidden" name="project_key" value="<?= htmlspecialchars($c['project_key']); ?>">
+                                        <button type="submit" class="btn-outline" style="padding:0.4rem 0.75rem; font-size:0.85rem;">Not a facility</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <!-- Needs manual review -->
     <?php if (!empty($needsReview)): ?>
