@@ -28,6 +28,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'utiliti
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../services/uman_api.php';
+require_once __DIR__ . '/../../../../config/energy_helper.php';
 
 $pdo = db();
 $pageTitle = 'UMAN Integration | LGU Facilities Reservation';
@@ -36,6 +37,10 @@ $dashboardContentClass = 'integrations-modern';
 $message = '';
 $messageType = '';
 $hasUmanTables = frs_uman_tables_exist($pdo);
+$hasReadingTables = frs_energy_tables_exist($pdo);
+$canCreateReadings = frs_can_create($role, 'utilities');
+$canUpdateReadings = frs_can_update($role, 'utilities');
+$canDeleteReadings = frs_can_delete($role, 'utilities');
 
 if ($hasUmanTables) {
     frs_ensure_uman_requests_schema_v2($pdo);
@@ -136,6 +141,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ? "Synced {$count} request status update(s) from UMAN."
             : 'Request statuses are up to date (or UMAN API unavailable).';
         $messageType = 'success';
+    } elseif ($_POST['action'] === 'add_utility_reading' && $canCreateReadings && $hasReadingTables) {
+        $month = (string)($_POST['reading_month'] ?? '');
+        $parts = explode('-', $month);
+        try {
+            if (count($parts) !== 2 || !ctype_digit($parts[0]) || !ctype_digit($parts[1]) || (int)$parts[1] < 1 || (int)$parts[1] > 12) {
+                throw new InvalidArgumentException('Please choose a valid reading month.');
+            }
+            $readingId = frs_energy_save_reading($pdo, [
+                'facility_id' => (int)($_POST['facility_id'] ?? 0),
+                'year' => (int)$parts[0],
+                'month' => (int)$parts[1],
+                'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
+                'previous_reading_kwh' => (float)($_POST['previous_reading_kwh'] ?? 0),
+                'current_reading_kwh' => (float)($_POST['current_reading_kwh'] ?? 0),
+                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
+                'previous_reading_water' => $_POST['previous_reading_water'] ?? null,
+                'current_reading_water' => $_POST['current_reading_water'] ?? null,
+                'rate_per_water' => $_POST['rate_per_water'] ?? null,
+                'notes' => trim((string)($_POST['notes'] ?? '')),
+                'recorded_by' => (int)($_SESSION['user_id'] ?? 0) ?: null,
+            ]);
+            $push = frs_uman_push_utility_reading($pdo, $readingId);
+            $message = $push['success']
+                ? 'Reading saved and sent to UMAN.'
+                : 'Reading saved locally. Send to UMAN pending: ' . (string)$push['error'];
+            $messageType = 'success';
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to save reading: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    } elseif ($_POST['action'] === 'update_utility_reading' && $canUpdateReadings && $hasReadingTables) {
+        $readingId = (int)($_POST['reading_id'] ?? 0);
+        try {
+            frs_energy_update_reading($pdo, $readingId, [
+                'current_reading_kwh' => $_POST['current_reading_kwh'] ?? null,
+                'previous_reading_kwh' => $_POST['previous_reading_kwh'] ?? null,
+                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
+                'current_reading_water' => $_POST['current_reading_water'] ?? null,
+                'previous_reading_water' => $_POST['previous_reading_water'] ?? null,
+                'rate_per_water' => $_POST['rate_per_water'] ?? null,
+                'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
+                'notes' => trim((string)($_POST['notes'] ?? '')),
+            ]);
+            $push = frs_uman_push_utility_reading($pdo, $readingId);
+            $message = $push['success']
+                ? 'Reading corrected and re-sent to UMAN.'
+                : 'Reading corrected. Send to UMAN pending: ' . (string)$push['error'];
+            $messageType = 'success';
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to correct reading: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    } elseif ($_POST['action'] === 'delete_utility_reading' && $canDeleteReadings && $hasReadingTables) {
+        $readingId = (int)($_POST['reading_id'] ?? 0);
+        try {
+            frs_energy_delete_reading($pdo, $readingId);
+            $message = 'Reading deleted.';
+            $messageType = 'success';
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
+        } catch (Throwable $e) {
+            $message = 'Unable to delete reading: ' . $e->getMessage();
+            $messageType = 'error';
+        }
     }
 }
 
@@ -224,6 +300,42 @@ $integrationStatus = [
     'asset_count' => count($umanAssets),
     'pending_requests' => count(array_filter($remoteRequests, fn($r) => ($r['status'] ?? '') === 'pending')),
 ];
+
+$utilityFacilities = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+$utilityLatestReadings = [];
+if ($hasReadingTables) {
+    $utilityRows = $pdo->query('
+        SELECT r.*, f.name AS facility_name, u.name AS recorded_by_name
+        FROM energy_meter_readings r
+        JOIN facilities f ON f.id = r.facility_id
+        LEFT JOIN users u ON u.id = r.recorded_by
+        ORDER BY r.year DESC, r.month DESC, r.id DESC
+        LIMIT 200
+    ')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($utilityRows as $row) {
+        $fid = (int)$row['facility_id'];
+        if (!isset($utilityLatestReadings[$fid])) {
+            $utilityLatestReadings[$fid] = $row;
+        }
+    }
+}
+$utilityEditReadingId = (int)($_GET['edit_reading'] ?? 0);
+$utilityEditReading = null;
+$utilityEditReadingIsOnly = false;
+if ($hasReadingTables && $utilityEditReadingId > 0 && $canUpdateReadings) {
+    foreach ($utilityLatestReadings as $r) {
+        if ((int)$r['id'] === $utilityEditReadingId) {
+            $utilityEditReading = $r;
+            break;
+        }
+    }
+    if ($utilityEditReading !== null) {
+        $onlyStmt = $pdo->prepare('SELECT COUNT(*) FROM energy_meter_readings WHERE facility_id = :facility_id AND id != :id');
+        $onlyStmt->execute(['facility_id' => (int)$utilityEditReading['facility_id'], 'id' => $utilityEditReadingId]);
+        $utilityEditReadingIsOnly = (int)$onlyStmt->fetchColumn() === 0;
+    }
+}
+$utilityMonthNames = [1 => 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 ob_start();
 ?>
@@ -452,6 +564,244 @@ ob_start();
                 </tbody>
             </table>
         </div>
+    <?php endif; ?>
+</section>
+
+<section class="booking-card" style="margin-top:1.5rem;">
+    <h2>💧⚡ Utility Readings (Electric &amp; Water)</h2>
+    <p style="color:#8b95b5; margin-bottom:1rem;">
+        Monthly readings sent to UMAN for consumption monitoring — UMAN forwards them to the LGU Energy system.
+        One reading per facility per month.
+    </p>
+
+    <?php if (!$hasReadingTables): ?>
+        <p style="color:#8b95b5;">Run <code>database/migration_add_energy_integration.sql</code> and <code>database/migration_add_water_readings.sql</code> to enable utility readings.</p>
+    <?php else: ?>
+
+    <?php if ($utilityEditReading !== null): ?>
+        <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
+            <h3 style="margin-top:0;">Edit Reading</h3>
+            <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" class="booking-form">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="action" value="update_utility_reading">
+                <input type="hidden" name="reading_id" value="<?= (int)$utilityEditReading['id']; ?>">
+                <label>
+                    Facility
+                    <input type="text" value="<?= htmlspecialchars((string)$utilityEditReading['facility_name']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Reading Date
+                    <input type="date" name="reading_date" required value="<?= htmlspecialchars((string)$utilityEditReading['reading_date']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <fieldset style="margin-top:1rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
+                    <legend>⚡ Electricity</legend>
+                    <label>
+                        Previous Reading (kWh)
+                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" value="<?= htmlspecialchars((string)$utilityEditReading['previous_reading_kwh']); ?>" <?= $utilityEditReadingIsOnly ? '' : 'readonly'; ?> style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Current Reading (kWh)
+                        <input type="number" step="0.01" min="0" name="current_reading_kwh" required value="<?= htmlspecialchars((string)$utilityEditReading['current_reading_kwh']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Rate per kWh (PHP)
+                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" required value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_kwh'] ?? 14.83), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                </fieldset>
+                <fieldset style="margin-top:0.75rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
+                    <legend>💧 Water</legend>
+                    <label>
+                        Previous Reading (m³)
+                        <input type="number" step="0.01" min="0" name="previous_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['previous_reading_water'] ?? '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Current Reading (m³)
+                        <input type="number" step="0.01" min="0" name="current_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['current_reading_water'] ?? '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Rate per m³ (PHP)
+                        <input type="number" step="0.01" min="0.01" name="rate_per_water" value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_water'] ?? 68.02), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                </fieldset>
+                <label style="margin-top:0.75rem; display:block;">
+                    Notes (optional)
+                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"><?= htmlspecialchars((string)($utilityEditReading['notes'] ?? '')); ?></textarea>
+                </label>
+                <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center;">
+                    <button type="submit" class="btn-primary">Save Correction</button>
+                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>">Cancel</a>
+                </div>
+            </form>
+        </div>
+    <?php elseif ($canCreateReadings): ?>
+        <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
+            <h3 style="margin-top:0;">Add Reading</h3>
+            <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" class="booking-form">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="action" value="add_utility_reading">
+                <label>
+                    Facility
+                    <select name="facility_id" id="utility-facility-select" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <option value="">— Select facility —</option>
+                        <?php foreach ($utilityFacilities as $f): ?>
+                            <?php $last = $utilityLatestReadings[(int)$f['id']] ?? null; ?>
+                            <option value="<?= (int)$f['id']; ?>"
+                                data-prev-kwh="<?= $last !== null ? htmlspecialchars((string)$last['current_reading_kwh']) : ''; ?>"
+                                data-rate-kwh="<?= $last !== null ? htmlspecialchars((string)($last['rate_per_kwh'] ?? '14.83')) : '14.83'; ?>"
+                                data-prev-water="<?= ($last !== null && $last['current_reading_water'] !== null) ? htmlspecialchars((string)$last['current_reading_water']) : ''; ?>"
+                                data-rate-water="<?= ($last !== null && $last['rate_per_water'] !== null) ? htmlspecialchars((string)$last['rate_per_water']) : '68.02'; ?>">
+                                <?= htmlspecialchars($f['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Reading Month
+                    <input type="month" name="reading_month" required value="<?= htmlspecialchars(date('Y-m')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <label style="margin-top:0.75rem; display:block;">
+                    Reading Date
+                    <input type="date" name="reading_date" required value="<?= htmlspecialchars(date('Y-m-d')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                </label>
+                <fieldset style="margin-top:1rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
+                    <legend>⚡ Electricity</legend>
+                    <label>
+                        Previous Reading (kWh)
+                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="utility-prev-kwh" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <small style="color:#8b95b5;">Auto-filled and locked when the facility already has a reading.</small>
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Current Reading (kWh)
+                        <input type="number" step="0.01" min="0" name="current_reading_kwh" id="utility-curr-kwh" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Rate per kWh (PHP)
+                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="utility-rate-kwh" required value="14.83" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <small style="color:#8b95b5;">Meralco residential all-in rate, July 2026 — adjust to the current tariff.</small>
+                    </label>
+                </fieldset>
+                <fieldset style="margin-top:0.75rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
+                    <legend>💧 Water (optional)</legend>
+                    <label>
+                        Previous Reading (m³)
+                        <input type="number" step="0.01" min="0" name="previous_reading_water" id="utility-prev-water" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <small style="color:#8b95b5;">Auto-filled and locked when the facility already has a water reading.</small>
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Current Reading (m³)
+                        <input type="number" step="0.01" min="0" name="current_reading_water" id="utility-curr-water" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    </label>
+                    <label style="margin-top:0.5rem; display:block;">
+                        Rate per m³ (PHP)
+                        <input type="number" step="0.01" min="0.01" name="rate_per_water" id="utility-rate-water" value="68.02" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <small style="color:#8b95b5;">Manila Water East Zone (Quezon City), Q2 2026 tier — adjust to the current tariff.</small>
+                    </label>
+                </fieldset>
+                <p id="utility-consumption-preview" style="margin-top:0.75rem; color:#0066cc; font-weight:600;"></p>
+                <label style="margin-top:0.75rem; display:block;">
+                    Notes (optional)
+                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
+                </label>
+                <button type="submit" class="btn-primary" style="margin-top:1rem;">Save Reading</button>
+            </form>
+            <script>
+            (function () {
+                'use strict';
+                var sel = document.getElementById('utility-facility-select');
+                var prevKwh = document.getElementById('utility-prev-kwh');
+                var currKwh = document.getElementById('utility-curr-kwh');
+                var rateKwh = document.getElementById('utility-rate-kwh');
+                var prevWater = document.getElementById('utility-prev-water');
+                var currWater = document.getElementById('utility-curr-water');
+                var rateWater = document.getElementById('utility-rate-water');
+                var preview = document.getElementById('utility-consumption-preview');
+                if (!sel || !prevKwh || !currKwh || !rateKwh || !preview) return;
+                function updatePreview() {
+                    var lines = [];
+                    var pk = parseFloat(prevKwh.value), ck = parseFloat(currKwh.value), rk = parseFloat(rateKwh.value);
+                    if (!isNaN(pk) && !isNaN(ck) && ck >= pk) {
+                        lines.push('Electric: ' + (ck - pk).toFixed(2) + ' kWh' + (!isNaN(rk) && rk > 0 ? ' | PHP ' + ((ck - pk) * rk).toFixed(2) : ''));
+                    }
+                    var pw = parseFloat(prevWater.value), cw = parseFloat(currWater.value), rw = parseFloat(rateWater.value);
+                    if (!isNaN(pw) && !isNaN(cw) && cw >= pw) {
+                        lines.push('Water: ' + (cw - pw).toFixed(2) + ' m³' + (!isNaN(rw) && rw > 0 ? ' | PHP ' + ((cw - pw) * rw).toFixed(2) : ''));
+                    }
+                    preview.innerHTML = lines.join('<br>');
+                }
+                sel.addEventListener('change', function () {
+                    var opt = sel.options[sel.selectedIndex];
+                    if (!opt) return;
+                    var lastKwh = opt.getAttribute('data-prev-kwh');
+                    if (lastKwh) { prevKwh.value = lastKwh; prevKwh.readOnly = true; }
+                    else { prevKwh.value = ''; prevKwh.readOnly = false; }
+                    rateKwh.value = opt.getAttribute('data-rate-kwh') || '14.83';
+
+                    var lastWater = opt.getAttribute('data-prev-water');
+                    if (lastWater) { prevWater.value = lastWater; prevWater.readOnly = true; }
+                    else { prevWater.value = ''; prevWater.readOnly = false; }
+                    rateWater.value = opt.getAttribute('data-rate-water') || '68.02';
+                    updatePreview();
+                });
+                [prevKwh, currKwh, rateKwh, prevWater, currWater, rateWater].forEach(function (el) {
+                    el.addEventListener('input', updatePreview);
+                });
+            })();
+            </script>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($utilityLatestReadings === []): ?>
+        <p style="color:#8b95b5; text-align:center; padding:2rem;">No utility readings recorded yet.</p>
+    <?php else: ?>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Facility</th><th>Period</th><th>Electric</th><th>Water</th><th>Sync</th><th>Recorded By</th>
+                        <?php if ($canUpdateReadings || $canDeleteReadings): ?><th>Actions</th><?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($utilityLatestReadings as $r): ?>
+                        <tr>
+                            <td data-label="Facility"><?= htmlspecialchars((string)$r['facility_name']); ?></td>
+                            <td data-label="Period"><?= htmlspecialchars(($utilityMonthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
+                            <td data-label="Electric"><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh · PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 14.83), 2); ?></td>
+                            <td data-label="Water">
+                                <?php if ($r['current_reading_water'] !== null): ?>
+                                    <?= number_format((float)$r['consumption_water'], 2); ?> m³ · PHP <?= number_format((float)$r['consumption_water'] * (float)($r['rate_per_water'] ?? 68.02), 2); ?>
+                                <?php else: ?>
+                                    <span style="color:#8b95b5;">Not recorded</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Sync">
+                                <span class="status-badge <?= $r['sync_status'] === 'synced' ? 'active' : ($r['sync_status'] === 'failed' ? 'offline' : 'maintenance'); ?>"
+                                      <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>
+                                    <?= htmlspecialchars(ucfirst((string)$r['sync_status'])); ?>
+                                </span>
+                            </td>
+                            <td data-label="Recorded By"><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
+                            <?php if ($canUpdateReadings || $canDeleteReadings): ?>
+                            <td data-label="Actions" style="white-space:nowrap;">
+                                <?php if ($canUpdateReadings): ?>
+                                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration?edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
+                                <?php endif; ?>
+                                <?php if ($canDeleteReadings && $r['sync_status'] !== 'synced'): ?>
+                                    <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" style="display:inline;">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="action" value="delete_utility_reading">
+                                        <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
+                                        <button type="submit" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem; color:#b23030;" onclick="return confirm('Delete this reading?')">Delete</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
     <?php endif; ?>
 </section>
 
