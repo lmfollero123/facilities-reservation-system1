@@ -42,6 +42,12 @@ $canCreateReadings = frs_can_create($role, 'utilities');
 $canUpdateReadings = frs_can_update($role, 'utilities');
 $canDeleteReadings = frs_can_delete($role, 'utilities');
 
+$tab = (string)($_GET['tab'] ?? 'equipment');
+if (!in_array($tab, ['equipment', 'readings'], true)) {
+    $tab = 'equipment';
+}
+$umanTabUrl = static fn (string $t): string => base_path() . '/dashboard/utilities-integration?tab=' . $t;
+
 if ($hasUmanTables) {
     frs_ensure_uman_requests_schema_v2($pdo);
 }
@@ -346,6 +352,11 @@ ob_start();
     <?= frs_page_title('UMAN Utilities Management Integration', 'Request utility assets from UMAN and assign approved equipment to facilities via Facility Management.'); ?>
 </div>
 
+<nav class="booking-hub-tabs" aria-label="UMAN sections">
+    <a class="booking-hub-tab <?= $tab === 'equipment' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($umanTabUrl('equipment')); ?>">Equipment &amp; Requests</a>
+    <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($umanTabUrl('readings')); ?>">Utility Readings</a>
+</nav>
+
 <?php if ($message):
     $msgBg = $messageType === 'success' ? '#ecfdf5' : ($messageType === 'warning' ? '#fffbeb' : '#fef2f2');
     $msgFg = $messageType === 'success' ? '#047857' : ($messageType === 'warning' ? '#92400e' : '#b91c1c');
@@ -370,6 +381,7 @@ ob_start();
     </div>
 <?php endif; ?>
 
+<?php if ($tab === 'equipment'): ?>
 <div class="booking-wrapper" id="request-form-wrapper">
     <section class="booking-card">
         <h2>Request Asset from UMAN</h2>
@@ -566,7 +578,9 @@ ob_start();
         </div>
     <?php endif; ?>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'readings'): ?>
 <section class="booking-card" style="margin-top:1.5rem;">
     <h2>💧⚡ Utility Readings (Electric &amp; Water)</h2>
     <p style="color:#8b95b5; margin-bottom:1rem;">
@@ -581,7 +595,7 @@ ob_start();
     <?php if ($utilityEditReading !== null): ?>
         <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
             <h3 style="margin-top:0;">Edit Reading</h3>
-            <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" class="booking-form">
+            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="booking-form">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="update_utility_reading">
                 <input type="hidden" name="reading_id" value="<?= (int)$utilityEditReading['id']; ?>">
@@ -629,14 +643,14 @@ ob_start();
                 </label>
                 <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center;">
                     <button type="submit" class="btn-primary">Save Correction</button>
-                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>">Cancel</a>
+                    <a href="<?= htmlspecialchars($umanTabUrl('readings')); ?>">Cancel</a>
                 </div>
             </form>
         </div>
     <?php elseif ($canCreateReadings): ?>
         <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
             <h3 style="margin-top:0;">Add Reading</h3>
-            <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" class="booking-form">
+            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="booking-form">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="add_utility_reading">
                 <label>
@@ -784,10 +798,10 @@ ob_start();
                             <?php if ($canUpdateReadings || $canDeleteReadings): ?>
                             <td data-label="Actions" style="white-space:nowrap;">
                                 <?php if ($canUpdateReadings): ?>
-                                    <a href="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration?edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
+                                    <a href="<?= htmlspecialchars($umanTabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
                                 <?php endif; ?>
                                 <?php if ($canDeleteReadings && $r['sync_status'] !== 'synced'): ?>
-                                    <form method="POST" action="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>" style="display:inline;">
+                                    <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" style="display:inline;">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="delete_utility_reading">
                                         <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
@@ -804,7 +818,9 @@ ob_start();
     <?php endif; ?>
     <?php endif; ?>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'equipment'): ?>
 <section class="booking-card" style="margin-top:1.5rem;">
     <h2>Asset Requests</h2>
     <?php
@@ -943,6 +959,7 @@ ob_start();
     });
 })();
 </script>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();
