@@ -261,6 +261,19 @@ function submitUMANAssetRequest(
 }
 
 /**
+ * Submit an electric+water utility meter reading to UMAN. UMAN monitors
+ * these for high consumption and forwards to the LGU Energy system on its
+ * own — this call's only job is to hand the reading over.
+ *
+ * @param array<string, mixed> $payload from frs_uman_build_utility_reading_payload()
+ * @return array{data: array, error: ?string}
+ */
+function submitUMANUtilityReading(array $payload): array
+{
+    return uman_api_post('/api/utility-readings.php', $payload);
+}
+
+/**
  * Idempotently upgrade local uman_asset_requests table to include the new
  * specific columns introduced with the v2 CPRF↔UMAN integration payload.
  * Safe to call on every page render — catches duplicate column exceptions.
