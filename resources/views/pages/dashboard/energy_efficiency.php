@@ -36,90 +36,15 @@ $message = '';
 $messageType = '';
 $hasTables = frs_energy_tables_exist($pdo);
 
-$tab = (string)($_GET['tab'] ?? 'readings');
-if (!in_array($tab, ['readings', 'recommendations', 'mapping', 'profiles'], true)) {
-    $tab = 'readings';
+$tab = (string)($_GET['tab'] ?? 'recommendations');
+if (!in_array($tab, ['recommendations', 'mapping', 'profiles'], true)) {
+    $tab = 'recommendations';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTables) {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
-    } elseif ($_POST['action'] === 'add_reading' && $canCreate) {
-        $month = (string)($_POST['reading_month'] ?? ''); // "YYYY-MM" from <input type=month>
-        $parts = explode('-', $month);
-        try {
-            if (count($parts) !== 2 || !ctype_digit($parts[0]) || !ctype_digit($parts[1]) || (int)$parts[1] < 1 || (int)$parts[1] > 12) {
-                throw new InvalidArgumentException('Please choose a valid reading month.');
-            }
-            $readingId = frs_energy_save_reading($pdo, [
-                'facility_id' => (int)($_POST['facility_id'] ?? 0),
-                'year' => (int)$parts[0],
-                'month' => (int)$parts[1],
-                'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
-                'previous_reading_kwh' => (float)($_POST['previous_reading_kwh'] ?? 0),
-                'current_reading_kwh' => (float)($_POST['current_reading_kwh'] ?? 0),
-                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
-                'notes' => trim((string)($_POST['notes'] ?? '')),
-                'recorded_by' => (int)($_SESSION['user_id'] ?? 0) ?: null,
-            ]);
-            $push = $syncEnabled
-                ? frs_energy_push_reading($pdo, $readingId)
-                : ['success' => false, 'error' => 'Sync disabled — reading saved locally as pending.'];
-            if ($push['success']) {
-                $message = 'Reading saved and pushed to the Energy system. Waiting for Energy Admin approval.';
-                $messageType = 'success';
-            } else {
-                $message = 'Reading saved locally. Push to Energy system pending: ' . (string)$push['error'];
-                $messageType = 'success';
-            }
-        } catch (InvalidArgumentException $e) {
-            $message = $e->getMessage();
-            $messageType = 'error';
-        } catch (Throwable $e) {
-            $message = 'Unable to save reading: ' . $e->getMessage();
-            $messageType = 'error';
-        }
-    } elseif ($_POST['action'] === 'update_reading' && $canUpdate) {
-        $readingId = (int)($_POST['reading_id'] ?? 0);
-        try {
-            frs_energy_update_reading($pdo, $readingId, [
-                'current_reading_kwh' => $_POST['current_reading_kwh'] ?? null,
-                'previous_reading_kwh' => $_POST['previous_reading_kwh'] ?? null,
-                'rate_per_kwh' => $_POST['rate_per_kwh'] ?? null,
-                'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
-                'notes' => trim((string)($_POST['notes'] ?? '')),
-            ]);
-            $push = $syncEnabled
-                ? frs_energy_push_reading($pdo, $readingId)
-                : ['success' => false, 'error' => 'Sync disabled — reading saved locally as pending.'];
-            if ($push['success']) {
-                $message = 'Reading corrected and re-pushed to the Energy system. Waiting for Energy Admin approval.';
-                $messageType = 'success';
-            } else {
-                $message = 'Reading corrected. Push pending: ' . (string)$push['error'];
-                $messageType = 'success';
-            }
-        } catch (InvalidArgumentException $e) {
-            $message = $e->getMessage();
-            $messageType = 'error';
-        } catch (Throwable $e) {
-            $message = 'Unable to correct reading: ' . $e->getMessage();
-            $messageType = 'error';
-        }
-    } elseif ($_POST['action'] === 'delete_reading' && $canDelete) {
-        $readingId = (int)($_POST['reading_id'] ?? 0);
-        try {
-            frs_energy_delete_reading($pdo, $readingId);
-            $message = 'Reading deleted.';
-            $messageType = 'success';
-        } catch (InvalidArgumentException $e) {
-            $message = $e->getMessage();
-            $messageType = 'error';
-        } catch (Throwable $e) {
-            $message = 'Unable to delete reading: ' . $e->getMessage();
-            $messageType = 'error';
-        }
     } elseif ($_POST['action'] === 'save_mapping' && $canUpdate) {
         $facilityId = (int)($_POST['facility_id'] ?? 0);
         $pair = trim((string)($_POST['energy_facility'] ?? '')); // "id|name"
@@ -197,18 +122,6 @@ if ($hasTables) {
         }
     }
 
-    $curYear = (int)date('Y');
-    $curMonth = (int)date('n');
-    $readFacilityIdsThisMonth = [];
-    foreach ($rows as $row) {
-        if ((int)$row['year'] === $curYear && (int)$row['month'] === $curMonth) {
-            $readFacilityIdsThisMonth[(int)$row['facility_id']] = true;
-        }
-    }
-    $facilitiesMissingThisMonth = array_values(array_filter($facilities, function ($f) use ($readFacilityIdsThisMonth) {
-        return $f['status'] !== 'deleted' && !isset($readFacilityIdsThisMonth[(int)$f['id']]);
-    }));
-
     $approvedRows = $pdo->query("
         SELECT facility_id, year, month
         FROM energy_recommendations_cache
@@ -219,24 +132,6 @@ if ($hasTables) {
     foreach ($approvedRows as $approvedRow) {
         $key = (int)$approvedRow['facility_id'] . '-' . (int)$approvedRow['year'] . '-' . (int)$approvedRow['month'];
         $approvedRecommendationPeriods[$key] = true;
-    }
-}
-
-// Edit-reading target: only valid when it is still a facility's latest reading.
-$editReadingId = (int)($_GET['edit_reading'] ?? 0);
-$editReading = null;
-$editReadingIsOnly = false;
-if ($hasTables && $editReadingId > 0 && $canUpdate) {
-    foreach ($latestReadings as $r) {
-        if ((int)$r['id'] === $editReadingId) {
-            $editReading = $r;
-            break;
-        }
-    }
-    if ($editReading !== null) {
-        $onlyStmt = $pdo->prepare('SELECT COUNT(*) FROM energy_meter_readings WHERE facility_id = :facility_id AND id != :id');
-        $onlyStmt->execute(['facility_id' => (int)$editReading['facility_id'], 'id' => $editReadingId]);
-        $editReadingIsOnly = (int)$onlyStmt->fetchColumn() === 0;
     }
 }
 
@@ -327,7 +222,6 @@ ob_start();
 <?php else: ?>
 
 <nav class="booking-hub-tabs" aria-label="Energy sections">
-    <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('readings')); ?>">Meter Readings</a>
     <a class="booking-hub-tab <?= $tab === 'recommendations' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('recommendations')); ?>">Recommendations</a>
     <a class="booking-hub-tab <?= $tab === 'profiles' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('profiles')); ?>">Facility Profiles</a>
     <?php if ($canUpdate): ?>
@@ -335,241 +229,7 @@ ob_start();
     <?php endif; ?>
 </nav>
 
-<?php if ($tab === 'readings'): ?>
-    <div class="booking-wrapper">
-        <?php if ($editReading !== null): ?>
-        <section class="booking-card">
-            <h2>Edit Reading</h2>
-            <p style="color:#8b95b5; margin-bottom:1rem;">Only the latest reading for a facility can be corrected. The reading period itself cannot be changed — record a new month instead if the period is wrong.</p>
-            <form method="POST" action="<?= htmlspecialchars($tabUrl('readings')); ?>" class="booking-form">
-                <?= csrf_field(); ?>
-                <input type="hidden" name="action" value="update_reading">
-                <input type="hidden" name="reading_id" value="<?= (int)$editReading['id']; ?>">
-                <label>
-                    Facility
-                    <input type="text" value="<?= htmlspecialchars((string)$editReading['facility_name']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Reading Month
-                    <input type="text" value="<?= htmlspecialchars(($monthNames[(int)$editReading['month']] ?? $editReading['month']) . ' ' . $editReading['year']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Reading Date
-                    <input type="date" name="reading_date" required value="<?= htmlspecialchars((string)$editReading['reading_date']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Previous Meter Reading (kWh)
-                    <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="energy-edit-prev-input" value="<?= htmlspecialchars((string)$editReading['previous_reading_kwh']); ?>" <?= $editReadingIsOnly ? '' : 'readonly'; ?> style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; <?= $editReadingIsOnly ? '' : 'background:#f4f6fa;'; ?>">
-                    <?php if (!$editReadingIsOnly): ?>
-                        <small style="color:#8b95b5;">Locked — this facility has earlier readings, so the previous value must stay linked to the prior reading.</small>
-                    <?php endif; ?>
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Current Meter Reading (kWh)
-                    <input type="number" step="0.01" min="0" name="current_reading_kwh" id="energy-edit-curr-input" required value="<?= htmlspecialchars((string)$editReading['current_reading_kwh']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Rate per kWh (PHP)
-                    <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="energy-edit-rate-input" required value="<?= htmlspecialchars(number_format((float)($editReading['rate_per_kwh'] ?? 12), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                    <small style="color:#8b95b5;">Electricity tariff used to calculate the energy cost.</small>
-                </label>
-                <p id="energy-edit-consumption-preview" style="margin-top:0.5rem; color:#0066cc; font-weight:600;"></p>
-                <label style="margin-top:0.75rem; display:block;">
-                    Notes (optional)
-                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"><?= htmlspecialchars((string)($editReading['notes'] ?? '')); ?></textarea>
-                </label>
-                <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center;">
-                    <button type="submit" class="btn-primary">Save Correction</button>
-                    <a href="<?= htmlspecialchars($tabUrl('readings')); ?>">Cancel</a>
-                </div>
-            </form>
-            <script>
-            (function () {
-                'use strict';
-                var prev = document.getElementById('energy-edit-prev-input');
-                var curr = document.getElementById('energy-edit-curr-input');
-                var rate = document.getElementById('energy-edit-rate-input');
-                var preview = document.getElementById('energy-edit-consumption-preview');
-                if (!prev || !curr || !rate || !preview) return;
-                function updatePreview() {
-                    var p = parseFloat(prev.value), c = parseFloat(curr.value), r = parseFloat(rate.value);
-                    preview.textContent = (!isNaN(p) && !isNaN(c) && c >= p)
-                        ? 'Consumption: ' + (c - p).toFixed(2) + ' kWh'
-                            + (!isNaN(r) && r > 0 ? ' | Estimated cost: PHP ' + ((c - p) * r).toFixed(2) : '')
-                        : '';
-                }
-                prev.addEventListener('input', updatePreview);
-                curr.addEventListener('input', updatePreview);
-                rate.addEventListener('input', updatePreview);
-                updatePreview();
-            })();
-            </script>
-        </section>
-        <?php elseif ($canCreate): ?>
-        <section class="booking-card">
-            <h2>Add Meter Reading</h2>
-            <p style="color:#8b95b5; margin-bottom:1rem;">One reading per facility per month. The previous value auto-fills from the facility's last reading.</p>
-            <form method="POST" action="<?= htmlspecialchars($tabUrl('readings')); ?>" class="booking-form">
-                <?= csrf_field(); ?>
-                <input type="hidden" name="action" value="add_reading">
-                <label>
-                    Facility
-                    <select name="facility_id" id="energy-facility-select" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                        <option value="">— Select facility —</option>
-                        <?php foreach ($facilities as $f): ?>
-                            <?php $last = $latestReadings[(int)$f['id']] ?? null; ?>
-                            <option value="<?= (int)$f['id']; ?>" data-prev="<?= $last !== null ? htmlspecialchars((string)$last['current_reading_kwh']) : ''; ?>" data-rate="<?= $last !== null ? htmlspecialchars((string)($last['rate_per_kwh'] ?? '12.00')) : '12.00'; ?>">
-                                <?= htmlspecialchars($f['name']); ?><?= isset($mapping[(int)$f['id']]) ? '' : ' (unmapped)'; ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Reading Month
-                    <input type="month" name="reading_month" required value="<?= htmlspecialchars(date('Y-m')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Reading Date
-                    <input type="date" name="reading_date" required value="<?= htmlspecialchars(date('Y-m-d')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Previous Meter Reading (kWh)
-                    <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="energy-prev-input" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                    <small style="color:#8b95b5;">Auto-filled and locked when the facility already has a reading.</small>
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Current Meter Reading (kWh)
-                    <input type="number" step="0.01" min="0" name="current_reading_kwh" id="energy-curr-input" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                </label>
-                <label style="margin-top:0.75rem; display:block;">
-                    Rate per kWh (PHP)
-                    <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="energy-rate-input" required value="12.00" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                    <small style="color:#8b95b5;">Enter the applicable electricity tariff for this billing period.</small>
-                </label>
-                <p id="energy-consumption-preview" style="margin-top:0.5rem; color:#0066cc; font-weight:600;"></p>
-                <label style="margin-top:0.75rem; display:block;">
-                    Notes (optional)
-                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
-                </label>
-                <button type="submit" class="btn-primary" style="margin-top:1rem;">Save Reading</button>
-            </form>
-            <script>
-            (function () {
-                'use strict';
-                var sel = document.getElementById('energy-facility-select');
-                var prev = document.getElementById('energy-prev-input');
-                var curr = document.getElementById('energy-curr-input');
-                var rate = document.getElementById('energy-rate-input');
-                var preview = document.getElementById('energy-consumption-preview');
-                if (!sel || !prev || !curr || !rate || !preview) return;
-                function updatePreview() {
-                    var p = parseFloat(prev.value), c = parseFloat(curr.value), r = parseFloat(rate.value);
-                    preview.textContent = (!isNaN(p) && !isNaN(c) && c >= p)
-                        ? 'Consumption: ' + (c - p).toFixed(2) + ' kWh'
-                            + (!isNaN(r) && r > 0 ? ' | Estimated cost: PHP ' + ((c - p) * r).toFixed(2) : '')
-                        : '';
-                }
-                sel.addEventListener('change', function () {
-                    var opt = sel.options[sel.selectedIndex];
-                    var last = opt ? opt.getAttribute('data-prev') : '';
-                    var lastRate = opt ? opt.getAttribute('data-rate') : '';
-                    if (last) { prev.value = last; prev.readOnly = true; }
-                    else { prev.value = ''; prev.readOnly = false; }
-                    rate.value = lastRate || '12.00';
-                    updatePreview();
-                });
-                prev.addEventListener('input', updatePreview);
-                curr.addEventListener('input', updatePreview);
-                rate.addEventListener('input', updatePreview);
-            })();
-            </script>
-        </section>
-        <?php endif; ?>
-
-        <section class="booking-card ee-missing-card">
-            <h2>Missing This Month</h2>
-            <p style="color:#8b95b5; margin:0 0 0.75rem;"><?= htmlspecialchars(date('F Y')); ?> readings not yet recorded.</p>
-            <?php if ($facilitiesMissingThisMonth === []): ?>
-                <p class="ee-missing-empty"><i class="bi bi-check-circle-fill"></i> All facilities are up to date.</p>
-            <?php else: ?>
-                <ul class="ee-missing-list">
-                    <?php foreach ($facilitiesMissingThisMonth as $f): ?>
-                        <li>
-                            <button type="button" class="ee-missing-item" data-facility-id="<?= (int)$f['id']; ?>">
-                                <?= htmlspecialchars($f['name']); ?>
-                                <?php if (!isset($mapping[(int)$f['id']])): ?>
-                                    <span class="ee-missing-tag">unmapped</span>
-                                <?php endif; ?>
-                            </button>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </section>
-    </div>
-
-    <section class="booking-card ee-readings-card">
-        <h2>Latest Readings per Facility</h2>
-        <?php if ($latestReadings === []): ?>
-            <p style="color:#8b95b5; text-align:center; padding:2rem;">No readings recorded yet.</p>
-        <?php else: ?>
-            <div class="table-responsive">
-                <table class="table ee-readings-table">
-                        <thead>
-                            <tr><th>Facility</th><th>Period</th><th>Consumption</th><th>Rate</th><th>Estimated Cost</th><th>Sync</th><th>Energy Review</th><th>Recorded By</th><?php if ($canUpdate || $canDelete): ?><th>Actions</th><?php endif; ?></tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($latestReadings as $r): ?>
-                                <tr>
-                                    <td data-label="Facility"><?= htmlspecialchars((string)$r['facility_name']); ?></td>
-                                    <td data-label="Period"><?= htmlspecialchars(($monthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
-                                    <td data-label="Consumption"><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh</td>
-                                    <td data-label="Rate">PHP <?= number_format((float)($r['rate_per_kwh'] ?? 12), 2); ?>/kWh</td>
-                                    <td data-label="Estimated Cost">PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 12), 2); ?></td>
-                                    <td data-label="Sync">
-                                        <span class="status-badge <?= $r['sync_status'] === 'synced' ? 'active' : ($r['sync_status'] === 'failed' ? 'offline' : 'maintenance'); ?>"
-                                              <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>
-                                            <?= htmlspecialchars(ucfirst((string)$r['sync_status'])); ?>
-                                        </span>
-                                    </td>
-                                    <td data-label="Energy Review">
-                                        <?php
-                                        $reviewKey = (int)$r['facility_id'] . '-' . (int)$r['year'] . '-' . (int)$r['month'];
-                                        $hasApprovedRecommendation = isset($approvedRecommendationPeriods[$reviewKey]);
-                                        ?>
-                                        <?php if ($r['sync_status'] !== 'synced'): ?>
-                                            <span style="color:#8b95b5;">Not submitted yet</span>
-                                        <?php elseif ($hasApprovedRecommendation): ?>
-                                            <span class="status-badge active">Approved</span>
-                                        <?php else: ?>
-                                            <span class="status-badge maintenance" style="white-space:nowrap;">Waiting for Energy Admin approval</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td data-label="Recorded By"><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
-                                    <?php if ($canUpdate || $canDelete): ?>
-                                    <td data-label="Actions" style="white-space:nowrap;">
-                                        <?php if ($canUpdate): ?>
-                                            <a href="<?= htmlspecialchars($tabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
-                                        <?php endif; ?>
-                                        <?php if ($canDelete && $r['sync_status'] !== 'synced'): ?>
-                                            <form method="POST" action="<?= htmlspecialchars($tabUrl('readings')); ?>" style="display:inline;">
-                                                <?= csrf_field(); ?>
-                                                <input type="hidden" name="action" value="delete_reading">
-                                                <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
-                                                <button type="submit" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem; color:#b23030;" onclick="return confirm('Delete this reading?')">Delete</button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </section>
-
-<?php elseif ($tab === 'recommendations'): ?>
+<?php if ($tab === 'recommendations'): ?>
     <section class="booking-card">
         <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; margin-bottom:1rem;">
             <h2 style="margin:0;">Energy-Saving Recommendations</h2>
@@ -594,7 +254,7 @@ ob_start();
                     <p style="color:#7b6848; margin:0;">Your monthly record was submitted successfully. Approved recommendations will appear here automatically after you run Sync Now.</p>
                 </div>
             <?php else: ?>
-                <p style="color:#8b95b5; text-align:center; padding:2rem;">No recommendations yet. Submit a monthly meter reading first.</p>
+                <p style="color:#8b95b5; text-align:center; padding:2rem;">No recommendations yet. Submit a monthly utility reading on the <a href="<?= htmlspecialchars(base_path() . '/dashboard/utilities-integration'); ?>">UMAN Integration page</a> first.</p>
             <?php endif; ?>
         <?php else: ?>
             <?php foreach ($recommendations as $reco): ?>
