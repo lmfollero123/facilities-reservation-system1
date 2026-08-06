@@ -36,8 +36,13 @@ $messageType = '';
 $hasTables = frs_energy_tables_exist($pdo);
 
 $tab = (string)($_GET['tab'] ?? 'readings');
-if (!in_array($tab, ['readings', 'recommendations', 'mapping', 'profiles'], true)) {
+if (!in_array($tab, ['readings', 'recommendations', 'mapping', 'profiles', 'reports'], true)) {
     $tab = 'readings';
+}
+
+$reportTab = (string)($_GET['report_tab'] ?? 'overview');
+if (!in_array($reportTab, ['overview', 'consumption', 'cost', 'savings'], true)) {
+    $reportTab = 'overview';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTables) {
@@ -307,8 +312,154 @@ if ($hasTables && $tab === 'profiles') {
     ')->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// Energy report data is kept local so reports remain available even when the
+// Energy API is temporarily offline.
+$reportFacility = max(0, (int)($_GET['report_facility'] ?? 0));
+$reportYearRaw = trim((string)($_GET['report_year'] ?? 'all'));
+$reportYear = ctype_digit($reportYearRaw) ? (int)$reportYearRaw : null;
+$reportYears = [];
+$reportSummary = [
+    'reading_count' => 0,
+    'facility_count' => 0,
+    'consumption_kwh' => 0.0,
+    'energy_cost' => 0.0,
+    'average_kwh' => 0.0,
+];
+$reportMonthly = [];
+$reportByFacility = [];
+$reportSavings = [];
+$reportSavingsSummary = [
+    'recommendation_count' => 0,
+    'expected_savings_kwh' => 0.0,
+    'actual_savings_kwh' => 0.0,
+    'implemented_count' => 0,
+    'verified_count' => 0,
+];
+
+if ($hasTables && $tab === 'reports') {
+    $reportYears = array_map(
+        'intval',
+        $pdo->query('SELECT DISTINCT year FROM energy_meter_readings ORDER BY year DESC')->fetchAll(PDO::FETCH_COLUMN)
+    );
+
+    $readingWhere = [];
+    $readingParams = [];
+    if ($reportFacility > 0) {
+        $readingWhere[] = 'r.facility_id = :facility_id';
+        $readingParams['facility_id'] = $reportFacility;
+    }
+    if ($reportYear !== null) {
+        $readingWhere[] = 'r.year = :report_year';
+        $readingParams['report_year'] = $reportYear;
+    }
+    $readingWhereSql = $readingWhere === [] ? '' : ' WHERE ' . implode(' AND ', $readingWhere);
+
+    $summaryStmt = $pdo->prepare(
+        'SELECT COUNT(*) AS reading_count, COUNT(DISTINCT r.facility_id) AS facility_count,
+                COALESCE(SUM(r.consumption_kwh), 0) AS consumption_kwh,
+                COALESCE(SUM(r.consumption_kwh * r.rate_per_kwh), 0) AS energy_cost,
+                COALESCE(AVG(r.consumption_kwh), 0) AS average_kwh
+         FROM energy_meter_readings r' . $readingWhereSql
+    );
+    $summaryStmt->execute($readingParams);
+    $reportSummary = array_merge($reportSummary, $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: []);
+
+    $monthlyStmt = $pdo->prepare(
+        'SELECT r.year, r.month, COUNT(*) AS reading_count,
+                SUM(r.consumption_kwh) AS consumption_kwh,
+                SUM(r.consumption_kwh * r.rate_per_kwh) AS energy_cost
+         FROM energy_meter_readings r' . $readingWhereSql . '
+         GROUP BY r.year, r.month ORDER BY r.year, r.month'
+    );
+    $monthlyStmt->execute($readingParams);
+    $reportMonthly = $monthlyStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $facilityStmt = $pdo->prepare(
+        'SELECT f.id AS facility_id, f.name AS facility_name, COUNT(*) AS reading_count,
+                SUM(r.consumption_kwh) AS consumption_kwh,
+                SUM(r.consumption_kwh * r.rate_per_kwh) AS energy_cost,
+                AVG(r.rate_per_kwh) AS average_rate
+         FROM energy_meter_readings r
+         JOIN facilities f ON f.id = r.facility_id' . $readingWhereSql . '
+         GROUP BY f.id, f.name ORDER BY consumption_kwh DESC, f.name'
+    );
+    $facilityStmt->execute($readingParams);
+    $reportByFacility = $facilityStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $savingsWhere = ["c.status = 'approved'"];
+    $savingsParams = [];
+    if ($reportFacility > 0) {
+        $savingsWhere[] = 'c.facility_id = :facility_id';
+        $savingsParams['facility_id'] = $reportFacility;
+    }
+    if ($reportYear !== null) {
+        $savingsWhere[] = 'c.year = :report_year';
+        $savingsParams['report_year'] = $reportYear;
+    }
+    $savingsWhereSql = ' WHERE ' . implode(' AND ', $savingsWhere);
+
+    $savingsSummaryStmt = $pdo->prepare(
+        "SELECT COUNT(*) AS recommendation_count,
+                COALESCE(SUM(c.expected_savings_kwh), 0) AS expected_savings_kwh,
+                COALESCE(SUM(c.actual_savings_kwh), 0) AS actual_savings_kwh,
+                SUM(CASE WHEN c.implementation_status IN ('implemented', 'verified') THEN 1 ELSE 0 END) AS implemented_count,
+                SUM(CASE WHEN c.implementation_status = 'verified' THEN 1 ELSE 0 END) AS verified_count
+         FROM energy_recommendations_cache c" . $savingsWhereSql
+    );
+    $savingsSummaryStmt->execute($savingsParams);
+    $reportSavingsSummary = array_merge($reportSavingsSummary, $savingsSummaryStmt->fetch(PDO::FETCH_ASSOC) ?: []);
+
+    $savingsStmt = $pdo->prepare(
+        'SELECT c.year, c.month, c.implementation_status,
+                COALESCE(SUM(c.expected_savings_kwh), 0) AS expected_savings_kwh,
+                COALESCE(SUM(c.actual_savings_kwh), 0) AS actual_savings_kwh,
+                COUNT(*) AS recommendation_count
+         FROM energy_recommendations_cache c' . $savingsWhereSql . '
+         GROUP BY c.year, c.month, c.implementation_status
+         ORDER BY c.year, c.month, c.implementation_status'
+    );
+    $savingsStmt->execute($savingsParams);
+    $reportSavings = $savingsStmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 $monthNames = [1 => 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 $tabUrl = static fn (string $t): string => base_path() . '/dashboard/energy-efficiency?tab=' . $t;
+$reportUrl = static function (string $r) use ($reportFacility, $reportYearRaw): string {
+    return base_path() . '/dashboard/energy-efficiency?' . http_build_query([
+        'tab' => 'reports',
+        'report_tab' => $r,
+        'report_facility' => $reportFacility,
+        'report_year' => $reportYearRaw,
+    ]);
+};
+$reportMonthlyLabels = [];
+$reportConsumptionData = [];
+$reportCostData = [];
+foreach ($reportMonthly as $row) {
+    $reportMonthlyLabels[] = ($monthNames[(int)$row['month']] ?? (string)$row['month']) . ' ' . (int)$row['year'];
+    $reportConsumptionData[] = round((float)$row['consumption_kwh'], 2);
+    $reportCostData[] = round((float)$row['energy_cost'], 2);
+}
+$reportMonthlyPeriodCount = count($reportMonthly);
+$reportSavingsByPeriod = [];
+foreach ($reportSavings as $row) {
+    $key = sprintf('%04d-%02d', (int)$row['year'], (int)$row['month']);
+    if (!isset($reportSavingsByPeriod[$key])) {
+        $reportSavingsByPeriod[$key] = ['expected' => 0.0, 'actual' => 0.0];
+    }
+    $reportSavingsByPeriod[$key]['expected'] += (float)$row['expected_savings_kwh'];
+    $reportSavingsByPeriod[$key]['actual'] += (float)$row['actual_savings_kwh'];
+}
+ksort($reportSavingsByPeriod);
+$reportSavingsLabels = [];
+$reportExpectedSavingsData = [];
+$reportActualSavingsData = [];
+foreach ($reportSavingsByPeriod as $period => $values) {
+    [$year, $month] = array_map('intval', explode('-', $period));
+    $reportSavingsLabels[] = ($monthNames[$month] ?? (string)$month) . ' ' . $year;
+    $reportExpectedSavingsData[] = round($values['expected'], 2);
+    $reportActualSavingsData[] = round($values['actual'], 2);
+}
 
 ob_start();
 ?>
@@ -364,6 +515,7 @@ ob_start();
     <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('readings')); ?>">Meter Readings</a>
     <a class="booking-hub-tab <?= $tab === 'recommendations' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('recommendations')); ?>">Recommendations</a>
     <a class="booking-hub-tab <?= $tab === 'profiles' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('profiles')); ?>">Facility Profiles</a>
+    <a class="booking-hub-tab <?= $tab === 'reports' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('reports')); ?>">Reports</a>
     <?php if ($canUpdate): ?>
         <a class="booking-hub-tab <?= $tab === 'mapping' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($tabUrl('mapping')); ?>">Facility Mapping</a>
     <?php endif; ?>
@@ -678,6 +830,212 @@ ob_start();
             <?php endforeach; ?>
         <?php endif; ?>
     </section>
+
+<?php elseif ($tab === 'reports'): ?>
+    <section class="booking-card energy-reports-shell">
+        <div class="energy-reports-header">
+            <div>
+                <h2 style="margin:0 0 0.3rem;">Energy Reports</h2>
+                <p style="color:#8b95b5; margin:0;">Analyze recorded electricity use, estimated cost, and recommendation savings.</p>
+            </div>
+            <form method="GET" action="<?= htmlspecialchars(base_path() . '/dashboard/energy-efficiency'); ?>" class="energy-report-filter">
+                <input type="hidden" name="tab" value="reports">
+                <input type="hidden" name="report_tab" value="<?= htmlspecialchars($reportTab); ?>">
+                <label>
+                    <span>Facility</span>
+                    <select name="report_facility">
+                        <option value="0">All facilities</option>
+                        <?php foreach ($facilities as $f): ?>
+                            <option value="<?= (int)$f['id']; ?>" <?= $reportFacility === (int)$f['id'] ? 'selected' : ''; ?>><?= htmlspecialchars((string)$f['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span>Year</span>
+                    <select name="report_year">
+                        <option value="all">All years</option>
+                        <?php foreach ($reportYears as $year): ?>
+                            <option value="<?= $year; ?>" <?= $reportYear === $year ? 'selected' : ''; ?>><?= $year; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <button type="submit" class="btn-primary">Apply Filter</button>
+            </form>
+        </div>
+
+        <nav class="energy-report-tabs" aria-label="Energy report views">
+            <?php foreach (['overview' => 'Overview', 'consumption' => 'Consumption', 'cost' => 'Cost', 'savings' => 'Savings'] as $key => $label): ?>
+                <a href="<?= htmlspecialchars($reportUrl($key)); ?>" class="<?= $reportTab === $key ? 'is-active' : ''; ?>" <?= $reportTab === $key ? 'aria-current="page"' : ''; ?>><?= $label; ?></a>
+            <?php endforeach; ?>
+        </nav>
+
+        <?php if ($reportTab !== 'savings' && (int)$reportSummary['reading_count'] === 0): ?>
+            <div class="energy-report-empty">
+                <strong>No meter readings for this filter.</strong>
+                <span>Add a monthly reading or choose a different facility and year.</span>
+            </div>
+        <?php elseif ($reportTab === 'overview'): ?>
+            <div class="energy-report-kpis">
+                <article><span>Total Consumption</span><strong><?= number_format((float)$reportSummary['consumption_kwh'], 2); ?> kWh</strong><small><?= number_format((int)$reportSummary['reading_count']); ?> monthly reading(s)</small></article>
+                <article><span>Estimated Energy Cost</span><strong>&#8369;<?= number_format((float)$reportSummary['energy_cost'], 2); ?></strong><small>Consumption &times; recorded rate</small></article>
+                <article><span>Average Consumption</span><strong><?= number_format((float)$reportSummary['average_kwh'], 2); ?> kWh</strong><small>Per submitted reading</small></article>
+                <article><span>Facilities Covered</span><strong><?= number_format((int)$reportSummary['facility_count']); ?></strong><small>With readings in this period</small></article>
+            </div>
+            <div class="reports-grid energy-report-charts">
+                <article class="report-card">
+                    <h3>Consumption Trend</h3>
+                    <p>Monthly electricity consumption in kWh.</p>
+                    <canvas id="energy-consumption-chart" height="220"></canvas>
+                </article>
+                <article class="report-card">
+                    <h3>Cost Trend</h3>
+                    <p>Estimated monthly cost using each reading's recorded tariff.</p>
+                    <canvas id="energy-cost-chart" height="220"></canvas>
+                </article>
+            </div>
+            <div class="energy-report-table-wrap">
+                <h3>Facility Summary</h3>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead><tr><th>Facility</th><th>Readings</th><th>Consumption</th><th>Estimated Cost</th><th>Avg. Rate</th></tr></thead>
+                        <tbody>
+                            <?php foreach ($reportByFacility as $row): ?>
+                                <tr>
+                                    <td><strong><?= htmlspecialchars((string)$row['facility_name']); ?></strong></td>
+                                    <td><?= number_format((int)$row['reading_count']); ?></td>
+                                    <td><?= number_format((float)$row['consumption_kwh'], 2); ?> kWh</td>
+                                    <td>&#8369;<?= number_format((float)$row['energy_cost'], 2); ?></td>
+                                    <td>&#8369;<?= number_format((float)$row['average_rate'], 2); ?>/kWh</td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php elseif ($reportTab === 'consumption'): ?>
+            <div class="energy-report-kpis energy-report-kpis-compact">
+                <article><span>Total Consumption</span><strong><?= number_format((float)$reportSummary['consumption_kwh'], 2); ?> kWh</strong></article>
+                <article><span>Monthly Average</span><strong><?= $reportMonthlyPeriodCount > 0 ? number_format((float)$reportSummary['consumption_kwh'] / $reportMonthlyPeriodCount, 2) : '0.00'; ?> kWh</strong></article>
+                <article><span>Readings</span><strong><?= number_format((int)$reportSummary['reading_count']); ?></strong></article>
+            </div>
+            <article class="report-card energy-report-wide-chart">
+                <h3>Monthly Consumption</h3>
+                <canvas id="energy-consumption-chart" height="115"></canvas>
+            </article>
+            <div class="energy-report-table-wrap">
+                <h3>Monthly Breakdown</h3>
+                <div class="table-responsive"><table class="table">
+                    <thead><tr><th>Period</th><th>Readings</th><th>Consumption</th><th>Share of Total</th></tr></thead>
+                    <tbody><?php foreach (array_reverse($reportMonthly) as $row): ?>
+                        <?php $share = (float)$reportSummary['consumption_kwh'] > 0 ? ((float)$row['consumption_kwh'] / (float)$reportSummary['consumption_kwh']) * 100 : 0; ?>
+                        <tr><td><strong><?= htmlspecialchars(($monthNames[(int)$row['month']] ?? (string)$row['month']) . ' ' . (int)$row['year']); ?></strong></td><td><?= number_format((int)$row['reading_count']); ?></td><td><?= number_format((float)$row['consumption_kwh'], 2); ?> kWh</td><td><?= number_format($share, 1); ?>%</td></tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+            </div>
+        <?php elseif ($reportTab === 'cost'): ?>
+            <div class="energy-report-kpis energy-report-kpis-compact">
+                <article><span>Estimated Total Cost</span><strong>&#8369;<?= number_format((float)$reportSummary['energy_cost'], 2); ?></strong></article>
+                <article><span>Average Cost / Reading</span><strong>&#8369;<?= (int)$reportSummary['reading_count'] > 0 ? number_format((float)$reportSummary['energy_cost'] / (int)$reportSummary['reading_count'], 2) : '0.00'; ?></strong></article>
+                <article><span>Consumption</span><strong><?= number_format((float)$reportSummary['consumption_kwh'], 2); ?> kWh</strong></article>
+            </div>
+            <article class="report-card energy-report-wide-chart">
+                <h3>Monthly Estimated Cost</h3>
+                <canvas id="energy-cost-chart" height="115"></canvas>
+            </article>
+            <div class="energy-report-table-wrap">
+                <h3>Cost by Facility</h3>
+                <div class="table-responsive"><table class="table">
+                    <thead><tr><th>Facility</th><th>Consumption</th><th>Average Rate</th><th>Estimated Cost</th><th>Share of Total</th></tr></thead>
+                    <tbody><?php foreach ($reportByFacility as $row): ?>
+                        <?php $costShare = (float)$reportSummary['energy_cost'] > 0 ? ((float)$row['energy_cost'] / (float)$reportSummary['energy_cost']) * 100 : 0; ?>
+                        <tr><td><strong><?= htmlspecialchars((string)$row['facility_name']); ?></strong></td><td><?= number_format((float)$row['consumption_kwh'], 2); ?> kWh</td><td>&#8369;<?= number_format((float)$row['average_rate'], 2); ?>/kWh</td><td>&#8369;<?= number_format((float)$row['energy_cost'], 2); ?></td><td><?= number_format($costShare, 1); ?>%</td></tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+            </div>
+        <?php else: ?>
+            <?php
+            $recommendationCount = (int)$reportSavingsSummary['recommendation_count'];
+            $implementationRate = $recommendationCount > 0 ? ((int)$reportSavingsSummary['implemented_count'] / $recommendationCount) * 100 : 0;
+            ?>
+            <?php if ($recommendationCount === 0): ?>
+                <div class="energy-report-empty"><strong>No approved recommendations for this filter.</strong><span>Run Sync Now after the Energy Admin approves recommendations.</span></div>
+            <?php else: ?>
+                <div class="energy-report-kpis">
+                    <article><span>Expected Savings</span><strong><?= number_format((float)$reportSavingsSummary['expected_savings_kwh'], 2); ?> kWh</strong><small>Engineer-approved target</small></article>
+                    <article><span>Actual Savings</span><strong><?= number_format((float)$reportSavingsSummary['actual_savings_kwh'], 2); ?> kWh</strong><small>Reported implementation result</small></article>
+                    <article><span>Implementation Rate</span><strong><?= number_format($implementationRate, 1); ?>%</strong><small><?= number_format((int)$reportSavingsSummary['implemented_count']); ?> of <?= number_format($recommendationCount); ?> implemented</small></article>
+                    <article><span>Verified</span><strong><?= number_format((int)$reportSavingsSummary['verified_count']); ?></strong><small>Confirmed by Energy</small></article>
+                </div>
+                <article class="report-card energy-report-wide-chart">
+                    <h3>Expected vs. Actual Savings</h3>
+                    <canvas id="energy-savings-chart" height="115"></canvas>
+                </article>
+                <div class="energy-report-table-wrap">
+                    <h3>Savings Breakdown</h3>
+                    <div class="table-responsive"><table class="table">
+                        <thead><tr><th>Period</th><th>Status</th><th>Recommendations</th><th>Expected Savings</th><th>Actual Savings</th></tr></thead>
+                        <tbody><?php foreach (array_reverse($reportSavings) as $row): ?>
+                            <tr><td><strong><?= htmlspecialchars(($monthNames[(int)$row['month']] ?? (string)$row['month']) . ' ' . (int)$row['year']); ?></strong></td><td><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$row['implementation_status']))); ?></td><td><?= number_format((int)$row['recommendation_count']); ?></td><td><?= number_format((float)$row['expected_savings_kwh'], 2); ?> kWh</td><td><?= number_format((float)$row['actual_savings_kwh'], 2); ?> kWh</td></tr>
+                        <?php endforeach; ?></tbody>
+                    </table></div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </section>
+
+    <style>
+        .energy-reports-header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:1rem; }
+        .energy-report-filter { display:flex; flex-wrap:wrap; align-items:flex-end; gap:0.65rem; }
+        .energy-report-filter label { display:grid; gap:0.25rem; color:#5b6888; font-size:0.82rem; font-weight:600; }
+        .energy-report-filter select { min-width:150px; padding:0.5rem; border:1px solid #e0e6ed; border-radius:7px; background:var(--bg-primary, #fff); color:inherit; }
+        .energy-report-tabs { display:flex; gap:0.4rem; margin:1.25rem 0; padding-bottom:0.7rem; border-bottom:1px solid #e8ecf4; overflow-x:auto; }
+        .energy-report-tabs a { padding:0.48rem 0.9rem; border-radius:7px; color:#5b6888; text-decoration:none; font-weight:600; white-space:nowrap; }
+        .energy-report-tabs a:hover, .energy-report-tabs a.is-active { color:#fff; background:var(--gov-blue, #1f5fae); }
+        .energy-report-kpis { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:0.85rem; margin-bottom:1rem; }
+        .energy-report-kpis-compact { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        .energy-report-kpis article { display:grid; gap:0.3rem; padding:1rem; border:1px solid #e8ecf4; border-radius:10px; background:var(--bg-primary, #fff); }
+        .energy-report-kpis span, .energy-report-kpis small { color:#7b86a2; }
+        .energy-report-kpis strong { color:var(--gov-blue-dark, #173f73); font-size:1.35rem; }
+        .energy-report-charts { margin:0 0 1rem; }
+        .energy-report-charts .report-card, .energy-report-wide-chart { padding:1rem; }
+        .energy-report-charts h3, .energy-report-wide-chart h3, .energy-report-table-wrap h3 { margin:0 0 0.35rem; }
+        .energy-report-charts p { margin:0 0 0.8rem; color:#8b95b5; font-size:0.9rem; }
+        .energy-report-wide-chart { margin-bottom:1rem; }
+        .energy-report-table-wrap { margin-top:1rem; }
+        .energy-report-empty { display:grid; gap:0.35rem; place-items:center; padding:2.5rem 1rem; color:#8b95b5; text-align:center; }
+        .energy-report-empty strong { color:#56627a; font-size:1.05rem; }
+        html[data-theme="dark"] .energy-report-tabs { border-color:var(--border-color, #475569); }
+        html[data-theme="dark"] .energy-report-kpis article { border-color:var(--border-color, #475569); }
+        html[data-theme="dark"] .energy-report-kpis strong { color:var(--text-primary, #f1f5f9); }
+        @media (max-width:900px) { .energy-report-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+        @media (max-width:600px) { .energy-report-kpis, .energy-report-kpis-compact { grid-template-columns:1fr; } .energy-report-filter, .energy-report-filter label, .energy-report-filter select, .energy-report-filter button { width:100%; } }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof Chart === 'undefined') return;
+        const styles = getComputedStyle(document.documentElement);
+        const textColor = styles.getPropertyValue('--text-primary').trim() || '#334155';
+        const gridColor = styles.getPropertyValue('--border-color').trim() || '#e8ecf4';
+        const labels = <?= json_encode($reportMonthlyLabels, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: textColor } } },
+            scales: {
+                x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } }
+            }
+        };
+        const consumptionCanvas = document.getElementById('energy-consumption-chart');
+        if (consumptionCanvas) new Chart(consumptionCanvas, { type:'line', data:{ labels:labels, datasets:[{ label:'Consumption (kWh)', data:<?= json_encode($reportConsumptionData); ?>, borderColor:'#1f5fae', backgroundColor:'rgba(31,95,174,0.14)', fill:true, tension:0.25 }] }, options:baseOptions });
+        const costCanvas = document.getElementById('energy-cost-chart');
+        if (costCanvas) new Chart(costCanvas, { type:'bar', data:{ labels:labels, datasets:[{ label:'Estimated Cost (PHP)', data:<?= json_encode($reportCostData); ?>, backgroundColor:'#0d9f6e', borderRadius:5 }] }, options:baseOptions });
+        const savingsCanvas = document.getElementById('energy-savings-chart');
+        if (savingsCanvas) new Chart(savingsCanvas, { type:'bar', data:{ labels:<?= json_encode($reportSavingsLabels, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>, datasets:[{ label:'Expected (kWh)', data:<?= json_encode($reportExpectedSavingsData); ?>, backgroundColor:'#f4b740', borderRadius:5 }, { label:'Actual (kWh)', data:<?= json_encode($reportActualSavingsData); ?>, backgroundColor:'#0d9f6e', borderRadius:5 }] }, options:baseOptions });
+    });
+    </script>
 
 <?php elseif ($tab === 'mapping' && $canUpdate): ?>
     <section class="booking-card">
