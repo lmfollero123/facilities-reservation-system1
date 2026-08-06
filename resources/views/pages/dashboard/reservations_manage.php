@@ -1380,6 +1380,9 @@ ob_start();
 </div>
 
 <script>
+const raCsrfName = <?= json_encode(CSRF_TOKEN_NAME); ?>;
+const raCsrfToken = <?= json_encode(csrf_token()); ?>;
+
 (function () {
     function closeAllRaSortMenus(exceptMenu) {
         document.querySelectorAll('[data-ra-sort-menu]').forEach(function (menu) {
@@ -1493,6 +1496,7 @@ async function checkModifyConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        body += `&${encodeURIComponent(raCsrfName)}=${encodeURIComponent(raCsrfToken)}`;
         const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1660,6 +1664,7 @@ async function checkStaffRescheduleConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        body += `&${encodeURIComponent(raCsrfName)}=${encodeURIComponent(raCsrfToken)}`;
         const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
