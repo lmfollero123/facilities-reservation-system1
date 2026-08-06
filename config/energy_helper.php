@@ -124,6 +124,8 @@ function frs_uman_build_utility_reading_payload(array $reading): array
 {
     $payload = [
         'facility_id' => (int)$reading['facility_id'],
+        'facility_name' => (string)($reading['facility_name'] ?? ''),
+        'location' => (string)($reading['facility_location'] ?? ''),
         'year' => (int)$reading['year'],
         'month' => (int)$reading['month'],
         'reading_date' => (string)$reading['reading_date'],
@@ -164,9 +166,10 @@ function frs_uman_build_utility_reading_payload(array $reading): array
 function frs_uman_push_utility_reading(PDO $pdo, int $readingId): array
 {
     $stmt = $pdo->prepare('
-        SELECT r.*, u.name AS recorded_by_name
+        SELECT r.*, u.name AS recorded_by_name, f.name AS facility_name, f.location AS facility_location
         FROM energy_meter_readings r
         LEFT JOIN users u ON u.id = r.recorded_by
+        LEFT JOIN facilities f ON f.id = r.facility_id
         WHERE r.id = :id
         LIMIT 1
     ');
