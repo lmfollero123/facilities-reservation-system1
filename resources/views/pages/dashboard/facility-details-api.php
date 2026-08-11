@@ -31,10 +31,10 @@ try {
     $pdo = db();
     
     // Fetch facility details
-    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, status, image_path, image_citation FROM facilities WHERE id = :id LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, is_free, status, image_path, image_citation FROM facilities WHERE id = :id LIMIT 1');
     $stmt->execute(['id' => $facilityId]);
     $facility = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$facility) {
         http_response_code(404);
         echo json_encode(['error' => 'Facility not found']);
@@ -47,7 +47,16 @@ try {
         (string) $facility['name'],
         isset($facility['description']) ? (string) $facility['description'] : null
     );
-    
+
+    $facility['equipment'] = [];
+    try {
+        $eqStmt = $pdo->prepare('SELECT asset_name, asset_type, condition_status FROM facility_equipment WHERE facility_id = :id ORDER BY asset_name');
+        $eqStmt->execute(['id' => $facilityId]);
+        $facility['equipment'] = $eqStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        // facility_equipment table may not exist yet on this deployment
+    }
+
     echo json_encode($facility);
     
 } catch (Throwable $e) {

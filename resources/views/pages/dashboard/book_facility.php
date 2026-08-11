@@ -3701,14 +3701,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '</div>';
             }
             
-            // Base rate (though facilities are free)
-            if (facility.base_rate) {
-                html += '<div style="margin-top: 1rem; padding: 1rem; background: #f9fafc; border-radius: 8px; border-left: 4px solid var(--gov-blue);">';
-                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Usage</strong>';
-                html += '<p style="margin: 0; color: #1b1b1f; font-weight: 600;">Free of Charge</p>';
+            // Equipment assigned to this facility (from UMAN)
+            if (Array.isArray(facility.equipment) && facility.equipment.length > 0) {
+                html += '<div style="margin-bottom: 1rem;">';
+                html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Equipment Available</strong>';
+                html += '<ul style="margin: 0; padding-left: 1.25rem; color: #1b1b1f; line-height: 1.8;">';
+                facility.equipment.forEach(eq => {
+                    let label = escapeHtml(eq.asset_name || eq.asset_type || 'Equipment');
+                    if (eq.asset_type && eq.asset_name && eq.asset_type !== eq.asset_name) {
+                        label += ' <span style="color:#8b95b5;font-size:0.85em;">(' + escapeHtml(eq.asset_type) + ')</span>';
+                    }
+                    html += '<li>' + label + '</li>';
+                });
+                html += '</ul>';
                 html += '</div>';
             }
-            
+
+            // Usage / pricing
+            const isFree = !facility.base_rate || Number(facility.base_rate) <= 0 || Number(facility.is_free) === 1;
+            html += '<div style="margin-top: 1rem; padding: 1rem; background: #f9fafc; border-radius: 8px; border-left: 4px solid var(--gov-blue);">';
+            html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Usage</strong>';
+            if (isFree) {
+                html += '<p style="margin: 0; color: #1b1b1f; font-weight: 600;">Free of Charge</p>';
+            } else {
+                const rate = Number(facility.base_rate).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                html += '<p style="margin: 0; color: #1b1b1f; font-weight: 600;">₱' + rate + '</p>';
+            }
+            html += '</div>';
+
             // Update content
             facilityDetailsContent.innerHTML = html;
             if (typeof window.frsRefreshFieldTips === 'function') {
