@@ -20,6 +20,11 @@ function frs_notification_link_for_dashboard(?string $link): ?string
     }
     $path = parse_url($link, PHP_URL_PATH) ?: '';
     if (basename($path) === 'facility-details') {
+        // Admin/Staff don't book facilities — send them to where they can act
+        // on the maintenance/blackout schedule instead of a resident booking form.
+        if (in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
+            return base_path() . '/dashboard/maintenance-integration';
+        }
         $query = [];
         parse_str((string)parse_url($link, PHP_URL_QUERY), $query);
         $facilityId = (int)($query['id'] ?? 0);
