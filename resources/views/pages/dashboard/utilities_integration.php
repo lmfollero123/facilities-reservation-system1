@@ -392,20 +392,61 @@ ob_start();
 <?php endif; ?>
 
 <?php if ($tab === 'equipment'): ?>
-<div class="booking-wrapper" id="request-form-wrapper">
-    <section class="booking-card">
-        <h2>Request Asset from UMAN</h2>
-        <p style="color:#8b95b5; margin-bottom:1rem;">Submit an equipment/utility asset request to the Utilities Management system. <em style="color:#059669;">Tip: click any asset row in the catalog below to prefill this form with a specific unit.</em></p>
+<?php
+$umanStatLabel = match ($integrationStatus['sync_status']) {
+    'live' => 'Live',
+    'request_only' => 'Request-only',
+    default => 'Offline',
+};
+$umanStatColor = match ($integrationStatus['sync_status']) {
+    'live' => 'bg-emerald-50 text-emerald-600',
+    'request_only' => 'bg-sky-50 text-sky-600',
+    default => 'bg-red-50 text-red-600',
+};
+?>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full <?= $umanStatColor; ?> flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-plug text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">UMAN Connection</p>
+            <p class="text-lg font-bold text-slate-900"><?= htmlspecialchars($umanStatLabel); ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-box-seam text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Assets in Catalog</p>
+            <p class="text-lg font-bold text-slate-900"><?= (int)$integrationStatus['asset_count']; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-hourglass-split text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Pending Requests</p>
+            <p class="text-lg font-bold text-slate-900"><?= (int)$integrationStatus['pending_requests']; ?></p>
+        </div>
+    </div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="request-form-wrapper">
+    <section class="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
+        <h2 class="text-base font-semibold text-slate-900 mb-1">Request Asset from UMAN</h2>
+        <p class="text-sm text-slate-500 mb-4">Submit an equipment/utility asset request to the Utilities Management system. <em class="text-emerald-600">Tip: click any asset row in the catalog below to prefill this form with a specific unit.</em></p>
         <form method="POST" class="booking-form" id="uman-asset-form">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="request_asset">
             <input type="hidden" name="asset_type_id" id="f_asset_type_id" value="">
             <input type="hidden" name="requested_asset_code" id="f_requested_asset_code" value="">
 
-            <div class="integration-form-row integration-form-row--2">
-                <label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label class="block text-sm font-medium text-slate-700">
                     Facility *
-                    <select name="facility_id" id="f_facility_id" required class="integration-field">
+                    <select name="facility_id" id="f_facility_id" required class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                         <option value="">— Select facility —</option>
                         <?php foreach ($facilities as $f): ?>
                             <option value="<?= (int)$f['id']; ?>"><?= htmlspecialchars($f['name']); ?></option>
@@ -413,9 +454,9 @@ ob_start();
                     </select>
                 </label>
 
-                <label>
+                <label class="block text-sm font-medium text-slate-700">
                     Asset / Equipment Type *
-                    <select name="asset_type" id="f_asset_type" required class="integration-field">
+                    <select name="asset_type" id="f_asset_type" required class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                         <option value="">— Select type —</option>
                         <?php foreach ($equipmentTypes as $t):
                             $countStr = $typesConnected && $t['asset_count'] > 0
@@ -430,116 +471,117 @@ ob_start();
                 </label>
             </div>
 
-            <div class="integration-form-row integration-form-row--3">
-                <label>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <label class="block text-sm font-medium text-slate-700">
                     Quantity
-                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" class="integration-field">
+                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
-                <label>
+                <label class="block text-sm font-medium text-slate-700">
                     Urgency
-                    <select name="urgency" id="f_urgency" class="integration-field">
+                    <select name="urgency" id="f_urgency" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                         <option value="Routine">Routine (3–5 days)</option>
                         <option value="Priority">Priority (1–2 days)</option>
                         <option value="Emergency">Emergency (same day)</option>
                     </select>
                 </label>
-                <label>
+                <label class="block text-sm font-medium text-slate-700">
                     Date Needed
-                    <input type="date" name="date_needed" id="f_date_needed" class="integration-field" min="<?= date('Y-m-d'); ?>">
+                    <input type="date" name="date_needed" id="f_date_needed" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none" min="<?= date('Y-m-d'); ?>">
                 </label>
             </div>
 
-            <div id="pinned-asset-banner" style="margin-top:0.75rem;padding:0.6rem 0.85rem;border-radius:8px;background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;font-size:0.9rem;display:none;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+            <div id="pinned-asset-banner" class="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900" style="display:none;">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <strong style="color:#155e75;">Pinned specific asset:</strong>
+                        <strong class="text-sky-800">Pinned specific asset:</strong>
                         <span id="pinned-asset-name">—</span>
-                        <span id="pinned-asset-code" style="margin-left:0.4rem;padding:0.1rem 0.4rem;border-radius:4px;background:#cffafe;color:#0e7490;font-family:monospace;font-size:0.8rem;"></span>
+                        <span id="pinned-asset-code" class="ml-1.5 rounded bg-sky-100 px-1.5 py-0.5 font-mono text-xs text-sky-800"></span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:0.6rem;">
-                        <label style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:#155e75;white-space:nowrap;">
-                            <input type="checkbox" name="exact_match" id="f_exact_match" style="width:auto;margin:0;">
+                    <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-1.5 text-xs text-sky-800 whitespace-nowrap">
+                            <input type="checkbox" name="exact_match" id="f_exact_match" class="rounded border-sky-300">
                             Exact unit only
                         </label>
-                        <button type="button" id="btn-clear-pin" style="padding:0.2rem 0.5rem;border-radius:4px;border:1px solid #a5f3fc;background:#fff;color:#0e7490;font-size:0.8rem;cursor:pointer;">Clear</button>
+                        <button type="button" id="btn-clear-pin" class="rounded-md border border-sky-300 bg-white px-2.5 py-1 text-xs text-sky-800 hover:bg-sky-100">Clear</button>
                     </div>
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
-                <label style="display:block;">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <label class="block text-sm font-medium text-slate-700">
                     Booking Reference (optional)
-                    <input type="text" name="booking_ref" id="f_booking_ref" placeholder="e.g., RES-2026-0812-007" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="text" name="booking_ref" id="f_booking_ref" placeholder="e.g., RES-2026-0812-007" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
-                <label style="display:block;">
+                <label class="block text-sm font-medium text-slate-700">
                     Responsible Office (optional)
-                    <input type="text" name="responsible_office" id="f_responsible_office" placeholder="e.g., Barangay Engineering Office" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="text" name="responsible_office" id="f_responsible_office" placeholder="e.g., Barangay Engineering Office" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
             </div>
 
-            <label style="margin-top:0.75rem; display:block;">
+            <label class="block text-sm font-medium text-slate-700 mt-4">
                 Event / Purpose (optional)
-                <input type="text" name="event_purpose" id="f_event_purpose" placeholder="e.g., Graduation ceremony, Barangay assembly" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                <input type="text" name="event_purpose" id="f_event_purpose" placeholder="e.g., Graduation ceremony, Barangay assembly" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
             </label>
 
-            <label style="margin-top:0.75rem; display:block;">
+            <label class="block text-sm font-medium text-slate-700 mt-4">
                 Notes (optional)
-                <textarea name="notes" id="f_notes" rows="2" placeholder="e.g., For convention hall events, portable unit preferred" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
+                <textarea name="notes" id="f_notes" rows="2" placeholder="e.g., For convention hall events, portable unit preferred" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"></textarea>
             </label>
 
-            <div style="margin-top:0.75rem;padding:0.55rem 0.8rem;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:0.82rem;">
+            <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                 <?= $typesConnected
                     ? '<strong>Live catalog:</strong> asset types and operational counts pulled directly from UMAN.'
                     : '<strong>Fallback list:</strong> using a static 9-type list — UMAN asset-types endpoint was unreachable' . (!empty($typesApiError) ? ' (' . htmlspecialchars($typesApiError) . ')' : '') . '.';
                 ?>
             </div>
 
-            <button type="submit" class="btn-primary" style="margin-top:1rem;" <?= $apiKeyConfigured ? '' : 'disabled title="Configure UMAN_API_KEY in .env first"'; ?>>
+            <button type="submit" class="btn-primary mt-4" <?= $apiKeyConfigured ? '' : 'disabled title="Configure UMAN_API_KEY in .env first"'; ?>>
                 <?= $apiKeyConfigured ? 'Submit Request to UMAN' : 'UMAN API key not configured'; ?>
             </button>
         </form>
     </section>
 
-    <aside class="booking-card">
-        <h2>Facility Equipment Summary</h2>
+    <aside class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 h-fit">
+        <h2 class="text-base font-semibold text-slate-900 mb-3">Facility Equipment Summary</h2>
         <?php if (empty($facilities)): ?>
-            <p style="color:#8b95b5;">No facilities registered.</p>
+            <p class="text-sm text-slate-500">No facilities registered.</p>
         <?php else: ?>
-            <ul style="list-style:none; padding:0; margin:0;">
+            <ul class="divide-y divide-slate-100">
                 <?php foreach ($facilities as $f): ?>
                     <?php $cnt = $assignedCounts[(int)$f['id']] ?? 0; ?>
-                    <li style="padding:0.75rem 0; border-bottom:1px solid #edf2f7; display:flex; justify-content:space-between; gap:0.5rem;">
-                        <span><?= htmlspecialchars($f['name']); ?></span>
-                        <span style="font-weight:600; color:<?= $cnt > 0 ? '#0066cc' : '#8b95b5'; ?>;"><?= $cnt; ?> assigned</span>
+                    <li class="py-2.5 flex items-center justify-between gap-2">
+                        <span class="text-sm text-slate-700"><?= htmlspecialchars($f['name']); ?></span>
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold <?= $cnt > 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'; ?>"><?= $cnt; ?> assigned</span>
                     </li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
 
-        <form method="POST" style="margin-top:1.25rem;padding-top:1rem;border-top:1px dashed #e0e6ed;">
+        <form method="POST" class="mt-5 pt-4 border-t border-dashed border-slate-200">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="sync_requests">
-            <button type="submit" class="btn-outline" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer;">
-                ⟳ Sync Request Status from UMAN
+            <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                <i class="bi bi-arrow-repeat"></i> Sync Request Status from UMAN
             </button>
         </form>
     </aside>
 </div>
 
-<section class="booking-card" style="margin-top:1.5rem;">
-    <h2>UMAN Asset Catalog <?= $catalogLive ? '' : '<small style="font-weight:500;color:#8b95b5;">(catalog offline — requests still work)</small>'; ?></h2>
+<section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 mt-6">
+    <h2 class="text-base font-semibold text-slate-900 mb-3">UMAN Asset Catalog <?= $catalogLive ? '' : '<span class="text-xs font-normal text-slate-400">(catalog offline — requests still work)</span>'; ?></h2>
     <?php if (empty($umanAssets)): ?>
-        <p style="color:#8b95b5; text-align:center; padding:2rem;">
+        <p class="text-sm text-slate-500 text-center py-8">
             <?= $apiError ? htmlspecialchars($apiError) : 'No assets returned from UMAN.'; ?>
         </p>
     <?php else: ?>
-        <div style="margin-bottom:0.6rem;font-size:0.85rem;color:#64748b;">
-            💡 <strong>Tip:</strong> click any row to prefill the request form with that specific asset.
+        <div class="mb-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 flex items-center gap-2">
+            <i class="bi bi-lightbulb text-slate-400"></i>
+            <span><strong class="text-slate-600">Tip:</strong> click any row to prefill the request form with that specific asset.</span>
         </div>
         <div class="table-responsive">
             <table class="table" id="asset-catalog-table">
                 <thead>
-                    <tr>
+                    <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <th>Code</th>
                         <th>Name</th>
                         <th>Type</th>
@@ -560,24 +602,22 @@ ob_start();
                         $typeId = (int)($asset['asset_type_id'] ?? 0);
                         $rowClickable = $cond === 'Operational';
                     ?>
-                        <tr class="uman-catalog-row"
+                        <tr class="uman-catalog-row hover:bg-slate-50 <?= $rowClickable ? 'cursor-pointer' : 'opacity-75'; ?>"
                             data-code="<?= htmlspecialchars($code); ?>"
                             data-name="<?= htmlspecialchars($name); ?>"
                             data-type="<?= htmlspecialchars($type); ?>"
                             data-type-id="<?= $typeId; ?>"
                             data-resp="<?= htmlspecialchars($resp); ?>"
-                            style="<?= $rowClickable ? 'cursor:pointer;' : 'opacity:0.75;' ?>"
                             title="<?= $rowClickable ? 'Click to request this specific asset' : 'Asset not operational — click to view only' ?>">
-                            <td data-label="Code"><strong style="font-family:monospace;"><?= htmlspecialchars($code); ?></strong></td>
+                            <td data-label="Code"><strong class="font-mono text-slate-700"><?= htmlspecialchars($code); ?></strong></td>
                             <td data-label="Name"><?= htmlspecialchars($name); ?></td>
                             <td data-label="Type"><?= htmlspecialchars($type); ?></td>
-                            <td data-label="Status"><span class="status-badge active"><?= htmlspecialchars($cond); ?></span></td>
+                            <td data-label="Status"><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700"><?= htmlspecialchars($cond); ?></span></td>
                             <td data-label="Location"><?= htmlspecialchars($loc); ?></td>
                             <td data-label="Responsible Office"><?= htmlspecialchars($resp); ?></td>
                             <td>
                                 <?php if ($rowClickable): ?>
-                                    <button type="button" class="uman-pin-btn"
-                                        style="padding:0.25rem 0.6rem;border-radius:6px;border:1px solid #059669;background:#d1fae5;color:#059669;font-size:0.78rem;cursor:pointer;white-space:nowrap;"
+                                    <button type="button" class="uman-pin-btn inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 whitespace-nowrap"
                                         aria-label="Request this asset">Use this</button>
                                 <?php endif; ?>
                             </td>
@@ -831,18 +871,18 @@ ob_start();
 <?php endif; ?>
 
 <?php if ($tab === 'equipment'): ?>
-<section class="booking-card" style="margin-top:1.5rem;">
-    <h2>Asset Requests</h2>
+<section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 mt-6">
+    <h2 class="text-base font-semibold text-slate-900 mb-3">Asset Requests</h2>
     <?php
     $displayRequests = $localRequests !== [] ? $localRequests : $remoteRequests;
     ?>
     <?php if (empty($displayRequests)): ?>
-        <p style="color:#8b95b5; text-align:center; padding:2rem;">No asset requests yet.</p>
+        <p class="text-sm text-slate-500 text-center py-8">No asset requests yet.</p>
     <?php else: ?>
         <div class="table-responsive">
             <table class="table">
                 <thead>
-                    <tr>
+                    <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <th>Reference</th>
                         <th>Facility</th>
                         <th>Asset</th>
@@ -867,23 +907,23 @@ ob_start();
 
                         $assetLabel = $type;
                         if ($code !== '') {
-                            $assetLabel .= ' <span style="font-size:0.75rem;padding:0.08rem 0.3rem;border-radius:3px;background:#f1f5f9;color:#475569;font-family:monospace;">' . htmlspecialchars($code) . '</span>';
+                            $assetLabel .= ' <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">' . htmlspecialchars($code) . '</span>';
                         }
 
-                        $urgColor = match($urg) {
-                            'Emergency' => '#dc2626',
-                            'Priority'  => '#d97706',
-                            default     => '#64748b',
+                        $urgBadgeClass = match($urg) {
+                            'Emergency' => 'bg-red-50 text-red-700',
+                            'Priority'  => 'bg-amber-50 text-amber-700',
+                            default     => 'bg-slate-100 text-slate-600',
                         };
                     ?>
-                        <tr>
-                            <td data-label="Reference"><strong><?= htmlspecialchars($ref); ?></strong></td>
+                        <tr class="hover:bg-slate-50">
+                            <td data-label="Reference"><strong class="text-slate-700"><?= htmlspecialchars($ref); ?></strong></td>
                             <td data-label="Facility"><?= htmlspecialchars($fac); ?></td>
                             <td data-label="Asset"><?= $assetLabel; ?></td>
                             <td data-label="Qty"><?= $qty; ?></td>
-                            <td data-label="Urgency"><span style="color:<?= $urgColor; ?>;font-weight:600;"><?= htmlspecialchars($urg); ?></span></td>
+                            <td data-label="Urgency"><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium <?= $urgBadgeClass; ?>"><?= htmlspecialchars($urg); ?></span></td>
                             <td data-label="Need By"><?= htmlspecialchars($need); ?></td>
-                            <td data-label="Status"><span class="status-badge maintenance"><?= htmlspecialchars(ucfirst($stat)); ?></span></td>
+                            <td data-label="Status"><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700"><?= htmlspecialchars(ucfirst($stat)); ?></span></td>
                             <td data-label="Date"><?= htmlspecialchars($when); ?></td>
                         </tr>
                     <?php endforeach; ?>
