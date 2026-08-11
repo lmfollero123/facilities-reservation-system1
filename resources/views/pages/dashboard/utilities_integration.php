@@ -631,81 +631,127 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
 <?php endif; ?>
 
 <?php if ($tab === 'readings'): ?>
-<section class="booking-card" style="margin-top:1.5rem;">
-    <h2>💧⚡ Utility Readings (Electric &amp; Water)</h2>
-    <p style="color:#8b95b5; margin-bottom:1rem;">
+<?php if ($hasReadingTables):
+    $curYear = (int)date('Y');
+    $curMonth = (int)date('n');
+    $readingsThisMonth = 0;
+    $syncFailedCount = 0;
+    foreach ($utilityLatestReadings as $r) {
+        if ((int)$r['year'] === $curYear && (int)$r['month'] === $curMonth) {
+            $readingsThisMonth++;
+        }
+        if (($r['sync_status'] ?? '') === 'failed') {
+            $syncFailedCount++;
+        }
+    }
+    $totalFacilities = count($utilityFacilities);
+    $coveredFacilities = count($utilityLatestReadings);
+?>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-calendar-check text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Readings This Month</p>
+            <p class="text-lg font-bold text-slate-900"><?= $readingsThisMonth; ?> / <?= $totalFacilities; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-buildings text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Facilities Covered</p>
+            <p class="text-lg font-bold text-slate-900"><?= $coveredFacilities; ?> / <?= $totalFacilities; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full <?= $syncFailedCount > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'; ?> flex items-center justify-center flex-shrink-0">
+            <i class="bi <?= $syncFailedCount > 0 ? 'bi-exclamation-circle' : 'bi-check-circle'; ?> text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Sync Status</p>
+            <p class="text-lg font-bold text-slate-900"><?= $syncFailedCount > 0 ? "{$syncFailedCount} failed" : 'All synced'; ?></p>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+<section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
+    <h2 class="text-base font-semibold text-slate-900 mb-1">💧⚡ Utility Readings (Electric &amp; Water)</h2>
+    <p class="text-sm text-slate-500 mb-4">
         Monthly readings sent to UMAN for consumption monitoring — UMAN forwards them to the LGU Energy system.
         One reading per facility per month.
     </p>
 
     <?php if (!$hasReadingTables): ?>
-        <p style="color:#8b95b5;">Run <code>database/migration_add_energy_integration.sql</code> and <code>database/migration_add_water_readings.sql</code> to enable utility readings.</p>
+        <p class="text-sm text-slate-500">Run <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">database/migration_add_energy_integration.sql</code> and <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">database/migration_add_water_readings.sql</code> to enable utility readings.</p>
     <?php else: ?>
 
     <?php if ($utilityEditReading !== null): ?>
-        <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
-            <h3 style="margin-top:0;">Edit Reading</h3>
-            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="booking-form">
+        <div class="mb-6 rounded-xl border border-slate-200 p-4 sm:p-5">
+            <h3 class="text-sm font-semibold text-slate-900 mb-3">Edit Reading</h3>
+            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="update_utility_reading">
                 <input type="hidden" name="reading_id" value="<?= (int)$utilityEditReading['id']; ?>">
-                <label>
+                <label class="block text-sm font-medium text-slate-700">
                     Facility
-                    <input type="text" value="<?= htmlspecialchars((string)$utilityEditReading['facility_name']); ?>" readonly style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px; background:#f4f6fa;">
+                    <input type="text" value="<?= htmlspecialchars((string)$utilityEditReading['facility_name']); ?>" readonly class="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
                 </label>
-                <label style="margin-top:0.75rem; display:block;">
+                <label class="block text-sm font-medium text-slate-700 mt-3">
                     Reading Date
-                    <input type="date" name="reading_date" required value="<?= htmlspecialchars((string)$utilityEditReading['reading_date']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="date" name="reading_date" required value="<?= htmlspecialchars((string)$utilityEditReading['reading_date']); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
-                <fieldset style="margin-top:1rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
-                    <legend>⚡ Electricity</legend>
-                    <label>
+                <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2"><i class="bi bi-lightning-charge-fill"></i> Electricity</div>
+                    <label class="block text-sm font-medium text-slate-700">
                         Previous Reading (kWh)
-                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" value="<?= htmlspecialchars((string)$utilityEditReading['previous_reading_kwh']); ?>" <?= $utilityEditReadingIsOnly ? '' : 'readonly'; ?> style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" value="<?= htmlspecialchars((string)$utilityEditReading['previous_reading_kwh']); ?>" <?= $utilityEditReadingIsOnly ? '' : 'readonly'; ?> class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Current Reading (kWh)
-                        <input type="number" step="0.01" min="0" name="current_reading_kwh" required value="<?= htmlspecialchars((string)$utilityEditReading['current_reading_kwh']); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="current_reading_kwh" required value="<?= htmlspecialchars((string)$utilityEditReading['current_reading_kwh']); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Rate per kWh (PHP)
-                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" required value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_kwh'] ?? 14.83), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" required value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_kwh'] ?? 14.83), 2, '.', '')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                </fieldset>
-                <fieldset style="margin-top:0.75rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
-                    <legend>💧 Water</legend>
-                    <label>
+                </div>
+                <div class="mt-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-sky-800 mb-2"><i class="bi bi-droplet-fill"></i> Water</div>
+                    <label class="block text-sm font-medium text-slate-700">
                         Previous Reading (m³)
-                        <input type="number" step="0.01" min="0" name="previous_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['previous_reading_water'] ?? '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="previous_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['previous_reading_water'] ?? '')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Current Reading (m³)
-                        <input type="number" step="0.01" min="0" name="current_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['current_reading_water'] ?? '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="current_reading_water" value="<?= htmlspecialchars((string)($utilityEditReading['current_reading_water'] ?? '')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Rate per m³ (PHP)
-                        <input type="number" step="0.01" min="0.01" name="rate_per_water" value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_water'] ?? 68.02), 2, '.', '')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0.01" name="rate_per_water" value="<?= htmlspecialchars(number_format((float)($utilityEditReading['rate_per_water'] ?? 68.02), 2, '.', '')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                </fieldset>
-                <label style="margin-top:0.75rem; display:block;">
+                </div>
+                <label class="block text-sm font-medium text-slate-700 mt-3">
                     Notes (optional)
-                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"><?= htmlspecialchars((string)($utilityEditReading['notes'] ?? '')); ?></textarea>
+                    <textarea name="notes" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"><?= htmlspecialchars((string)($utilityEditReading['notes'] ?? '')); ?></textarea>
                 </label>
-                <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center;">
+                <div class="mt-4 flex items-center gap-3">
                     <button type="submit" class="btn-primary">Save Correction</button>
-                    <a href="<?= htmlspecialchars($umanTabUrl('readings')); ?>">Cancel</a>
+                    <a href="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="text-sm text-slate-500 hover:text-slate-700">Cancel</a>
                 </div>
             </form>
         </div>
     <?php elseif ($canCreateReadings): ?>
-        <div class="booking-form" style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e6ed; border-radius:8px;">
-            <h3 style="margin-top:0;">Add Reading</h3>
-            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="booking-form">
+        <div class="mb-6 rounded-xl border border-slate-200 p-4 sm:p-5">
+            <h3 class="text-sm font-semibold text-slate-900 mb-3">Add Reading</h3>
+            <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="add_utility_reading">
-                <label>
+                <label class="block text-sm font-medium text-slate-700">
                     Facility
-                    <select name="facility_id" id="utility-facility-select" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <select name="facility_id" id="utility-facility-select" required class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                         <option value="">— Select facility —</option>
                         <?php foreach ($utilityFacilities as $f): ?>
                             <?php $last = $utilityLatestReadings[(int)$f['id']] ?? null; ?>
@@ -719,54 +765,54 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
                         <?php endforeach; ?>
                     </select>
                 </label>
-                <label style="margin-top:0.75rem; display:block;">
+                <label class="block text-sm font-medium text-slate-700 mt-3">
                     Reading Month
-                    <input type="month" name="reading_month" required value="<?= htmlspecialchars(date('Y-m')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="month" name="reading_month" required value="<?= htmlspecialchars(date('Y-m')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
-                <label style="margin-top:0.75rem; display:block;">
+                <label class="block text-sm font-medium text-slate-700 mt-3">
                     Reading Date
-                    <input type="date" name="reading_date" required value="<?= htmlspecialchars(date('Y-m-d')); ?>" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                    <input type="date" name="reading_date" required value="<?= htmlspecialchars(date('Y-m-d')); ?>" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
-                <fieldset style="margin-top:1rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
-                    <legend>⚡ Electricity</legend>
-                    <label>
+                <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2"><i class="bi bi-lightning-charge-fill"></i> Electricity</div>
+                    <label class="block text-sm font-medium text-slate-700">
                         Previous Reading (kWh)
-                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="utility-prev-kwh" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                        <small style="color:#8b95b5;">Auto-filled and locked when the facility already has a reading.</small>
+                        <input type="number" step="0.01" min="0" name="previous_reading_kwh" id="utility-prev-kwh" required class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <small class="text-slate-400">Auto-filled and locked when the facility already has a reading.</small>
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Current Reading (kWh)
-                        <input type="number" step="0.01" min="0" name="current_reading_kwh" id="utility-curr-kwh" required style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="current_reading_kwh" id="utility-curr-kwh" required class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Rate per kWh (PHP)
-                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="utility-rate-kwh" required value="14.83" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                        <small style="color:#8b95b5;">Meralco residential all-in rate, July 2026 — adjust to the current tariff.</small>
+                        <input type="number" step="0.01" min="0.01" name="rate_per_kwh" id="utility-rate-kwh" required value="14.83" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <small class="text-slate-400">Meralco residential all-in rate, July 2026 — adjust to the current tariff.</small>
                     </label>
-                </fieldset>
-                <fieldset style="margin-top:0.75rem; border:1px solid #e0e6ed; border-radius:8px; padding:0.75rem;">
-                    <legend>💧 Water (optional)</legend>
-                    <label>
+                </div>
+                <div class="mt-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-sky-800 mb-2"><i class="bi bi-droplet-fill"></i> Water (optional)</div>
+                    <label class="block text-sm font-medium text-slate-700">
                         Previous Reading (m³)
-                        <input type="number" step="0.01" min="0" name="previous_reading_water" id="utility-prev-water" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                        <small style="color:#8b95b5;">Auto-filled and locked when the facility already has a water reading.</small>
+                        <input type="number" step="0.01" min="0" name="previous_reading_water" id="utility-prev-water" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <small class="text-slate-400">Auto-filled and locked when the facility already has a water reading.</small>
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Current Reading (m³)
-                        <input type="number" step="0.01" min="0" name="current_reading_water" id="utility-curr-water" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
+                        <input type="number" step="0.01" min="0" name="current_reading_water" id="utility-curr-water" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                     </label>
-                    <label style="margin-top:0.5rem; display:block;">
+                    <label class="block text-sm font-medium text-slate-700 mt-2">
                         Rate per m³ (PHP)
-                        <input type="number" step="0.01" min="0.01" name="rate_per_water" id="utility-rate-water" value="68.02" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;">
-                        <small style="color:#8b95b5;">Manila Water East Zone (Quezon City), Q2 2026 tier — adjust to the current tariff.</small>
+                        <input type="number" step="0.01" min="0.01" name="rate_per_water" id="utility-rate-water" value="68.02" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                        <small class="text-slate-400">Manila Water East Zone (Quezon City), Q2 2026 tier — adjust to the current tariff.</small>
                     </label>
-                </fieldset>
-                <p id="utility-consumption-preview" style="margin-top:0.75rem; color:#0066cc; font-weight:600;"></p>
-                <label style="margin-top:0.75rem; display:block;">
+                </div>
+                <p id="utility-consumption-preview" class="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800 font-semibold text-sm empty:border-0 empty:bg-transparent empty:p-0"></p>
+                <label class="block text-sm font-medium text-slate-700 mt-3">
                     Notes (optional)
-                    <textarea name="notes" rows="2" style="width:100%; padding:0.5rem; border:1px solid #e0e6ed; border-radius:6px;"></textarea>
+                    <textarea name="notes" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"></textarea>
                 </label>
-                <button type="submit" class="btn-primary" style="margin-top:1rem;">Save Reading</button>
+                <button type="submit" class="btn-primary mt-4">Save Reading</button>
             </form>
             <script>
             (function () {
@@ -815,19 +861,25 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
     <?php endif; ?>
 
     <?php if ($utilityLatestReadings === []): ?>
-        <p style="color:#8b95b5; text-align:center; padding:2rem;">No utility readings recorded yet.</p>
+        <p class="text-sm text-slate-500 text-center py-8">No utility readings recorded yet.</p>
     <?php else: ?>
         <div class="table-responsive">
             <table class="table">
                 <thead>
-                    <tr>
+                    <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <th>Facility</th><th>Period</th><th>Electric</th><th>Water</th><th>Sync</th><th>Recorded By</th>
                         <?php if ($canUpdateReadings || $canDeleteReadings): ?><th>Actions</th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($utilityLatestReadings as $r): ?>
-                        <tr>
+                    <?php foreach ($utilityLatestReadings as $r):
+                        $syncBadgeClass = match($r['sync_status']) {
+                            'synced' => 'bg-emerald-50 text-emerald-700',
+                            'failed' => 'bg-red-50 text-red-700',
+                            default  => 'bg-amber-50 text-amber-700',
+                        };
+                    ?>
+                        <tr class="hover:bg-slate-50">
                             <td data-label="Facility"><?= htmlspecialchars((string)$r['facility_name']); ?></td>
                             <td data-label="Period"><?= htmlspecialchars(($utilityMonthNames[(int)$r['month']] ?? $r['month']) . ' ' . $r['year']); ?></td>
                             <td data-label="Electric"><?= number_format((float)$r['consumption_kwh'], 2); ?> kWh · PHP <?= number_format((float)$r['consumption_kwh'] * (float)($r['rate_per_kwh'] ?? 14.83), 2); ?></td>
@@ -835,27 +887,27 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
                                 <?php if ($r['current_reading_water'] !== null): ?>
                                     <?= number_format((float)$r['consumption_water'], 2); ?> m³ · PHP <?= number_format((float)$r['consumption_water'] * (float)($r['rate_per_water'] ?? 68.02), 2); ?>
                                 <?php else: ?>
-                                    <span style="color:#8b95b5;">Not recorded</span>
+                                    <span class="text-slate-400">Not recorded</span>
                                 <?php endif; ?>
                             </td>
                             <td data-label="Sync">
-                                <span class="status-badge <?= $r['sync_status'] === 'synced' ? 'active' : ($r['sync_status'] === 'failed' ? 'offline' : 'maintenance'); ?>"
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium <?= $syncBadgeClass; ?>"
                                       <?= $r['sync_error'] !== null ? 'title="' . htmlspecialchars((string)$r['sync_error']) . '"' : ''; ?>>
                                     <?= htmlspecialchars(ucfirst((string)$r['sync_status'])); ?>
                                 </span>
                             </td>
                             <td data-label="Recorded By"><?= htmlspecialchars((string)($r['recorded_by_name'] ?? '—')); ?></td>
                             <?php if ($canUpdateReadings || $canDeleteReadings): ?>
-                            <td data-label="Actions" style="white-space:nowrap;">
+                            <td data-label="Actions" class="whitespace-nowrap">
                                 <?php if ($canUpdateReadings): ?>
-                                    <a href="<?= htmlspecialchars($umanTabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem;">Edit</a>
+                                    <a href="<?= htmlspecialchars($umanTabUrl('readings') . '&edit_reading=' . (int)$r['id']); ?>" class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"><i class="bi bi-pencil"></i> Edit</a>
                                 <?php endif; ?>
                                 <?php if ($canDeleteReadings && $r['sync_status'] !== 'synced'): ?>
-                                    <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" style="display:inline;">
+                                    <form method="POST" action="<?= htmlspecialchars($umanTabUrl('readings')); ?>" class="inline">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="delete_utility_reading">
                                         <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
-                                        <button type="submit" class="btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.85rem; color:#b23030;" onclick="return confirm('Delete this reading?')">Delete</button>
+                                        <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" onclick="return confirm('Delete this reading?')"><i class="bi bi-trash"></i> Delete</button>
                                     </form>
                                 <?php endif; ?>
                             </td>
