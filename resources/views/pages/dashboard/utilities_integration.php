@@ -284,7 +284,7 @@ if ($hasUmanTables) {
     }
 }
 
-$facilities = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+$facilities = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
 $assignedCounts = [];
 if ($hasUmanTables) {
@@ -307,7 +307,7 @@ $integrationStatus = [
     'pending_requests' => count(array_filter($remoteRequests, fn($r) => ($r['status'] ?? '') === 'pending')),
 ];
 
-$utilityFacilities = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+$utilityFacilities = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $utilityLatestReadings = [];
 if ($hasReadingTables) {
     $utilityRows = $pdo->query('

@@ -318,7 +318,7 @@ function frs_energy_auto_map_by_external_ref(PDO $pdo, ?array $energyFacilities 
     }
 
     $existing = frs_energy_get_mapping($pdo);
-    $localIds = array_map('intval', $pdo->query('SELECT id FROM facilities')->fetchAll(PDO::FETCH_COLUMN));
+    $localIds = array_map('intval', $pdo->query("SELECT id FROM facilities WHERE status != 'deleted'")->fetchAll(PDO::FETCH_COLUMN));
     $localIds = array_flip($localIds);
 
     $mapped = 0;

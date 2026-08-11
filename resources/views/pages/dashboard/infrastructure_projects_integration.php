@@ -80,7 +80,7 @@ $activeIpmsProjects = array_values($activeIpmsProjects);
 
 $facilityNameById = [];
 try {
-    foreach ($pdo->query('SELECT id, name FROM facilities')->fetchAll(PDO::FETCH_ASSOC) as $f) {
+    foreach ($pdo->query("SELECT id, name FROM facilities WHERE status != 'deleted'")->fetchAll(PDO::FETCH_ASSOC) as $f) {
         $facilityNameById[(int)$f['id']] = (string)$f['name'];
     }
 } catch (Throwable $e) {

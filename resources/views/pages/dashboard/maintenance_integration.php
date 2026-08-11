@@ -135,7 +135,7 @@ $upcomingPaginated = array_slice(array_values($upcomingFiltered), $offset, $perP
 // Get real facilities for dropdown
 $facilities = [];
 try {
-    $facilitiesStmt = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name');
+    $facilitiesStmt = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name");
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     // Ignore error

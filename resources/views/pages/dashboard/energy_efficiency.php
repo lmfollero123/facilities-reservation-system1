@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
     }
 }
 
-$facilities = $pdo->query('SELECT id, name, status FROM facilities ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+$facilities = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $mapping = $hasTables ? frs_energy_get_mapping($pdo) : [];
 $syncState = $hasTables ? frs_energy_load_sync_state($pdo) : ['last_pull_at' => null, 'last_push_at' => null, 'last_summary' => null];
 
@@ -197,6 +197,7 @@ if ($hasTables && $tab === 'profiles') {
         FROM facilities f
         JOIN energy_facility_map m ON m.facility_id = f.id
         LEFT JOIN energy_profile_cache p ON p.facility_id = f.id
+        WHERE f.status != 'deleted'
         ORDER BY f.name
     ')->fetchAll(PDO::FETCH_ASSOC);
 }
