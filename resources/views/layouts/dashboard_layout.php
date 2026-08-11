@@ -271,8 +271,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var contentEl = document.querySelector('.dashboard-content');
     if (!contentEl) return;
     contentEl.querySelectorAll('div').forEach(function (el) {
-        if (window.getComputedStyle(el).position === 'fixed' && el.parentElement !== document.body) {
+        var computed = window.getComputedStyle(el);
+        if (computed.position === 'fixed' && el.parentElement !== document.body) {
             document.body.appendChild(el);
+            // Re-parented overlays now stack against the sidebar
+            // (z-index:1100) instead of sitting inside the page flow — keep
+            // them on top regardless of whatever z-index they were authored with.
+            var currentZ = parseInt(computed.zIndex, 10);
+            if (isNaN(currentZ) || currentZ < 1200) {
+                el.style.zIndex = '1200';
+            }
         }
     });
 });
