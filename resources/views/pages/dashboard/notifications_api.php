@@ -37,7 +37,11 @@ try {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+        foreach ($notifications as &$notification) {
+            $notification['link'] = frs_notification_link_for_dashboard($notification['link'] ?? null);
+        }
+        unset($notification);
+
         echo json_encode([
             'success' => true,
             'notifications' => $notifications

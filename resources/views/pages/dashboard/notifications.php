@@ -141,7 +141,7 @@ ob_start();
                             </div>
                         </div>
                         <?php if ($note['link']): ?>
-                            <a href="<?= htmlspecialchars($note['link']); ?>" style="display: inline-block; margin-top: 0.5rem; color: var(--gov-blue); font-size: 0.85rem; text-decoration: none;">
+                            <a href="<?= htmlspecialchars(frs_notification_link_for_dashboard($note['link'])); ?>" style="display: inline-block; margin-top: 0.5rem; color: var(--gov-blue); font-size: 0.85rem; text-decoration: none;">
                                 View Details →
                             </a>
                         <?php endif; ?>

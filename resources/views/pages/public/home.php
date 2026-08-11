@@ -230,10 +230,10 @@ ob_start();
         </div>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            <?php foreach ($featuredFacilities as $index => $facility): 
+            <?php foreach ($featuredFacilities as $index => $facility):
                 $img = !empty($facility['image_path'])
                     ? $base . $facility['image_path']
-                    : $defaultImage;
+                    : $base . frs_facility_placeholder_image($facility['name'], $facility['description'] ?? null, $index);
                 $detailUrl = $base . '/facility-details?id=' . (int)$facility['id'];
             ?>
                 <a href="<?= htmlspecialchars($detailUrl); ?>" class="home-facility-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group">

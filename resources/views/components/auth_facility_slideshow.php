@@ -33,7 +33,7 @@ try {
             'id' => (int)$row['id'],
             'name' => (string)$row['name'],
             'location' => trim((string)($row['location'] ?? '')),
-            'image_url' => frs_facility_display_image_url($row['image_path'] ?? null, $i),
+            'image_url' => frs_facility_display_image_url($row['image_path'] ?? null, $i, (string)$row['name']),
         ];
     }
 } catch (Throwable $e) {

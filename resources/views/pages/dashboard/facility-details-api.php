@@ -43,7 +43,9 @@ try {
 
     $facility['image_url'] = frs_facility_display_image_url(
         isset($facility['image_path']) ? (string) $facility['image_path'] : null,
-        (int) $facility['id']
+        (int) $facility['id'],
+        (string) $facility['name'],
+        isset($facility['description']) ? (string) $facility['description'] : null
     );
     
     echo json_encode($facility);

@@ -103,18 +103,20 @@ if (!function_exists('frs_facility_placeholder_image')) {
         $haystack = strtolower($facilityName . ' ' . ($description ?? ''));
 
         $keywordMap = [
-            'court' => '/public/img/covered-court.jpg',
-            'gym' => '/public/img/covered-court.jpg',
-            'gymnasium' => '/public/img/covered-court.jpg',
-            'school' => '/public/img/school-building.jpg',
-            'highschool' => '/public/img/school-building.jpg',
-            'elementary' => '/public/img/school-building.jpg',
+            'court' => '/public/img/covered-court-placeholder.png',
+            'gym' => '/public/img/covered-court-placeholder.png',
+            'gymnasium' => '/public/img/covered-court-placeholder.png',
+            'covered court' => '/public/img/covered-court-placeholder.png',
+            'school' => '/public/img/daycare-school-placeholder.png',
+            'highschool' => '/public/img/daycare-school-placeholder.png',
+            'elementary' => '/public/img/daycare-school-placeholder.png',
+            'daycare' => '/public/img/daycare-school-placeholder.png',
+            'day care' => '/public/img/daycare-school-placeholder.png',
             'amphitheater' => '/public/img/amphitheater.jpg',
             'amphitheatre' => '/public/img/amphitheater.jpg',
             'park' => '/public/img/amphitheater.jpg',
-            'hall' => '/public/img/convention-hall.jpg',
-            'multipurpose' => '/public/img/convention-hall.jpg',
-            'covered court' => '/public/img/covered-court.jpg',
+            'hall' => '/public/img/multipurpose-placeholder.png',
+            'multipurpose' => '/public/img/multipurpose-placeholder.png',
         ];
 
         foreach ($keywordMap as $keyword => $image) {
@@ -123,12 +125,6 @@ if (!function_exists('frs_facility_placeholder_image')) {
             }
         }
 
-        $genericRotation = [
-            '/public/img/barangay-street.jpg',
-            '/public/img/convention-hall.jpg',
-            '/public/img/sports-complex.jpg',
-        ];
-
-        return $genericRotation[$rotationIndex % count($genericRotation)];
+        return '/public/img/multipurpose-placeholder.png';
     }
 }

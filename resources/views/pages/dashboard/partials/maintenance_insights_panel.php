@@ -57,7 +57,8 @@ $miTabQs = static function (array $extra = []) use ($filterBand): string {
                     <?php foreach ($displayRows as $row):
                         $imgUrl = frs_facility_display_image_url(
                             !empty($row['image_path']) ? (string)$row['image_path'] : null,
-                            (int)($row['facility_id'] ?? 0)
+                            (int)($row['facility_id'] ?? 0),
+                            (string)($row['facility_name'] ?? '')
                         );
                         $riskScore = (int)($row['risk_score'] ?? 0);
                         $riskColor = (string)($row['risk_color'] ?? '#64748b');

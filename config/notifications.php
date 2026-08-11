@@ -7,8 +7,32 @@ require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/notification_preferences.php';
 
 /**
+ * Broadcast (user_id NULL) notifications reuse the same "link" for both the
+ * public homepage feed and the dashboard notification bell. Public routes
+ * like /facility-details drop an authenticated user out of the dashboard
+ * layout entirely (looks like they got logged out). Rewrite those to their
+ * dashboard equivalent before rendering inside the dashboard.
+ */
+function frs_notification_link_for_dashboard(?string $link): ?string
+{
+    if ($link === null || trim($link) === '') {
+        return $link;
+    }
+    $path = parse_url($link, PHP_URL_PATH) ?: '';
+    if (basename($path) === 'facility-details') {
+        $query = [];
+        parse_str((string)parse_url($link, PHP_URL_QUERY), $query);
+        $facilityId = (int)($query['id'] ?? 0);
+        if ($facilityId > 0) {
+            return base_path() . '/dashboard/book?facility_id=' . $facilityId;
+        }
+    }
+    return $link;
+}
+
+/**
  * Create a notification for a user or all users
- * 
+ *
  * @param int|null $userId User ID (null for system-wide notifications)
  * @param string $type Notification type: 'booking', 'system', 'reminder'
  * @param string $title Notification title

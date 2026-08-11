@@ -14,6 +14,23 @@ ob_start();
     <div class="container px-4 px-lg-5">
         <div class="faq-wrapper">
             <div class="faq-container page-content-animate">
+            <!-- Tutorial Video -->
+            <div class="faq-category">
+                <h3 class="category-title">
+                    <i class="bi bi-play-circle"></i> How to Use the System
+                </h3>
+                <div class="tutorial-video-placeholder">
+                    <i class="bi bi-camera-reels"></i>
+                    <p>Tutorial video coming soon.</p>
+                </div>
+                <!--
+                Once the tutorial video is recorded, replace the placeholder div above with an embed, e.g.:
+                <div class="tutorial-video-wrapper">
+                    <iframe src="https://www.youtube.com/embed/VIDEO_ID" title="How to Use the System" allowfullscreen></iframe>
+                </div>
+                -->
+            </div>
+
             <!-- Getting Started -->
             <div class="faq-category">
                 <h3 class="category-title">
@@ -290,6 +307,42 @@ ob_start();
 .faq-container {
     max-width: 900px;
     margin: 0 auto;
+}
+
+.tutorial-video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 3rem 1.5rem;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    background: #f8f9fa;
+    color: #6b7280;
+    text-align: center;
+}
+
+.tutorial-video-placeholder i {
+    font-size: 2.5rem;
+    color: #285ccd;
+}
+
+.tutorial-video-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.tutorial-video-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
 }
 
 .faq-category {

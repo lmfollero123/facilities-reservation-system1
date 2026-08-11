@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
+require_once __DIR__ . '/ui_helpers.php';
 
 /** Minutes before slot start when Check In is allowed */
 const FRS_OCCUPANCY_CHECKIN_GRACE_BEFORE = 15;
@@ -675,19 +676,14 @@ function frs_occupancy_aggregate_is_available(string $aggregateState): bool
 /**
  * Public URL for a facility thumbnail (with rotating fallbacks when no upload).
  */
-function frs_facility_display_image_url(?string $imagePath, int $index = 0): string
+function frs_facility_display_image_url(?string $imagePath, int $index = 0, string $name = '', ?string $description = null): string
 {
     $base = base_path();
     if ($imagePath !== null && trim($imagePath) !== '') {
         $path = trim($imagePath);
         return $base . (str_starts_with($path, '/') ? $path : '/' . $path);
     }
-    $fallbacks = [
-        $base . '/public/img/convention-hall.jpg',
-        $base . '/public/img/sports-complex.jpg',
-        $base . '/public/img/amphitheater.jpg',
-    ];
-    return $fallbacks[abs($index) % count($fallbacks)];
+    return $base . frs_facility_placeholder_image($name, $description, $index);
 }
 
 /**

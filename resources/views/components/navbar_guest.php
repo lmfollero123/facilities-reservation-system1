@@ -11,7 +11,8 @@ $navLinks = [
 ];
 ?>
 <!-- Navigation - Modern dark navbar -->
-<nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3 public-navbar-modern" id="mainNav">
+<?php $navStartsScrolled = empty($isHomePage); ?>
+<nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3 public-navbar-modern<?= $navStartsScrolled ? ' navbar-scrolled' : ''; ?>" id="mainNav" data-nav-starts-scrolled="<?= $navStartsScrolled ? '1' : '0'; ?>">
     <a class="navbar-brand public-nav-brand" href="<?= $base; ?>/">
         <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services">
         <span class="brand-name">Barangay Culiat</span>
@@ -155,16 +156,19 @@ if (document.readyState === 'loading') {
     setInterval(updateNavbarDateTime, 1000);
 }
 
-// Navbar scroll behavior - turn white when scrolling
+// Navbar scroll behavior - turn white when scrolling.
+// Pages without a dark hero (anything but Home) start pre-scrolled via
+// the .navbar-scrolled class rendered server-side, and stay that way.
 (function() {
     const navbar = document.getElementById('mainNav');
     if (!navbar) return;
-    
+    if (navbar.dataset.navStartsScrolled === '1') return;
+
     const scrollThreshold = 50; // Change color after scrolling 50px
-    
+
     window.addEventListener('scroll', function() {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        
+
         if (scrollTop > scrollThreshold) {
             // Scrolled down - make navbar white
             navbar.classList.add('navbar-scrolled');
