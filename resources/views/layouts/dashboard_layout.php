@@ -259,6 +259,23 @@ window.SESSION_TIMEOUT_REMAINING = <?= (int)$sessionRemainingSeconds; ?>;
 window.SESSION_TIMEOUT_WARNING_SECONDS = 60;
 window.CSRF_TOKEN = "<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>";
 window.CSRF_TOKEN_NAME = <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+// Fullscreen modal overlays (position:fixed) rendered inside .dashboard-content
+// stop being viewport-relative if any ancestor between them and <body> ever
+// picks up a transform/filter (animations, GSAP, Tailwind utility classes,
+// etc.) — that ancestor becomes their containing block instead of the
+// viewport, so the "fixed" modal scrolls with the page. Re-parenting to
+// <body> sidesteps the whole class of bug regardless of which ancestor is at
+// fault (same fix already used for #dayReservationsModal).
+document.addEventListener('DOMContentLoaded', function () {
+    var contentEl = document.querySelector('.dashboard-content');
+    if (!contentEl) return;
+    contentEl.querySelectorAll('div').forEach(function (el) {
+        if (window.getComputedStyle(el).position === 'fixed' && el.parentElement !== document.body) {
+            document.body.appendChild(el);
+        }
+    });
+});
 </script>
 <?php
 $mainJsPath = dirname(__DIR__, 3) . '/public/js/main.js';
