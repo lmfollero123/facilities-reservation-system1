@@ -108,7 +108,9 @@ function mapCIMMToCPRF(array $rawSchedules): array {
         $duration = '';
         if ($start && $end) {
             $hours = round(($end - $start) / 3600);
-            if ($hours < 24) {
+            if ($hours <= 0) {
+                $duration = 'Same day';
+            } elseif ($hours < 24) {
                 $duration = $hours . ' hours';
             } else {
                 $days = round($hours / 24);
