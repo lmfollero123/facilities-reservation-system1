@@ -100,7 +100,7 @@
             '<span class="frs-bdp-title">' + MONTH_NAMES[month - 1] + ' ' + year + '</span>' +
             '<button type="button" class="frs-bdp-nav" data-nav="1" aria-label="Next month">&rsaquo;</button>' +
             '</div>' +
-            '<div class="frs-bdp-weekdays">Su Mo Tu We Th Fr Sa</div>' +
+            '<div class="frs-bdp-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>' +
             '<div class="frs-bdp-grid frs-bdp-loading">Loading&hellip;</div>' +
             '<div class="frs-bdp-legend"><span class="frs-bdp-chip frs-bdp-chip--blocked"></span> Maintenance / blackout &nbsp; <span class="frs-bdp-chip frs-bdp-chip--selected"></span> Selected</div>';
 

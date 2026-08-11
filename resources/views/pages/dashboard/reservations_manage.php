@@ -3182,6 +3182,12 @@ $frsBdpJsVer = is_file($frsBdpJsPath) ? (string)filemtime($frsBdpJsPath) : '1';
             return document.getElementById('postpone_facility_id')?.value || '';
         });
     }
+    var staffRescheduleDate = document.getElementById('staff_reschedule_new_date');
+    if (staffRescheduleDate) {
+        window.frsBlockedDatePicker.attach(staffRescheduleDate, function () {
+            return document.getElementById('staff_reschedule_facility_id')?.value || '';
+        });
+    }
 })();
 </script>
 <?php
