@@ -352,32 +352,42 @@ ob_start();
     <?= frs_page_title('UMAN Utilities Management Integration', 'Request utility assets from UMAN and assign approved equipment to facilities via Facility Management.'); ?>
 </div>
 
-<nav class="booking-hub-tabs" aria-label="UMAN sections">
-    <a class="booking-hub-tab <?= $tab === 'equipment' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($umanTabUrl('equipment')); ?>">Equipment &amp; Requests</a>
-    <a class="booking-hub-tab <?= $tab === 'readings' ? 'is-active' : ''; ?>" href="<?= htmlspecialchars($umanTabUrl('readings')); ?>">Utility Readings</a>
+<nav class="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 mb-6 gap-1" aria-label="UMAN sections">
+    <a class="px-4 py-2 rounded-lg text-sm font-medium transition-colors <?= $tab === 'equipment' ? 'bg-white shadow-sm text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'; ?>" href="<?= htmlspecialchars($umanTabUrl('equipment')); ?>">Equipment &amp; Requests</a>
+    <a class="px-4 py-2 rounded-lg text-sm font-medium transition-colors <?= $tab === 'readings' ? 'bg-white shadow-sm text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'; ?>" href="<?= htmlspecialchars($umanTabUrl('readings')); ?>">Utility Readings</a>
 </nav>
 
 <?php if ($message):
-    $msgBg = $messageType === 'success' ? '#ecfdf5' : ($messageType === 'warning' ? '#fffbeb' : '#fef2f2');
-    $msgFg = $messageType === 'success' ? '#047857' : ($messageType === 'warning' ? '#92400e' : '#b91c1c');
-    $msgBd = $messageType === 'success' ? '#a7f3d0' : ($messageType === 'warning' ? '#fde68a' : '#fecaca');
+    $msgClasses = $messageType === 'success'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        : ($messageType === 'warning'
+            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            : 'border-red-200 bg-red-50 text-red-800');
+    $msgIcon = $messageType === 'success' ? 'bi-check-circle' : ($messageType === 'warning' ? 'bi-exclamation-triangle' : 'bi-exclamation-circle');
 ?>
-    <div class="message <?= htmlspecialchars($messageType); ?>" style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:<?= $msgBg; ?>;color:<?= $msgFg; ?>;border:1px solid <?= $msgBd; ?>;">
-        <?= htmlspecialchars($message); ?>
+    <div class="mb-5 rounded-xl border px-4 py-3 text-sm flex items-start gap-3 <?= $msgClasses; ?>" role="alert">
+        <i class="bi <?= $msgIcon; ?> text-lg flex-shrink-0 mt-0.5"></i>
+        <span><?= htmlspecialchars($message); ?></span>
     </div>
 <?php endif; ?>
 
 <?php if (!$apiKeyConfigured): ?>
-    <div style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;">
-        <strong style="display:block;margin-bottom:0.25rem;">UMAN API key not configured</strong>
-        Set <code>UMAN_API_KEY</code> in your <code>.env</code> file to submit asset requests.
+    <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-3" role="alert">
+        <i class="bi bi-exclamation-triangle text-lg flex-shrink-0 mt-0.5"></i>
+        <div>
+            <strong class="block mb-0.5">UMAN API key not configured</strong>
+            Set <code class="rounded bg-amber-100/80 px-1.5 py-0.5 text-xs">UMAN_API_KEY</code> in your <code class="rounded bg-amber-100/80 px-1.5 py-0.5 text-xs">.env</code> file to submit asset requests.
+        </div>
     </div>
 <?php elseif (!$catalogLive): ?>
-    <div style="padding:0.85rem 1rem;border-radius:10px;margin-bottom:1.25rem;background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;">
-        <strong style="display:block;margin-bottom:0.25rem;">Request-only mode</strong>
-        Asset catalog and request sync couldn't load from UMAN
-        <?php if (!empty($apiError)): ?>: <em><?= htmlspecialchars($apiError); ?></em><?php endif; ?>.
-        You can still submit requests — they will be queued and synced automatically when UMAN is reachable.
+    <div class="mb-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 flex items-start gap-3" role="alert">
+        <i class="bi bi-info-circle text-lg flex-shrink-0 mt-0.5"></i>
+        <div>
+            <strong class="block mb-0.5">Request-only mode</strong>
+            Asset catalog and request sync couldn't load from UMAN
+            <?php if (!empty($apiError)): ?>: <em><?= htmlspecialchars($apiError); ?></em><?php endif; ?>.
+            You can still submit requests — they will be queued and synced automatically when UMAN is reachable.
+        </div>
     </div>
 <?php endif; ?>
 
