@@ -1081,7 +1081,7 @@ ob_start();
                                 <div class="ra-action-group">
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= (int)$reservation['id']; ?>" class="btn-outline ra-action-btn">Details</a>
                                     <button type="button" class="btn-outline ra-action-btn" onclick="openModifyModal(this)" data-id="<?= (int)$reservation['id']; ?>" data-facility-id="<?= (int)$reservation['facility_id']; ?>" data-date="<?= htmlspecialchars((string)$reservation['reservation_date']); ?>" data-time="<?= htmlspecialchars((string)$reservation['time_slot'], ENT_QUOTES, 'UTF-8'); ?>" data-facility="<?= htmlspecialchars((string)$reservation['facility'], ENT_QUOTES, 'UTF-8'); ?>" data-purpose="<?= htmlspecialchars($approvedPurpose, ENT_QUOTES, 'UTF-8'); ?>" data-attendees="<?= htmlspecialchars((string)($reservation['expected_attendees'] ?? '')); ?>">Modify</button>
-                                    <button type="button" class="btn-outline ra-action-btn" onclick="openPostponeModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars((string)$reservation['reservation_date']); ?>', '<?= htmlspecialchars((string)$reservation['time_slot']); ?>', '<?= htmlspecialchars((string)$reservation['facility']); ?>')">Postpone</button>
+                                    <button type="button" class="btn-outline ra-action-btn" onclick="openPostponeModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars((string)$reservation['reservation_date']); ?>', '<?= htmlspecialchars((string)$reservation['time_slot']); ?>', '<?= htmlspecialchars((string)$reservation['facility']); ?>', <?= (int)$reservation['facility_id']; ?>)">Postpone</button>
                                     <button type="button" class="btn-outline ra-action-btn ra-action-btn--deny" onclick="openCancelModal(<?= (int)$reservation['id']; ?>, '<?= htmlspecialchars((string)$reservation['facility']); ?>', '<?= htmlspecialchars((string)$reservation['reservation_date']); ?>', '<?= htmlspecialchars((string)$reservation['time_slot']); ?>')">Cancel</button>
                                 </div>
                             </td>
@@ -1234,7 +1234,8 @@ ob_start();
             <input type="hidden" name="view" value="approved">
             <input type="hidden" name="reservation_id" id="postpone_reservation_id">
             <input type="hidden" name="action" value="postpone">
-            
+            <input type="hidden" id="postpone_facility_id" value="">
+
             <div style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
                 <strong>⚠️ Note:</strong> Postponing will set the reservation status to "postponed" with priority and require re-approval.
             </div>
@@ -1549,8 +1550,9 @@ function closeModifyModal() {
     document.getElementById('modifyModal').style.display = 'none';
 }
 
-function openPostponeModal(reservationId, currentDate, currentTime, facilityName) {
+function openPostponeModal(reservationId, currentDate, currentTime, facilityName, facilityId) {
     document.getElementById('postpone_reservation_id').value = reservationId;
+    document.getElementById('postpone_facility_id').value = facilityId || '';
     document.getElementById('postpone_current_schedule').textContent = facilityName + ' on ' + currentDate + ' (' + currentTime + ')';
     document.getElementById('postpone_new_date').value = '';
     document.getElementById('postpone_start_time').value = '';
@@ -3157,6 +3159,28 @@ html[data-theme="dark"] .frs-all-reservations-modal__search select:focus {
                 closeAllReservationsModal();
             }
         }, true);
+    }
+})();
+</script>
+<?php
+$frsBdpJsPath = dirname(__DIR__, 3) . '/public/js/frs-blocked-datepicker.js';
+$frsBdpJsVer = is_file($frsBdpJsPath) ? (string)filemtime($frsBdpJsPath) : '1';
+?>
+<script src="<?= base_path(); ?>/public/js/frs-blocked-datepicker.js?v=<?= htmlspecialchars($frsBdpJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script>
+(function () {
+    if (!window.frsBlockedDatePicker) return;
+    var modifyDate = document.getElementById('modify_new_date');
+    if (modifyDate) {
+        window.frsBlockedDatePicker.attach(modifyDate, function () {
+            return document.getElementById('modify_facility_id')?.value || '';
+        });
+    }
+    var postponeDate = document.getElementById('postpone_new_date');
+    if (postponeDate) {
+        window.frsBlockedDatePicker.attach(postponeDate, function () {
+            return document.getElementById('postpone_facility_id')?.value || '';
+        });
     }
 })();
 </script>

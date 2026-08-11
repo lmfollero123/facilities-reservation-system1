@@ -1394,6 +1394,23 @@ document.getElementById('violationModal')?.addEventListener('click', function (e
     if (e.target === this) closeViolationModal();
 });
 </script>
+<?php
+$frsBdpJsPath = dirname(__DIR__, 3) . '/public/js/frs-blocked-datepicker.js';
+$frsBdpJsVer = is_file($frsBdpJsPath) ? (string)filemtime($frsBdpJsPath) : '1';
+?>
+<script src="<?= base_path(); ?>/public/js/frs-blocked-datepicker.js?v=<?= htmlspecialchars($frsBdpJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script>
+(function () {
+    if (!window.frsBlockedDatePicker) return;
+    var getFacilityId = function () {
+        return document.getElementById('modify_facility_id')?.value || '';
+    };
+    var modifyDate = document.getElementById('modify_new_date');
+    if (modifyDate) window.frsBlockedDatePicker.attach(modifyDate, getFacilityId);
+    var postponeDate = document.getElementById('postpone_new_date');
+    if (postponeDate) window.frsBlockedDatePicker.attach(postponeDate, getFacilityId);
+})();
+</script>
 
 <div style="margin-top:1.5rem;">
     <a href="<?= base_path(); ?>/dashboard/reservations-manage" class="btn-outline" style="display:inline-block;text-decoration:none;">← Back to Approvals</a>
