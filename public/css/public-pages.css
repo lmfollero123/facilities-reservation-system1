@@ -3,18 +3,28 @@
  * Loaded when Tailwind is used on public pages
  */
 
-/* ===== Modern Public Navbar: transparent + light blur (matches reference site's
-   actual bg-transparent backdrop-blur-sm -- no dark tint at all). Legibility
-   over busy photos comes from text-shadow, not a background tint. Same
-   treatment on scroll -- no separate darker/opaque scrolled look. ===== */
-#mainNav.public-navbar-modern,
-#mainNav.public-navbar-modern.navbar-scrolled {
+/* ===== Modern Public Navbar =====
+   Default (unscrolled, over the home hero photo): transparent + blur,
+   light text via text-shadow -- matches the hero image behind it.
+   Scrolled (or any non-hero page, pre-scrolled server-side -- see
+   navbar_guest.php): solid light background + dark text, since most
+   pages have no photo behind the bar for light-on-transparent to read
+   against. */
+#mainNav.public-navbar-modern {
     background: transparent !important;
     backdrop-filter: blur(6px) !important;
     -webkit-backdrop-filter: blur(6px) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow: none !important;
     transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled {
+    background: rgba(255, 255, 255, 0.97) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
 }
 
 /* style.css's #mainNav.navbar-scrolled .nav-link (and brand/datetime) rules
@@ -27,22 +37,22 @@
 #mainNav.public-navbar-modern.navbar-scrolled .navbar-datetime,
 #mainNav.public-navbar-modern.navbar-scrolled #navbar-date,
 #mainNav.public-navbar-modern.navbar-scrolled #navbar-time {
-    color: #e2e8f0 !important;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    color: #1f2937 !important;
+    text-shadow: none;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .brand-name {
-    color: #f1f5f9 !important;
+    color: #1f2937 !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .brand-accent {
-    color: #34d399 !important;
+    color: #047857 !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .nav-link:hover,
 #mainNav.public-navbar-modern.navbar-scrolled .nav-link.active {
-    color: #34d399 !important;
-    border-bottom-color: #34d399;
+    color: #047857 !important;
+    border-bottom-color: #047857;
 }
 
 #mainNav.public-navbar-modern .navbar-brand.public-nav-brand {
@@ -168,21 +178,21 @@
     transform: translateY(-1px);
 }
 
-/* Scrolled state uses the same transparent/light-text treatment as default now
-   (no separate opaque/white scrolled bar) -- login button and theme toggle
-   need their own scrolled-state color rules since #mainNav.navbar-scrolled
-   .theme-toggle-nav is styled elsewhere in style.css with no guard against
-   this navbar, same specificity trap as the nav-link/brand text had. */
+/* Solid scrolled bar needs dark-on-light button/toggle colors -- login
+   button and theme toggle need their own scrolled-state color rules since
+   #mainNav.navbar-scrolled .theme-toggle-nav is styled elsewhere in
+   style.css with no guard against this navbar, same specificity trap as
+   the nav-link/brand text had. */
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login {
-    color: #e2e8f0 !important;
-    border-color: rgba(226, 232, 240, 0.5) !important;
-    background: rgba(255, 255, 255, 0.05) !important;
+    color: #1f2937 !important;
+    border-color: rgba(31, 41, 55, 0.3) !important;
+    background: rgba(0, 0, 0, 0.03) !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login:hover {
-    background: rgba(255, 255, 255, 0.12) !important;
-    border-color: #e2e8f0 !important;
-    color: #ffffff !important;
+    background: rgba(0, 0, 0, 0.06) !important;
+    border-color: #1f2937 !important;
+    color: #1f2937 !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-register {
@@ -191,15 +201,15 @@
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav {
-    color: #e2e8f0 !important;
-    border: 1px solid rgba(226, 232, 240, 0.4);
-    background: rgba(255, 255, 255, 0.05);
+    color: #1f2937 !important;
+    border: 1px solid rgba(31, 41, 55, 0.2);
+    background: rgba(0, 0, 0, 0.03);
     border-radius: 8px;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
+    background: rgba(0, 0, 0, 0.06) !important;
+    color: #1f2937 !important;
 }
 
 /* ===== Page Header Hero (green section with icon, title, tagline) ===== */
