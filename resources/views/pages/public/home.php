@@ -32,35 +32,63 @@ $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Default fallback image
 $defaultImage = $base . '/public/img/cityhall.jpeg';
 
+$heroImage = $base . '/public/img/756975060_2502390913534018_3600429775912430720_n.jpg';
+
 ob_start();
 ?>
 
-<!-- Hero Section - Full viewport, Main Bg with blur + green tint overlay -->
-<section class="home-hero relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16 overflow-hidden">
-    <div class="home-hero-bg" style="background-image: url('<?= $base; ?>/public/uploads/Main%20Bg.jpg');"></div>
-    <div class="home-hero-overlay"></div>
-    <div class="relative z-10 max-w-5xl mx-auto text-center flex-1 flex flex-col items-center justify-center">
-        <h1 class="home-animate visible text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight">
-            Barangay Culiat Public Facilities Reservation System
-        </h1>
-        <div class="home-animate visible h-1 w-24 bg-emerald-600 rounded-full mx-auto mt-6 mb-8" style="transition-delay: 0.1s;"></div>
-        <p class="home-animate visible text-lg sm:text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto mb-10" style="transition-delay: 0.15s;">
-            Reserve barangay facilities with clear approvals, OTP-secured logins, and smart recommendations—built for residents and LGU teams.
+<!-- Hero Section - static photo, serif title, Tagalog copy -->
+<section class="reservation-hero" aria-label="Barangay Culiat facilities reservation portal">
+    <div class="reservation-hero-bg" style="background-image:url('<?= htmlspecialchars($heroImage); ?>');"></div>
+    <div class="reservation-hero-gradient"></div>
+
+    <div class="reservation-hero-content">
+        <p class="reservation-hero-eyebrow">District 6, Quezon City &middot; Public Facilities Reservation Portal</p>
+        <h1 class="reservation-hero-title">Barangay Culiat</h1>
+        <div class="reservation-hero-rule"></div>
+        <p class="reservation-hero-lead">
+            Malugod na pagbati! Ang Sistema ng Reserbasyon ng Pasilidad ng Barangay Culiat ay dinisenyo upang mapadali ang pag-book ng mga pampublikong pasilidad &mdash; mula sa covered court hanggang sa multi-purpose hall &mdash; nang mabilis, ligtas, at maayos. Sa pamamagitan ng aming online portal, maaari kang mag-book, subaybayan ang katayuan ng iyong reservation, at makatanggap ng abiso, lahat sa iisang lugar.
         </p>
-        <div class="home-animate visible flex flex-wrap gap-4 justify-center" style="transition-delay: 0.2s;">
-            <a href="<?= $base; ?>/facilities" class="inline-flex items-center px-8 py-4 bg-emerald-600 text-white font-semibold rounded-lg shadow-lg hover:bg-emerald-700 hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 text-base sm:text-lg">
-                Browse Facilities
-            </a>
-            <a href="<?= $base; ?>/register" class="inline-flex items-center px-8 py-4 border-2 border-emerald-600 text-emerald-700 font-semibold rounded-lg hover:bg-emerald-50 transition-all duration-200 text-base sm:text-lg">
-                Create Account
-            </a>
+        <div class="reservation-hero-ctas">
+            <a href="<?= $base; ?>/facilities" class="reservation-hero-cta reservation-hero-cta-solid">Browse Facilities</a>
+            <a href="<?= $base; ?>/register" class="reservation-hero-cta reservation-hero-cta-outline">Create Account</a>
         </div>
     </div>
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce z-10">
-        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-        </svg>
-    </div>
+
+    <?php if (!empty($announcements)): ?>
+    <aside class="hc-widget" aria-label="Community updates">
+        <div class="hc-widget-head">
+            <span class="hc-widget-title">Community Updates</span>
+            <button type="button" class="hc-widget-toggle" id="hcAutoToggle" aria-pressed="true">&#9679; Slide</button>
+        </div>
+        <div class="hc-widget-body">
+            <?php foreach ($announcements as $i => $item):
+                $hcCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
+                $hcDate = date('M j, Y', strtotime($item['created_at']));
+                $hcFallback = frs_announcement_fallback_image($item['title'] ?? '', $item['message'] ?? '');
+            ?>
+                <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="hc-slide<?= $i === 0 ? ' is-active' : ''; ?>">
+                    <?php if (!empty($item['image_path'])): ?>
+                        <div class="hc-slide-img" style="background-image:url('<?= htmlspecialchars($base . $item['image_path']); ?>');"></div>
+                    <?php elseif ($hcFallback !== null): ?>
+                        <div class="hc-slide-img" style="background-image:url('<?= htmlspecialchars($base . $hcFallback); ?>');"></div>
+                    <?php else: ?>
+                        <div class="hc-slide-img" style="background:<?= htmlspecialchars($hcCategory['bgColor']); ?>;"></div>
+                    <?php endif; ?>
+                    <span class="hc-slide-tag" style="color:<?= htmlspecialchars($hcCategory['color']); ?>;"><?= htmlspecialchars(ucfirst($hcCategory['type'])); ?></span>
+                    <strong class="hc-slide-title"><?= htmlspecialchars((string)($item['title'] ?? 'Announcement')); ?></strong>
+                    <span class="hc-slide-date"><?= htmlspecialchars($hcDate); ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <div class="hc-widget-dots">
+            <?php foreach ($announcements as $i => $item): ?>
+                <span class="hc-dot<?= $i === 0 ? ' is-active' : ''; ?>"></span>
+            <?php endforeach; ?>
+        </div>
+        <p class="hc-widget-hint">Tap card to open section</p>
+    </aside>
+    <?php endif; ?>
 </section>
 
 <!-- How It Works Section -->
@@ -123,52 +151,62 @@ ob_start();
 <!-- Announcements Section -->
 <?php if (!empty($announcements)): ?>
 <section class="py-16 sm:py-20 px-4 sm:px-6 lg:px-8" style="background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);">
-    <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-16 home-animate">
-            <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">Announcements & Updates</h2>
-            <div class="h-1 w-16 bg-emerald-600 rounded-full mx-auto mt-4 mb-4"></div>
-            <p class="text-gray-600 text-lg">Latest advisories from Barangay Culiat</p>
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-10 home-animate">
+            <div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">Announcements & Updates</h2>
+                <p class="text-gray-600 text-lg mt-2">Latest advisories from Barangay Culiat</p>
+            </div>
+            <a href="<?= $base; ?>/announcements" class="inline-flex items-center whitespace-nowrap text-emerald-700 font-semibold hover:text-emerald-800">
+                See all
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+            </a>
         </div>
-        
-        <div class="space-y-6">
-            <?php foreach ($announcements as $index => $item): 
-                $category = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
-                $dateFormatted = date('M d, Y', strtotime($item['created_at']));
-                $messageSummary = htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 120, '…'));
-                $hasLink = !empty($item['link']);
-                $hasImage = !empty($item['image_path']);
-            ?>
-                <div class="home-announcement-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div class="flex items-center justify-between px-5 py-4" style="background-color: <?= $category['bgColor']; ?>; border-left: 4px solid <?= $category['color']; ?>;">
-                        <span class="font-semibold uppercase text-sm tracking-wider" style="color: <?= $category['color']; ?>;">
-                            <?= ucfirst($category['type']); ?>
-                        </span>
-                        <span class="text-gray-500 text-sm"><?= $dateFormatted; ?></span>
-                    </div>
-                    
-                    <?php if ($hasImage): ?>
-                    <div class="home-announcement-img h-48 sm:h-56 overflow-hidden">
-                        <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>" class="w-full h-full object-cover">
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="p-6">
-                        <h3 class="text-xl font-bold text-gray-900 mb-3"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h3>
-                        <p class="text-gray-600 mb-4"><?= $messageSummary; ?></p>
-                        
-                        <?php if ($hasLink): ?>
-                        <a href="<?= htmlspecialchars($base . $item['link']); ?>" class="inline-flex items-center text-emerald-600 font-semibold hover:text-emerald-700">
-                            Read More
-                            <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                            </svg>
-                        </a>
-                        <?php endif; ?>
-                    </div>
+
+        <?php
+            $featuredAnnouncement = $announcements[0];
+            $restAnnouncements = array_slice($announcements, 1, 3);
+            $featCategory = getAnnouncementCategory($featuredAnnouncement['title'] ?? '', $featuredAnnouncement['message'] ?? '', $featuredAnnouncement['type'] ?? 'system');
+            $featDate = date('M j, Y', strtotime($featuredAnnouncement['created_at']));
+            $featFallback = frs_announcement_fallback_image($featuredAnnouncement['title'] ?? '', $featuredAnnouncement['message'] ?? '');
+            $featImg = !empty($featuredAnnouncement['image_path'])
+                ? $base . $featuredAnnouncement['image_path']
+                : ($featFallback !== null ? $base . $featFallback : $defaultImage);
+        ?>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="lg:col-span-2 relative rounded-2xl overflow-hidden group home-animate block" style="min-height:360px;">
+                <div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style="background-image:url('<?= htmlspecialchars($featImg); ?>');"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
+                <div class="absolute bottom-0 left-0 p-6 sm:p-8 text-white">
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mb-3 text-white" style="background:<?= htmlspecialchars($featCategory['color']); ?>;"><?= htmlspecialchars($featCategory['type']); ?></span>
+                    <h3 class="text-2xl sm:text-3xl font-bold mb-2"><?= htmlspecialchars($featuredAnnouncement['title'] ?? 'Announcement'); ?></h3>
+                    <p class="text-white/80 text-sm"><?= htmlspecialchars($featDate); ?></p>
                 </div>
-            <?php endforeach; ?>
+            </a>
+
+            <div class="flex flex-col gap-4">
+                <?php foreach ($restAnnouncements as $index => $item):
+                    $rCategory = getAnnouncementCategory($item['title'] ?? '', $item['message'] ?? '', $item['type'] ?? 'system');
+                    $rDate = date('M j, Y', strtotime($item['created_at']));
+                    $rFallback = frs_announcement_fallback_image($item['title'] ?? '', $item['message'] ?? '');
+                    $rImg = !empty($item['image_path'])
+                        ? $base . $item['image_path']
+                        : ($rFallback !== null ? $base . $rFallback : $defaultImage);
+                ?>
+                    <a href="<?= htmlspecialchars($base . '/announcements'); ?>" class="home-announcement-card home-animate home-animate-delay-<?= min($index + 1, 5); ?> flex gap-3 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-3">
+                        <div class="w-20 h-20 flex-shrink-0 rounded-lg bg-cover bg-center" style="background-image:url('<?= htmlspecialchars($rImg); ?>');"></div>
+                        <div class="flex-1 min-w-0">
+                            <span class="text-xs font-bold uppercase tracking-wide" style="color:<?= htmlspecialchars($rCategory['color']); ?>;"><?= htmlspecialchars($rCategory['type']); ?></span>
+                            <h4 class="text-sm font-bold text-gray-900 line-clamp-2 mt-0.5"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h4>
+                            <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars($rDate); ?></p>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
-        
+
         <div class="text-center mt-12 home-animate">
             <a href="<?= $base; ?>/announcements" class="inline-flex items-center px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg shadow-lg hover:bg-emerald-700 hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
                 View All Announcements
@@ -377,6 +415,40 @@ ob_start();
         </div>
     </div>
 </section>
+
+<script>
+(function () {
+    'use strict';
+    var hcSlides = document.querySelectorAll('.hc-slide');
+    var hcDots = document.querySelectorAll('.hc-dot');
+    var toggle = document.getElementById('hcAutoToggle');
+    if (hcSlides.length > 0) {
+        var hcIndex = 0;
+        var autoOn = true;
+        var timer = null;
+        var hcShow = function (i) {
+            hcSlides.forEach(function (s, idx) { s.classList.toggle('is-active', idx === i); });
+            hcDots.forEach(function (d, idx) { d.classList.toggle('is-active', idx === i); });
+            hcIndex = i;
+        };
+        var stopAuto = function () { if (timer) { clearInterval(timer); timer = null; } };
+        var startAuto = function () {
+            stopAuto();
+            if (hcSlides.length > 1) {
+                timer = setInterval(function () { hcShow((hcIndex + 1) % hcSlides.length); }, 5000);
+            }
+        };
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                autoOn = !autoOn;
+                toggle.setAttribute('aria-pressed', autoOn ? 'true' : 'false');
+                if (autoOn) { startAuto(); } else { stopAuto(); }
+            });
+        }
+        startAuto();
+    }
+})();
+</script>
 
 <?php
 $content = ob_get_clean();

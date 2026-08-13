@@ -21,7 +21,7 @@ $userName = $_SESSION['pending_otp_name'] ?? '';
 
 try {
     $pdo = db();
-    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status, totp_secret, COALESCE(totp_enabled, 0) AS totp_enabled, COALESCE(enable_otp, 1) AS enable_otp FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, name, otp_code_hash, otp_expires_at, otp_attempts, otp_last_sent_at, role, status, totp_secret, must_change_password, COALESCE(totp_enabled, 0) AS totp_enabled, COALESCE(enable_otp, 1) AS enable_otp FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -211,171 +211,109 @@ $maskedUserEmail = frs_mask_email_for_display((string) ($user['email'] ?? $userE
 
 ob_start();
 ?>
-<div class="auth-container">
-    <div class="auth-card">
-        <div class="auth-header">
-            <div class="auth-icon">🔐</div>
-            <?php
-            if ($showEmailOtpCountdown && $emailOtpValid) {
-                if ($recoveryMode && !$emailOtpEnabled) {
-                    $otpTip = 'Recovery code sent to ' . $maskedUserEmail . '. It expires in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '. You can still use your authenticator app if you regain access.';
-                } else {
-                    $otpTip = 'We sent a 6-digit code to ' . $userEmail . '. Codes expire in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '.'
-                        . ($hasTotp ? ' You may also use your authenticator app.' : '');
-                }
-            } elseif ($hasTotp && !$emailOtpEnabled && !$recoveryMode) {
-                $otpTip = 'Enter the 6-digit code from your authenticator app. If you lost access to the app, use the recovery option below.';
-            } elseif ($hasTotp && !$emailOtpEnabled && $recoveryMode) {
-                $otpTip = 'Enter the recovery code from your email, or use your authenticator app if available.';
-            } elseif ($hasTotp) {
-                $otpTip = 'Enter the code from your authenticator app, or use the email code if you received one.';
+<div class="auth-card auth-split-standalone-card">
+    <div class="auth-header">
+        <div class="auth-icon">🔐</div>
+        <?php
+        if ($showEmailOtpCountdown && $emailOtpValid) {
+            if ($recoveryMode && !$emailOtpEnabled) {
+                $otpTip = 'Recovery code sent to ' . $maskedUserEmail . '. It expires in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '. You can still use your authenticator app if you regain access.';
             } else {
-                $otpTip = 'Enter the 6-digit code from your email to finish signing in.';
+                $otpTip = 'We sent a 6-digit code to ' . $userEmail . '. Codes expire in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '.'
+                    . ($hasTotp ? ' You may also use your authenticator app.' : '');
             }
-            echo frs_heading_with_tip('Enter One-Time Passcode', $otpTip, 'h1');
-            ?>
-            <?php if ($showEmailOtpCountdown): ?>
-                <p id="otpCountdown" style="font-weight:600; margin-top:0.5rem; color:<?= $emailOtpValid ? '#b45309' : '#b23030'; ?>;">
-                    <?php if ($emailOtpValid): ?>
-                        Code expires in <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
-                    <?php else: ?>
-                        Code expired. Click "Resend Code" below to get a new one.
-                    <?php endif; ?>
-                </p>
-            <?php elseif ($hasTotp && !$emailOtpEnabled && !$recoveryMode): ?>
-                <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
-                    Open your authenticator app and enter the current 6-digit code.
-                </p>
-            <?php elseif ($recoveryMode && !$emailOtpEnabled): ?>
-                <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
-                    Check your email (<?= htmlspecialchars($maskedUserEmail); ?>) for the recovery code, or use your authenticator app.
-                </p>
-            <?php endif; ?>
+        } elseif ($hasTotp && !$emailOtpEnabled && !$recoveryMode) {
+            $otpTip = 'Enter the 6-digit code from your authenticator app. If you lost access to the app, use the recovery option below.';
+        } elseif ($hasTotp && !$emailOtpEnabled && $recoveryMode) {
+            $otpTip = 'Enter the recovery code from your email, or use your authenticator app if available.';
+        } elseif ($hasTotp) {
+            $otpTip = 'Enter the code from your authenticator app, or use the email code if you received one.';
+        } else {
+            $otpTip = 'Enter the 6-digit code from your email to finish signing in.';
+        }
+        echo frs_heading_with_tip('Enter One-Time Passcode', $otpTip, 'h1');
+        ?>
+        <?php if ($showEmailOtpCountdown): ?>
+            <p id="otpCountdown" style="font-weight:600; margin-top:0.5rem; color:<?= $emailOtpValid ? '#b45309' : '#b23030'; ?>;">
+                <?php if ($emailOtpValid): ?>
+                    Code expires in <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
+                <?php else: ?>
+                    Code expired. Click "Resend Code" below to get a new one.
+                <?php endif; ?>
+            </p>
+        <?php elseif ($hasTotp && !$emailOtpEnabled && !$recoveryMode): ?>
+            <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
+                Open your authenticator app and enter the current 6-digit code.
+            </p>
+        <?php elseif ($recoveryMode && !$emailOtpEnabled): ?>
+            <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
+                Check your email (<?= htmlspecialchars($maskedUserEmail); ?>) for the recovery code, or use your authenticator app.
+            </p>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($error): ?>
+        <div style="background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: 0.9rem;">
+            <?= htmlspecialchars($error); ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($success): ?>
+        <div style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: 0.9rem;">
+            <?= htmlspecialchars($success); ?>
+        </div>
+    <?php endif; ?>
+
+    <form method="POST" class="auth-form" id="otpForm">
+        <?= csrf_field(); ?>
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color:#334155; font-size:0.85rem;">OTP Code</label>
+            <div class="otp-input-container" id="otpContainer">
+                <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="text" name="otp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="text" name="otp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="text" name="otp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="text" name="otp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
+                <input type="hidden" name="otp" id="otpCombined" value="">
+            </div>
         </div>
 
-        <?php if ($error): ?>
-            <div style="background: #fdecee; color: #b23030; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
-                <?= htmlspecialchars($error); ?>
-            </div>
-        <?php endif; ?>
+        <button class="btn-primary" type="submit">Verify &amp; Sign In</button>
+    </form>
 
-        <?php if ($success): ?>
-            <div style="background: #e3f8ef; color: #0d7a43; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.9rem;">
-                <?= htmlspecialchars($success); ?>
-            </div>
-        <?php endif; ?>
+    <?php if ($showResendEmailOtp): ?>
+    <form method="POST" id="loginOtpResendForm" style="margin-top:0.75rem; text-align:center;">
+        <?= csrf_field(); ?>
+        <button class="<?= ($showEmailOtpCountdown && !$emailOtpValid) ? 'btn-primary' : 'btn-outline'; ?>" type="submit" name="resend" value="1" id="loginOtpResendBtn" style="padding:0.45rem 0.75rem;">
+            <?= ($recoveryMode && !$emailOtpEnabled) ? 'Resend recovery code' : 'Resend Code'; ?>
+        </button>
+    </form>
+    <?php elseif ($canRequestRecovery && !$recoveryMode): ?>
+    <form method="POST" id="loginOtpRecoveryForm" style="margin-top:1rem; text-align:center;">
+        <?= csrf_field(); ?>
+        <p style="font-size:0.85rem; color:#64748b; margin:0 0 0.5rem;">
+            Can't access your authenticator app?
+        </p>
+        <button class="btn-outline" type="submit" name="recovery_email" value="1" id="loginOtpRecoveryBtn" style="padding:0.45rem 0.85rem;">
+            Send recovery code to email
+        </button>
+        <p style="font-size:0.78rem; color:#94a3b8; margin:0.5rem 0 0;">
+            A one-time code will be sent to <?= htmlspecialchars($maskedUserEmail); ?>.
+        </p>
+    </form>
+    <?php endif; ?>
 
-        <form method="POST" class="auth-form" id="otpForm">
-            <?= csrf_field(); ?>
-            <div style="margin-bottom: 1rem;">
-                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">OTP Code</label>
-                <div class="otp-input-container" id="otpContainer">
-                    <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="text" name="otp_3" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="text" name="otp_4" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="text" name="otp_5" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="text" name="otp_6" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
-                    <input type="hidden" name="otp" id="otpCombined" value="">
-                </div>
-            </div>
-
-            <button class="btn-primary" type="submit">Verify &amp; Sign In</button>
-        </form>
-
-        <?php if ($showResendEmailOtp): ?>
-        <form method="POST" id="loginOtpResendForm" style="margin-top:0.75rem; text-align:center;">
-            <?= csrf_field(); ?>
-            <button class="<?= ($showEmailOtpCountdown && !$emailOtpValid) ? 'btn-primary' : 'btn-outline'; ?>" type="submit" name="resend" value="1" id="loginOtpResendBtn" style="padding:0.45rem 0.75rem;">
-                <?= ($recoveryMode && !$emailOtpEnabled) ? 'Resend recovery code' : 'Resend Code'; ?>
-            </button>
-        </form>
-        <?php elseif ($canRequestRecovery && !$recoveryMode): ?>
-        <form method="POST" id="loginOtpRecoveryForm" style="margin-top:1rem; text-align:center;">
-            <?= csrf_field(); ?>
-            <p style="font-size:0.85rem; color:#64748b; margin:0 0 0.5rem;">
-                Can't access your authenticator app?
-            </p>
-            <button class="btn-outline" type="submit" name="recovery_email" value="1" id="loginOtpRecoveryBtn" style="padding:0.45rem 0.85rem;">
-                Send recovery code to email
-            </button>
-            <p style="font-size:0.78rem; color:#94a3b8; margin:0.5rem 0 0;">
-                A one-time code will be sent to <?= htmlspecialchars($maskedUserEmail); ?>.
-            </p>
-        </form>
-        <?php endif; ?>
-
-        <div class="auth-footer">
-            <a href="<?= base_path(); ?>/login">Back to login</a>
-        </div>
+    <div class="auth-footer" style="margin-top:1.5rem; text-align:center; padding-top:1rem; border-top:1px solid #e2e8f0;">
+        <a href="<?= base_path(); ?>/login" style="color:#047857; font-weight:600; text-decoration:none; font-size:0.9rem;">Back to login</a>
     </div>
 </div>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/guest_layout.php';
 
-// Always load OTP styling since it's used for both email OTP and TOTP
+// OTP container/input styling lives in auth-pages.css under .auth-split-page scope.
 ?>
-<style>
-.otp-input-container {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 0.75rem;
-    justify-content: center;
-    margin-top: 0.75rem;
-    width: 100%;
-}
-
-.otp-input {
-    width: 50px !important;
-    height: 50px !important;
-    text-align: center;
-    font-size: 1.75rem;
-    font-weight: 700;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 0;
-    transition: all 0.2s ease;
-    background: #ffffff;
-    color: #1e293b;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    flex-shrink: 0;
-    max-width: 50px !important;
-    min-width: 50px !important;
-}
-
-.otp-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-}
-
-.otp-input:not(:placeholder-shown) {
-    border-color: #3b82f6;
-    background: #f8fafc;
-}
-
-.otp-input::placeholder {
-    color: #cbd5e1;
-    font-size: 1.5rem;
-}
-
-@media (max-width: 480px) {
-    .otp-input {
-        width: 45px !important;
-        height: 45px !important;
-        font-size: 1.5rem;
-        border-radius: 10px;
-        max-width: 45px !important;
-        min-width: 45px !important;
-    }
-    
-    .otp-input-container {
-        gap: 0.5rem;
-    }
-}
-</style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const countdownEl = document.getElementById('otpCountdown');

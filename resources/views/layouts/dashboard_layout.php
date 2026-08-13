@@ -74,9 +74,9 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     <title><?= htmlspecialchars($pageTitle); ?></title>
     <?php 
     $appRoot = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__, 3);
-    $faviconPath = $appRoot . '/public/img/infragov-logo.png';
+    $faviconPath = $appRoot . '/public/img/brgy-culiat-logo.png';
     ?>
-    <link rel="icon" href="<?= base_path(); ?>/public/img/infragov-logo.png?v=<?= file_exists($faviconPath) ? filemtime($faviconPath) : time(); ?>" type="image/png">
+    <link rel="icon" href="<?= base_path(); ?>/public/img/brgy-culiat-logo.png?v=<?= file_exists($faviconPath) ? filemtime($faviconPath) : time(); ?>" type="image/png">
     <?php
     $cssVersion = file_exists($appRoot . '/public/css/style.css') ? filemtime($appRoot . '/public/css/style.css') : time();
     $tailwindVersion = file_exists($appRoot . '/public/css/tailwind.css') ? filemtime($appRoot . '/public/css/tailwind.css') : time();
@@ -143,7 +143,7 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 <?php include __DIR__ . '/../components/sidebar_dashboard.php'; ?>
 <div class="dashboard-main">
     <?php include __DIR__ . '/../components/navbar_dashboard.php'; ?>
-    <section class="dashboard-content dashboard-fade-in">
+    <section class="dashboard-content dashboard-fade-in <?= htmlspecialchars($dashboardContentClass ?? '', ENT_QUOTES, 'UTF-8'); ?>">
         <?= $content ?? ''; ?>
     </section>
 </div>

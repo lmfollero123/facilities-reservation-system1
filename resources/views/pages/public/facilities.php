@@ -2,6 +2,7 @@
 $useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/ui_helpers.php';
 $pageTitle = 'Facilities | LGU Facilities Reservation';
 $base = base_path();
 $pdo = db();
@@ -9,20 +10,13 @@ $pdo = db();
 $stmt = $pdo->query("SELECT id, name, description, image_path, status FROM facilities WHERE status != 'deleted' ORDER BY name");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fallback images rotation if no uploaded image
-$fallbackImages = [
-    $base . '/public/img/convention-hall.jpg',
-    $base . '/public/img/sports-complex.jpg',
-    $base . '/public/img/amphitheater.jpg',
-];
-
 $facilities = [];
 foreach ($rows as $idx => $row) {
     $statusLabel = ucfirst($row['status']);
     $statusClass = $row['status'] === 'available' ? 'status-available' : 'status-booked';
     $image = $row['image_path']
         ? $base . $row['image_path']
-        : $fallbackImages[$idx % count($fallbackImages)];
+        : $base . frs_facility_placeholder_image($row['name'], $row['description'], $idx);
 
     $facilities[] = [
         'id' => $row['id'],

@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../services/uman_api.php';
+require_once __DIR__ . '/../../../../services/ipms_api.php';
 $pdo = db();
 $hasUmanEquipment = frs_uman_tables_exist($pdo);
 $umanAssetsCatalog = [];
@@ -93,6 +94,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
+    } elseif (($_POST['action'] ?? '') === 'request_uman_return' && $hasUmanEquipment) {
+        $retFacilityId = (int)($_POST['facility_id'] ?? 0);
+        $retAssetId    = (int)($_POST['uman_asset_id'] ?? 0);
+        $retType       = trim((string)($_POST['return_type'] ?? 'RETURN_ONLY'));
+        $retCondition  = trim((string)($_POST['return_condition'] ?? ''));
+        $retReason     = trim((string)($_POST['return_reason'] ?? ''));
+        $byUserId      = (int)($_SESSION['user_id'] ?? 0);
+        $decomConfirm  = isset($_POST['decommission_confirm']) && $_POST['decommission_confirm'] === '1';
+
+        if ($retFacilityId <= 0 || $retAssetId <= 0) {
+            $message = 'Invalid facility or asset for return.';
+            $messageType = 'error';
+        } elseif (!in_array($retType, ['RETURN_ONLY', 'RETURN_AND_REPLACE', 'RETURN_DECOMMISSION'], true)) {
+            $message = 'Invalid return type selected.';
+            $messageType = 'error';
+        } elseif ($retCondition === '') {
+            $message = 'Please describe the current condition of the equipment.';
+            $messageType = 'error';
+        } elseif ($retReason === '') {
+            $message = 'Please provide a reason for the return.';
+            $messageType = 'error';
+        } elseif ($retType === 'RETURN_DECOMMISSION' && !$decomConfirm) {
+            $message = 'For decommissioning, you must confirm that the equipment is beyond repair and will not be returned to UMAN inventory.';
+            $messageType = 'error';
+        } else {
+            $nameStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
+            $nameStmt->execute([$retFacilityId]);
+            $facName = (string)($nameStmt->fetchColumn() ?: ('Facility #' . $retFacilityId));
+
+            $result = frs_uman_request_return(
+                $pdo, $retFacilityId, $retAssetId, $retType, $retCondition, $retReason, $byUserId
+            );
+            $typeLabel = [
+                'RETURN_ONLY'            => 'Return Only',
+                'RETURN_AND_REPLACE'     => 'Return + Replace',
+                'RETURN_DECOMMISSION'    => 'Decommission (WMR)',
+            ][$retType] ?? 'Return';
+
+            $details = "{$typeLabel} requested for UMAN Asset #{$retAssetId} at {$facName}";
+            if (!empty($result['event_ref'])) {
+                $details .= " (event: {$result['event_ref']})";
+            }
+            logAudit('CPRF UMAN Return Requested', 'Facility Management', $details . ' - Reason: ' . $retReason);
+
+            if (empty($result['ok'])) {
+                $message = 'Return request failed: ' . ($result['error'] ?? 'Unknown error.');
+                $messageType = 'error';
+            } else {
+                $message = "Return request ({$typeLabel}) submitted successfully. The equipment is now flagged as 'Return Pending'.";
+                $messageType = 'success';
+                if (!empty($result['replacement_asset_id'])) {
+                    $message .= " UMAN has allocated replacement asset #{$result['replacement_asset_id']}.";
+                }
+                if (empty($result['webhook_ok'])) {
+                    $message .= ' NOTE: UMAN system is offline; the request was saved locally and will sync when UMAN is reachable.';
+                } elseif (!empty($result['pickup_instructions'])) {
+                    $message .= ' Pickup: ' . $result['pickup_instructions'];
+                }
+            }
+        }
+    } elseif (($_POST['action'] ?? '') === 'cancel_uman_return' && $hasUmanEquipment) {
+        $canFacilityId = (int)($_POST['facility_id'] ?? 0);
+        $canAssetId    = (int)($_POST['uman_asset_id'] ?? 0);
+        $canReason    = trim((string)($_POST['cancel_reason'] ?? ''));
+        $byUserId     = (int)($_SESSION['user_id'] ?? 0);
+        if ($canFacilityId <= 0 || $canAssetId <= 0) {
+            $message = 'Invalid facility or asset for cancel.';
+            $messageType = 'error';
+        } else {
+            $result = frs_uman_cancel_return($pdo, $canFacilityId, $canAssetId, $canReason, $byUserId);
+            if (empty($result['ok'])) {
+                $message = 'Could not cancel return: ' . ($result['error'] ?? 'Unknown error.');
+                $messageType = 'error';
+            } else {
+                $nameStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
+                $nameStmt->execute([$canFacilityId]);
+                $facName = (string)($nameStmt->fetchColumn() ?: ('Facility #' . $canFacilityId));
+                logAudit('CPRF UMAN Return Cancelled', 'Facility Management',
+                    "Cancelled return for UMAN Asset #{$canAssetId} at {$facName}" .
+                    ($canReason !== '' ? " - {$canReason}" : ''));
+                $message = 'Return request cancelled. Equipment remains in active custody.';
+                $messageType = 'success';
+            }
+        }
+    } elseif (($_POST['action'] ?? '') === 'mark_replacement_received' && $hasUmanEquipment) {
+        $recFacilityId     = (int)($_POST['facility_id'] ?? 0);
+        $recAssetId        = (int)($_POST['replacement_asset_id'] ?? 0);
+        $recCondition      = trim((string)($_POST['received_condition'] ?? ''));
+        $recNotes          = trim((string)($_POST['received_notes'] ?? ''));
+        $byUserId          = (int)($_SESSION['user_id'] ?? 0);
+        if ($recFacilityId <= 0 || $recAssetId <= 0) {
+            $message = 'Invalid facility or replacement asset.';
+            $messageType = 'error';
+        } elseif ($recCondition === '') {
+            $message = 'Please describe the received condition of the replacement.';
+            $messageType = 'error';
+        } else {
+            $nameStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = ? LIMIT 1');
+            $nameStmt->execute([$recFacilityId]);
+            $facName = (string)($nameStmt->fetchColumn() ?: ('Facility #' . $recFacilityId));
+            $result = frs_uman_mark_replacement_received(
+                $pdo, $recFacilityId, $recAssetId, $recCondition, $recNotes, $byUserId
+            );
+            if (empty($result['ok'])) {
+                $message = 'Unable to mark as received: ' . ($result['error'] ?? 'Unknown error.');
+                $messageType = 'error';
+            } else {
+                logAudit(
+                    'CPRF UMAN Replacement Received',
+                    'Facility Management',
+                    "Replacement UMAN Asset #{$recAssetId} at {$facName}" .
+                    (!empty($result['event_ref']) ? " (event: {$result['event_ref']})" : '') .
+                    ($recNotes !== '' ? " - {$recNotes}" : '')
+                );
+                $message = "Replacement asset #{$recAssetId} is now marked as 'Active' for {$facName}.";
+                $messageType = 'success';
+            }
+        }
     } elseif (($_POST['action'] ?? '') === 'regenerate_facility_qr') {
         $regenId = (int)($_POST['facility_id'] ?? 0);
         if (!$hasFacilityQr) {
@@ -387,7 +506,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         : [];
                     frs_save_facility_equipment($pdo, $newFacilityId, $selectedEquipment, $umanAssetsIndexed);
                 }
-                
+
+                $ipmsProjectKey = trim((string)($_POST['ipms_project_key'] ?? ''));
+                if ($newFacilityId > 0 && $ipmsProjectKey !== '') {
+                    $pins = frs_ipms_load_schedule_pins();
+                    $pins[$ipmsProjectKey] = $newFacilityId;
+                    frs_ipms_save_schedule_pins($pins);
+                }
+
                 $message = 'Facility added successfully.';
             }
             $messageType = 'success';
@@ -400,20 +526,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$facilityTab = ($_GET['tab'] ?? 'active') === 'deleted' ? 'deleted' : 'active';
+
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
-$totalFacilities = (int)$pdo->query('SELECT COUNT(*) FROM facilities')->fetchColumn();
+$activeFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status != 'deleted'")->fetchColumn();
+$deletedFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status = 'deleted'")->fetchColumn();
+
+$totalFacilities = $facilityTab === 'deleted' ? $deletedFacilityCount : $activeFacilityCount;
 $totalPages = max(1, (int)ceil($totalFacilities / $perPage));
 
-$facilitiesStmt = $pdo->prepare('SELECT *, latitude, longitude, operating_hours FROM facilities ORDER BY updated_at DESC LIMIT :limit OFFSET :offset');
+$facilitiesStmt = $pdo->prepare(
+    "SELECT *, latitude, longitude, operating_hours FROM facilities
+     WHERE status " . ($facilityTab === 'deleted' ? "= 'deleted'" : "!= 'deleted'") . "
+     ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+);
 $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
 $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $equipmentByFacility = [];
+$allowedEquipmentByFacility = [];
 if ($hasUmanEquipment && $facilities !== []) {
     $equipmentByFacility = frs_get_facility_equipment_map(
         $pdo,
@@ -423,6 +559,13 @@ if ($hasUmanEquipment && $facilities !== []) {
         $fid = (int)$facRow['id'];
         $facRow['equipment'] = $equipmentByFacility[$fid] ?? [];
         $facRow['equipment_ids'] = array_map(static fn($e) => (int)$e['uman_asset_id'], $facRow['equipment']);
+
+        $allowed = frs_uman_allowed_assets_for_facility($pdo, $fid, $umanAssetsIndexed);
+        $allowedEquipmentByFacility[$fid] = $allowed;
+        // Convert to a plain zero-indexed array for the JSON payload that
+        // editFacility() receives. Using the array_keys/values structure
+        // guarantees zero-indexed encoding on the wire.
+        $facRow['allowed_equipment'] = array_values($allowed);
     }
     unset($facRow);
 }
@@ -494,16 +637,25 @@ ob_start();
         <?php endif; ?>
     </div>
 
+    <nav class="booking-hub-tabs" aria-label="Facility list sections" style="margin-bottom: 1rem;">
+        <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active" data-frs-partial="facility-list">
+            Active Facilities (<?= $activeFacilityCount; ?>)
+        </a>
+        <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted" data-frs-partial="facility-list">
+            Deleted Facilities (<?= $deletedFacilityCount; ?>)
+        </a>
+    </nav>
+
     <section class="collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
-            <span>Facilities</span>
+            <span><?= $facilityTab === 'deleted' ? 'Deleted Facilities' : 'Facilities'; ?></span>
             <span class="chevron">▼</span>
         </button>
         <div class="collapsible-body" id="facilities-list">
             <div data-frs-partial-id="facility-list" data-frs-partial-root>
             <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
-                    <p>No facilities added yet. Click "Add Facility" to add your first facility.</p>
+                    <p><?= $facilityTab === 'deleted' ? 'No deleted facilities.' : 'No facilities added yet. Click "Add Facility" to add your first facility.'; ?></p>
                 </article>
             <?php else: ?>
                 <?php foreach ($facilities as $facility): ?>
@@ -579,11 +731,11 @@ ob_start();
                 <?php if ($totalPages > 1): ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
                         <?php endif; ?>
                         <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                         <?php if ($page < $totalPages): ?>
-                            <a href="?page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
@@ -650,6 +802,7 @@ ob_start();
                 <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="facility_id" id="facility_id">
+                    <input type="hidden" name="ipms_project_key" id="form-ipms-project-key" value="">
                     <label>
                         Facility Name
                         <div class="input-wrapper">
@@ -727,36 +880,29 @@ ob_start();
                         <textarea name="amenities" id="form-amenities" placeholder="e.g., Restrooms, parking area, wheelchair access"></textarea>
                     </label>
                     <?php if ($hasUmanEquipment): ?>
+                    <input type="hidden" name="facility_equipment_context_id" id="form-facility-equipment-context-id" value="0">
                     <div style="margin-top:1rem; padding:1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
                         <label style="display:block; font-weight:600; margin-bottom:0.5rem;">
                             UMAN Equipment / Utility Assets
-                            <?= frs_field_tip('Select assets from UMAN Utilities Management assigned to this facility. Request new assets via UMAN Integration.'); ?>
+                            <?= frs_field_tip('Equipment shown here is GATED by the Request → UMAN Approve/Fulfill workflow. Only assets UMAN has explicitly approved or fulfilled for this specific facility appear in this list.'); ?>
                         </label>
-                        <?php if (empty($umanAssetsCatalog)): ?>
+                        <?php if (empty($umanAssetsCatalog) && uman_api_key() === ''): ?>
                             <p style="color:#8b95b5; font-size:0.9rem; margin:0;">
                                 No assets loaded from UMAN. Configure <code>UMAN_API_KEY</code> or submit requests in
                                 <a href="<?= base_path(); ?>/dashboard/utilities-integration">UMAN Integration</a>.
                             </p>
                         <?php else: ?>
                             <div id="equipment-checklist" style="max-height:220px; overflow-y:auto; display:grid; gap:0.5rem;">
-                                <?php foreach ($umanAssetsCatalog as $asset): ?>
-                                    <?php
-                                    $aid = (int)($asset['id'] ?? 0);
-                                    if ($aid <= 0) {
-                                        continue;
-                                    }
-                                    $code = (string)($asset['asset_code'] ?? '');
-                                    $type = (string)($asset['asset_type'] ?? '');
-                                    ?>
-                                    <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
-                                        <input type="checkbox" name="equipment_ids[]" value="<?= $aid; ?>" class="equipment-checkbox" style="margin-top:0.2rem;">
-                                        <span>
-                                            <strong><?= htmlspecialchars((string)($asset['name'] ?? '')); ?></strong>
-                                            <small style="color:#64748b; display:block;"><?= htmlspecialchars($code); ?> · <?= htmlspecialchars($type); ?> · <?= htmlspecialchars((string)($asset['condition_status'] ?? '')); ?></small>
-                                        </span>
-                                    </label>
-                                <?php endforeach; ?>
+                                <div id="equipment-checklist-slot-empty" style="padding:1rem; text-align:center; color:#8b95b5; font-size:0.9rem; border:1px dashed #cbd5e1; border-radius:6px; background:#fff;">
+                                    <div style="margin-bottom:0.35rem;">Equipment options appear after UMAN approves or fulfills a request for this facility.</div>
+                                    <a href="<?= base_path(); ?>/dashboard/utilities-integration" style="color:#0066cc; font-weight:600; text-decoration:underline;">Submit a UMAN request &rarr;</a>
+                                </div>
                             </div>
+                            <p style="margin:0.6rem 0 0; font-size:0.8rem; color:#64748b;">
+                                💡 <strong>Flow:</strong> 1) <a href="<?= base_path(); ?>/dashboard/utilities-integration" style="color:#059669;">UMAN Integration</a> → request asset for this facility.
+                                2) UMAN staff fulfills the request (sets status + assigns a specific asset).
+                                3) Click <em>"Sync Request Status from UMAN"</em> (or revisit this page) — the asset auto-appears above.
+                            </p>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -783,12 +929,20 @@ ob_start();
                     </label>
                     <label>
                         Operating Hours
-                        <div class="input-wrapper">
-                            <span class="input-icon">🕐</span>
-                            <input type="text" name="operating_hours" id="form-operating-hours" placeholder="e.g., 09:00-16:00 or 8:00 AM - 4:00 PM">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="input-wrapper" style="flex:1;">
+                                <span class="input-icon">🕐</span>
+                                <input type="time" id="form-operating-hours-start" onchange="syncOperatingHours()">
+                            </div>
+                            <span style="color:#8b95b5;">to</span>
+                            <div class="input-wrapper" style="flex:1;">
+                                <span class="input-icon">🕐</span>
+                                <input type="time" id="form-operating-hours-end" onchange="syncOperatingHours()">
+                            </div>
                         </div>
+                        <input type="hidden" name="operating_hours" id="form-operating-hours">
                         <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">
-                            Facility operating hours. Format: HH:MM-HH:MM (24-hour) or HH:MM AM/PM - HH:MM AM/PM. Example: "09:00-16:00" or "8:00 AM - 4:00 PM". Leave blank for default (8:00 AM - 9:00 PM).
+                            Pick a start and end time. Leave both blank for default (8:00 AM - 9:00 PM).
                         </small>
                     </label>
 
@@ -915,7 +1069,202 @@ ob_start();
     </div>
 </div>
 
+<!-- ── Phase 3: UMAN Return Request Modal (Return / Replace / Decommission) ── -->
+<div id="umanReturnModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1400; align-items:center; justify-content:center; padding:1rem;">
+    <div class="modal" style="width:100%; max-width:560px; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(90deg,#fef3c7,#fef9c3);">
+            <h3 id="umanReturnModalTitle" style="margin:0; font-size:1.05rem; color:#92400e;">Request Equipment Return</h3>
+            <button type="button" onclick="closeUmanReturnModal()" style="background:transparent; border:none; font-size:1.4rem; color:#92400e; cursor:pointer; padding:0 0.25rem;">&times;</button>
+        </div>
+        <form method="POST" id="umanReturnForm" style="padding:1.25rem;">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="request_uman_return">
+            <input type="hidden" name="facility_id" id="umanReturnFacilityId" value="0">
+            <input type="hidden" name="uman_asset_id" id="umanReturnAssetId" value="0">
+            <input type="hidden" name="return_type" id="umanReturnReturnType" value="RETURN_ONLY">
+
+            <div style="margin-bottom:0.75rem;">
+                <div id="umanReturnAssetName" style="font-weight:600; color:#0f172a; margin-bottom:0.2rem;"></div>
+                <div id="umanReturnAssetCode" style="font-size:0.82rem; color:#64748b;"></div>
+            </div>
+
+            <label style="display:block; font-size:0.88rem; font-weight:600; color:#334155; margin:0.6rem 0 0.3rem;">Current Condition</label>
+            <select name="return_condition" id="umanReturnCondition" required style="width:100%; padding:0.55rem 0.65rem; border:1px solid #cbd5e1; border-radius:8px; font-size:0.92rem; box-sizing:border-box;">
+                <option value="">-- Select condition --</option>
+                <option value="Good (working)">Good — fully functional</option>
+                <option value="Fair (minor issues)">Fair — minor cosmetic wear, works</option>
+                <option value="Poor (needs repair)">Poor — functional but needs repair</option>
+                <option value="Broken (inoperable)">Broken — inoperable, needs service</option>
+                <option value="Damaged beyond repair">Destroyed / beyond economical repair</option>
+                <option value="Lost or missing">Lost / missing</option>
+            </select>
+
+            <label style="display:block; font-size:0.88rem; font-weight:600; color:#334155; margin:0.6rem 0 0.3rem;">Reason / Explanation <span style="color:#dc2626;">*</span></label>
+            <textarea name="return_reason" id="umanReturnReason" required rows="3" placeholder="Describe why you are returning this equipment (fault, surplus, recall notice, etc.)"
+                style="width:100%; padding:0.55rem 0.65rem; border:1px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
+
+            <div id="umanDecommissionConfirm" style="display:none; margin-top:0.75rem; padding:0.7rem 0.8rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px;">
+                <label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.88rem; color:#991b1b; cursor:pointer;">
+                    <input type="checkbox" name="decommission_confirm" value="1" style="margin-top:0.15rem;">
+                    <span><strong>CONFIRM:</strong> This equipment is being written off (WMR/COA). It will <em>not</em> be returned to UMAN inventory, and this action cannot be undone.</span>
+                </label>
+            </div>
+
+            <div style="margin-top:1.1rem; display:flex; gap:0.6rem; justify-content:flex-end;">
+                <button type="button" onclick="closeUmanReturnModal()" style="padding:0.55rem 1rem; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-size:0.9rem; color:#334155;">Cancel</button>
+                <button type="submit" id="umanReturnSubmitBtn" style="padding:0.55rem 1.15rem; background:#059669; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600;">Submit Return</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Phase 3: UMAN Cancel Return form (inline with hidden inputs, confirms on submit) -->
+<form method="POST" id="umanCancelReturnForm" style="display:none;">
+    <?= csrf_field(); ?>
+    <input type="hidden" name="action" value="cancel_uman_return">
+    <input type="hidden" name="facility_id" id="umanCancelFacilityId" value="0">
+    <input type="hidden" name="uman_asset_id" id="umanCancelAssetId" value="0">
+    <input type="hidden" name="cancel_reason" id="umanCancelReason" value="">
+</form>
+
+<!-- ── Phase 3c: Mark Replacement as Received modal ──────────────────────── -->
+<div id="umanReceivedModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1400; align-items:center; justify-content:center; padding:1rem;">
+    <div class="modal" style="width:100%; max-width:560px; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(90deg,#ede9fe,#c7d2fe);">
+            <h3 id="umanReceivedModalTitle" style="margin:0; font-size:1.05rem; color:#4c1d95;">Mark Replacement as Received</h3>
+            <button type="button" onclick="closeUmanReceivedModal()" style="background:transparent; border:none; font-size:1.4rem; color:#4c1d95; cursor:pointer; padding:0 0.25rem;">&times;</button>
+        </div>
+        <form method="POST" id="umanReceivedForm" style="padding:1.25rem;">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="mark_replacement_received">
+            <input type="hidden" name="facility_id" id="umanReceivedFacilityId" value="0">
+            <input type="hidden" name="replacement_asset_id" id="umanReceivedReplacementId" value="0">
+
+            <div style="margin-bottom:0.75rem;">
+                <div id="umanReceivedAssetName" style="font-weight:600; color:#0f172a; margin-bottom:0.2rem;"></div>
+                <div id="umanReceivedAssetCode" style="font-size:0.82rem; color:#64748b;"></div>
+            </div>
+
+            <label style="display:block; font-size:0.88rem; font-weight:600; color:#334155; margin:0.6rem 0 0.3rem;">Condition on Receipt <span style="color:#dc2626;">*</span></label>
+            <select name="received_condition" id="umanReceivedCondition" required style="width:100%; padding:0.55rem 0.65rem; border:1px solid #cbd5e1; border-radius:8px; font-size:0.92rem; box-sizing:border-box;">
+                <option value="">-- Select condition --</option>
+                <option value="Good (working)">Good — brand new / fully functional</option>
+                <option value="Fair (minor issues)">Fair — minor shelf wear, works</option>
+                <option value="Poor (needs repair)">Poor — arrived damaged but repairable</option>
+                <option value="Damaged beyond repair">DOA / damaged in transit</option>
+            </select>
+
+            <label style="display:block; font-size:0.88rem; font-weight:600; color:#334155; margin:0.6rem 0 0.3rem;">Delivery / receipt notes (optional)</label>
+            <textarea name="received_notes" id="umanReceivedNotes" rows="2" placeholder="e.g. courier tracking, signatures, any visible damage remarks"
+                style="width:100%; padding:0.55rem 0.65rem; border:1px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
+
+            <div style="margin-top:1.1rem; display:flex; gap:0.6rem; justify-content:flex-end;">
+                <button type="button" onclick="closeUmanReceivedModal()" style="padding:0.55rem 1rem; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-size:0.9rem; color:#334155;">Cancel</button>
+                <button type="submit" style="padding:0.55rem 1.15rem; background:#6d28d9; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600;">✓ Confirm Receipt</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// Server-rendered config used by equipment-checklist reset() so UMAN
+// Integration URLs are always correct relative to base_path().
+window.FACILITY_MANAGEMENT_CONFIG = {
+    utilitiesUrl: <?= json_encode(base_path() . '/dashboard/utilities-integration', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
+};
+
+// ── Phase 3: Return modal helpers ──────────────────────────────────────────
+function openUmanReturnModal(facilityId, assetId, returnType, assetName, assetCode) {
+    const titleMap = {
+        RETURN_ONLY:            'Return Equipment to UMAN',
+        RETURN_AND_REPLACE:     'Request Return + Replacement',
+        RETURN_DECOMMISSION:    'Decommission / Write-Off (WMR)',
+    };
+    const btnMap = {
+        RETURN_ONLY:            { bg:'#0284c7', label:'Submit Return Request' },
+        RETURN_AND_REPLACE:     { bg:'#d97706', label:'Submit Replace Request' },
+        RETURN_DECOMMISSION:    { bg:'#dc2626', label:'Confirm Decommission' },
+    };
+    const style = btnMap[returnType] || btnMap.RETURN_ONLY;
+    document.getElementById('umanReturnModalTitle').textContent = titleMap[returnType] || 'Request Equipment Return';
+    document.getElementById('umanReturnFacilityId').value = String(facilityId || 0);
+    document.getElementById('umanReturnAssetId').value    = String(assetId || 0);
+    document.getElementById('umanReturnReturnType').value = returnType;
+    document.getElementById('umanReturnAssetName').textContent = assetName || ('UMAN Asset #' + assetId);
+    document.getElementById('umanReturnAssetCode').textContent = assetCode ? ('Asset Code: ' + assetCode) : '';
+    document.getElementById('umanDecommissionConfirm').style.display = returnType === 'RETURN_DECOMMISSION' ? 'block' : 'none';
+    const btn = document.getElementById('umanReturnSubmitBtn');
+    btn.style.backgroundColor = style.bg;
+    btn.textContent = style.label;
+    document.getElementById('umanReturnCondition').value = '';
+    document.getElementById('umanReturnReason').value = '';
+    const decommCheck = document.querySelector('#umanReturnForm input[name="decommission_confirm"]');
+    if (decommCheck) decommCheck.checked = false;
+    const m = document.getElementById('umanReturnModal');
+    if (m) {
+        if (m.parentNode !== document.body) document.body.appendChild(m);
+        m.style.display = 'flex';
+    }
+}
+function closeUmanReturnModal() {
+    const m = document.getElementById('umanReturnModal');
+    if (m) { m.style.display = 'none'; }
+}
+document.addEventListener('click', (e) => {
+    const m = document.getElementById('umanReturnModal');
+    if (m && e.target === m) closeUmanReturnModal();
+});
+document.getElementById('umanReturnForm')?.addEventListener('submit', (e) => {
+    const rt = document.getElementById('umanReturnReturnType').value;
+    if (rt === 'RETURN_DECOMMISSION') {
+        const cb = document.querySelector('#umanReturnForm input[name="decommission_confirm"]');
+        if (!cb || !cb.checked) {
+            e.preventDefault();
+            alert('Please tick the decommission confirmation checkbox before proceeding.');
+            return;
+        }
+        if (!confirm('WARNING: Decommissioning (WMR) writes off this asset permanently. This cannot be undone. Continue?')) {
+            e.preventDefault();
+            return;
+        }
+    }
+});
+function submitUmanCancelReturn(facilityId, assetId, reason) {
+    const r = (reason && typeof reason === 'string' && reason.trim() !== '')
+        ? reason.trim()
+        : ('Cancelled by ' + (document.body.dataset.userName || 'CPRF staff') + ' via Facility Management UI');
+    if (!confirm('Cancel the pending return request for this asset?')) return;
+    const form = document.getElementById('umanCancelReturnForm');
+    if (!form) return;
+    document.getElementById('umanCancelFacilityId').value = String(facilityId || 0);
+    document.getElementById('umanCancelAssetId').value    = String(assetId || 0);
+    document.getElementById('umanCancelReason').value     = r;
+    form.submit();
+}
+// ── Phase 3c: Mark Replacement as Received modal helpers ──────────────────
+function openUmanReceivedModal(facilityId, replacementAssetId, assetName, assetCode) {
+    document.getElementById('umanReceivedFacilityId').value    = String(facilityId || 0);
+    document.getElementById('umanReceivedReplacementId').value   = String(replacementAssetId || 0);
+    document.getElementById('umanReceivedAssetName').textContent  = assetName || ('Replacement Asset #' + replacementAssetId);
+    document.getElementById('umanReceivedAssetCode').textContent = assetCode ? ('Asset Code: ' + assetCode) : '';
+    document.getElementById('umanReceivedCondition').value = '';
+    document.getElementById('umanReceivedNotes').value     = '';
+    const m = document.getElementById('umanReceivedModal');
+    if (m) {
+        if (m.parentNode !== document.body) document.body.appendChild(m);
+        m.style.display = 'flex';
+    }
+}
+function closeUmanReceivedModal() {
+    const m = document.getElementById('umanReceivedModal');
+    if (m) m.style.display = 'none';
+}
+document.addEventListener('click', (e) => {
+    const m = document.getElementById('umanReceivedModal');
+    if (m && e.target === m) closeUmanReceivedModal();
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Move facility modal to body so position:fixed works (parent transforms break it)
 (function() {
     const modal = document.getElementById('facilityModal');
@@ -923,6 +1272,57 @@ ob_start();
         document.body.appendChild(modal);
     }
 })();
+
+// Combine the two <input type="time"> pickers into the "HH:MM-HH:MM" string
+// the backend expects (see config/occupancy_monitoring.php / extension_helpers.php
+// parseOperatingHours()). Leaves the hidden field blank (= facility default
+// hours) unless both start and end are set.
+function syncOperatingHours() {
+    const start = document.getElementById('form-operating-hours-start');
+    const end = document.getElementById('form-operating-hours-end');
+    const hidden = document.getElementById('form-operating-hours');
+    if (!start || !end || !hidden) return;
+    hidden.value = (start.value && end.value) ? (start.value + '-' + end.value) : '';
+}
+
+// Parse a stored operating_hours string (24-hour "HH:MM-HH:MM" or 12-hour
+// "h:MM AM/PM - h:MM AM/PM") back into the two <input type="time"> pickers,
+// which only accept 24-hour "HH:MM" values.
+function setOperatingHoursFields(stored) {
+    const start = document.getElementById('form-operating-hours-start');
+    const end = document.getElementById('form-operating-hours-end');
+    const hidden = document.getElementById('form-operating-hours');
+    if (!start || !end || !hidden) return;
+
+    const raw = String(stored || '').trim();
+    let startVal = '';
+    let endVal = '';
+
+    let m = raw.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (m) {
+        startVal = m[1].padStart(5, '0');
+        endVal = m[2].padStart(5, '0');
+    } else {
+        m = raw.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+        if (m) {
+            const to24 = function (t) {
+                const parts = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/);
+                if (!parts) return '';
+                let h = parseInt(parts[1], 10);
+                const min = parts[2];
+                const ampm = parts[3];
+                if (ampm === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
+                return String(h).padStart(2, '0') + ':' + min;
+            };
+            startVal = to24(m[1]);
+            endVal = to24(m[2]);
+        }
+    }
+
+    start.value = startVal;
+    end.value = endVal;
+    hidden.value = raw;
+}
 
 function openFacilityModal(resetForm = true) {
     const modal = document.getElementById('facilityModal');
@@ -1032,12 +1432,264 @@ function editFacility(payload) {
     document.getElementById('form-amenities').value = facility.amenities || '';
     document.getElementById('form-rules').value = facility.rules || '';
 
-    document.querySelectorAll('.equipment-checkbox').forEach(cb => {
-        cb.checked = Array.isArray(facility.equipment_ids) && facility.equipment_ids.includes(parseInt(cb.value, 10));
-    });
+    // Render the equipment checklist dynamically for this facility:
+    // show ONLY items that are (a) already auto-assigned to this facility
+    // from fulfilled UMAN requests, or (b) approved requests with a
+    // fulfilled_asset_id for this specific facility. Full-catalog checkboxes
+    // were gated off in the v2 integration fix.
+    //
+    // Phase 3 enhancement: each row also carries a 3-button Return /
+    // Replace / Decommission action column (Return Slip annex + WMR) that
+    // opens the return modal with the right flavor preselected. Assets with
+    // status=return_pending render a cyan "Return Pending" chip and offer a
+    // "Cancel return request" link instead of the three buttons.
+    //
+    // Phase 3c enhancement (COA lifecycle close):
+    //   - replacement_in_transit rows render violet "In Transit" badge +
+    //     "Mark as Received" button that opens the received-condition modal.
+    //   - archived / decommissioned rows are appended at the bottom in a
+    //     History section (faded, no checkbox) with archived_at timestamp,
+    //     acceptance ref + disposal_ref if any so COA §6.2 filter queries
+    //     can match them 7 years later without extra joins.
+    (function () {
+        const ctxId = document.getElementById('form-facility-equipment-context-id');
+        if (ctxId) ctxId.value = String(facility.id || 0);
+        const slot = document.getElementById('equipment-checklist');
+        const emptyTpl = document.getElementById('equipment-checklist-slot-empty');
+        if (!slot) return;
+
+        const allowed = Array.isArray(facility.allowed_equipment) ? facility.allowed_equipment : [];
+        const checked = Array.isArray(facility.equipment_ids) ? facility.equipment_ids.map(Number) : [];
+
+        if (allowed.length === 0) {
+            slot.innerHTML = '';
+            if (emptyTpl) slot.appendChild(emptyTpl.content ? emptyTpl.content.cloneNode(true) : (() => {
+                const d = document.createElement('div');
+                d.innerHTML = emptyTpl.outerHTML;
+                return d.firstChild;
+            })());
+            return;
+        }
+
+        slot.innerHTML = '';
+        const facilityIdForJs = Number(facility.id) || 0;
+
+        // Categorize by status so we can bucket render
+        const active = [];
+        const pendingReturn = [];
+        const inTransit = [];
+        const history = [];
+        allowed.forEach((row) => {
+            const aid = Number(row.uman_asset_id) || 0;
+            if (aid <= 0) return;
+            const s = String(row.status || 'active');
+            if (s === 'return_pending')              pendingReturn.push(row);
+            else if (s === 'replacement_in_transit') inTransit.push(row);
+            else if (s === 'archived' || s === 'decommissioned') history.push(row);
+            else                                      active.push(row);
+        });
+        const orderedMain = [].concat(active, inTransit, pendingReturn);
+
+        function badgeForSource(src) {
+            return src === 'fulfilled_req' || src === 'UMAN_REQUEST_FULFILLED'
+                ? '<span style="margin-left:0.3rem;padding:0.08rem 0.35rem;border-radius:3px;background:#dcfce7;color:#166534;font-size:0.72rem;">Fulfilled</span>'
+                : '';
+        }
+        function returnTypeLabel(rt) {
+            return rt ? ({RETURN_ONLY:'Return',RETURN_AND_REPLACE:'Replace',RETURN_DECOMMISSION:'Decomm'}[rt] || String(rt).replace('RETURN_','')) : '';
+        }
+
+        // ── Phase 1+2 main rows (active / inTransit / pendingReturn) ──────
+        orderedMain.forEach((row) => {
+            const aid = Number(row.uman_asset_id) || 0;
+            if (aid <= 0) return;
+            const code = row.asset_code || '';
+            const type = row.asset_type || '';
+            const cond = row.condition_status || '';
+            const name = row.asset_name || ('UMAN Asset #' + aid);
+            const isChecked = checked.includes(aid);
+            const status  = String(row.status || 'active');
+            const retType = String(row.return_type || '');
+            const retBy   = String(row.return_requested_by || '');
+            const retAt   = String(row.return_requested_at || '');
+            const retReason = String(row.return_reason || '');
+            const acceptedBy = String(row.accepted_return_by || '');
+            const linkedRep  = Number(row.linked_replacement_asset_id) || 0;
+            const disposalRef = String(row.disposal_ref || '');
+            const assignedEvt = String(row.assigned_event_ref || '');
+
+            const srcTag  = badgeForSource(row.source);
+            let   retBadge = '';
+            let   actionsHtml = '';
+            let   rowStyle = '';
+            let   checkboxDisabled = false;
+            let   checkboxDisabledTitle = '';
+
+            if (status === 'return_pending') {
+                const label = returnTypeLabel(retType);
+                retBadge = '<span style="margin-left:0.3rem;padding:0.08rem 0.35rem;border-radius:3px;background:#cffafe;color:#0e7490;font-size:0.72rem; font-weight:600;">↻ Return Pending'
+                    + (label ? (' · ' + label) : '') + '</span>';
+                const summaryBits = [];
+                if (retBy)   summaryBits.push('by ' + escapeHtml(retBy));
+                if (retAt)   summaryBits.push(retAt.substring(0, 16).replace('T', ' '));
+                if (retReason.length > 50) summaryBits.push('reason: ' + escapeHtml(retReason.substring(0, 50)) + '…');
+                actionsHtml =
+                    '<div style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:0.2rem; min-width:200px;">' +
+                        (summaryBits.length ? '<small style="color:#0e7490; font-size:0.7rem;">' + summaryBits.join(' · ') + '</small>' : '') +
+                        '<button type="button" class="uman-ret-cancel" data-fid="' + facilityIdForJs + '" data-aid="' + aid + '" data-reason="' + escapeHtml(retReason) + '"' +
+                            'style="padding:0.25rem 0.55rem; background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:0.75rem; cursor:pointer; font-weight:600;">' +
+                            '✕ Cancel return request' +
+                        '</button>' +
+                    '</div>';
+                rowStyle = 'display:flex; align-items:flex-start; gap:0.5rem; padding:0.5rem 0.55rem; border:1px solid #a5f3fc; border-radius:8px; background:#ecfeff;';
+                checkboxDisabled = true;
+                checkboxDisabledTitle = 'Checkbox disabled while return is pending.';
+            } else if (status === 'replacement_in_transit') {
+                retBadge = '<span style="margin-left:0.3rem;padding:0.08rem 0.35rem;border-radius:3px;background:#ede9fe;color:#5b21b6;font-size:0.72rem; font-weight:600;">🚚 In Transit'
+                    + (linkedRep ? (' · replaces #' + linkedRep) : '') + '</span>';
+                actionsHtml =
+                    '<div style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:0.2rem; min-width:200px;">' +
+                        (assignedEvt ? '<small style="color:#6d28d9; font-size:0.7rem;">shipment ref: ' + escapeHtml(assignedEvt) + '</small>' : '') +
+                        '<button type="button" class="uman-recv-btn" data-fid="' + facilityIdForJs + '" data-aid="' + aid + '" data-name="' + escapeHtml(name) + '" data-code="' + escapeHtml(code) + '"' +
+                            'title="Mark replacement as delivered and activate it for this facility"' +
+                            'style="padding:0.25rem 0.55rem; background:#6d28d9; color:#fff; border:1px solid #5b21b6; border-radius:6px; font-size:0.75rem; cursor:pointer; font-weight:600;">' +
+                            '✓ Mark Received' +
+                        '</button>' +
+                    '</div>';
+                rowStyle = 'display:flex; align-items:flex-start; gap:0.5rem; padding:0.5rem 0.55rem; border:1px solid #ddd6fe; border-radius:8px; background:#f5f3ff;';
+                checkboxDisabled = true;
+                checkboxDisabledTitle = 'Checkbox disabled until replacement is marked as received.';
+            } else {
+                // active — standard 3 return buttons
+                actionsHtml =
+                    '<div style="margin-left:auto; display:flex; gap:0.25rem; align-items:center; flex-shrink:0;">' +
+                        '<button type="button" class="uman-ret-btn" data-ret="RETURN_ONLY" data-fid="' + facilityIdForJs + '" data-aid="' + aid + '" data-name="' + escapeHtml(name) + '" data-code="' + escapeHtml(code) + '"' +
+                            'title="Return this equipment to UMAN warehouse" ' +
+                            'style="padding:0.25rem 0.5rem; background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; border-radius:6px; font-size:0.75rem; cursor:pointer; font-weight:600; white-space:nowrap;">' +
+                            '↩ Return' +
+                        '</button>' +
+                        '<button type="button" class="uman-ret-btn" data-ret="RETURN_AND_REPLACE" data-fid="' + facilityIdForJs + '" data-aid="' + aid + '" data-name="' + escapeHtml(name) + '" data-code="' + escapeHtml(code) + '"' +
+                            'title="Request return + replacement from UMAN" ' +
+                            'style="padding:0.25rem 0.5rem; background:#fffbeb; color:#b45309; border:1px solid #fcd34d; border-radius:6px; font-size:0.75rem; cursor:pointer; font-weight:600; white-space:nowrap;">' +
+                            '🔄 Replace' +
+                        '</button>' +
+                        '<button type="button" class="uman-ret-btn" data-ret="RETURN_DECOMMISSION" data-fid="' + facilityIdForJs + '" data-aid="' + aid + '" data-name="' + escapeHtml(name) + '" data-code="' + escapeHtml(code) + '"' +
+                            'title="Decommission / write off (WMR) — cannot be undone" ' +
+                            'style="padding:0.25rem 0.5rem; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; cursor:pointer; font-weight:600; white-space:nowrap;">' +
+                            '🗑 Decomm' +
+                        '</button>' +
+                    '</div>';
+                rowStyle = 'display:flex; align-items:flex-start; gap:0.5rem; padding:0.35rem 0.45rem; border-radius:6px;';
+            }
+
+            const rowWrap = document.createElement('div');
+            rowWrap.style.cssText = rowStyle;
+
+            const checkboxHtml =
+                '<label style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.9rem; cursor:pointer; flex:1; min-width:0;">' +
+                    '<input type="checkbox" name="equipment_ids[]" value="' + aid + '" class="equipment-checkbox" style="margin-top:0.2rem;"' + (isChecked ? ' checked' : '') +
+                    (checkboxDisabled ? (' disabled title="' + (checkboxDisabledTitle || 'Checkbox disabled.') + '"') : '') + '>' +
+                    '<span style="flex:1; min-width:0;">' +
+                        '<strong>' + escapeHtml(name) + '</strong>' + srcTag + retBadge +
+                        '<small style="color:#64748b; display:block;">' + escapeHtml(code) + (code ? ' · ' : '') + escapeHtml(type) + (type ? ' · ' : '') + escapeHtml(cond) +
+                        (status === 'return_pending' && retReason ? ' <span style="color:#0e7490;">· ' + escapeHtml(retReason) + '</span>' : '') +
+                        (status === 'replacement_in_transit' && linkedRep ? ' <span style="color:#6d28d9;">· replaces asset #' + linkedRep + '</span>' : '') +
+                        (status === 'active' && disposalRef ? ' <span style="color:#991b1b;">· disposal ref ' + escapeHtml(disposalRef) + '</span>' : '') +
+                        '</small>' +
+                    '</span>' +
+                '</label>';
+
+            rowWrap.innerHTML = checkboxHtml + actionsHtml;
+            slot.appendChild(rowWrap);
+        });
+
+        // ── Phase 3c History block (archived / decommissioned rows) ──────
+        if (history.length > 0) {
+            const head = document.createElement('div');
+            head.style.cssText = 'margin:0.8rem 0 0.2rem; padding:0.35rem 0.5rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; font-size:0.75rem; color:#475569; font-weight:600; letter-spacing:0.02em;';
+            head.textContent = '📦 Custody history (archived / decommissioned — for COA audit, these rows are kept 7 years per DILG standards)';
+            slot.appendChild(head);
+
+            history.forEach((row) => {
+                const aid = Number(row.uman_asset_id) || 0;
+                if (aid <= 0) return;
+                const code  = row.asset_code || '';
+                const type  = row.asset_type || '';
+                const name  = row.asset_name || ('UMAN Asset #' + aid);
+                const s     = String(row.status || 'archived');
+                const retType = String(row.return_type || '');
+                const rtLabel = returnTypeLabel(retType);
+                const acceptedBy = String(row.accepted_return_by || '');
+                const acceptedAt = String(row.archived_at || '');
+                const disposalRef = String(row.disposal_ref || '');
+                const linkedRep   = Number(row.linked_replacement_asset_id) || 0;
+                const eventRef    = String(row.accepted_return_ref || '');
+
+                const badgeClass = s === 'decommissioned'
+                    ? 'background:#fee2e2;color:#991b1b;'
+                    : 'background:#e2e8f0;color:#475569;';
+                const badgeLabel = s === 'decommissioned' ? '🗑 Decommissioned' : '📦 Archived';
+                const subBits = [];
+                if (rtLabel)      subBits.push('type: ' + rtLabel);
+                if (acceptedBy)   subBits.push('accepted by ' + acceptedBy);
+                if (acceptedAt)   subBits.push(acceptedAt.substring(0, 16).replace('T', ' '));
+                if (eventRef)     subBits.push('ref: ' + eventRef);
+                if (disposalRef)  subBits.push('WMR/disposal: ' + disposalRef);
+                if (linkedRep)    subBits.push('replaced by #' + linkedRep);
+
+                const rowWrap = document.createElement('div');
+                rowWrap.style.cssText = 'display:flex; align-items:flex-start; gap:0.5rem; padding:0.35rem 0.45rem; opacity:0.68; filter:grayscale(0.35); border-radius:6px;';
+                rowWrap.innerHTML =
+                    '<span style="font-size:0.85rem; flex:1; min-width:0;">' +
+                        '<strong style="color:#334155;">' + escapeHtml(name) + '</strong>' +
+                        '<span style="margin-left:0.3rem;padding:0.08rem 0.35rem;border-radius:3px;font-size:0.72rem;font-weight:600;' + badgeClass + '">' + badgeLabel + '</span>' +
+                        '<small style="color:#64748b; display:block;">' + escapeHtml(code) + (code ? ' · ' : '') + escapeHtml(type) +
+                        (subBits.length ? (' · ' + subBits.join(' · ')) : '') +
+                        '</small>' +
+                    '</span>';
+                slot.appendChild(rowWrap);
+            });
+        }
+
+        // Wire all the buttons we just rendered (return buttons + cancel + received).
+        // Event delegation via `slot` because rows are innerHTML-replaced on
+        // every editFacility() call.
+        slot.addEventListener('click', (e) => {
+            const retBtn = e.target && e.target.closest ? e.target.closest('button.uman-ret-btn') : null;
+            if (retBtn) {
+                const fid = Number(retBtn.dataset.fid) || 0;
+                const aid = Number(retBtn.dataset.aid) || 0;
+                const rt  = String(retBtn.dataset.ret || 'RETURN_ONLY');
+                const nm  = String(retBtn.dataset.name || '');
+                const cd  = String(retBtn.dataset.code || '');
+                openUmanReturnModal(fid, aid, rt, nm, cd);
+                return;
+            }
+            const cancelBtn = e.target && e.target.closest ? e.target.closest('button.uman-ret-cancel') : null;
+            if (cancelBtn) {
+                const fid = Number(cancelBtn.dataset.fid) || 0;
+                const aid = Number(cancelBtn.dataset.aid) || 0;
+                const rs  = String(cancelBtn.dataset.reason || '');
+                submitUmanCancelReturn(fid, aid, rs);
+                return;
+            }
+            const recvBtn = e.target && e.target.closest ? e.target.closest('button.uman-recv-btn') : null;
+            if (recvBtn) {
+                const fid = Number(recvBtn.dataset.fid) || 0;
+                const aid = Number(recvBtn.dataset.aid) || 0;
+                const nm  = String(recvBtn.dataset.name || '');
+                const cd  = String(recvBtn.dataset.code || '');
+                openUmanReceivedModal(fid, aid, nm, cd);
+            }
+        });
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+    })();
 
     document.getElementById('form-status').value = facility.status || 'available';
-    document.getElementById('form-operating-hours').value = facility.operating_hours || '';
+    setOperatingHoursFields(facility.operating_hours || '');
     document.getElementById('form-auto-approve').checked = (facility.auto_approve == 1 || facility.auto_approve === true);
     document.getElementById('form-capacity-threshold').value = facility.capacity_threshold || '';
     document.getElementById('form-max-duration').value = facility.max_duration_hours || '';
@@ -1099,8 +1751,28 @@ function resetFacilityForm() {
     setVal('form-capacity', '');
     setVal('form-amenities', '');
     setVal('form-rules', '');
-    document.querySelectorAll('.equipment-checkbox').forEach(cb => { cb.checked = false; });
+
+    // Reset equipment checklist to the "new facility" empty state (no
+    // allow-list items yet because the facility doesn't exist in the DB —
+    // requests can only be attached after the row is saved with an ID).
+    (function () {
+        const ctxId = document.getElementById('form-facility-equipment-context-id');
+        if (ctxId) ctxId.value = '0';
+        const slot = document.getElementById('equipment-checklist');
+        if (!slot) return;
+        slot.innerHTML = '';
+        const placeholder = document.createElement('div');
+        placeholder.setAttribute('style', 'padding:1rem; text-align:center; color:#8b95b5; font-size:0.9rem; border:1px dashed #cbd5e1; border-radius:6px; background:#fff;');
+        placeholder.innerHTML =
+            '<div style="margin-bottom:0.35rem;">Equipment options appear after this facility is created and a UMAN request is approved/fulfilled for it.</div>' +
+            '<a href="' + window.FACILITY_MANAGEMENT_CONFIG.utilitiesUrl + '" style="color:#0066cc; font-weight:600; text-decoration:underline;">Submit a UMAN request &rarr;</a>';
+        slot.appendChild(placeholder);
+    })();
+
+    setVal('form-ipms-project-key', '');
     setVal('form-status', 'available');
+    setVal('form-operating-hours-start', '');
+    setVal('form-operating-hours-end', '');
     setVal('form-operating-hours', '');
     setChecked('form-auto-approve', false);
     setVal('form-capacity-threshold', '');
@@ -1153,6 +1825,25 @@ function resetFacilityForm() {
         }
     }
 }
+
+function prefillFromIpmsCandidate() {
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('prefill_name');
+    const location = params.get('prefill_location');
+    const lat = params.get('prefill_lat');
+    const lng = params.get('prefill_lng');
+    const ipmsKey = params.get('prefill_ipms_key');
+    if (!name && !location && !ipmsKey) return;
+
+    openFacilityModal(true);
+    if (name) document.getElementById('form-name').value = name;
+    if (location) document.getElementById('form-location').value = location;
+    if (lat) document.getElementById('form-latitude').value = lat;
+    if (lng) document.getElementById('form-longitude').value = lng;
+    if (ipmsKey) document.getElementById('form-ipms-project-key').value = ipmsKey;
+}
+
+document.addEventListener('DOMContentLoaded', prefillFromIpmsCandidate);
 
 // Map functionality
 let facilityMap = null;

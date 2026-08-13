@@ -2,6 +2,7 @@
 $useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
+require_once __DIR__ . '/../../../../config/ui_helpers.php';
 require_once __DIR__ . '/../../../../services/uman_api.php';
 
 $base = base_path();
@@ -73,25 +74,18 @@ ob_start();
         <div class="facility-detail-main">
             <div class="facility-hero-card">
                 <?php
-                $imageUrl = null;
-                if (!empty($facility['image_path'])) {
-                    $imageUrl = $base . $facility['image_path'];
-                }
+                $imageUrl = !empty($facility['image_path'])
+                    ? $base . $facility['image_path']
+                    : $base . frs_facility_placeholder_image($facility['name'], $facility['description'] ?? null, (int)$facility['id']);
                 ?>
-                <?php if ($imageUrl): ?>
-                    <div class="facility-hero-image-wrapper">
-                        <div class="facility-hero-image" style="background-image:url('<?= htmlspecialchars($imageUrl); ?>');"></div>
-                        <?php if (!empty($facility['image_citation'])): ?>
-                            <div class="image-citation" title="Image Source">
-                                <small>📷 <?= htmlspecialchars($facility['image_citation']); ?></small>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php else: ?>
-                    <div class="facility-hero-placeholder">
-                        <span class="icon">🏛️</span>
-                    </div>
-                <?php endif; ?>
+                <div class="facility-hero-image-wrapper">
+                    <div class="facility-hero-image" style="background-image:url('<?= htmlspecialchars($imageUrl); ?>');"></div>
+                    <?php if (!empty($facility['image_path']) && !empty($facility['image_citation'])): ?>
+                        <div class="image-citation" title="Image Source">
+                            <small>📷 <?= htmlspecialchars($facility['image_citation']); ?></small>
+                        </div>
+                    <?php endif; ?>
+                </div>
                 <div class="facility-hero-body">
                     <div class="facility-hero-header">
                         <h2><?= htmlspecialchars($facility['name']); ?></h2>

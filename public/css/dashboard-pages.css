@@ -1082,3 +1082,112 @@
     }
 }
 
+/* ============================================================
+   Integrations Modern UI
+   Scoped to pages that set $dashboardContentClass =
+   'integrations-modern' before including dashboard_layout.php.
+   Inert everywhere else — see
+   docs/superpowers/specs/2026-08-03-integrations-modern-ui-design.md
+   ============================================================ */
+
+.integrations-modern .page-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color, #e0e6ed);
+    margin-bottom: 1.5rem;
+}
+
+.integrations-modern .booking-card {
+    border: 1px solid var(--border-light, #f0f2f5);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.integrations-modern .booking-card:hover {
+    box-shadow: 0 12px 28px var(--shadow-hover, rgba(0, 0, 0, 0.12));
+}
+
+/* Responsive field grid — replaces ad hoc inline grid-template-columns
+   that didn't collapse on mobile. */
+.integrations-modern .integration-form-row {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.integrations-modern .integration-form-row--2 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.integrations-modern .integration-form-row--3 {
+    grid-template-columns: 1fr 1fr 1fr;
+    margin-top: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .integrations-modern .integration-form-row--2,
+    .integrations-modern .integration-form-row--3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Field sizing only — border/background/color stay owned by the global
+   input/select tag rules in style.css so dark mode keeps working. */
+.integrations-modern .integration-field {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 6px;
+}
+
+.integrations-modern label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-secondary, #5b6888);
+}
+
+/* Maintenance page tab nav — .mi-tabs/.mi-tab had no CSS anywhere before
+   this; modeled on the existing .booking-hub-tab pattern for visual
+   consistency with the energy page's tab bar. */
+.integrations-modern .mi-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 2px solid var(--border-color, #e0e6ed);
+    margin-bottom: 1.25rem;
+}
+
+.integrations-modern .mi-tab {
+    display: inline-block;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-secondary, #5b6888);
+    background: transparent;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.integrations-modern .mi-tab:hover {
+    color: var(--primary-color, #0047ab);
+    background: var(--bg-tertiary, #f9fafc);
+}
+
+.integrations-modern .mi-tab.active {
+    background: var(--bg-secondary, #fff);
+    border-color: var(--border-color, #e0e6ed);
+    border-bottom-color: var(--bg-secondary, #fff);
+    color: var(--primary-color, #0047ab);
+    margin-bottom: -2px;
+}
+
+@media (max-width: 480px) {
+    .integrations-modern .mi-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .integrations-modern .mi-tab {
+        flex: 0 0 auto;
+    }
+}
+

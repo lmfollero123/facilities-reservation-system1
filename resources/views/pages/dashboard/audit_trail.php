@@ -60,8 +60,8 @@ $totalRows = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch audit entries
-$sql = 'SELECT a.id, a.action, a.module, a.details, a.created_at, 
-               u.name AS user_name, u.email AS user_email
+$sql = 'SELECT a.id, a.action, a.module, a.details, a.created_at,
+               u.name AS user_name, u.email AS user_email, u.role AS user_role
         FROM audit_log a
         LEFT JOIN users u ON a.user_id = u.id
         ' . $whereClause . '
@@ -94,7 +94,7 @@ ob_start();
     <?= frs_page_title('Audit Trail', 'Searchable log of who changed reservations, facilities, and accounts.'); ?>
 </div>
 
-<div class="booking-wrapper">
+<div class="booking-wrapper" style="grid-template-columns: 1fr;">
     <section class="booking-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h2 style="margin: 0;">Activity Log</h2>
@@ -187,7 +187,18 @@ ob_start();
                     <?php foreach ($entries as $row): ?>
                         <tr>
                             <td><?= date('M d, Y H:i', strtotime($row['created_at'])); ?></td>
-                            <td><?= $row['user_name'] ? htmlspecialchars($row['user_name']) : '<em>System</em>'; ?></td>
+                            <td>
+                                <?php if ($row['user_name']): ?>
+                                    <?php $isAdmin = strcasecmp($row['user_role'] ?? '', 'Admin') === 0; ?>
+                                    <?php if ($isAdmin): ?>
+                                        <span class="badge badge-admin" style="display:inline-block; padding:0.15rem 0.5rem; border-radius:4px; background:#dc3545; color:#fff; font-size:0.7rem; font-weight:600; margin-right:0.4rem; vertical-align:middle;">ADMIN</span>ADMIN - <?= htmlspecialchars($row['user_name']); ?>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($row['user_name']); ?>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <em>System</em>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars($row['action']); ?></td>
                             <td><?= htmlspecialchars($row['module']); ?></td>
                             <td><?= $row['details'] ? htmlspecialchars($row['details']) : '-'; ?></td>
@@ -210,31 +221,6 @@ ob_start();
             <?php endif; ?>
         <?php endif; ?>
     </section>
-
-    <aside class="booking-card">
-        <h2>Scope of Tracking</h2>
-        <ul class="audit-list">
-            <li>Reservation lifecycle changes (create, approve/deny, cancel).</li>
-            <li>Facility updates (capacity, availability, maintenance flags).</li>
-            <li>User account approvals, role changes, and locks.</li>
-            <li>Notification dispatches and system advisories.</li>
-        </ul>
-        
-        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #dfe3ef;">
-            <h3 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Statistics</h3>
-            <ul class="audit-list" style="margin:0;">
-                <?php
-                $totalStmt = $pdo->query('SELECT COUNT(*) FROM audit_log');
-                $totalEntries = (int)$totalStmt->fetchColumn();
-                
-                $todayStmt = $pdo->query('SELECT COUNT(*) FROM audit_log WHERE DATE(created_at) = CURDATE()');
-                $todayEntries = (int)$todayStmt->fetchColumn();
-                ?>
-                <li><strong><?= $totalEntries; ?></strong> total entries logged</li>
-                <li><strong><?= $todayEntries; ?></strong> entries today</li>
-            </ul>
-        </div>
-    </aside>
 </div>
 <?php
 $content = ob_get_clean();

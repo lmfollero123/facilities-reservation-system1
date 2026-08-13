@@ -98,6 +98,7 @@ ob_start();
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
+    align-items: stretch;
 }
 
 .ai-recommendation-card {
@@ -111,6 +112,9 @@ ob_start();
     transform: translateY(30px);
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .ai-recommendation-card::before {
@@ -222,6 +226,7 @@ ob_start();
     text-decoration: none;
     display: inline-block;
     text-align: center;
+    margin-top: auto;
 }
 
 .ai-rec-action:hover {

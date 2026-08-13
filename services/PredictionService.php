@@ -13,7 +13,7 @@ class PredictionService
 {
     private $pdo;
     private $lookbackMonths = 6;
-    private $minDataThreshold = 5; // Minimum historical records for reliable predictions
+    private $minDataThreshold = 3; // Minimum historical records for reliable predictions
     
     // Holiday calendar (Philippines + local events)
     private $holidays = [];
@@ -168,51 +168,98 @@ class PredictionService
     }
     
     /**
+     * Extract an ['start' => int, 'end' => int] hour range (0-23, may exceed
+     * 23 when the parsed end is treated as past midnight) from a stored
+     * time_slot value. Real bookings are free-form ranges typed via the
+     * facility booking form (e.g. "16:30 - 18:00", "08:00 - 20:00") or older
+     * preset labels (e.g. "Morning (8AM - 12PM)") -- never the fixed
+     * "HH:MM-HH:MM" slot strings this service predicts against -- so historical
+     * matching below is done by overlapping hour ranges rather than requiring
+     * an exact string match, which real data would almost never satisfy.
+     * Returns null when no two time markers can be parsed out.
+     */
+    private function extractHourRange(string $timeSlot): ?array
+    {
+        if (preg_match_all('/(\d{1,2}):(\d{2})/', $timeSlot, $m) && count($m[1]) >= 2) {
+            $startMinutes = ((int)$m[1][0]) * 60 + (int)$m[2][0];
+            $endMinutes = ((int)$m[1][1]) * 60 + (int)$m[2][1];
+        } elseif (preg_match_all('/(\d{1,2})\s*(AM|PM)/i', $timeSlot, $m) && count($m[1]) >= 2) {
+            $to24 = static function (string $hour, string $meridiem): int {
+                $h = ((int)$hour) % 12;
+                return strtoupper($meridiem) === 'PM' ? $h + 12 : $h;
+            };
+            $startMinutes = $to24($m[1][0], $m[2][0]) * 60;
+            $endMinutes = $to24($m[1][1], $m[2][1]) * 60;
+        } else {
+            return null;
+        }
+
+        // Compare full minutes (not truncated hours) before deciding this is an
+        // overnight/malformed range -- a same-hour booking like "08:00 - 08:30"
+        // must not be mistaken for a wrap spanning the entire rest of the day.
+        if ($endMinutes <= $startMinutes) {
+            $endMinutes += 24 * 60;
+        }
+
+        return [
+            'start' => (int)floor($startMinutes / 60),
+            'end' => (int)ceil($endMinutes / 60),
+        ];
+    }
+
+    /** Whether two hour ranges overlap at all. */
+    private function hourRangesOverlap(array $a, array $b): bool
+    {
+        return $a['start'] < $b['end'] && $b['start'] < $a['end'];
+    }
+
+    /**
      * Get historical booking data for a specific slot
      */
     private function getHistoricalData($facilityId, $date, $timeSlot)
     {
         $dayOfWeek = date('l', strtotime($date));
         $month = date('m', strtotime($date));
-        
+
         $windowStart = date('Y-m-d', strtotime("-{$this->lookbackMonths} months"));
         $windowEnd = date('Y-m-d');
-        
-        $sql = "SELECT 
-                    COUNT(*) as total_count,
-                    AVG(booking_count) as avg_bookings,
-                    MAX(booking_count) as max_bookings
-                FROM (
-                    SELECT 
-                        reservation_date,
-                        time_slot,
-                        COUNT(*) as booking_count
-                    FROM reservations
-                    WHERE facility_id = :facility_id
-                        AND reservation_date BETWEEN :start AND :end
-                        AND status = 'approved'
-                        AND time_slot = :time_slot
-                    GROUP BY reservation_date, time_slot
-                ) as daily_bookings
-                WHERE DAYNAME(reservation_date) = :day_of_week
-                    OR MONTH(reservation_date) = :month";
-        
+
+        $targetRange = $this->extractHourRange($timeSlot);
+        if ($targetRange === null) {
+            return ['total_count' => 0, 'avg_bookings' => 0.0, 'max_bookings' => 0];
+        }
+
+        $sql = "SELECT reservation_date, time_slot
+                FROM reservations
+                WHERE facility_id = :facility_id
+                    AND reservation_date BETWEEN :start AND :end
+                    AND status = 'approved'
+                    AND (DAYNAME(reservation_date) = :day_of_week OR MONTH(reservation_date) = :month)";
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'facility_id' => $facilityId,
             'start' => $windowStart,
             'end' => $windowEnd,
-            'time_slot' => $timeSlot,
             'day_of_week' => $dayOfWeek,
             'month' => $month
         ]);
-        
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
+        $perDay = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $range = $this->extractHourRange((string)$row['time_slot']);
+            if ($range === null || !$this->hourRangesOverlap($range, $targetRange)) {
+                continue;
+            }
+            $perDay[$row['reservation_date']] = ($perDay[$row['reservation_date']] ?? 0) + 1;
+        }
+
+        $counts = array_values($perDay);
+
         return [
-            'total_count' => (int)($result['total_count'] ?? 0),
-            'avg_bookings' => (float)($result['avg_bookings'] ?? 0),
-            'max_bookings' => (int)($result['max_bookings'] ?? 0)
+            'total_count' => count($counts),
+            'avg_bookings' => $counts !== [] ? array_sum($counts) / count($counts) : 0.0,
+            'max_bookings' => $counts !== [] ? max($counts) : 0
         ];
     }
     
@@ -294,45 +341,49 @@ class PredictionService
     private function getTrendAdjustment($facilityId, $date, $timeSlot)
     {
         $dayOfWeek = date('l', strtotime($date));
-        
+
         // Last 30 days
         $recentStart = date('Y-m-d', strtotime('-30 days'));
         $recentEnd = date('Y-m-d');
-        
+
         // Previous 30-60 days
         $previousStart = date('Y-m-d', strtotime('-60 days'));
-        $previousEnd = date('Y-m-d', strtotime('-30 days'));
-        
-        $sql = "SELECT 
-                    (SELECT COUNT(*) FROM reservations 
-                     WHERE facility_id = :facility_id 
-                        AND reservation_date BETWEEN :recent_start AND :recent_end
-                        AND status = 'approved'
-                        AND time_slot = :time_slot
-                        AND DAYNAME(reservation_date) = :day_of_week) as recent_count,
-                    (SELECT COUNT(*) FROM reservations 
-                     WHERE facility_id = :facility_id 
-                        AND reservation_date BETWEEN :previous_start AND :previous_end
-                        AND status = 'approved'
-                        AND time_slot = :time_slot
-                        AND DAYNAME(reservation_date) = :day_of_week) as previous_count";
-        
+
+        $targetRange = $this->extractHourRange($timeSlot);
+        if ($targetRange === null) {
+            return 0;
+        }
+
+        $sql = "SELECT reservation_date, time_slot
+                FROM reservations
+                WHERE facility_id = :facility_id
+                    AND reservation_date BETWEEN :previous_start AND :recent_end
+                    AND status = 'approved'
+                    AND DAYNAME(reservation_date) = :day_of_week";
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'facility_id' => $facilityId,
-            'recent_start' => $recentStart,
-            'recent_end' => $recentEnd,
             'previous_start' => $previousStart,
-            'previous_end' => $previousEnd,
-            'time_slot' => $timeSlot,
+            'recent_end' => $recentEnd,
             'day_of_week' => $dayOfWeek
         ]);
-        
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        $recent = (int)($result['recent_count'] ?? 0);
-        $previous = (int)($result['previous_count'] ?? 0);
-        
+
+        $recent = 0;
+        $previous = 0;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $range = $this->extractHourRange((string)$row['time_slot']);
+            if ($range === null || !$this->hourRangesOverlap($range, $targetRange)) {
+                continue;
+            }
+            $rowDate = (string)$row['reservation_date'];
+            if ($rowDate >= $recentStart) {
+                $recent++;
+            } elseif ($rowDate >= $previousStart && $rowDate < $recentStart) {
+                $previous++;
+            }
+        }
+
         if ($previous == 0) {
             return 0;
         }

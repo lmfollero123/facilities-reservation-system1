@@ -126,6 +126,7 @@ if ($isAuthSplitPage) {
     <!-- Google fonts -->
     <link href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,700" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css?family=Merriweather:400,300,300italic,400italic,700,700italic" rel="stylesheet" type="text/css" />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <!-- SimpleLightbox plugin CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.css" rel="stylesheet" />
     <!-- Bootstrap CSS -->
@@ -159,7 +160,7 @@ if ($isAuthSplitPage) {
     ?>
     <link rel="stylesheet" href="<?= $base; ?>/public/css/auth-pages.css?v=<?= $authCssVersion; ?>">
     <?php endif; ?>
-    <link rel="icon" href="<?= $base; ?>/public/img/infragov-logo.png?v=<?= file_exists($appRoot . '/public/img/infragov-logo.png') ? filemtime($appRoot . '/public/img/infragov-logo.png') : time(); ?>" type="image/png">
+    <link rel="icon" href="<?= $base; ?>/public/img/brgy-culiat-logo.png?v=<?= file_exists($appRoot . '/public/img/brgy-culiat-logo.png') ? filemtime($appRoot . '/public/img/brgy-culiat-logo.png') : time(); ?>" type="image/png">
     <?php if (!empty($useTailwind)): 
         $homeCssPath = $appRoot . '/public/css/home.css';
         $tailwindPath = $appRoot . '/public/css/tailwind.css';

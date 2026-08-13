@@ -57,7 +57,7 @@ try {
     $pdo = db();
 
     $sql = '
-        SELECT id, name, description, location, capacity, operating_hours,
+        SELECT id, name, description, location, capacity, operating_hours, image_path,
                latitude, longitude, status, created_at, updated_at
         FROM facilities
         WHERE status != \'deleted\'
@@ -82,6 +82,14 @@ try {
 
     $data = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $imagePath = trim((string)($row['image_path'] ?? ''));
+        $imageUrl = null;
+        if ($imagePath !== '') {
+            $imageUrl = preg_match('#^https?://#i', $imagePath)
+                ? $imagePath
+                : rtrim(base_url(), '/') . '/' . ltrim($imagePath, '/');
+        }
+
         $data[] = [
             'id' => (int)$row['id'],
             'name' => (string)$row['name'],
@@ -90,6 +98,9 @@ try {
             'barangay' => 'Culiat',
             'capacity' => $row['capacity'] !== null ? (string)$row['capacity'] : null,
             'operating_hours' => $row['operating_hours'] !== null ? (string)$row['operating_hours'] : null,
+            // Absolute URL lets partner systems display the CPRF-owned photo
+            // without assuming CPRF's upload directory or copying the file.
+            'image_url' => $imageUrl,
             'latitude' => isset($row['latitude']) && $row['latitude'] !== null ? (float)$row['latitude'] : null,
             'longitude' => isset($row['longitude']) && $row['longitude'] !== null ? (float)$row['longitude'] : null,
             // CPRF statuses: available | maintenance | offline

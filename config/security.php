@@ -678,6 +678,9 @@ function frs_complete_authenticated_login(array $user): void
     $_SESSION['user_org'] = $user['role'];
     $_SESSION['last_activity'] = time();
 
+    require_once __DIR__ . '/audit.php';
+    logAudit('Login', 'Authentication', ($user['name'] ?? 'Unknown') . ' (' . ($user['email'] ?? 'unknown') . ')');
+
     unset(
         $_SESSION['pending_otp_user_id'],
         $_SESSION['pending_otp_email'],
@@ -695,13 +698,23 @@ function frs_complete_authenticated_login(array $user): void
         'message' => 'Welcome back, ' . ($user['name'] ?? 'User') . '!',
         'type' => 'success',
     ];
+
+    // Admin-forced password resets (User Management > Reset Password) set this
+    // flag; the user must set their own password before reaching the dashboard.
+    $_SESSION['must_change_password'] = !empty($user['must_change_password']);
 }
 
 /**
- * Redirect to post-login destination or dashboard.
+ * Redirect to post-login destination or dashboard — unless the account has a
+ * pending forced password change, which takes priority over any other target.
  */
 function frs_redirect_after_login(): void
 {
+    if (!empty($_SESSION['must_change_password'])) {
+        header('Location: ' . base_path() . '/change-password-required');
+        exit;
+    }
+
     $redirect = frs_safe_redirect_path($_SESSION['post_login_redirect'] ?? null);
     unset($_SESSION['post_login_redirect']);
     if ($redirect !== null) {

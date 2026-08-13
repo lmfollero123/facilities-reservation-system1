@@ -3,65 +3,107 @@
  * Loaded when Tailwind is used on public pages
  */
 
-/* ===== Modern Public Navbar – LIGHT MODE (default): light bar, dark text ===== */
-/* Solid bar, no glassmorphism. Dark mode overrides in dark-mode-public.css. */
-#mainNav.public-navbar-modern {
-    background: #ffffff !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+/* ===== Modern Public Navbar: transparent + light blur (matches reference site's
+   actual bg-transparent backdrop-blur-sm -- no dark tint at all). Legibility
+   over busy photos comes from text-shadow, not a background tint. Same
+   treatment on scroll -- no separate darker/opaque scrolled look. ===== */
+#mainNav.public-navbar-modern,
+#mainNav.public-navbar-modern.navbar-scrolled {
+    background: transparent !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
     transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-#mainNav.public-navbar-modern.navbar-scrolled {
-    background: #ffffff !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+/* style.css's #mainNav.navbar-scrolled .nav-link (and brand/datetime) rules
+   have no :not(.public-navbar-modern) guard on text color, unlike its
+   background rule -- redeclare here at matching specificity so scrolling
+   doesn't revert this navbar's text back to style.css's dark defaults. */
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-brand,
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-brand span,
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link,
+#mainNav.public-navbar-modern.navbar-scrolled .navbar-datetime,
+#mainNav.public-navbar-modern.navbar-scrolled #navbar-date,
+#mainNav.public-navbar-modern.navbar-scrolled #navbar-time {
+    color: #e2e8f0 !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.public-navbar-modern .navbar-brand.public-nav-brand {
+#mainNav.public-navbar-modern.navbar-scrolled .brand-name {
+    color: #f1f5f9 !important;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled .brand-accent {
+    color: #34d399 !important;
+}
+
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link:hover,
+#mainNav.public-navbar-modern.navbar-scrolled .nav-link.active {
+    color: #34d399 !important;
+    border-bottom-color: #34d399;
+}
+
+#mainNav.public-navbar-modern .navbar-brand.public-nav-brand {
     display: flex !important;
     align-items: center;
     gap: 0.75rem;
 }
 
-.public-navbar-modern .public-nav-brand img {
-    height: 38px;
+#mainNav.public-navbar-modern .public-nav-brand img {
+    height: 48px;
     width: auto;
 }
 
-.public-navbar-modern .brand-name {
+#mainNav.public-navbar-modern .brand-name {
+    font-family: 'Cinzel', serif;
     font-size: 1rem;
-    font-weight: 600;
-    color: #1e293b !important;
-}
-
-.public-navbar-modern .brand-accent {
-    font-size: 0.95rem;
     font-weight: 700;
-    color: #059669 !important;
+    letter-spacing: 0.02em;
+    color: #f1f5f9 !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.public-navbar-modern .nav-link {
-    color: #334155 !important;
-    font-weight: 500;
+#mainNav.public-navbar-modern .brand-accent {
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #34d399 !important;
+    display: block;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.public-navbar-modern .nav-link:hover,
-.public-navbar-modern .nav-link.active {
-    color: #047857 !important;
-    text-decoration: underline !important;
+#mainNav.public-navbar-modern .nav-link {
+    font-family: 'Cinzel', serif;
+    color: #e2e8f0 !important;
+    font-weight: 600;
+    font-size: 0.88rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding-bottom: 0.35rem !important;
+    border-bottom: 2px solid transparent;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.public-navbar-modern .navbar-datetime,
-.public-navbar-modern #navbar-date,
-.public-navbar-modern #navbar-time {
-    color: #334155 !important;
+#mainNav.public-navbar-modern .nav-link:hover,
+#mainNav.public-navbar-modern .nav-link.active {
+    color: #34d399 !important;
+    text-decoration: none !important;
+    border-bottom-color: #34d399;
 }
 
-.public-navbar-modern .theme-toggle-nav {
-    color: #475569;
+#mainNav.public-navbar-modern .navbar-datetime,
+#mainNav.public-navbar-modern #navbar-date,
+#mainNav.public-navbar-modern #navbar-time {
+    color: #e2e8f0 !important;
+}
+
+#mainNav.public-navbar-modern .theme-toggle-nav {
+    color: #e2e8f0;
 }
 
 .public-nav-actions {
@@ -80,7 +122,7 @@
 }
 
 /* Theme toggle - add spacing from nav links and Login/Register */
-.public-navbar-modern .nav-item-theme {
+#mainNav.public-navbar-modern .nav-item-theme {
     margin-right: 1rem;
 }
 
@@ -89,28 +131,34 @@
 }
 
 .public-btn-login {
-    color: #1e293b !important;
-    background: transparent !important;
-    border: 2px solid #64748b;
+    color: #e2e8f0 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 2px solid rgba(226, 232, 240, 0.5);
     padding: 0.5rem 1.25rem;
-    font-weight: 600;
-    border-radius: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
     text-decoration: none !important;
 }
 
 .public-btn-login:hover {
-    background: rgba(30, 41, 59, 0.06) !important;
-    border-color: #475569;
-    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: #e2e8f0;
+    color: #ffffff !important;
 }
 
 .public-btn-register {
     background: linear-gradient(135deg, #059669, #047857) !important;
     color: #ffffff !important;
     border: none;
-    padding: 0.5rem 1.25rem;
-    font-weight: 600;
-    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
     text-decoration: none !important;
 }
 
@@ -120,16 +168,21 @@
     transform: translateY(-1px);
 }
 
-/* Light mode scrolled – same light bar, keep dark text (no extra overrides needed) */
+/* Scrolled state uses the same transparent/light-text treatment as default now
+   (no separate opaque/white scrolled bar) -- login button and theme toggle
+   need their own scrolled-state color rules since #mainNav.navbar-scrolled
+   .theme-toggle-nav is styled elsewhere in style.css with no guard against
+   this navbar, same specificity trap as the nav-link/brand text had. */
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login {
-    color: #1e293b !important;
-    border-color: #64748b !important;
+    color: #e2e8f0 !important;
+    border-color: rgba(226, 232, 240, 0.5) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-login:hover {
-    background: rgba(30, 41, 59, 0.06) !important;
-    border-color: #475569 !important;
-    color: #0f172a !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: #e2e8f0 !important;
+    color: #ffffff !important;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .public-btn-register {
@@ -138,15 +191,15 @@
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav {
-    color: #475569 !important;
-    border: 1px solid #cbd5e1;
-    background: rgba(0, 0, 0, 0.04);
+    color: #e2e8f0 !important;
+    border: 1px solid rgba(226, 232, 240, 0.4);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
 }
 
 #mainNav.public-navbar-modern.navbar-scrolled .theme-toggle-nav:hover {
-    background: rgba(30, 41, 59, 0.08) !important;
-    color: #1e293b !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
 }
 
 /* ===== Page Header Hero (green section with icon, title, tagline) ===== */

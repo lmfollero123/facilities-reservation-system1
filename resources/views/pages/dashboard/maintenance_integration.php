@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../../../config/integration_status.php';
 $pdo = db();
 $base = base_path();
 $pageTitle = 'Maintenance Integration | LGU Facilities Reservation';
+$dashboardContentClass = 'integrations-modern';
 $canSubmit = frs_can_create($role, 'maintenance') || frs_can_update($role, 'maintenance');
 
 $activeTab = preg_replace('/[^a-z_]/', '', (string)($_GET['tab'] ?? 'schedules'));
@@ -168,12 +169,12 @@ ob_start();
 .pm-export-btn { padding:0.4rem 0.85rem; font-size:0.82rem; font-weight:700; border-radius:8px; }
 .pm-layout { display:grid; grid-template-columns:1fr 300px; gap:1rem; align-items:start; }
 @media (max-width:1000px){ .pm-layout { grid-template-columns:1fr; } }
-.pm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem; }
-.pm-card { background:#fff; border:1px solid #e8ecf4; border-radius:14px; overflow:hidden; box-shadow:0 1px 4px rgba(15,23,42,0.04); }
-.pm-card-media { height:110px; background-size:cover; background-position:center; position:relative; background-color:#e2e8f0; }
+.pm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem; align-items:stretch; }
+.pm-card { background:#fff; border:1px solid #e8ecf4; border-radius:14px; overflow:hidden; box-shadow:0 1px 4px rgba(15,23,42,0.04); display:flex; flex-direction:column; height:100%; }
+.pm-card-media { height:110px; background-size:cover; background-position:center; position:relative; background-color:#e2e8f0; flex-shrink:0; }
 .pm-risk-pill { position:absolute; top:0.5rem; right:0.5rem; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.7rem; font-weight:800; }
-.pm-card-body { padding:0.85rem 1rem 1rem; }
-.pm-card-title { margin:0; font-size:1rem; font-weight:800; color:#0f172a; }
+.pm-card-body { padding:0.85rem 1rem 1rem; display:flex; flex-direction:column; flex:1; }
+.pm-card-title { margin:0; font-size:1rem; font-weight:800; color:#0f172a; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .pm-card-meta { margin:0.2rem 0 0.65rem; font-size:0.78rem; color:#64748b; }
 .pm-risk-bar { height:7px; border-radius:999px; background:#f1f5f9; overflow:hidden; margin-top:0.25rem; }
 .pm-risk-bar > span { display:block; height:100%; border-radius:999px; }
@@ -182,6 +183,7 @@ ob_start();
 .pm-metric { background:#f8fafc; border-radius:8px; padding:0.45rem 0.55rem; font-size:0.75rem; color:#64748b; }
 .pm-metric strong { display:block; color:#0f172a; font-size:0.9rem; margin-top:0.1rem; }
 .pm-window { font-size:0.8rem; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:0.45rem 0.55rem; margin-bottom:0.65rem; }
+.pm-card-actions { margin-top:auto; padding-top:0.65rem; }
 .pm-btn-request { width:100%; border:none; border-radius:8px; padding:0.5rem; font-weight:800; font-size:0.8rem; cursor:pointer; background:linear-gradient(135deg,#0284c7,#0369a1); color:#fff; }
 .pm-btn-request.is-sent { background:#e2e8f0; color:#64748b; cursor:not-allowed; }
 .pm-side-panel { background:#fff; border:1px solid #e8ecf4; border-radius:12px; padding:0.85rem 1rem; }
@@ -207,6 +209,10 @@ ob_start();
 .mi-cimm-info li { margin-bottom:0.25rem; }
 .mi-sync-meta { margin:0; font-size:0.82rem; color:#0369a1; }
 .mi-sync-warn { margin:0.35rem 0 0; color:#b45309; font-weight:600; }
+.mi-schedule-layout { grid-template-columns: 1fr !important; }
+.mi-calendar-toolbar { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; }
+.mi-open-schedules-btn { display:inline-flex; align-items:center; gap:0.45rem; padding:0.55rem 1rem; font-weight:700; }
+#upcomingSchedulesModal .modal-dialog { max-width: 1100px; width: 94%; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -267,123 +273,16 @@ ob_start();
 <?php endif; ?> -->
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
-<div class="booking-wrapper">
-    <!-- Upcoming Maintenance Schedules -->
-    <section class="booking-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2>Upcoming Maintenance Schedules</h2>
-            <div style="display: flex; gap: 0.5rem;">
-                <select id="filterStatus" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
-                    <option value="scheduled" <?= $statusFilter === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                    <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                    <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                    <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                </select>
-                <select id="filterPriority" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all" <?= $priorityFilter === 'all' ? 'selected' : ''; ?>>All Priorities</option>
-                    <option value="high" <?= $priorityFilter === 'high' ? 'selected' : ''; ?>>High</option>
-                    <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
-                    <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
-                </select>
-            </div>
-        </div>
-
-        <?php if ($totalFiltered === 0): ?>
-            <p style="color: #8b95b5; text-align: center; padding: 2rem;">No upcoming maintenance schedules.</p>
-        <?php else: ?>
-            <div class="table-responsive table-responsive--maintenance">
-                <table class="table table--maintenance-schedules">
-                    <thead>
-                        <tr>
-                            <th>Maintenance ID</th>
-                            <th>Facility</th>
-                            <th>Type</th>
-                            <th>Scheduled Date</th>
-                            <th>Duration</th>
-                            <th class="th-badge">Priority</th>
-                            <th class="th-badge">Status</th>
-                            <th>Affected</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="maintenanceTableBody">
-                        <?php foreach ($upcomingPaginated as $schedule): 
-                            $priorityClass = $schedule['priority'] === 'high' ? 'offline' : ($schedule['priority'] === 'medium' ? 'maintenance' : 'active');
-                            $statusClass = $schedule['status'] === 'in_progress' ? 'maintenance' : ($schedule['status'] === 'completed' ? 'active' : 'offline');
-                            $statusDisplay = ucfirst(str_replace('_', ' ', $schedule['status']));
-                        ?>
-                            <tr>
-                                <td><strong><?= htmlspecialchars($schedule['id']); ?></strong></td>
-                                <td><?= htmlspecialchars($schedule['facility_name']); ?></td>
-                                <td><?= htmlspecialchars($schedule['maintenance_type']); ?></td>
-                                <td>
-                                    <?= date('M d, Y', strtotime($schedule['scheduled_start'])); ?><br>
-                                    <small style="color: #8b95b5;">
-                                        <?= date('H:i', strtotime($schedule['scheduled_start'])); ?> - 
-                                        <?= date('H:i', strtotime($schedule['scheduled_end'])); ?>
-                                    </small>
-                                </td>
-                                <td><?= htmlspecialchars($schedule['estimated_duration']); ?></td>
-                                <td class="td-badge">
-                                    <span class="status-badge status-badge--cell <?= $priorityClass; ?>" style="text-transform: capitalize;" title="<?= htmlspecialchars($schedule['priority']); ?>">
-                                        <?= htmlspecialchars($schedule['priority']); ?>
-                                    </span>
-                                </td>
-                                <td class="td-badge">
-                                    <span class="status-badge status-badge--cell <?= $statusClass; ?>" title="<?= htmlspecialchars($statusDisplay); ?>">
-                                        <?= $statusDisplay; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if ($schedule['affected_reservations'] > 0): ?>
-                                        <span style="color: #dc3545; font-weight: 600;">
-                                            <?= $schedule['affected_reservations']; ?> reservation(s)
-                                        </span>
-                                    <?php else: ?>
-                                        <span style="color: #8b95b5;">None</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <button class="btn-outline" onclick="viewMaintenanceDetails('<?= htmlspecialchars($schedule['id']); ?>')" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
-                                        View Details
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php
-            $linkParams = array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'priority' => $priorityFilter !== 'all' ? $priorityFilter : null]);
-            $prevQuery = $page > 1 ? http_build_query($linkParams + ['page' => $page - 1]) : '';
-            $nextQuery = $page < $totalPages ? http_build_query($linkParams + ['page' => $page + 1]) : '';
-            ?>
-            <div class="pagination-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
-                <span style="color: #6b7280; font-size: 0.9rem;">
-                    Showing <?= $totalFiltered ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalFiltered); ?> of <?= $totalFiltered; ?>
-                </span>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <?php if ($prevQuery): ?>
-                        <a href="?<?= htmlspecialchars($prevQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
-                    <?php else: ?>
-                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">← Prev</span>
-                    <?php endif; ?>
-                    <span style="font-size: 0.9rem; color: #4b5563;">Page <?= $page; ?> of <?= $totalPages; ?></span>
-                    <?php if ($nextQuery): ?>
-                        <a href="?<?= htmlspecialchars($nextQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
-                    <?php else: ?>
-                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">Next →</span>
-                    <?php endif; ?>
-                </div>
-            </div>
-        <?php endif; ?>
-    </section>
-
+<div class="booking-wrapper mi-schedule-layout">
     <!-- Maintenance Calendar (New Design) -->
     <aside class="booking-card maintenance-calendar-wrapper">
+        <div class="mi-calendar-toolbar">
+            <button type="button" class="btn-outline mi-open-schedules-btn" onclick="openUpcomingSchedulesModal()">
+                📋 View Upcoming Schedules
+            </button>
+        </div>
         <h2>Maintenance Calendar</h2>
-        
+
         <!-- Mobile Controls (Mobile Only) -->
         <div class="mobile-controls" id="mobileListControls" style="display:none;">
             <input id="mobileScheduleSearch" type="text" placeholder="Search schedules...">
@@ -423,7 +322,7 @@ ob_start();
                 <div class="scroll-indicator">⌄</div>
             </div>
         </div>
-        
+
         <!-- List View -->
         <div id="scheduleView" class="hidden">
             <div style="display:flex; gap:10px; align-items:center;">
@@ -433,8 +332,8 @@ ob_start();
             <div id="scheduleListHolder">
                 <?php if (empty($mockMaintenanceSchedules)): ?>
                     <p id="noScheduleMsg">No scheduled maintenance.</p>
-                <?php else: 
-                    foreach ($mockMaintenanceSchedules as $row): 
+                <?php else:
+                    foreach ($mockMaintenanceSchedules as $row):
                         $scheduleDate = date('Y-m-d', strtotime($row['scheduled_start'] ?? 'now'));
                 ?>
                     <div class="schedule-item"
@@ -492,6 +391,123 @@ ob_start();
     </aside>
 </div>
 
+<!-- Upcoming Maintenance Schedules Modal -->
+<div id="upcomingSchedulesModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-dialog" style="border-radius: 8px; padding: 2rem; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="margin:0;">Upcoming Maintenance Schedules</h2>
+            <button onclick="closeUpcomingSchedulesModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+            <div style="display: flex; gap: 0.5rem;">
+                <select id="filterStatus" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+                    <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
+                    <option value="scheduled" <?= $statusFilter === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
+                    <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                    <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                    <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                </select>
+                <select id="filterPriority" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
+                    <option value="all" <?= $priorityFilter === 'all' ? 'selected' : ''; ?>>All Priorities</option>
+                    <option value="high" <?= $priorityFilter === 'high' ? 'selected' : ''; ?>>High</option>
+                    <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                    <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
+                </select>
+            </div>
+        </div>
+
+        <?php if ($totalFiltered === 0): ?>
+            <p style="color: #8b95b5; text-align: center; padding: 2rem;">No upcoming maintenance schedules.</p>
+        <?php else: ?>
+            <div class="table-responsive table-responsive--maintenance">
+                <table class="table table--maintenance-schedules">
+                    <thead>
+                        <tr>
+                            <th>Maintenance ID</th>
+                            <th>Facility</th>
+                            <th>Type</th>
+                            <th>Scheduled Date</th>
+                            <th>Duration</th>
+                            <th class="th-badge">Priority</th>
+                            <th class="th-badge">Status</th>
+                            <th>Affected</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="maintenanceTableBody">
+                        <?php foreach ($upcomingPaginated as $schedule): 
+                            $priorityClass = in_array($schedule['priority'], ['high', 'critical'], true) ? 'offline' : ($schedule['priority'] === 'medium' ? 'maintenance' : 'active');
+                            $statusClass = $schedule['status'] === 'in_progress' ? 'maintenance' : ($schedule['status'] === 'completed' ? 'active' : 'offline');
+                            $statusDisplay = ucfirst(str_replace('_', ' ', $schedule['status']));
+                        ?>
+                            <tr>
+                                <td data-label="Maintenance ID"><strong><?= htmlspecialchars($schedule['id']); ?></strong></td>
+                                <td data-label="Facility"><?= htmlspecialchars($schedule['facility_name']); ?></td>
+                                <td data-label="Type"><?= htmlspecialchars($schedule['maintenance_type']); ?></td>
+                                <td data-label="Scheduled Date">
+                                    <?= date('M d, Y', strtotime($schedule['scheduled_start'])); ?><br>
+                                    <small style="color: #8b95b5;">
+                                        <?= date('H:i', strtotime($schedule['scheduled_start'])); ?> -
+                                        <?= date('H:i', strtotime($schedule['scheduled_end'])); ?>
+                                    </small>
+                                </td>
+                                <td data-label="Duration"><?= htmlspecialchars($schedule['estimated_duration']); ?></td>
+                                <td class="td-badge" data-label="Priority">
+                                    <span class="status-badge status-badge--cell <?= $priorityClass; ?>" style="text-transform: capitalize;" title="<?= htmlspecialchars($schedule['priority']); ?>">
+                                        <?= htmlspecialchars($schedule['priority']); ?>
+                                    </span>
+                                </td>
+                                <td class="td-badge" data-label="Status">
+                                    <span class="status-badge status-badge--cell <?= $statusClass; ?>" title="<?= htmlspecialchars($statusDisplay); ?>">
+                                        <?= $statusDisplay; ?>
+                                    </span>
+                                </td>
+                                <td data-label="Affected">
+                                    <?php if ($schedule['affected_reservations'] > 0): ?>
+                                        <span style="color: #dc3545; font-weight: 600;">
+                                            <?= $schedule['affected_reservations']; ?> reservation(s)
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color: #8b95b5;">None</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Action">
+                                    <button class="btn-outline" onclick="viewMaintenanceDetails('<?= htmlspecialchars($schedule['id']); ?>')" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
+                                        View Details
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php
+            $linkParams = array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'priority' => $priorityFilter !== 'all' ? $priorityFilter : null]);
+            $prevQuery = $page > 1 ? http_build_query($linkParams + ['page' => $page - 1]) : '';
+            $nextQuery = $page < $totalPages ? http_build_query($linkParams + ['page' => $page + 1]) : '';
+            ?>
+            <div class="pagination-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
+                <span style="color: #6b7280; font-size: 0.9rem;">
+                    Showing <?= $totalFiltered ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalFiltered); ?> of <?= $totalFiltered; ?>
+                </span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <?php if ($prevQuery): ?>
+                        <a href="?<?= htmlspecialchars($prevQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
+                    <?php else: ?>
+                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">← Prev</span>
+                    <?php endif; ?>
+                    <span style="font-size: 0.9rem; color: #4b5563;">Page <?= $page; ?> of <?= $totalPages; ?></span>
+                    <?php if ($nextQuery): ?>
+                        <a href="?<?= htmlspecialchars($nextQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
+                    <?php else: ?>
+                        <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">Next →</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
 <!-- Maintenance History Section -->
 <section class="booking-card" style="margin-top: 1.5rem;">
     <h2>Maintenance History</h2>
@@ -515,16 +531,16 @@ ob_start();
                 <tbody>
                     <?php foreach ($mockMaintenanceHistory as $history): ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($history['id']); ?></strong></td>
-                            <td><?= htmlspecialchars($history['facility_name']); ?></td>
-                            <td><?= htmlspecialchars($history['maintenance_type']); ?></td>
-                            <td><?= date('M d, Y H:i', strtotime($history['completed_at'])); ?></td>
-                            <td><?= htmlspecialchars($history['duration']); ?></td>
-                            <td><?= htmlspecialchars($history['technician']); ?></td>
-                            <td>
+                            <td data-label="Maintenance ID"><strong><?= htmlspecialchars($history['id']); ?></strong></td>
+                            <td data-label="Facility"><?= htmlspecialchars($history['facility_name']); ?></td>
+                            <td data-label="Type"><?= htmlspecialchars($history['maintenance_type']); ?></td>
+                            <td data-label="Completed Date"><?= date('M d, Y H:i', strtotime($history['completed_at'])); ?></td>
+                            <td data-label="Duration"><?= htmlspecialchars($history['duration']); ?></td>
+                            <td data-label="Technician"><?= htmlspecialchars($history['technician']); ?></td>
+                            <td data-label="Status">
                                 <span class="status-badge active">Completed</span>
                             </td>
-                            <td>
+                            <td data-label="Action">
                                 <button class="btn-outline" onclick="viewMaintenanceHistory('<?= htmlspecialchars($history['id']); ?>')" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
                                     View Details
                                 </button>
@@ -661,6 +677,20 @@ function closeMaintenanceModal() {
 document.getElementById('maintenanceModal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeMaintenanceModal();
+    }
+});
+
+function openUpcomingSchedulesModal() {
+    document.getElementById('upcomingSchedulesModal').style.display = 'flex';
+}
+
+function closeUpcomingSchedulesModal() {
+    document.getElementById('upcomingSchedulesModal').style.display = 'none';
+}
+
+document.getElementById('upcomingSchedulesModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeUpcomingSchedulesModal();
     }
 });
 

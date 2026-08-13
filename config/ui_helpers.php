@@ -72,3 +72,63 @@ if (!function_exists('frs_page_title')) {
         return frs_heading_with_tip($title, $tip, 'h1');
     }
 }
+
+if (!function_exists('frs_role_badge')) {
+    /**
+     * Small colored role badge (Admin/Staff/Resident), reusing the same
+     * .status-badge.admin/.staff/.resident classes already styled for
+     * light/dark mode elsewhere in the app.
+     */
+    function frs_role_badge(?string $role): string
+    {
+        $role = trim((string)$role);
+        if ($role === '') {
+            return '';
+        }
+        $class = htmlspecialchars(strtolower($role), ENT_QUOTES, 'UTF-8');
+        $label = htmlspecialchars(strtoupper($role), ENT_QUOTES, 'UTF-8');
+
+        return '<span class="status-badge ' . $class . ' ra-role-badge">' . $label . '</span>';
+    }
+}
+
+if (!function_exists('frs_facility_placeholder_image')) {
+    /**
+     * Type-aware fallback photo for a facility with no uploaded image_path.
+     * Keyword-matches the facility name/description against known facility
+     * types; falls back to a rotating generic image when nothing matches.
+     */
+    function frs_facility_placeholder_image(string $facilityName, ?string $description = null, int $rotationIndex = 0): string
+    {
+        $haystack = strtolower($facilityName . ' ' . ($description ?? ''));
+
+        $keywordMap = [
+            'court' => '/public/img/covered-court.jpg',
+            'gym' => '/public/img/covered-court.jpg',
+            'gymnasium' => '/public/img/covered-court.jpg',
+            'school' => '/public/img/school-building.jpg',
+            'highschool' => '/public/img/school-building.jpg',
+            'elementary' => '/public/img/school-building.jpg',
+            'amphitheater' => '/public/img/amphitheater.jpg',
+            'amphitheatre' => '/public/img/amphitheater.jpg',
+            'park' => '/public/img/amphitheater.jpg',
+            'hall' => '/public/img/convention-hall.jpg',
+            'multipurpose' => '/public/img/convention-hall.jpg',
+            'covered court' => '/public/img/covered-court.jpg',
+        ];
+
+        foreach ($keywordMap as $keyword => $image) {
+            if (str_contains($haystack, $keyword)) {
+                return $image;
+            }
+        }
+
+        $genericRotation = [
+            '/public/img/barangay-street.jpg',
+            '/public/img/convention-hall.jpg',
+            '/public/img/sports-complex.jpg',
+        ];
+
+        return $genericRotation[$rotationIndex % count($genericRotation)];
+    }
+}

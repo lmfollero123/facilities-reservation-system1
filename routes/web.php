@@ -33,6 +33,7 @@ return [
         '/dashboard/ai-chatbot' => 'resources/views/pages/dashboard/ai_chatbot.php',
         '/dashboard/notifications' => 'resources/views/pages/dashboard/notifications.php',
         '/dashboard/users' => 'resources/views/pages/dashboard/user_management.php',
+        '/dashboard/resident-profile' => 'resources/views/pages/dashboard/resident_profile.php',
         '/dashboard/audit' => 'resources/views/pages/dashboard/audit_trail.php',
         '/dashboard/profile' => 'resources/views/pages/dashboard/profile.php',
     ],

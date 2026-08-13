@@ -13,6 +13,7 @@ if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reserva
 
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/ui_helpers.php';
 require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
@@ -21,6 +22,7 @@ require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/flash_helper.php';
+require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -439,7 +441,7 @@ $pendingTotalPages = max(1, (int)ceil($pendingTotal / $pendingPerPage));
 $pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, r.postponed_at,
        r.expected_attendees, r.is_commercial, r.created_at,
        f.id AS facility_id, f.name AS facility, f.capacity_threshold, f.base_rate,
-       u.id AS requester_id, u.name AS requester, u.email AS requester_email, u.mobile AS requester_mobile
+       u.id AS requester_id, u.name AS requester, u.role AS requester_role, u.email AS requester_email, u.mobile AS requester_mobile
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -454,6 +456,34 @@ $pendingStmt->bindValue(':pending_limit', $pendingPerPage, PDO::PARAM_INT);
 $pendingStmt->bindValue(':pending_offset', $pendingOffset, PDO::PARAM_INT);
 $pendingStmt->execute();
 $pendingReservations = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Violation summary per requester, so staff can see risky requesters before approving
+// (mirrors the per-user violation check already shown on the reservation-detail page).
+$pendingViolationSummary = [];
+$pendingRequesterIds = array_values(array_unique(array_map(
+    fn($r) => (int)$r['requester_id'],
+    $pendingReservations
+)));
+if (!empty($pendingRequesterIds)) {
+    $placeholders = implode(',', array_fill(0, count($pendingRequesterIds), '?'));
+    $violationSummaryStmt = $pdo->prepare(
+        "SELECT user_id,
+                COUNT(*) AS total,
+                SUM(severity = 'critical') AS critical_count,
+                SUM(severity = 'high') AS high_count
+         FROM user_violations
+         WHERE user_id IN ($placeholders)
+         GROUP BY user_id"
+    );
+    $violationSummaryStmt->execute($pendingRequesterIds);
+    foreach ($violationSummaryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $pendingViolationSummary[(int)$row['user_id']] = [
+            'total' => (int)$row['total'],
+            'critical' => (int)$row['critical_count'],
+            'high' => (int)$row['high_count'],
+        ];
+    }
+}
 
 // Counts for filter tabs (same search scope, no status sub-filter)
 $pendingBaseWhere = ['r.status IN ("' . implode('", "', $pendingStatuses) . '")'];
@@ -545,7 +575,7 @@ $approvedTotal = (int)$approvedCountStmt->fetchColumn();
 $approvedTotalPages = max(1, (int)ceil($approvedTotal / $approvedPerPage));
 
 // Get approved reservations
-$approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.facility_id, f.name AS facility, u.name AS requester, u.email AS requester_email
+$approvedSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.facility_id, f.name AS facility, u.name AS requester, u.role AS requester_role, u.email AS requester_email
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -634,7 +664,7 @@ $modalTotalPages = max(1, ceil($modalTotal / $modalPerPage));
 
 // Fetch modal reservations
 $modalHistoryStmt = $pdo->prepare(
-    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.name AS requester
+    "SELECT r.id, r.reservation_date, r.time_slot, r.status, f.name AS facility, u.id AS requester_id, u.name AS requester, u.role AS requester_role
      FROM reservations r
      JOIN facilities f ON r.facility_id = f.id
      JOIN users u ON r.user_id = u.id
@@ -862,7 +892,30 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td data-label="Requester">
-                                    <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                    <span class="ra-cell-primary">
+                                        <?= frs_role_badge($reservation['requester_role'] ?? null); ?>
+                                        <?php if (!empty($reservation['requester_id'])): ?>
+                                            <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars((string)$reservation['requester']); ?>
+                                        <?php endif; ?>
+                                    </span>
+                                    <?php
+                                        $requesterViolations = $pendingViolationSummary[(int)$reservation['requester_id']] ?? null;
+                                    ?>
+                                    <?php if ($requesterViolations && $requesterViolations['total'] > 0): ?>
+                                        <?php
+                                            $violationBadgeClass = ($requesterViolations['critical'] > 0 || $requesterViolations['high'] > 0)
+                                                ? 'ra-violation-badge ra-violation-badge--severe'
+                                                : 'ra-violation-badge';
+                                            $violationTitle = $requesterViolations['total'] . ' violation(s) on record'
+                                                . ($requesterViolations['critical'] > 0 ? ', ' . $requesterViolations['critical'] . ' critical' : '')
+                                                . ($requesterViolations['high'] > 0 ? ', ' . $requesterViolations['high'] . ' high severity' : '');
+                                        ?>
+                                        <span class="<?= $violationBadgeClass; ?>" title="<?= htmlspecialchars($violationTitle); ?>">
+                                            ⚠ <?= $requesterViolations['total']; ?> violation<?= $requesterViolations['total'] > 1 ? 's' : ''; ?><?= ($requesterViolations['critical'] > 0 || $requesterViolations['high'] > 0) ? ' (severe)' : ''; ?>
+                                        </span>
+                                    <?php endif; ?>
                                     <?php if ($submittedLabel !== ''): ?>
                                         <span class="ra-cell-meta">Submitted <?= htmlspecialchars($submittedLabel); ?></span>
                                     <?php endif; ?>
@@ -1004,7 +1057,14 @@ ob_start();
                         ?>
                         <tr class="ra-queue-row">
                             <td data-label="Requester">
-                                <span class="ra-cell-primary"><?= htmlspecialchars((string)$reservation['requester']); ?></span>
+                                <span class="ra-cell-primary">
+                                    <?= frs_role_badge($reservation['requester_role'] ?? null); ?>
+                                    <?php if (!empty($reservation['requester_id'])): ?>
+                                        <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$reservation['requester_id']); ?>"><?= htmlspecialchars((string)$reservation['requester']); ?></a>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars((string)$reservation['requester']); ?>
+                                    <?php endif; ?>
+                                </span>
                                 <span class="ra-cell-meta"><?= htmlspecialchars((string)$reservation['requester_email']); ?></span>
                             </td>
                             <td data-label="Facility">
@@ -1320,6 +1380,9 @@ ob_start();
 </div>
 
 <script>
+const raCsrfName = <?= json_encode(CSRF_TOKEN_NAME); ?>;
+const raCsrfToken = <?= json_encode(csrf_token()); ?>;
+
 (function () {
     function closeAllRaSortMenus(exceptMenu) {
         document.querySelectorAll('[data-ra-sort-menu]').forEach(function (menu) {
@@ -1433,6 +1496,7 @@ async function checkModifyConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        body += `&${encodeURIComponent(raCsrfName)}=${encodeURIComponent(raCsrfToken)}`;
         const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1600,6 +1664,7 @@ async function checkStaffRescheduleConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        body += `&${encodeURIComponent(raCsrfName)}=${encodeURIComponent(raCsrfToken)}`;
         const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1973,7 +2038,14 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                                     <a href="<?= base_path(); ?>/dashboard/reservation-detail?id=<?= $record['id']; ?>" class="btn-outline" style="text-decoration:none; padding:0.4rem 0.75rem; font-size:0.9rem;">View Details</a>
                                 </div>
                             </header>
-                            <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong> <?= htmlspecialchars($record['requester']); ?></p>
+                            <p style="margin:0 0 0.75rem; color: #4a5568;"><strong>Requester:</strong>
+                                <?= frs_role_badge($record['requester_role'] ?? null); ?>
+                                <?php if (!empty($record['requester_id'])): ?>
+                                    <a class="ra-resident-link" href="<?= htmlspecialchars(base_path() . '/dashboard/resident-profile?user_id=' . (int)$record['requester_id']); ?>"><?= htmlspecialchars($record['requester']); ?></a>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($record['requester']); ?>
+                                <?php endif; ?>
+                            </p>
                             <?php if ($timeline): ?>
                                 <ul class="timeline" style="margin: 0; padding-left: 1.25rem;">
                                     <?php foreach ($timeline as $event): ?>
@@ -2369,6 +2441,31 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     color: #1e293b;
     line-height: 1.35;
 }
+.ra-role-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+}
+.ra-resident-link {
+    color: var(--gov-blue-dark);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--gov-blue);
+}
+.ra-resident-link:hover,
+.ra-resident-link:focus-visible {
+    color: var(--gov-blue);
+    border-bottom-style: solid;
+}
+html[data-theme="dark"] .ra-resident-link {
+    color: var(--gov-blue-light);
+    border-bottom-color: var(--gov-blue-light);
+}
+html[data-theme="dark"] .ra-resident-link:hover,
+html[data-theme="dark"] .ra-resident-link:focus-visible {
+    color: #fff;
+}
 .ra-cell-meta {
     display: block;
     margin-top: 0.15rem;
@@ -2438,6 +2535,16 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     font-size: 0.68rem;
     font-weight: 700;
     vertical-align: middle;
+}
+.ra-violation-badge {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #9a6b00;
+}
+.ra-violation-badge--severe {
+    color: #b91c1c;
 }
 .ra-payment-note {
     font-size: 0.78rem;

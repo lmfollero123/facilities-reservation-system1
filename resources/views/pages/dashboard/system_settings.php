@@ -52,6 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
             } else {
                 $role = trim($_POST['role'] ?? '');
                 $permissionKey = trim($_POST['permission_key'] ?? '');
+                $validRoles = array_filter(frs_get_roles(), fn($r) => $r !== 'Admin');
+                if (!in_array($role, $validRoles, true) || !in_array($permissionKey, frs_get_permission_keys(), true)) {
+                    $message = 'Invalid role or permission key.';
+                    $messageType = 'error';
+                } else {
                 $permissions = [
                     'create' => ((int)($_POST['can_create'] ?? 0)) === 1,
                     'read' => ((int)($_POST['can_read'] ?? 0)) === 1,
@@ -64,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
                 if ($result['ok']) {
                     logAudit('Updated role permissions', 'System Settings', $role . ' - ' . $permissionKey);
                     $activeCategory = 'role_permissions';
+                }
                 }
             }
         } elseif (!$tablesReady) {
@@ -129,6 +135,7 @@ if ($rolePermissionsTableReady && !in_array('role_permissions', array_column($ca
     ];
 }
 $categoryValues = $tablesReady ? frs_lookup_values($pdo, $activeCategory, false) : frs_lookup_fallback_values($activeCategory);
+$isLookupCategory = $tablesReady && !in_array($activeCategory, ['integrations', 'role_permissions'], true);
 
 // Load permissions data for role_permissions category
 $roles = frs_get_roles();
@@ -207,10 +214,10 @@ ob_start();
                     <p class="ss-page-description"><?= htmlspecialchars($catMeta['description']); ?></p>
                 <?php endif; ?>
             </div>
-            <?php if ($activeCategory === 'facility_status'): ?>
+            <?php if ($isLookupCategory): ?>
             <button type="button" class="ss-btn-primary ss-btn-large" onclick="document.getElementById('add-modal').classList.add('is-open')">
                 <i class="bi bi-plus-lg ss-btn-icon"></i>
-                Add New Status
+                Add New <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?>
             </button>
             <?php endif; ?>
         </div>
@@ -386,9 +393,9 @@ ob_start();
                     <div class="ss-empty-icon"><i class="bi bi-inbox"></i></div>
                     <h3>No items yet</h3>
                     <p>Add your first <?= htmlspecialchars($catMeta['name'] ?? 'item'); ?> to get started.</p>
-                    <?php if ($activeCategory === 'facility_status'): ?>
+                    <?php if ($isLookupCategory): ?>
                     <button type="button" class="ss-btn-primary" onclick="document.getElementById('add-modal').classList.add('is-open')">
-                        Add First Status
+                        Add First <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?>
                     </button>
                     <?php endif; ?>
                 </div>
@@ -481,17 +488,17 @@ ob_start();
 </div>
 
 <!-- Add Modal -->
-<?php if ($activeCategory === 'facility_status'): ?>
+<?php if ($isLookupCategory): ?>
 <div id="add-modal" class="ss-modal-overlay">
     <div class="ss-modal">
         <div class="ss-modal-header">
-            <h2>Add New Status</h2>
+            <h2>Add New <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?></h2>
             <button type="button" class="ss-modal-close" onclick="document.getElementById('add-modal').classList.remove('is-open')">×</button>
         </div>
         <form method="POST" class="ss-modal-form">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="add_value">
-            <input type="hidden" name="category" value="facility_status">
+            <input type="hidden" name="category" value="<?= htmlspecialchars($activeCategory); ?>">
             <div class="ss-form-group">
                 <label for="add-label">Display Label <span class="ss-required">*</span></label>
                 <input type="text" id="add-label" name="label" required maxlength="128" placeholder="e.g. Under Renovation">
@@ -502,6 +509,7 @@ ob_start();
                 <input type="text" id="add-slug" name="slug" maxlength="64" pattern="[a-z0-9_]+" placeholder="under_renovation">
                 <small class="ss-hint">Lowercase letters, numbers, underscores only. Auto-generated if blank.</small>
             </div>
+            <?php if ($activeCategory === 'facility_status'): ?>
             <div class="ss-form-check">
                 <label class="ss-checkbox-label">
                     <input type="checkbox" name="blocks_booking" value="1" checked>
@@ -509,6 +517,7 @@ ob_start();
                     <span>Blocks new bookings when assigned to a facility</span>
                 </label>
             </div>
+            <?php endif; ?>
             <div class="ss-modal-actions">
                 <button type="button" class="ss-btn-secondary" onclick="document.getElementById('add-modal').classList.remove('is-open')">Cancel</button>
                 <button type="submit" class="ss-btn-primary">Add Status</button>

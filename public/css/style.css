@@ -4795,6 +4795,16 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     position: relative;
 }
 
+/* Base rule: .table-responsive must always scroll horizontally when its
+   content is wider than its container, regardless of viewport size — a
+   narrow sibling column (e.g. .booking-wrapper's 2fr/1fr split) can squeeze
+   this below any table's natural width even on desktop. */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 /* Mobile (≤480px): Stack tables as cards for better readability */
 @media (max-width: 480px) {
     .table-responsive {
@@ -4943,6 +4953,62 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
     grid-template-columns: 1fr;
     gap: 1rem;
     width: 100%;
+}
+
+/* "Missing This Month" nudge panel (energy_efficiency.php) — narrow-column
+   actionable checklist, sits beside the meter-reading form. */
+.ee-missing-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.ee-missing-item {
+    width: 100%;
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    background: var(--bg-secondary, #fff);
+    color: var(--text-primary, #1e293b);
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ee-missing-item:hover { border-color: var(--gov-blue); background: rgba(99, 132, 210, 0.08); }
+.ee-missing-tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #fef3c7;
+    color: #92400e;
+}
+.ee-missing-empty { color: #0d7a43; font-weight: 600; margin: 0; }
+html[data-theme="dark"] .ee-missing-item { border-color: var(--border-color, #334155); background: var(--bg-tertiary, #0f172a); color: var(--text-primary, #f1f5f9); }
+html[data-theme="dark"] .ee-missing-tag { background: #78350f; color: #fde68a; }
+
+/* Compact reference table (e.g. energy_efficiency.php "Latest Readings") —
+   full-width, denser rows, and a real scroll affordance instead of relying
+   on the user to discover a hidden horizontal scrollbar. */
+.ee-readings-card { margin-top: 1.25rem; }
+.ee-readings-table th,
+.ee-readings-table td { padding: 0.5rem 0.65rem; font-size: 0.85rem; }
+.ee-readings-card .table-responsive {
+    position: relative;
+}
+.ee-readings-card .table-responsive.is-scrollable::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 28px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--bg-secondary, var(--gov-white)) 90%);
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+.ee-readings-card .table-responsive.is-scrollable.is-scroll-end::after {
+    opacity: 0;
+}
+html[data-theme="dark"] .ee-readings-card .table-responsive.is-scrollable::after {
+    background: linear-gradient(to right, transparent, var(--bg-secondary, #1e293b) 90%);
 }
 
 /* Tablet (≥481px): Single column with increased gap for better form visibility */
@@ -5435,12 +5501,14 @@ body.sidebar-collapsed .sidebar-toggle-btn:hover svg {
 }
 
 .btn.btn-danger {
+    background: #e53935;
     border-color: #e53935;
-    color: #e53935;
+    color: #fff;
 }
 
 .btn.btn-danger:hover {
-    background: #e53935;
+    background: #c62828;
+    border-color: #c62828;
     color: #fff;
 }
 
@@ -11970,3 +12038,10 @@ html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f3f4f6"] {
     background: var(--bg-tertiary) !important;
     border-color: var(--border-color) !important;
 }
+/* Maintenance fallback photo (geralt-maintenance-2422167_1920.jpg) is a wide
+   1920x937 landscape shot; the subject (excavator + sign) sits in the lower
+   half, so a plain center crop in a square/narrow slot only shows flat sky.
+   Attribute-selects the URL directly -- works everywhere this image is
+   used (background-image divs and <img> tags alike) with no markup changes. */
+[style*="geralt-maintenance"] { background-position: center 75% !important; }
+img[src*="geralt-maintenance"] { object-position: center 75% !important; }

@@ -114,6 +114,7 @@ ob_start();
                     $messageSummary = htmlspecialchars(mb_strimwidth($item['message'] ?? '', 0, 200, '…'));
                     $hasLink = !empty($item['link']);
                     $hasImage = !empty($item['image_path']);
+                    $fallbackImage = $hasImage ? null : frs_announcement_fallback_image($item['title'] ?? '', $item['message'] ?? '');
                 ?>
                     <article class="announcement-card">
                         <!-- Category Badge -->
@@ -127,6 +128,10 @@ ob_start();
                         <?php if ($hasImage): ?>
                             <div class="card-image">
                                 <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>">
+                            </div>
+                        <?php elseif ($fallbackImage !== null): ?>
+                            <div class="card-image">
+                                <img src="<?= htmlspecialchars($base . $fallbackImage); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>">
                             </div>
                         <?php else: ?>
                             <div class="card-image card-image-placeholder">

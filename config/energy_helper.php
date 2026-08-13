@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';
 require_once dirname(__DIR__) . '/services/energy_api.php';
+require_once dirname(__DIR__) . '/services/uman_api.php';
 
 /** Minimum score for an automatic facility-name match suggestion. */
 const FRS_ENERGY_MATCH_THRESHOLD = 60;
@@ -110,6 +111,95 @@ function frs_energy_build_reading_payload(array $reading, int $energyFacilityId)
         $payload['recorded_by_email'] = (string)$reading['recorded_by_email'];
     }
     return $payload;
+}
+
+/**
+ * Map a local energy_meter_readings row to UMAN's utility-reading intake
+ * payload. Unlike the Energy push, no facility-mapping lookup is needed —
+ * UMAN and CPRF already share the same facility_id.
+ *
+ * @param array<string, mixed> $reading local row
+ */
+function frs_uman_build_utility_reading_payload(array $reading): array
+{
+    $payload = [
+        'facility_id' => (int)$reading['facility_id'],
+        'facility_name' => (string)($reading['facility_name'] ?? ''),
+        'location' => (string)($reading['facility_location'] ?? ''),
+        'year' => (int)$reading['year'],
+        'month' => (int)$reading['month'],
+        'reading_date' => (string)$reading['reading_date'],
+        'electric' => [
+            'previous_reading_kwh' => (float)$reading['previous_reading_kwh'],
+            'current_reading_kwh' => (float)$reading['current_reading_kwh'],
+            'consumption_kwh' => (float)$reading['consumption_kwh'],
+            'rate_per_kwh' => (float)$reading['rate_per_kwh'],
+            'cost' => round((float)$reading['consumption_kwh'] * (float)$reading['rate_per_kwh'], 2),
+        ],
+        'external_ref' => 'CPRF-' . (int)$reading['id'],
+    ];
+    if ($reading['current_reading_water'] !== null) {
+        $payload['water'] = [
+            'previous_reading_cbm' => (float)$reading['previous_reading_water'],
+            'current_reading_cbm' => (float)$reading['current_reading_water'],
+            'consumption_cbm' => (float)$reading['consumption_water'],
+            'rate_per_cbm' => (float)$reading['rate_per_water'],
+            'cost' => round((float)$reading['consumption_water'] * (float)$reading['rate_per_water'], 2),
+        ];
+    }
+    if (!empty($reading['notes'])) {
+        $payload['notes'] = (string)$reading['notes'];
+    }
+    if (!empty($reading['recorded_by_name'])) {
+        $payload['recorded_by_name'] = (string)$reading['recorded_by_name'];
+    }
+    return $payload;
+}
+
+/**
+ * Push one local reading to UMAN and record the outcome. Simpler sibling of
+ * frs_energy_push_reading() — no facility-mapping lookup, since UMAN already
+ * shares CPRF's facility_id directly (see services/uman_api.php).
+ *
+ * @return array{success: bool, error: ?string}
+ */
+function frs_uman_push_utility_reading(PDO $pdo, int $readingId): array
+{
+    $stmt = $pdo->prepare('
+        SELECT r.*, u.name AS recorded_by_name, f.name AS facility_name, f.location AS facility_location
+        FROM energy_meter_readings r
+        LEFT JOIN users u ON u.id = r.recorded_by
+        LEFT JOIN facilities f ON f.id = r.facility_id
+        WHERE r.id = :id
+        LIMIT 1
+    ');
+    $stmt->execute(['id' => $readingId]);
+    $reading = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($reading === false) {
+        return ['success' => false, 'error' => 'Reading not found.'];
+    }
+
+    $payload = frs_uman_build_utility_reading_payload($reading);
+    $result = submitUMANUtilityReading($payload);
+
+    // uman_api_post() (and everything built on it, like this function) returns
+    // {data, error} with no 'success' key — absence of an error IS success,
+    // same contract every other UMAN call site in this codebase checks
+    // (e.g. utilities_integration.php's `!empty($result['error'])`).
+    if (!empty($result['error'])) {
+        $fail = $pdo->prepare("UPDATE energy_meter_readings SET sync_status = 'failed', sync_error = :err WHERE id = :id");
+        $fail->execute(['err' => (string)$result['error'], 'id' => $readingId]);
+        return ['success' => false, 'error' => $result['error']];
+    }
+
+    $ok = $pdo->prepare("
+        UPDATE energy_meter_readings
+        SET sync_status = 'synced', synced_at = NOW(), sync_error = NULL
+        WHERE id = :id
+    ");
+    $ok->execute(['id' => $readingId]);
+
+    return ['success' => true, 'error' => null];
 }
 
 /**
@@ -309,6 +399,16 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
         throw new InvalidArgumentException('Rate per kWh must be greater than zero.');
     }
 
+    $hasWaterInput = isset($data['current_reading_water']) && $data['current_reading_water'] !== '' && $data['current_reading_water'] !== null;
+    if ($hasWaterInput) {
+        if (!is_numeric($data['current_reading_water'])) {
+            throw new InvalidArgumentException('Water meter readings must be numeric values.');
+        }
+        if (!isset($data['rate_per_water']) || !is_numeric($data['rate_per_water']) || (float)$data['rate_per_water'] <= 0) {
+            throw new InvalidArgumentException('Rate per cubic meter must be greater than zero.');
+        }
+    }
+
     $facilityId = (int)$data['facility_id'];
     $last = frs_energy_last_reading($pdo, $facilityId);
     if ($last !== null) {
@@ -330,6 +430,26 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
         throw new InvalidArgumentException('Current reading must be greater than or equal to the previous reading (' . number_format($previous, 2) . ' kWh).');
     }
 
+    $previousWater = null;
+    $currentWater = null;
+    $consumptionWater = null;
+    $rateWater = null;
+    if ($hasWaterInput) {
+        $lastWaterKnown = $last !== null && $last['current_reading_water'] !== null;
+        $previousWater = $lastWaterKnown
+            ? (float)$last['current_reading_water']
+            : (isset($data['previous_reading_water']) && is_numeric($data['previous_reading_water']) ? (float)$data['previous_reading_water'] : null);
+        if ($previousWater === null) {
+            throw new InvalidArgumentException('Previous water reading is required for this facility\'s first water entry.');
+        }
+        $currentWater = (float)$data['current_reading_water'];
+        $consumptionWater = frs_energy_compute_consumption($previousWater, $currentWater);
+        if ($consumptionWater === null) {
+            throw new InvalidArgumentException('Current water reading must be greater than or equal to the previous reading (' . number_format($previousWater, 2) . ' m³).');
+        }
+        $rateWater = round((float)$data['rate_per_water'], 2);
+    }
+
     $dupe = $pdo->prepare('SELECT COUNT(*) FROM energy_meter_readings WHERE facility_id = :f AND year = :y AND month = :m');
     $dupe->execute(['f' => $facilityId, 'y' => (int)$data['year'], 'm' => (int)$data['month']]);
     if ((int)$dupe->fetchColumn() > 0) {
@@ -338,9 +458,13 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
 
     $stmt = $pdo->prepare('
         INSERT INTO energy_meter_readings
-            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, rate_per_kwh, notes, recorded_by, sync_status)
+            (facility_id, year, month, reading_date, previous_reading_kwh, current_reading_kwh, consumption_kwh, rate_per_kwh,
+             previous_reading_water, current_reading_water, consumption_water, rate_per_water,
+             notes, recorded_by, sync_status)
         VALUES
-            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :rate_per_kwh, :notes, :recorded_by, \'pending\')
+            (:facility_id, :year, :month, :reading_date, :previous_kwh, :current_kwh, :consumption_kwh, :rate_per_kwh,
+             :previous_water, :current_water, :consumption_water, :rate_per_water,
+             :notes, :recorded_by, \'pending\')
     ');
     try {
         $stmt->execute([
@@ -352,6 +476,10 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
             'current_kwh' => $current,
             'consumption_kwh' => $consumption,
             'rate_per_kwh' => round((float)$data['rate_per_kwh'], 2),
+            'previous_water' => $previousWater,
+            'current_water' => $currentWater,
+            'consumption_water' => $consumptionWater,
+            'rate_per_water' => $rateWater ?? 68.02,
             'notes' => $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null,
             'recorded_by' => $data['recorded_by'],
         ]);
@@ -364,7 +492,11 @@ function frs_energy_save_reading(PDO $pdo, array $data): int
     $id = (int)$pdo->lastInsertId();
 
     require_once __DIR__ . '/audit.php';
-    logAudit('Recorded energy meter reading', 'Energy Efficiency', "facility_id={$facilityId} {$data['year']}-{$data['month']}: {$consumption} kWh");
+    $auditMsg = "facility_id={$facilityId} {$data['year']}-{$data['month']}: {$consumption} kWh";
+    if ($consumptionWater !== null) {
+        $auditMsg .= ", {$consumptionWater} m³ water";
+    }
+    logAudit('Recorded utility meter reading', 'UMAN Utilities', $auditMsg);
 
     return $id;
 }
@@ -429,12 +561,44 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
 
     $notes = $data['notes'] !== null && $data['notes'] !== '' ? (string)$data['notes'] : null;
 
+    $previousWater = $reading['previous_reading_water'] !== null ? (float)$reading['previous_reading_water'] : null;
+    $currentWater = $reading['current_reading_water'] !== null ? (float)$reading['current_reading_water'] : null;
+    $consumptionWater = $reading['consumption_water'] !== null ? (float)$reading['consumption_water'] : null;
+    $rateWater = $reading['rate_per_water'] !== null ? (float)$reading['rate_per_water'] : null;
+
+    if (isset($data['current_reading_water']) && $data['current_reading_water'] !== '' && $data['current_reading_water'] !== null) {
+        if (!is_numeric($data['current_reading_water'])) {
+            throw new InvalidArgumentException('Water meter readings must be numeric values.');
+        }
+        if (!isset($data['rate_per_water']) || !is_numeric($data['rate_per_water']) || (float)$data['rate_per_water'] <= 0) {
+            throw new InvalidArgumentException('Rate per cubic meter must be greater than zero.');
+        }
+        if ($isOnlyReading && array_key_exists('previous_reading_water', $data) && $data['previous_reading_water'] !== null && $data['previous_reading_water'] !== '') {
+            if (!is_numeric($data['previous_reading_water'])) {
+                throw new InvalidArgumentException('Water meter readings must be numeric values.');
+            }
+            $previousWater = (float)$data['previous_reading_water'];
+        } elseif ($previousWater === null) {
+            throw new InvalidArgumentException('Previous water reading is required for this facility\'s first water entry.');
+        }
+        $currentWater = (float)$data['current_reading_water'];
+        $consumptionWater = frs_energy_compute_consumption($previousWater, $currentWater);
+        if ($consumptionWater === null) {
+            throw new InvalidArgumentException('Current water reading must be greater than or equal to the previous reading (' . number_format($previousWater, 2) . ' m³).');
+        }
+        $rateWater = round((float)$data['rate_per_water'], 2);
+    }
+
     $update = $pdo->prepare('
         UPDATE energy_meter_readings
         SET previous_reading_kwh = :previous_kwh,
             current_reading_kwh = :current_kwh,
             consumption_kwh = :consumption_kwh,
             rate_per_kwh = :rate_per_kwh,
+            previous_reading_water = :previous_water,
+            current_reading_water = :current_water,
+            consumption_water = :consumption_water,
+            rate_per_water = :rate_per_water,
             reading_date = :reading_date,
             notes = :notes,
             sync_status = \'pending\',
@@ -447,6 +611,10 @@ function frs_energy_update_reading(PDO $pdo, int $readingId, array $data): void
         'current_kwh' => $current,
         'consumption_kwh' => $consumption,
         'rate_per_kwh' => $ratePerKwh,
+        'previous_water' => $previousWater,
+        'current_water' => $currentWater,
+        'consumption_water' => $consumptionWater,
+        'rate_per_water' => $rateWater,
         'reading_date' => (string)$data['reading_date'],
         'notes' => $notes,
         'id' => $readingId,

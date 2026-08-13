@@ -132,7 +132,6 @@ function frs_get_default_permissions(): array
             'facilities' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'reservations' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'reports' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
-            'settings' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'announcements' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'blackout_dates' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
             'audit_trail' => ['create' => true, 'read' => true, 'update' => true, 'delete' => true],
@@ -149,7 +148,6 @@ function frs_get_default_permissions(): array
             'facilities' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'reservations' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'reports' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
-            'settings' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
             'announcements' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'blackout_dates' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'audit_trail' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
@@ -166,7 +164,6 @@ function frs_get_default_permissions(): array
             'facilities' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
             'reservations' => ['create' => true, 'read' => true, 'update' => true, 'delete' => false],
             'reports' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
-            'settings' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
             'announcements' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
             'blackout_dates' => ['create' => false, 'read' => true, 'update' => false, 'delete' => false],
             'audit_trail' => ['create' => false, 'read' => false, 'update' => false, 'delete' => false],
@@ -200,14 +197,19 @@ function frs_clear_permissions_cache(): void
 function frs_update_permission(string $role, string $permissionKey, array $permissions): array
 {
     $pdo = db();
-    
+
     // Check if table exists
     try {
         $pdo->query("SELECT 1 FROM role_permissions LIMIT 1");
     } catch (Throwable $e) {
         return ['ok' => false, 'message' => 'Role permissions table not installed. Run migration_add_role_permissions.sql.'];
     }
-    
+
+    $validRoles = array_filter(frs_get_roles(), fn($r) => $r !== 'Admin');
+    if (!in_array($role, $validRoles, true) || !in_array($permissionKey, frs_get_permission_keys(), true)) {
+        return ['ok' => false, 'message' => 'Invalid role or permission key.'];
+    }
+
     $canCreate = (bool)($permissions['create'] ?? false);
     $canRead = (bool)($permissions['read'] ?? false);
     $canUpdate = (bool)($permissions['update'] ?? false);

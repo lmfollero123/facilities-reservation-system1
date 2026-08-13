@@ -57,3 +57,27 @@ if (!function_exists('getAnnouncementCategory')) {
         return array_merge(['type' => 'general'], $categoryConfig['general']);
     }
 }
+
+if (!function_exists('frs_announcement_fallback_image')) {
+    /**
+     * Keyword-matched stand-in photo for auto-generated announcements that
+     * have no uploaded image_path (e.g. CIMM/Gemini maintenance advisories
+     * for a facility with no photo on file). Returns null when nothing
+     * matches, so callers keep their existing generic placeholder.
+     */
+    function frs_announcement_fallback_image(string $title, string $message): ?string
+    {
+        $combined = strtolower($title . ' ' . $message);
+
+        // "Scheduled for {maintenance_type}" is the fixed title template used
+        // by frs_fallback_maintenance_announcement_text() -- the type itself
+        // (e.g. "Electrical - Circuit Overload", "Auto-flagged: Critical")
+        // often never contains the literal word "maintenance", so match the
+        // reliable surrounding template text too, not just maintenance-ish keywords.
+        if (preg_match('/scheduled for|cannot be reserved during this period|maintenance|repair|upkeep|renovation/i', $combined)) {
+            return '/public/img/geralt-maintenance-2422167_1920.jpg';
+        }
+
+        return null;
+    }
+}

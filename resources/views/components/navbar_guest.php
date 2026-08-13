@@ -13,7 +13,7 @@ $navLinks = [
 <!-- Navigation - Modern dark navbar -->
 <nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3 public-navbar-modern" id="mainNav">
     <a class="navbar-brand public-nav-brand" href="<?= $base; ?>/">
-        <img src="<?= $base; ?>/public/img/infragov-logo.png" alt="Infra Gov Services">
+        <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services">
         <span class="brand-name">Barangay Culiat</span>
         <span class="brand-accent">CPRFS</span>
     </a>
@@ -68,7 +68,7 @@ $navLinks = [
 <!-- Mobile Sidebar Menu -->
 <aside class="mobile-nav-sidebar" id="mobileNavSidebar">
     <div class="mobile-nav-header">
-        <img src="<?= $base; ?>/public/img/infragov-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
+        <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 44px; width: auto; object-fit: contain;">
         <span>Menu</span>
         <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
     </div>

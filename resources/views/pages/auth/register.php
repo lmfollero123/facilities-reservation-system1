@@ -253,13 +253,12 @@ ob_start();
 ?>
 <section class="auth-split auth-split-register">
     <aside class="auth-split-brand" aria-hidden="false">
-        <div class="auth-split-brand-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-decor" aria-hidden="true"></div>
+        <?php include __DIR__ . '/../../components/auth_brand_illustration.php'; ?>
         <div class="auth-split-brand-inner">
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
                 <i class="bi bi-arrow-left"></i> Back to website
             </a>
-            <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
+            <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
             <h2>Reserving Spaces,<br>Serving Community.</h2>
             <p>Join the Barangay Culiat Public Facilities Reservation System. Book courts, halls, and community spaces — made for Culiat residents.</p>
             <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
@@ -268,12 +267,101 @@ ob_start();
     </aside>
 
     <div class="auth-split-form-panel">
-        <div class="auth-split-form-bg" style="background-image: url('<?= htmlspecialchars($base); ?>/public/uploads/Main%20Bg.jpg');"></div>
-        <div class="auth-split-form-overlay" aria-hidden="true"></div>
+        <div class="auth-split-form-decor" aria-hidden="true">
+            <!-- Top-right tropical palm / leaf cluster -->
+            <svg class="auth-split-form-decor__palm-tr" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g fill="#059669" fill-opacity="0.5">
+                    <path d="M140 30 C 170 50, 210 60, 260 55 C 215 70, 180 90, 150 120 C 142 90, 135 60, 140 30 Z"/>
+                    <path d="M140 30 C 130 60, 100 90, 55 110 C 90 85, 118 65, 138 35 Z" fill-opacity="0.4"/>
+                    <path d="M140 30 C 168 48, 200 100, 225 160 C 190 125, 165 85, 142 38 Z" fill-opacity="0.45"/>
+                    <path d="M140 30 C 115 55, 80 115, 45 175 C 80 140, 110 90, 138 35 Z" fill-opacity="0.35"/>
+                </g>
+                <g fill="#10b981" fill-opacity="0.35">
+                    <path d="M145 60 C 165 80, 200 120, 245 170 C 208 140, 178 105, 148 65 Z"/>
+                    <path d="M138 60 C 118 90, 85 140, 35 200 C 80 165, 115 115, 140 65 Z"/>
+                </g>
+                <!-- Thin stem -->
+                <path d="M140 35 C 142 80, 144 140, 146 220" stroke="#047857" stroke-opacity="0.4" stroke-width="3" stroke-linecap="round" fill="none"/>
+            </svg>
+
+            <!-- Bottom-left grass / cropland tufts -->
+            <svg class="auth-split-form-decor__grass-bl" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background grass mound -->
+                <ellipse cx="160" cy="200" rx="160" ry="40" fill="#059669" fill-opacity="0.18"/>
+                <ellipse cx="110" cy="210" rx="120" ry="32" fill="#10b981" fill-opacity="0.15"/>
+                <!-- Individual grass blades -->
+                <g stroke="#059669" stroke-opacity="0.55" fill="none" stroke-linecap="round">
+                    <path d="M40 210 C 42 185, 44 165, 46 140" stroke-width="3"/>
+                    <path d="M60 210 C 65 180, 70 155, 75 130" stroke-width="3.5"/>
+                    <path d="M82 210 C 88 178, 94 150, 100 120" stroke-width="4"/>
+                    <path d="M105 210 C 110 185, 115 160, 122 135" stroke-width="3"/>
+                    <path d="M128 210 C 133 182, 138 155, 146 128" stroke-width="3.5"/>
+                    <path d="M152 210 C 156 188, 160 165, 168 140" stroke-width="2.8"/>
+                    <path d="M176 210 C 180 185, 184 158, 192 132" stroke-width="3.2"/>
+                    <path d="M200 210 C 204 188, 208 162, 216 138" stroke-width="2.6"/>
+                    <path d="M222 210 C 226 190, 230 168, 238 148" stroke-width="3"/>
+                    <!-- Secondary layer shorter blades -->
+                    <path d="M50 210 C 53 195, 56 180, 60 165" stroke-width="2"/>
+                    <path d="M72 210 C 76 195, 80 178, 86 160" stroke-width="2.2"/>
+                    <path d="M96 210 C 100 192, 104 172, 110 154" stroke-width="2"/>
+                    <path d="M118 210 C 122 195, 126 175, 132 158" stroke-width="2"/>
+                    <path d="M142 210 C 146 196, 150 178, 156 160" stroke-width="2"/>
+                    <path d="M164 210 C 168 195, 172 178, 178 160" stroke-width="1.8"/>
+                    <path d="M186 210 C 190 195, 194 178, 200 160" stroke-width="2"/>
+                    <path d="M210 210 C 214 195, 218 180, 224 165" stroke-width="2"/>
+                </g>
+                <!-- Wheat / grain tufts accent (amber, barangay harvest feel) -->
+                <g fill="#f59e0b" fill-opacity="0.45">
+                    <circle cx="76" cy="118" r="4"/>
+                    <circle cx="72" cy="128" r="3"/>
+                    <circle cx="82" cy="130" r="3"/>
+                    <circle cx="102" cy="108" r="4.5"/>
+                    <circle cx="97" cy="120" r="3.5"/>
+                    <circle cx="108" cy="122" r="3.2"/>
+                    <circle cx="148" cy="116" r="4"/>
+                    <circle cx="144" cy="128" r="3"/>
+                    <circle cx="154" cy="130" r="3"/>
+                </g>
+            </svg>
+
+            <!-- Sun accent (mirrors the left panel's sun motif) -->
+            <svg class="auth-split-form-decor__sun-accent" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Soft sun disc -->
+                <circle cx="35" cy="35" r="24" fill="#fbbf24" fill-opacity="0.5"/>
+                <circle cx="35" cy="35" r="18" fill="#fde68a" fill-opacity="0.7"/>
+                <!-- Rays -->
+                <g stroke="#fbbf24" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round">
+                    <line x1="35" y1="4"  x2="35" y2="12"/>
+                    <line x1="35" y1="58" x2="35" y2="66"/>
+                    <line x1="4"  y1="35" x2="12" y2="35"/>
+                    <line x1="58" y1="35" x2="66" y2="35"/>
+                    <line x1="13" y1="13" x2="19" y2="19"/>
+                    <line x1="51" y1="51" x2="57" y2="57"/>
+                    <line x1="13" y1="57" x2="19" y2="51"/>
+                    <line x1="51" y1="19" x2="57" y2="13"/>
+                </g>
+            </svg>
+
+            <!-- Tiny floating leaf #1 (right) -->
+            <svg class="auth-split-form-decor__leaf auth-split-form-decor__leaf--1" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 23 C 3 23, 8 18, 14 12 C 20 6, 24 3, 24 3 C 24 3, 19 9, 13 15 C 7 21, 3 23, 3 23 Z" fill="#10b981" fill-opacity="0.65"/>
+                <path d="M4 22 C 10 16, 22 5, 23 4" stroke="#047857" stroke-opacity="0.5" stroke-width="1" fill="none"/>
+            </svg>
+            <!-- Tiny floating leaf #2 (left-lower) -->
+            <svg class="auth-split-form-decor__leaf auth-split-form-decor__leaf--2" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 23 C 3 23, 8 18, 14 12 C 20 6, 24 3, 24 3 C 24 3, 19 9, 13 15 C 7 21, 3 23, 3 23 Z" fill="#059669" fill-opacity="0.55"/>
+                <path d="M4 22 C 10 16, 22 5, 23 4" stroke="#064e3b" stroke-opacity="0.4" stroke-width="1" fill="none"/>
+            </svg>
+            <!-- Tiny floating leaf #3 (left-upper) -->
+            <svg class="auth-split-form-decor__leaf auth-split-form-decor__leaf--3" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M23 3 C 23 3, 18 8, 12 14 C 6 20, 3 24, 3 24 C 3 24, 9 19, 15 13 C 21 7, 23 3, 23 3 Z" fill="#fbbf24" fill-opacity="0.55"/>
+                <path d="M22 4 C 16 10, 5 22, 4 23" stroke="#d97706" stroke-opacity="0.45" stroke-width="1" fill="none"/>
+            </svg>
+        </div>
         <div class="auth-split-form-inner is-wide">
             <div class="auth-split-form-top">
                 <div class="auth-split-logo-text">
-                    <img src="<?= htmlspecialchars($base); ?>/public/img/infragov-logo.png" alt="">
+                    <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="">
                     <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
                 </div>
                 <h1>Create an account</h1>
@@ -317,7 +405,10 @@ ob_start();
 
                     <label>
                         Email address *
-                        <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        <div class="auth-split-field">
+                            <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
+                            <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
+                        </div>
                     </label>
 
                     <label>
@@ -341,6 +432,7 @@ ob_start();
                     <label>
                         Password *
                         <div class="auth-split-field">
+                            <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
                             <input name="password" id="registerPassword" type="password" placeholder="Create a strong password" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
                             <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="Show password">
                                 <i class="bi bi-eye"></i>
@@ -367,6 +459,7 @@ ob_start();
                 </div>
 
                 <button class="btn-primary" type="submit" id="submitBtn">Create account</button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Securely processed by Barangay Culiat CPRFS</p>
             </form>
         </div>
     </div>

@@ -49,6 +49,11 @@ database/*-inside*.sql
 !database/schema.sql
 !database/performance_indexes.sql
 
-# Stray logo asset (proper copy is in public/img/infragov-logo.png)
+# Stray logo asset (proper copy is in public/img/brgy-culiat-logo.png)
 599746247_1396112291886318_566174000779487152_n.png
 config/database.php
+
+# Ad-hoc backup copies (may contain credentials; never belong in history)
+*.backup
+*.bak
+*.bak.*
