@@ -1905,7 +1905,7 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
         if (data.referral_name) {
             bannerHtml += '<div class="ra-review-alert ra-review-alert--info">Non-Culiat requester — referral: <strong>'
                 + escapeHtml(data.referral_name) + '</strong> (' + escapeHtml(data.referral_relationship || 'unspecified relationship') + ').'
-                + (data.referral_id_document_url ? ' <a href="#" onclick="frsOpenDocPreview(\'' + data.referral_id_document_url.replace(/'/g, '%27') + '\', \'Referral ID — ' + escapeHtml(data.referral_name).replace(/'/g, '') + '\'); return false;">View referral ID</a>' : ' No referral ID on file — verify before approving.')
+                + (data.referral_id_document_url ? ' <a href="#" class="ra-review-alert__doc-btn" onclick="frsOpenDocPreview(\'' + data.referral_id_document_url.replace(/'/g, '%27') + '\', \'Referral ID — ' + escapeHtml(data.referral_name).replace(/'/g, '') + '\'); return false;">View referral ID</a>' : ' No referral ID on file — verify before approving.')
                 + '</div>';
         }
         if (bannerEl) bannerEl.innerHTML = bannerHtml;
@@ -1931,7 +1931,12 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
         modal.setAttribute('aria-hidden', 'false');
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
-        noteInput.focus();
+        // Focusing the note field scrolls it into view by default, which
+        // hides the referral/priority banner sitting above it — keep the
+        // dialog scrolled to the top instead of jumping straight to the note.
+        const scrollEl = modal.querySelector('.ra-review-modal__body');
+        if (scrollEl) scrollEl.scrollTop = 0;
+        noteInput.focus({ preventScroll: true });
     }
 
     window.openReviewModal = openReviewModal;
@@ -2718,6 +2723,20 @@ html[data-theme="dark"] .ra-resident-link:focus-visible {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
     color: #1e40af;
+}
+.ra-review-alert__doc-btn {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    background: #1e40af;
+    color: #fff !important;
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-decoration: none !important;
+}
+.ra-review-alert__doc-btn:hover {
+    background: #1e3a8a;
 }
 .ra-review-alert--warn {
     background: #fff7ed;

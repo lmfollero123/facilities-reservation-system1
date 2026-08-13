@@ -234,7 +234,7 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
 
 <!-- Shared inline document preview (valid IDs, referral IDs, etc.) so staff
      don't have to leave the page just to glance at an image/PDF. -->
-<div id="frsDocPreviewModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1200; align-items:center; justify-content:center;">
+<div id="frsDocPreviewModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:999999; align-items:center; justify-content:center;">
     <div class="modal-dialog" style="background:#fff; border-radius:8px; padding:1rem; max-width:90vw; width:640px; max-height:90vh; display:flex; flex-direction:column;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; gap:0.75rem;">
             <h3 id="frsDocPreviewTitle" style="margin:0; font-size:1rem;">Document</h3>
