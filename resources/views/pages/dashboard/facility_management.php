@@ -2308,10 +2308,13 @@ window.closeFacilityModal = closeFacilityModal;
         document.body.style.overflow = 'hidden';
     }
 
-    document.querySelectorAll('.js-open-qr-modal').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            openQrModal(btn);
-        });
+    // Delegated on document (not bound per-button) — the facility list is
+    // re-rendered via AJAX partial reload on pagination/tab switch
+    // (data-frs-partial="facility-list"), which would otherwise leave the
+    // new page's buttons with no click handler at all.
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.js-open-qr-modal');
+        if (btn) openQrModal(btn);
     });
 
     modal.querySelectorAll('.js-close-qr-modal').forEach(function(el) {
