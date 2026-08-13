@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../../../config/audit.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
 require_once __DIR__ . '/../../../../config/integration_status.php';
+require_once __DIR__ . '/../../../../config/app_settings.php';
 
 $pdo = db();
 $pageTitle = 'System Settings | LGU Facilities Reservation';
@@ -104,6 +105,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
             if ($result['ok']) {
                 logAudit('Updated lookup value', 'System Settings', 'ID ' . $valueId . ': ' . $label);
             }
+        } elseif ($action === 'update_security_timers') {
+            if (!frs_app_settings_table_ready($pdo)) {
+                $message = 'Settings table not installed. Run migration_add_app_settings.sql.';
+                $messageType = 'error';
+            } else {
+                $timerFields = [
+                    'session_timeout_seconds' => ['minutes', 1, 480],
+                    'login_otp_ttl_seconds' => ['seconds', 30, 900],
+                    'login_otp_resend_cooldown_seconds' => ['seconds', 15, 300],
+                    'email_verification_ttl_seconds' => ['minutes', 5, 120],
+                ];
+                $adminId = $_SESSION['user_id'] ?? null;
+                $invalid = false;
+                foreach ($timerFields as $key => [$unit, $min, $max]) {
+                    $raw = (int)($_POST[$key] ?? 0);
+                    $seconds = $unit === 'minutes' ? $raw * 60 : $raw;
+                    $rawMin = $unit === 'minutes' ? $min * 60 : $min;
+                    $rawMax = $unit === 'minutes' ? $max * 60 : $max;
+                    if ($seconds < $rawMin || $seconds > $rawMax) {
+                        $invalid = true;
+                        $message = ucwords(str_replace('_', ' ', $key)) . ' must be between ' . $min . ' and ' . $max . ' ' . $unit . '.';
+                        $messageType = 'error';
+                        break;
+                    }
+                    frs_set_app_setting($pdo, $key, (string)$seconds, $adminId ? (int)$adminId : null);
+                }
+                if (!$invalid) {
+                    logAudit('Updated security timers', 'System Settings', 'session/OTP/verification timers');
+                    $message = 'Security timers updated. Takes effect on each user\'s next request.';
+                    $messageType = 'success';
+                }
+                $activeCategory = 'security_timers';
+            }
         } elseif ($action === 'delete_value') {
             $valueId = (int)($_POST['value_id'] ?? 0);
             $result = frs_lookup_delete_value($pdo, $valueId);
@@ -134,8 +168,14 @@ if ($rolePermissionsTableReady && !in_array('role_permissions', array_column($ca
         'description' => 'Configure CRUD permissions for Staff and Resident roles per module.',
     ];
 }
+$categories[] = [
+    'id' => 0,
+    'slug' => 'security_timers',
+    'name' => 'Security & Timers',
+    'description' => 'Session auto-logout, login OTP lifetime/resend cooldown, and email verification code lifetime.',
+];
 $categoryValues = $tablesReady ? frs_lookup_values($pdo, $activeCategory, false) : frs_lookup_fallback_values($activeCategory);
-$isLookupCategory = $tablesReady && !in_array($activeCategory, ['integrations', 'role_permissions'], true);
+$isLookupCategory = $tablesReady && !in_array($activeCategory, ['integrations', 'role_permissions', 'security_timers'], true);
 
 // Load permissions data for role_permissions category
 $roles = frs_get_roles();
@@ -350,6 +390,66 @@ ob_start();
                 <span class="ss-legend-item"><span class="ss-legend-dot ss-legend-resident"></span> Resident: Self-only access</span>
             </div>
         </div>
+        <?php elseif ($activeCategory === 'security_timers'): ?>
+        <?php if (!frs_app_settings_table_ready($pdo)): ?>
+        <div class="booking-card ss-notice">
+            <strong>Setup required</strong>
+            <p>Run <code>database/migration_add_app_settings.sql</code> on your database to enable editable security timers.</p>
+        </div>
+        <?php else: ?>
+        <?php
+            $timerDefaults = [
+                'session_timeout_seconds' => 300,
+                'login_otp_ttl_seconds' => 60,
+                'login_otp_resend_cooldown_seconds' => 60,
+                'email_verification_ttl_seconds' => 900,
+            ];
+            $timerVals = [];
+            foreach ($timerDefaults as $k => $d) {
+                $timerVals[$k] = frs_get_app_setting_int($pdo, $k, $d);
+            }
+        ?>
+        <div class="booking-card" style="max-width: 640px;">
+            <form method="POST">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="action" value="update_security_timers">
+
+                <label style="display:block; margin-bottom:1rem;">
+                    <span style="font-weight:600;">Session auto-logout (minutes)</span>
+                    <input type="number" name="session_timeout_seconds" min="1" max="480" required
+                           value="<?= (int)round($timerVals['session_timeout_seconds'] / 60); ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">Idle time before a user is automatically logged out. 1–480 minutes.</small>
+                </label>
+
+                <label style="display:block; margin-bottom:1rem;">
+                    <span style="font-weight:600;">Login OTP code lifetime (seconds)</span>
+                    <input type="number" name="login_otp_ttl_seconds" min="30" max="900" required
+                           value="<?= (int)$timerVals['login_otp_ttl_seconds']; ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">How long a login email OTP code stays valid. 30–900 seconds.</small>
+                </label>
+
+                <label style="display:block; margin-bottom:1rem;">
+                    <span style="font-weight:600;">Login OTP resend cooldown (seconds)</span>
+                    <input type="number" name="login_otp_resend_cooldown_seconds" min="15" max="300" required
+                           value="<?= (int)$timerVals['login_otp_resend_cooldown_seconds']; ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">Minimum wait before a user can request another login OTP. 15–300 seconds.</small>
+                </label>
+
+                <label style="display:block; margin-bottom:1.25rem;">
+                    <span style="font-weight:600;">Email verification code lifetime (minutes)</span>
+                    <input type="number" name="email_verification_ttl_seconds" min="5" max="120" required
+                           value="<?= (int)round($timerVals['email_verification_ttl_seconds'] / 60); ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">How long the registration email verification code stays valid. 5–120 minutes.</small>
+                </label>
+
+                <button type="submit" class="btn-primary">Save timers</button>
+            </form>
+        </div>
+        <?php endif; ?>
         <?php elseif (!$tablesReady): ?>
         <div class="booking-card ss-notice">
             <strong>Setup required</strong>

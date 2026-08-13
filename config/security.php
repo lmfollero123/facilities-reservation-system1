@@ -12,10 +12,31 @@ define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Max failed login attempts per email
 define('RATE_LIMIT_LOGIN_WINDOW', 900); // 15 minutes in seconds
 define('RATE_LIMIT_EMAIL_VERIFY_ATTEMPTS', 10); // Max wrong codes per pending user
 define('RATE_LIMIT_EMAIL_VERIFY_WINDOW', 900); // 15 minutes
-define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', 900); // 15 minutes — first-time registration email verification
+
+// Timers below are admin-editable (System Settings > Security & Timers,
+// app_settings table) — read the saved value if present, otherwise fall
+// back to these defaults. Guarded so a missing table or unreachable DB
+// (e.g. during install) never blocks the app from loading.
+$__frsSecurityTimers = [];
+try {
+    require_once __DIR__ . '/database.php';
+    require_once __DIR__ . '/app_settings.php';
+    $__frsSecurityTimers = frs_get_app_settings_map(db());
+} catch (Throwable $e) {
+    $__frsSecurityTimers = [];
+}
+$__frsTimer = function (string $key, int $default) use ($__frsSecurityTimers): int {
+    if (!isset($__frsSecurityTimers[$key]) || $__frsSecurityTimers[$key] === '') {
+        return $default;
+    }
+    $value = (int)$__frsSecurityTimers[$key];
+    return $value > 0 ? $value : $default;
+};
+
+define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', $__frsTimer('email_verification_ttl_seconds', 900)); // first-time registration email verification
 define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before manual resend
-define('LOGIN_OTP_CODE_TTL_SECONDS', 60); // Login email OTP lifetime
-define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', 60); // Min wait before login OTP resend
+define('LOGIN_OTP_CODE_TTL_SECONDS', $__frsTimer('login_otp_ttl_seconds', 60)); // Login email OTP lifetime
+define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', $__frsTimer('login_otp_resend_cooldown_seconds', 60)); // Min wait before login OTP resend
 /** Hours to retain registrations that never completed email verification (industry norm: 24–72h). */
 define('UNVERIFIED_ACCOUNT_RETENTION_HOURS', 24);
 // Registration rate limit:
@@ -31,7 +52,7 @@ define('RATE_LIMIT_GEMINI_CHAT_IP_ATTEMPTS', 40); // Max chat attempts per IP (f
 define('RATE_LIMIT_GEMINI_CHAT_IP_WINDOW', 3600);
 define('RATE_LIMIT_GEMINI_REPORT_ATTEMPTS', 12); // AI summary on Reports page
 define('RATE_LIMIT_GEMINI_REPORT_WINDOW', 3600);
-define('SESSION_TIMEOUT', 300); // 5 minutes
+define('SESSION_TIMEOUT', $__frsTimer('session_timeout_seconds', 300)); // 5 minutes
 define('PASSWORD_MIN_LENGTH', 8);
 define('PASSWORD_REQUIRE_UPPERCASE', true);
 define('PASSWORD_REQUIRE_LOWERCASE', true);
