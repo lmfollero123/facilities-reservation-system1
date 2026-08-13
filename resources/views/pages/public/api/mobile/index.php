@@ -723,6 +723,18 @@ if ($route === 'me' && in_array($method, ['PATCH', 'PUT'], true)) {
     if ($address !== null) {
         $sets[] = 'address = ?';
         $params[] = $address;
+        // Dashboard's profile save geocodes on address change so distance
+        // features (chatbot "nearest facility", etc.) work — mobile never did.
+        if ($address !== '') {
+            require_once dirname(__DIR__, 6) . '/config/geocoding.php';
+            $coords = geocodeAddress($address);
+            if ($coords && isset($coords['lat'], $coords['lng'])) {
+                $sets[] = 'latitude = ?';
+                $params[] = $coords['lat'];
+                $sets[] = 'longitude = ?';
+                $params[] = $coords['lng'];
+            }
+        }
     }
     if ($sets === []) {
         mobile_error('No fields to update.', 422, 'validation');
@@ -2154,6 +2166,8 @@ if ($route === 'assistant/chat' && $method === 'POST') {
         require_once $geminiConfigPath;
     }
     require_once dirname(__DIR__, 6) . '/config/gemini_chatbot.php';
+    require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
+    require_once dirname(__DIR__, 6) . '/config/blackout_dates.php';
 
     if ($message === '') {
         mobile_json([
@@ -2194,7 +2208,7 @@ if ($route === 'assistant/chat' && $method === 'POST') {
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
             $facStmt = $pdo->query(
-                "SELECT id, name, status, capacity, amenities, location, operating_hours
+                "SELECT id, name, status, capacity, amenities, location, operating_hours, latitude, longitude
                  FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50"
             );
             $facilities = $facStmt ? ($facStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
@@ -2214,7 +2228,49 @@ if ($route === 'assistant/chat' && $method === 'POST') {
             // exceed phone/proxy timeouts before Gemini (or soft-fail) can respond.
             $liveOccupancy = null;
 
-            $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId, $liveOccupancy);
+            $locStmt = $pdo->prepare('SELECT address, latitude, longitude FROM users WHERE id = ? LIMIT 1');
+            $locStmt->execute([$userId]);
+            $userLocation = $locStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+            $bookingUsage = null;
+            if (frs_booking_limits_apply_to_user($pdo, $userId)) {
+                $cfg = frs_resident_booking_limit_config();
+                $usageStmt = $pdo->prepare(
+                    'SELECT COUNT(*) FROM reservations
+                     WHERE user_id = :uid AND reservation_date >= :today
+                       AND status IN (' . frs_active_booking_statuses_sql($pdo) . ')'
+                );
+                $usageStmt->execute(['uid' => $userId, 'today' => date('Y-m-d')]);
+                $bookingUsage = ['used' => (int) $usageStmt->fetchColumn(), 'max' => $cfg['max_upcoming_active']];
+            }
+
+            $violationSummary = null;
+            $violStmt = $pdo->prepare(
+                "SELECT COUNT(*) AS total, SUM(severity = 'critical') AS critical_count, SUM(severity = 'high') AS high_count
+                 FROM user_violations WHERE user_id = ?"
+            );
+            $violStmt->execute([$userId]);
+            if ($violRow = $violStmt->fetch(PDO::FETCH_ASSOC)) {
+                $violationSummary = [
+                    'total' => (int) $violRow['total'],
+                    'critical' => (int) $violRow['critical_count'],
+                    'high' => (int) $violRow['high_count'],
+                ];
+            }
+
+            $upcomingBlackouts = frs_list_blackout_dates_between($pdo, date('Y-m-d'), date('Y-m-d', strtotime('+60 days')));
+
+            $prompt = buildGeminiChatbotPrompt(
+                $facilities,
+                $userBookings,
+                $userName,
+                $userId,
+                $liveOccupancy,
+                $userLocation,
+                $bookingUsage,
+                $violationSummary,
+                $upcomingBlackouts
+            );
             $geminiResult = geminiChatbotResponse($prompt, $message, $sanitizedHistory);
 
             if ($geminiResult && !empty($geminiResult['reply'])) {
