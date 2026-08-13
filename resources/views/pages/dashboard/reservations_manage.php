@@ -1905,7 +1905,7 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
         if (data.referral_name) {
             bannerHtml += '<div class="ra-review-alert ra-review-alert--info">Non-Culiat requester — referral: <strong>'
                 + escapeHtml(data.referral_name) + '</strong> (' + escapeHtml(data.referral_relationship || 'unspecified relationship') + ').'
-                + (data.referral_id_document_url ? ' <a href="' + escapeHtml(data.referral_id_document_url) + '" target="_blank" rel="noopener">View referral ID</a>' : ' No referral ID on file — verify before approving.')
+                + (data.referral_id_document_url ? ' <a href="#" onclick="frsOpenDocPreview(\'' + data.referral_id_document_url.replace(/'/g, '%27') + '\', \'Referral ID — ' + escapeHtml(data.referral_name).replace(/'/g, '') + '\'); return false;">View referral ID</a>' : ' No referral ID on file — verify before approving.')
                 + '</div>';
         }
         if (bannerEl) bannerEl.innerHTML = bannerHtml;

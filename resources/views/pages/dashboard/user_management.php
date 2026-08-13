@@ -918,7 +918,7 @@ ob_start();
                                     if (!$docId) continue;
                                     $secureUrl = getSecureDocumentUrl($docId, 'view');
                                 ?>
-                                    <a href="<?= htmlspecialchars($secureUrl); ?>" target="_blank" rel="noopener" class="um-doc-link">
+                                    <a href="#" class="um-doc-link" onclick="frsOpenDocPreview('<?= htmlspecialchars($secureUrl, ENT_QUOTES); ?>', '<?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type'])), ENT_QUOTES); ?>'); return false;">
                                         <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
                                     </a>
                                 <?php endforeach; ?>

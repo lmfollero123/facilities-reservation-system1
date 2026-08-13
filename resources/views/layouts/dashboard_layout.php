@@ -232,6 +232,64 @@ if (is_array($loginToast) && !empty($loginToast['message'])) {
     </div>
 </div>
 
+<!-- Shared inline document preview (valid IDs, referral IDs, etc.) so staff
+     don't have to leave the page just to glance at an image/PDF. -->
+<div id="frsDocPreviewModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1200; align-items:center; justify-content:center;">
+    <div class="modal-dialog" style="background:#fff; border-radius:8px; padding:1rem; max-width:90vw; width:640px; max-height:90vh; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; gap:0.75rem;">
+            <h3 id="frsDocPreviewTitle" style="margin:0; font-size:1rem;">Document</h3>
+            <div style="display:flex; align-items:center; gap:0.75rem; flex-shrink:0;">
+                <a id="frsDocPreviewOpenNew" href="#" target="_blank" rel="noopener" style="font-size:0.85rem;">Open in new tab ↗</a>
+                <button type="button" onclick="frsCloseDocPreview()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+        </div>
+        <div style="overflow:auto; flex:1; display:flex; align-items:center; justify-content:center; background:#f3f4f6; border-radius:6px; min-height:200px;">
+            <img id="frsDocPreviewImg" style="display:none; max-width:100%; max-height:80vh; object-fit:contain;">
+            <iframe id="frsDocPreviewFrame" style="display:none; width:100%; height:80vh; border:none;"></iframe>
+        </div>
+    </div>
+</div>
+<script>
+function frsOpenDocPreview(url, title) {
+    var modal = document.getElementById('frsDocPreviewModal');
+    var img = document.getElementById('frsDocPreviewImg');
+    var frame = document.getElementById('frsDocPreviewFrame');
+    var titleEl = document.getElementById('frsDocPreviewTitle');
+    var openNew = document.getElementById('frsDocPreviewOpenNew');
+    if (!modal || !img || !frame) return;
+
+    titleEl.textContent = title || 'Document';
+    openNew.href = url;
+    frame.style.display = 'none';
+    frame.src = '';
+    img.style.display = 'none';
+    img.onload = function () { img.style.display = 'block'; };
+    // Not every image extension/mime is guessable client-side, and some
+    // documents are PDFs — if <img> can't render it, fall back to an iframe
+    // (PDFs render fine there; a genuinely broken link fails visibly either way).
+    img.onerror = function () {
+        img.style.display = 'none';
+        frame.style.display = 'block';
+        frame.src = url;
+    };
+    img.src = url;
+    modal.style.display = 'flex';
+}
+function frsCloseDocPreview() {
+    var modal = document.getElementById('frsDocPreviewModal');
+    var img = document.getElementById('frsDocPreviewImg');
+    var frame = document.getElementById('frsDocPreviewFrame');
+    if (modal) modal.style.display = 'none';
+    if (img) img.src = '';
+    if (frame) frame.src = '';
+}
+document.getElementById('frsDocPreviewModal')?.addEventListener('click', function (e) {
+    if (e.target === this) frsCloseDocPreview();
+});
+window.frsOpenDocPreview = frsOpenDocPreview;
+window.frsCloseDocPreview = frsCloseDocPreview;
+</script>
+
 <div id="sessionTimeoutModal" class="session-timeout-overlay" style="display:none;">
     <div class="session-timeout-dialog">
         <div class="session-timeout-icon">⏳</div>
