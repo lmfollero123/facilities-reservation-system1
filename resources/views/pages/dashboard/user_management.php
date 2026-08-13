@@ -147,6 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             case 'verify':
             case 'lock':
             case 'unlock':
+            case 'set_culiat_resident':
+            case 'unset_culiat_resident':
                 if (!frs_can_update($actorRole, 'users')) {
                     $permissionError = true;
                 }
@@ -228,12 +230,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     }
                     break;
                     
+                case 'set_culiat_resident':
+                    // Only for accounts already ID-verified — this exempts them
+                    // from the per-reservation Culiat referral requirement.
+                    $adminId = $_SESSION['user_id'] ?? null;
+                    $userStmt = $pdo->prepare('SELECT name, email, is_verified FROM users WHERE id = :id');
+                    $userStmt->execute(['id' => $userId]);
+                    $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$userInfo) {
+                        $message = 'User not found.';
+                        $messageType = 'error';
+                        break;
+                    }
+                    if (empty($userInfo['is_verified'])) {
+                        $message = 'Verify this user\'s ID before assigning Barangay Culiat resident status.';
+                        $messageType = 'error';
+                        break;
+                    }
+
+                    $stmt = $pdo->prepare('UPDATE users SET is_culiat_resident = TRUE, culiat_resident_set_at = CURRENT_TIMESTAMP, culiat_resident_set_by = :admin_id, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['id' => $userId, 'admin_id' => $adminId]);
+
+                    logAudit('Assigned Barangay Culiat resident status', 'User Management', $userInfo['name'] . ' (' . $userInfo['email'] . ')');
+                    $message = 'User marked as a Barangay Culiat resident. They no longer need a referral for reservations.';
+                    break;
+
+                case 'unset_culiat_resident':
+                    $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
+                    $userStmt->execute(['id' => $userId]);
+                    $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+                    $stmt = $pdo->prepare('UPDATE users SET is_culiat_resident = FALSE, culiat_resident_set_at = NULL, culiat_resident_set_by = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['id' => $userId]);
+
+                    logAudit('Removed Barangay Culiat resident status', 'User Management', $userInfo ? ($userInfo['name'] . ' (' . $userInfo['email'] . ')') : 'User ID: ' . $userId);
+                    $message = 'Barangay Culiat resident status removed. This user will need a referral on future reservations.';
+                    break;
+
                 case 'deny':
                     // Get user info for audit log
                     $userStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id');
                     $userStmt->execute(['id' => $userId]);
                     $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
-                    
+
                     // Check if user has any reservations
                     $reservationCheck = $pdo->prepare('SELECT COUNT(*) FROM reservations WHERE user_id = :id');
                     $reservationCheck->execute(['id' => $userId]);
@@ -547,11 +587,11 @@ $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch users
 if ($umView === 'id_pending') {
-    $sql = 'SELECT u.id, u.name, u.email, u.role, u.status, u.is_verified, COALESCE(u.email_verified, 0) AS email_verified, u.verified_at, u.created_at, u.updated_at,
+    $sql = 'SELECT u.id, u.name, u.email, u.role, u.status, u.is_verified, u.is_culiat_resident, COALESCE(u.email_verified, 0) AS email_verified, u.verified_at, u.created_at, u.updated_at,
         (SELECT MAX(d2.uploaded_at) FROM user_documents d2 WHERE d2.user_id = u.id AND d2.document_type = "valid_id" AND d2.is_archived = 0) AS id_uploaded_at
         FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
 } else {
-    $sql = 'SELECT id, name, email, role, status, is_verified, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
+    $sql = 'SELECT id, name, email, role, status, is_verified, is_culiat_resident, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
 }
 $stmt = $pdo->prepare($sql);
 foreach ($params as $key => $value) {
@@ -764,6 +804,7 @@ ob_start();
                     $initial = strtoupper(substr((string)$user['name'], 0, 1));
                     $emailVerified = (bool)($user['email_verified'] ?? false);
                     $isIdVerified = (bool)($user['is_verified'] ?? false);
+                    $isCuliatResidentUser = (bool)($user['is_culiat_resident'] ?? false);
                     $hasValidIdDoc = isset($docsByUser[$user['id']]) &&
                         !empty(array_filter($docsByUser[$user['id']], static fn($d) => ($d['document_type'] ?? '') === 'valid_id'));
                     $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'pending' : 'locked');
@@ -919,6 +960,28 @@ ob_start();
                                     <input type="hidden" name="action" value="verify">
                                     <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Verify this user's ID and enable auto-approval features?">Verify ID</button>
                                 </form>
+                            <?php endif; ?>
+
+                            <?php if ($user['role'] === 'Resident'): ?>
+                                <?php if ($isCuliatResidentUser): ?>
+                                    <form method="POST" class="um-inline-form">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="unset_culiat_resident">
+                                        <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove Barangay Culiat resident status? This user will need a referral on future reservations.">Remove Culiat status</button>
+                                    </form>
+                                <?php elseif ($isIdVerified): ?>
+                                    <form method="POST" class="um-inline-form">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="set_culiat_resident">
+                                        <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Mark as a Barangay Culiat resident? They will no longer need a referral for reservations.">Mark Culiat resident</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="um-btn-sm" style="color:#8b95b5; font-size:0.82rem;" title="Verify this user's ID first">Culiat status: verify ID first</span>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                             <?php if ($user['status'] === 'active' && !$isSelf): ?>

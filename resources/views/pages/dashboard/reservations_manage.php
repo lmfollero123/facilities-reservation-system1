@@ -440,6 +440,7 @@ $pendingTotalPages = max(1, (int)ceil($pendingTotal / $pendingPerPage));
 // Get pending reservations
 $pendingSql = 'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.status, r.postponed_priority, r.postponed_at,
        r.expected_attendees, r.is_commercial, r.created_at,
+       r.referral_name, r.referral_relationship, r.referral_id_document_path,
        f.id AS facility_id, f.name AS facility, f.capacity_threshold, f.base_rate,
        u.id AS requester_id, u.name AS requester, u.role AS requester_role, u.email AS requester_email, u.mobile AS requester_mobile
      FROM reservations r
@@ -846,6 +847,11 @@ ob_start();
                     'postponed_priority' => !empty($reservation['postponed_priority']),
                     'submitted_at' => $submittedAt,
                     'detail_url' => base_path() . '/dashboard/reservation-detail?id=' . (int)$reservation['id'],
+                    'referral_name' => (string)($reservation['referral_name'] ?? ''),
+                    'referral_relationship' => (string)($reservation['referral_relationship'] ?? ''),
+                    'referral_id_document_url' => !empty($reservation['referral_id_document_path'])
+                        ? base_path() . '/dashboard/download-reservation-referral-id?reservation_id=' . (int)$reservation['id']
+                        : '',
                 ];
             }
             ?>
@@ -1895,6 +1901,12 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
         }
         if (data.expected_attendees !== null && data.capacity_threshold && data.expected_attendees > data.capacity_threshold) {
             bannerHtml += '<div class="ra-review-alert ra-review-alert--warn">Expected attendees (' + data.expected_attendees + ') exceed the facility threshold (' + data.capacity_threshold + ').</div>';
+        }
+        if (data.referral_name) {
+            bannerHtml += '<div class="ra-review-alert ra-review-alert--info">Non-Culiat requester — referral: <strong>'
+                + escapeHtml(data.referral_name) + '</strong> (' + escapeHtml(data.referral_relationship || 'unspecified relationship') + ').'
+                + (data.referral_id_document_url ? ' <a href="' + escapeHtml(data.referral_id_document_url) + '" target="_blank" rel="noopener">View referral ID</a>' : ' No referral ID on file — verify before approving.')
+                + '</div>';
         }
         if (bannerEl) bannerEl.innerHTML = bannerHtml;
 

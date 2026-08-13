@@ -93,15 +93,19 @@ if ($canBookOnBehalf && $pdo && $selectedBookForUserId > 0) {
     }
 }
 $bookingSubjectId = ($canBookOnBehalf && $selectedBookForUserId > 0) ? $selectedBookForUserId : $sessionActorId;
-$userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
+$userVerificationStmt = $pdo->prepare('SELECT is_verified, is_culiat_resident, role FROM users WHERE id = :user_id');
 $userVerificationStmt->execute(['user_id' => $userId]);
 $userVerificationData = $userVerificationStmt->fetch(PDO::FETCH_ASSOC);
 $isVerified = (bool)($userVerificationData['is_verified'] ?? false);
+$isCuliatResident = (bool)($userVerificationData['is_culiat_resident'] ?? false);
 $userRole = $userVerificationData['role'] ?? 'Resident';
 $isAdminUser = ($userRole === 'Admin');
 
 // Staff and Admin are automatically verified (no ID upload required)
 $isVerifiedOrPrivileged = $isVerified || in_array($userRole, ['Staff', 'Admin'], true);
+// Non-Culiat residents need a Culiat referral attached to every booking;
+// Staff/Admin (booking for themselves) are exempt like everything else here.
+$isExemptFromReferral = $isCuliatResident || in_array($userRole, ['Staff', 'Admin'], true);
 
 // Check if user has already uploaded a valid ID document
 $hasValidIdDocStmt = $pdo->prepare('SELECT id FROM user_documents WHERE user_id = :user_id AND document_type = "valid_id" AND is_archived = 0 LIMIT 1');
@@ -112,6 +116,8 @@ if ($canBookOnBehalf && $bookingSubjectId !== $sessionActorId) {
     $subVer->execute(['id' => $bookingSubjectId]);
     $isVerified = (bool)$subVer->fetchColumn();
     $isVerifiedOrPrivileged = true;
+    // A staff-assisted booking is vouched for by staff — no referral needed.
+    $isExemptFromReferral = true;
 }
 
 try {
@@ -159,6 +165,7 @@ $historySupportsPendingPayment = in_array('pending_payment', $historyStatusValue
 $hasPriorityLevelColumn = isset($reservationColumns['priority_level']);
 $hasExpiresAtColumn = isset($reservationColumns['expires_at']);
 $hasPaymentDueAtColumn = isset($reservationColumns['payment_due_at']);
+$hasReferralColumns = isset($reservationColumns['referral_name']);
 $activeBookingStatusesSql = $supportsPendingPayment
     ? '"pending_payment","pending","approved"'
     : '"pending","approved"';
@@ -266,20 +273,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     $eventPermitFile = $_FILES['event_supporting_doc'] ?? null;
     
     // Check if user is verified - if not, require ID upload
-    $userVerificationStmt = $pdo->prepare('SELECT is_verified, role FROM users WHERE id = :user_id');
+    $userVerificationStmt = $pdo->prepare('SELECT is_verified, is_culiat_resident, role FROM users WHERE id = :user_id');
     $userVerificationStmt->execute(['user_id' => $userId]);
     $userVerifyRow = $userVerificationStmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $isVerified = (bool)($userVerifyRow['is_verified'] ?? false);
+    $isCuliatResident = (bool)($userVerifyRow['is_culiat_resident'] ?? false);
     $postUserRole = (string)($userVerifyRow['role'] ?? $userRole);
     $isAdminUser = ($postUserRole === 'Admin');
     $isVerifiedOrPrivileged = $isVerified || in_array($postUserRole, ['Staff', 'Admin'], true);
-    
+    $isExemptFromReferral = $isCuliatResident || in_array($postUserRole, ['Staff', 'Admin'], true);
+
     $validIdFile = $_FILES['doc_valid_id'] ?? null;
     $hasValidIdUpload = $validIdFile && isset($validIdFile['tmp_name']) && $validIdFile['error'] === UPLOAD_ERR_OK && $validIdFile['size'] > 0;
-    
+
+    $referralName = sanitizeInput($_POST['referral_name'] ?? '');
+    $referralRelationship = sanitizeInput($_POST['referral_relationship'] ?? '');
+    $referralIdFile = $_FILES['referral_id_document'] ?? null;
+    $hasReferralIdUpload = $referralIdFile && isset($referralIdFile['tmp_name']) && $referralIdFile['error'] === UPLOAD_ERR_OK && $referralIdFile['size'] > 0;
+
     $staffAssistedBooking = $canBookOnBehalf && $bookingUserId !== $sessionActorId;
     if ($staffAssistedBooking) {
         $isVerifiedOrPrivileged = true;
+        $isExemptFromReferral = true;
     }
 
     // If user is not verified and hasn't uploaded a valid ID, require ID upload
@@ -287,13 +302,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
         $error = 'Please upload a valid ID document. Unverified users must submit a valid ID when making a reservation.';
         $errorField = 'doc_valid_id';
     }
-    
+
     // If user already has a valid ID document uploaded, don't allow another upload
     if (!$isVerifiedOrPrivileged && $hasValidIdDocument && $hasValidIdUpload) {
         $error = 'You have already submitted a valid ID document. Please wait for admin verification.';
         $errorField = 'doc_valid_id';
     }
-    
+
+    // Non-Culiat residents must attach a Culiat referral to every booking —
+    // unlike the account's own valid ID, this is per-reservation and never skipped.
+    if (empty($error) && !$isExemptFromReferral) {
+        if ($referralName === '' || $referralRelationship === '') {
+            $error = 'Please provide the name and relationship of your Barangay Culiat referral.';
+            $errorField = 'referral_name';
+        } elseif (!$hasReferralIdUpload) {
+            $error = 'Please upload a valid ID of your Barangay Culiat referral.';
+            $errorField = 'referral_id_document';
+        }
+    }
+
     // Validate time inputs and create time slot string
     if (!$startTime || !$endTime) {
         $error = 'Please select both start and end times.';
@@ -498,7 +525,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                     throw new Exception('Document upload failed');
                 }
             }
-            
+
+            // Referral's ID is evidence for THIS reservation, not the account —
+            // stored on the reservation row itself, not user_documents.
+            $referralIdDocumentPath = null;
+            if (!$isExemptFromReferral && $hasReferralIdUpload) {
+                require_once __DIR__ . '/../../../../config/secure_documents.php';
+                $referralResult = saveDocumentToSecureStorage($referralIdFile, $userId, 'referral_id');
+                if ($referralResult['success']) {
+                    $referralIdDocumentPath = $referralResult['file_path'];
+                } else {
+                    $error = 'Failed to save referral ID document. Please try again.';
+                    throw new Exception('Referral document upload failed');
+                }
+            }
+
             // Evaluate auto-approval conditions
             $autoApprovalResult = evaluateAutoApproval(
                 $facilityId,
@@ -583,6 +624,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
                 $insertColumns[] = 'payment_due_at';
                 $insertParams['payment_due_at'] = $paymentDueAt;
             }
+            if ($hasReferralColumns && !$isExemptFromReferral) {
+                $insertColumns[] = 'referral_name';
+                $insertParams['referral_name'] = $referralName;
+                $insertColumns[] = 'referral_relationship';
+                $insertParams['referral_relationship'] = $referralRelationship;
+                $insertColumns[] = 'referral_id_document_path';
+                $insertParams['referral_id_document_path'] = $referralIdDocumentPath;
+            }
 
             $insertPlaceholders = [
                 ':user',
@@ -604,6 +653,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             if ($hasPaymentDueAtColumn) {
                 $insertPlaceholders[] = ':payment_due_at';
             }
+            if ($hasReferralColumns && !$isExemptFromReferral) {
+                $insertPlaceholders[] = ':referral_name';
+                $insertPlaceholders[] = ':referral_relationship';
+                $insertPlaceholders[] = ':referral_id_document_path';
+            }
 
             $pdo->beginTransaction();
             frs_lock_facility_for_booking($pdo, $facilityId);
@@ -619,7 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             );
             $stmt->execute($insertParams);
             $newReservationId = $pdo->lastInsertId();
-            
+
             // Get facility name for audit log
             $facilityStmt = $pdo->prepare('SELECT name FROM facilities WHERE id = :id');
             $facilityStmt->execute(['id' => $facilityId]);
@@ -944,6 +998,8 @@ $bookingFieldSelectors = [
     'booking_notes' => '#booking-notes',
     'expected_attendees' => '#expected-attendees',
     'doc_valid_id' => 'input[name="doc_valid_id"]',
+    'referral_name' => 'input[name="referral_name"]',
+    'referral_id_document' => 'input[name="referral_id_document"]',
     'book_for_user_id' => '#bcf-walkin-search',
 ];
 
@@ -2489,6 +2545,27 @@ ul.bcf-scroll-select-menu {
                 <p style="margin:0; color:#1976D2; font-size:0.9rem; line-height:1.5;">
                     Your valid ID document has been submitted and is awaiting admin verification. Once verified, you'll be able to use auto-approval features.
                 </p>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!$isExemptFromReferral && !($canBookOnBehalf && $selectedBookForUserId > 0)): ?>
+            <div style="padding:1rem; background:#fff4e5; border:2px solid #ffc107; border-radius:8px; margin-top:1rem;">
+                <h4 class="bcf-label-row" style="margin:0 0 0.75rem; color:#856404; font-size:1rem;">
+                    ⚠️ Barangay Culiat Referral Required
+                    <?= frs_field_tip('Your account address is outside Barangay Culiat. Every reservation needs a Culiat resident vouching for it: their name, your relationship to them, and a photo of their valid ID.'); ?>
+                </h4>
+                <label>
+                    Referral's full name
+                    <input type="text" name="referral_name" required maxlength="150" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                </label>
+                <label style="display:block; margin-top:0.75rem;">
+                    Your relationship to the referral
+                    <input type="text" name="referral_relationship" required maxlength="100" placeholder="e.g. friend, relative, neighbor" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                </label>
+                <label style="display:block; margin-top:0.75rem;">
+                    Referral's valid ID (PDF or image, max 8MB)
+                    <input type="file" name="referral_id_document" accept=".pdf,image/*" required style="margin-top:0.5rem; padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                </label>
             </div>
             <?php endif; ?>
 

@@ -69,6 +69,7 @@ if (!function_exists('frs_mobile_user_public')) {
             'profile_picture' => $pic,
             'avatar_url' => $avatarUrl,
             'is_verified' => (bool) ($user['is_verified'] ?? false),
+            'is_culiat_resident' => (bool) ($user['is_culiat_resident'] ?? false),
         ];
     }
 }

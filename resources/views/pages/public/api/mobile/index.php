@@ -1105,6 +1105,27 @@ if ($route === 'reservations' && $method === 'GET') {
     mobile_json(['ok' => true, 'reservations' => array_map('mobile_serialize_reservation', $rows)]);
 }
 
+// Referral's ID is uploaded separately (multipart), before the main JSON
+// booking POST — mirrors the web flow's file save but split across two
+// requests since a JSON body can't carry a file. Returns a path the client
+// includes as referral_id_document_path in the POST /reservations call.
+if ($route === 'reservations/referral-id' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $uid = (int) $user['id'];
+
+    if (empty($_FILES['referral_id']['name']) || ($_FILES['referral_id']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        mobile_error('A referral ID file is required (PDF, JPG, or PNG, max 8MB).', 422, 'validation');
+    }
+
+    require_once dirname(__DIR__, 6) . '/config/secure_documents.php';
+    $result = saveDocumentToSecureStorage($_FILES['referral_id'], $uid, 'referral_id');
+    if (!$result['success']) {
+        mobile_error($result['error'] ?: 'Failed to upload referral ID.', 422, 'upload_failed');
+    }
+
+    mobile_json(['ok' => true, 'file_path' => $result['file_path']]);
+}
+
 if ($route === 'reservations' && $method === 'POST') {
     $user = mobile_require_user($pdo);
     $body = mobile_body();
@@ -1116,6 +1137,9 @@ if ($route === 'reservations' && $method === 'POST') {
     $attendees = isset($body['expected_attendees'])
         ? (int) $body['expected_attendees']
         : (isset($body['attendees']) ? (int) $body['attendees'] : 0);
+    $referralName = trim((string) ($body['referral_name'] ?? ''));
+    $referralRelationship = trim((string) ($body['referral_relationship'] ?? ''));
+    $referralIdDocumentPath = trim((string) ($body['referral_id_document_path'] ?? ''));
 
     require_once dirname(__DIR__, 6) . '/config/ai_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
@@ -1125,6 +1149,22 @@ if ($route === 'reservations' && $method === 'POST') {
     }
 
     $uid = (int) $user['id'];
+
+    $userRoleStmt = $pdo->prepare('SELECT role, is_culiat_resident FROM users WHERE id = ? LIMIT 1');
+    $userRoleStmt->execute([$uid]);
+    $userRoleRow = $userRoleStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $isExemptFromReferral = !empty($userRoleRow['is_culiat_resident'])
+        || in_array((string) ($userRoleRow['role'] ?? ''), ['Staff', 'Admin'], true);
+
+    if (!$isExemptFromReferral) {
+        if ($referralName === '' || $referralRelationship === '') {
+            mobile_error('Please provide the name and relationship of your Barangay Culiat referral.', 422, 'validation');
+        }
+        if ($referralIdDocumentPath === '') {
+            mobile_error('Please upload a valid ID of your Barangay Culiat referral first (POST /reservations/referral-id).', 422, 'validation');
+        }
+    }
+
     $check = frs_validate_resident_booking_request($pdo, $uid, [
         'facility_id' => $facilityId,
         'reservation_date' => $date,
@@ -1218,6 +1258,22 @@ if ($route === 'reservations' && $method === 'POST') {
             $values[] = $expiresAt;
         } catch (Throwable $e) {
             // column missing
+        }
+        if (!$isExemptFromReferral) {
+            try {
+                $pdo->query('SELECT referral_name FROM reservations LIMIT 1');
+                $cols[] = 'referral_name';
+                $placeholders[] = '?';
+                $values[] = $referralName;
+                $cols[] = 'referral_relationship';
+                $placeholders[] = '?';
+                $values[] = $referralRelationship;
+                $cols[] = 'referral_id_document_path';
+                $placeholders[] = '?';
+                $values[] = $referralIdDocumentPath;
+            } catch (Throwable $e) {
+                // columns missing
+            }
         }
         $stmt = $pdo->prepare(
             'INSERT INTO reservations (' . implode(', ', $cols) . ') VALUES (' . implode(', ', $placeholders) . ')'
