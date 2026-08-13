@@ -296,13 +296,56 @@ TXT);
 }
 
 /**
+ * Great-circle distance between two coordinates, in kilometers.
+ */
+function frs_haversine_km(float $lat1, float $lng1, float $lat2, float $lng2): float {
+    $earthRadiusKm = 6371.0;
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLng = deg2rad($lng2 - $lng1);
+    $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+    return $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
+}
+
+/**
  * Build system prompt for the chatbot with facilities, rules, live occupancy, and user context.
  *
  * @param array<int, array<string, mixed>> $facilities
  * @param array<int, array<string, mixed>> $userBookings
  * @param array<string, mixed>|null $liveOccupancy optional snapshot from frs_build_operational_occupancy_snapshot()
+ * @param array{address?:string, latitude?:float, longitude?:float}|null $userLocation
+ * @param array{used:int, max:int}|null $bookingUsage
+ * @param array{total:int, critical:int, high:int}|null $violationSummary
+ * @param array<int, array{facility_name:string, blackout_date:string, reason?:string}> $upcomingBlackouts
  */
-function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string $userName, ?int $userId, ?array $liveOccupancy = null): string {
+function buildGeminiChatbotPrompt(
+    array $facilities,
+    array $userBookings,
+    string $userName,
+    ?int $userId,
+    ?array $liveOccupancy = null,
+    ?array $userLocation = null,
+    ?array $bookingUsage = null,
+    ?array $violationSummary = null,
+    array $upcomingBlackouts = []
+): string {
+    $userLat = $userLocation['latitude'] ?? null;
+    $userLng = $userLocation['longitude'] ?? null;
+    $hasUserCoords = is_numeric($userLat) && is_numeric($userLng);
+
+    // Nearest-first when we can compute distance — lets the model just read
+    // off the top of the list instead of comparing every row itself.
+    if ($hasUserCoords) {
+        usort($facilities, function ($a, $b) use ($userLat, $userLng) {
+            $da = (is_numeric($a['latitude'] ?? null) && is_numeric($a['longitude'] ?? null))
+                ? frs_haversine_km((float)$userLat, (float)$userLng, (float)$a['latitude'], (float)$a['longitude'])
+                : PHP_FLOAT_MAX;
+            $db = (is_numeric($b['latitude'] ?? null) && is_numeric($b['longitude'] ?? null))
+                ? frs_haversine_km((float)$userLat, (float)$userLng, (float)$b['latitude'], (float)$b['longitude'])
+                : PHP_FLOAT_MAX;
+            return $da <=> $db;
+        });
+    }
+
     $facList = [];
     foreach ($facilities as $f) {
         $hours = trim((string)($f['operating_hours'] ?? ''));
@@ -316,7 +359,13 @@ function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string
         if (!empty($f['location'])) {
             $extra[] = 'location: ' . $f['location'];
         }
+        if (!empty($f['amenities'])) {
+            $extra[] = 'amenities: ' . $f['amenities'];
+        }
         $extra[] = 'hours: ' . $hours;
+        if ($hasUserCoords && is_numeric($f['latitude'] ?? null) && is_numeric($f['longitude'] ?? null)) {
+            $extra[] = 'distance from user: ' . round(frs_haversine_km((float)$userLat, (float)$userLng, (float)$f['latitude'], (float)$f['longitude']), 1) . ' km';
+        }
         $facList[] = sprintf(
             '- ID %d (internal only): %s (catalog status: %s, %s)',
             (int)$f['id'],
@@ -326,6 +375,49 @@ function buildGeminiChatbotPrompt(array $facilities, array $userBookings, string
         );
     }
     $facilitiesText = implode("\n", $facList);
+
+    $userLocationText = 'Not set — if the user asks about nearest/distance, tell them to add their address in Profile first.';
+    if (!empty($userLocation['address'])) {
+        $userLocationText = (string)$userLocation['address'];
+        if (!$hasUserCoords) {
+            $userLocationText .= ' (not geocoded yet — distances unavailable; suggest re-saving the address in Profile)';
+        }
+    }
+
+    $bookingUsageText = 'Not applicable (Staff/Admin are exempt, or usage unavailable).';
+    if ($bookingUsage !== null) {
+        $remaining = max(0, $bookingUsage['max'] - $bookingUsage['used']);
+        $bookingUsageText = sprintf(
+            '%d of %d active upcoming reservation slot(s) used (%d remaining).',
+            $bookingUsage['used'],
+            $bookingUsage['max'],
+            $remaining
+        );
+    }
+
+    $violationText = 'None on record.';
+    if ($violationSummary !== null && $violationSummary['total'] > 0) {
+        $violationText = sprintf(
+            '%d violation(s) on record (%d critical, %d high severity). This may affect approval of new requests.',
+            $violationSummary['total'],
+            $violationSummary['critical'],
+            $violationSummary['high']
+        );
+    }
+
+    $blackoutText = 'None scheduled in the next 60 days.';
+    if (!empty($upcomingBlackouts)) {
+        $lines = [];
+        foreach ($upcomingBlackouts as $bo) {
+            $lines[] = sprintf(
+                '- %s: %s%s',
+                $bo['blackout_date'],
+                $bo['facility_name'],
+                !empty($bo['reason']) ? ' (' . $bo['reason'] . ')' : ''
+            );
+        }
+        $blackoutText = implode("\n", $lines);
+    }
 
     $bookingsText = 'None';
     if (!empty($userBookings)) {
@@ -370,6 +462,18 @@ Use this section whenever the user asks what is open now, available right now, o
 
 ## USER'S RECENT BOOKINGS
 {$bookingsText}
+
+## USER'S LOCATION (use for "nearest facility to me" / distance questions — facilities above are already sorted nearest-first when this is set)
+{$userLocationText}
+
+## USER'S BOOKING LIMIT USAGE (use when asked "can I still book" / "how many slots left")
+{$bookingUsageText}
+
+## USER'S VIOLATION HISTORY (mention only if directly relevant, e.g. user asks why a request is delayed/denied, or asks about their standing)
+{$violationText}
+
+## UPCOMING BLACKOUT / MAINTENANCE DATES (next 60 days, all facilities — use for "is it free next [date]" questions, not just live-now status)
+{$blackoutText}
 
 ## BOOKING RULES (strict - always enforce)
 1. Default operating hours when a facility has no custom hours: 8:00 AM - 9:00 PM (08:00 - 21:00). Many facilities have custom hours — use each facility's hours from the lists above.

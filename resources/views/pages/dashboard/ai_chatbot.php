@@ -11,6 +11,8 @@ require_once __DIR__ . '/../../../../config/chatbot_responses.php';
 // Do NOT require gemini_config.php before that — a stale key there blocks the env key.
 require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 require_once __DIR__ . '/../../../../config/occupancy_monitoring.php';
+require_once __DIR__ . '/../../../../config/reservation_helpers.php';
+require_once __DIR__ . '/../../../../config/blackout_dates.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -54,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- Gemini AI (try first when available) ---
     if (function_exists('geminiChatbotResponse') && function_exists('buildGeminiChatbotPrompt')) {
         try {
-            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50");
+            $facStmt = $pdo->query("SELECT id, name, status, capacity, amenities, location, operating_hours, latitude, longitude FROM facilities WHERE status != 'deleted' ORDER BY name LIMIT 50");
             $facilities = $facStmt ? $facStmt->fetchAll(PDO::FETCH_ASSOC) : [];
             $userBookings = [];
             if ($userId) {
@@ -73,7 +75,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Skip live occupancy in chatbot — keep Gemini latency reliable.
             $liveOccupancy = null;
 
-            $prompt = buildGeminiChatbotPrompt($facilities, $userBookings, $userName, $userId, $liveOccupancy);
+            $userLocation = null;
+            $bookingUsage = null;
+            $violationSummary = null;
+            $upcomingBlackouts = [];
+            if ($userId) {
+                $locStmt = $pdo->prepare('SELECT address, latitude, longitude FROM users WHERE id = ? LIMIT 1');
+                $locStmt->execute([$userId]);
+                $userLocation = $locStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+                if (frs_booking_limits_apply_to_user($pdo, $userId)) {
+                    $cfg = frs_resident_booking_limit_config();
+                    $usageStmt = $pdo->prepare(
+                        'SELECT COUNT(*) FROM reservations
+                         WHERE user_id = :uid AND reservation_date >= :today
+                           AND status IN (' . frs_active_booking_statuses_sql($pdo) . ')'
+                    );
+                    $usageStmt->execute(['uid' => $userId, 'today' => date('Y-m-d')]);
+                    $bookingUsage = ['used' => (int)$usageStmt->fetchColumn(), 'max' => $cfg['max_upcoming_active']];
+                }
+
+                $violStmt = $pdo->prepare(
+                    "SELECT COUNT(*) AS total, SUM(severity = 'critical') AS critical_count, SUM(severity = 'high') AS high_count
+                     FROM user_violations WHERE user_id = ?"
+                );
+                $violStmt->execute([$userId]);
+                if ($violRow = $violStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $violationSummary = [
+                        'total' => (int)$violRow['total'],
+                        'critical' => (int)$violRow['critical_count'],
+                        'high' => (int)$violRow['high_count'],
+                    ];
+                }
+            }
+            $upcomingBlackouts = frs_list_blackout_dates_between($pdo, date('Y-m-d'), date('Y-m-d', strtotime('+60 days')));
+
+            $prompt = buildGeminiChatbotPrompt(
+                $facilities,
+                $userBookings,
+                $userName,
+                $userId,
+                $liveOccupancy,
+                $userLocation,
+                $bookingUsage,
+                $violationSummary,
+                $upcomingBlackouts
+            );
 
             // Conversation memory (last 10 messages = 5 exchanges)
             $historyKey = 'chatbot_history_' . ($userId ?? 'guest');
