@@ -270,9 +270,24 @@ window.CSRF_TOKEN_NAME = <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG | JSON_HE
 document.addEventListener('DOMContentLoaded', function () {
     var contentEl = document.querySelector('.dashboard-content');
     if (!contentEl) return;
-    contentEl.querySelectorAll('div').forEach(function (el) {
+    var candidates = Array.prototype.filter.call(contentEl.querySelectorAll('div'), function (el) {
+        return window.getComputedStyle(el).position === 'fixed';
+    });
+    candidates.forEach(function (el) {
+        // Some modals (e.g. profile.php's .facility-modal-dialog/-backdrop)
+        // are themselves position:fixed even though only their OUTER wrapper
+        // carries display:none. Moving such a nested piece on its own would
+        // rip it out of that wrapper's hidden state and leave it permanently
+        // visible with no working close handler — only ever move the
+        // outermost fixed element per modal; its fixed descendants travel
+        // with it automatically.
+        var isNestedInAnotherCandidate = candidates.some(function (other) {
+            return other !== el && other.contains(el);
+        });
+        if (isNestedInAnotherCandidate) return;
+
         var computed = window.getComputedStyle(el);
-        if (computed.position === 'fixed' && el.parentElement !== document.body) {
+        if (el.parentElement !== document.body) {
             document.body.appendChild(el);
             // Re-parented overlays now stack against the sidebar
             // (z-index:1100) instead of sitting inside the page flow — keep

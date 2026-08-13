@@ -197,7 +197,7 @@ if ($hasTables && $tab === 'profiles') {
         FROM facilities f
         JOIN energy_facility_map m ON m.facility_id = f.id
         LEFT JOIN energy_profile_cache p ON p.facility_id = f.id
-        WHERE f.status != 'deleted'
+        WHERE f.status != "deleted"
         ORDER BY f.name
     ')->fetchAll(PDO::FETCH_ASSOC);
 }
