@@ -1015,13 +1015,17 @@ ob_start();
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly reservation counts. Use the filter to change status, facility, date range, or 6 vs 12 months.'); ?>
         <?= frs_dashboard_chart_filter_form('dash-trend', 'trend', $facilityOptions, $trendChartFilter, true, false, [], 'dash-charts'); ?>
-        <canvas id="monthlyChart" style="max-height: 300px;"></canvas>
+        <div style="position: relative; height: 300px;">
+            <canvas id="monthlyChart"></canvas>
+        </div>
     </section>
 
     <section class="booking-card">
         <?= frs_heading_with_tip('Status Breakdown', 'Distribution of approved, pending, denied, and cancelled reservations for the filter below.'); ?>
         <?= frs_dashboard_chart_filter_form('dash-status', 'status', $facilityOptions, $statusChartFilter, false, false, [], 'dash-charts'); ?>
-        <canvas id="statusChart" style="max-height: 300px;"></canvas>
+        <div style="position: relative; height: 300px;">
+            <canvas id="statusChart"></canvas>
+        </div>
     </section>
 </div>
 
@@ -1034,7 +1038,9 @@ ob_start();
     ); ?>
     <?= frs_dashboard_chart_filter_form('dash-topfac', 'topfac', $facilityOptions, $topfacChartFilter, false, true, [], 'dash-charts'); ?>
     <?php if (!empty($facilityLabels)): ?>
-    <canvas id="facilityChart" style="max-height: 300px;"></canvas>
+    <div style="position: relative; height: 300px;">
+        <canvas id="facilityChart"></canvas>
+    </div>
     <?php else: ?>
     <p style="color: #8b95b5; padding: 1rem 0;">No data for the selected filters.</p>
     <?php endif; ?>

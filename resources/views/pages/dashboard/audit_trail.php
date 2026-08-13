@@ -96,10 +96,10 @@ ob_start();
 
 <div class="booking-wrapper" style="grid-template-columns: 1fr;">
     <section class="booking-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
             <h2 style="margin: 0;">Activity Log</h2>
             <?php if (!empty($entries) || !empty($whereConditions)): ?>
-                <div style="display: flex; gap: 0.75rem;">
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
                     <?php
                     // Build export URL with current filters
                     $exportParams = [];

@@ -141,7 +141,7 @@
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     plugins: Object.assign({ legend: { display: false } }, valueLabelOpts),
                     scales: {
                         y: {
@@ -159,7 +159,7 @@
         if (statusCtx) {
             const statusOptions = {
                 responsive: true,
-                maintainAspectRatio: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'bottom',
@@ -232,11 +232,16 @@
 
             const facilityOptions = {
                 responsive: true,
-                maintainAspectRatio: true,
+                maintainAspectRatio: false,
                 plugins: Object.assign({ legend: { display: false } }, valueLabelOpts),
                 scales: {
                     y: {
                         beginAtZero: true,
+                        // Headroom so the tallest bar's value label (drawn above the
+                        // bar by alwaysValueLabelsPlugin) doesn't get clipped by the
+                        // chart area's top edge or collide with a neighboring bar's
+                        // label on narrow/mobile widths.
+                        grace: cfg.showValueLabels ? '10%' : undefined,
                         ticks: cfg.showValueLabels ? undefined : { stepSize: 1 },
                         grid: { color: gridColor() }
                     },

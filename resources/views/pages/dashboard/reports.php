@@ -935,12 +935,16 @@ ob_start();
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly count of reservations for the selected facility and period.'); ?>
         <?= frs_reports_period_filter_form('rpt-trend', 'trend', $allFacilities, $trendPeriod, []); ?>
-        <canvas id="monthlyChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="monthlyChart"></canvas>
+        </div>
     </section>
     <section class="booking-card">
         <?= frs_heading_with_tip('Status Breakdown', 'Share of approved, pending, denied, and cancelled reservations in the selected period.'); ?>
         <?= frs_reports_period_filter_form('rpt-status', 'status', $allFacilities, $statusPeriod, []); ?>
-        <canvas id="statusChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="statusChart"></canvas>
+        </div>
     </section>
 </div>
 
@@ -948,7 +952,9 @@ ob_start();
     <?= frs_heading_with_tip('Top Facilities by Approved Bookings', 'Facilities ranked by approved bookings in the selected period (top 5).'); ?>
     <?= frs_reports_period_filter_form('rpt-topfac', 'topfac', $allFacilities, $topfacPeriod, []); ?>
     <?php if (!empty($facilityLabels)): ?>
-    <canvas id="facilityChart" style="max-height: 320px;"></canvas>
+    <div style="position: relative; height: 320px;">
+        <canvas id="facilityChart"></canvas>
+    </div>
     <?php else: ?>
     <p style="color:#8b95b5; padding:1rem 0;">No data for the selected filters.</p>
     <?php endif; ?>
