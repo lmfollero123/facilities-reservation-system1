@@ -577,7 +577,7 @@ function frs_resident_identity_allows_booking(PDO $pdo, int $userId): array
     }
     return [
         'ok' => false,
-        'message' => 'Please upload a valid ID on the website first. Unverified residents must submit a valid ID before booking.',
+        'message' => 'Please upload a valid ID before booking. Unverified residents must submit a valid ID first.',
         'error' => 'id_required',
     ];
 }
