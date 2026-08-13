@@ -177,6 +177,35 @@ function fetchUMANAssetTypes(): array
     return ['data' => $result['data'], 'error' => $result['error']];
 }
 
+/**
+ * True remaining stock for an asset type: units UMAN has in working
+ * condition (Operational/Needs Inspection) AND not already on-loan,
+ * pending return, or condemned. Distinct from asset-types.php's
+ * operational_count, which is condition-only and ignores custody.
+ *
+ * @return int|null null when UMAN is unreachable — callers should not
+ *                   block a request just because the stock check failed;
+ *                   the existing "queue locally" fallback already handles
+ *                   UMAN being down.
+ */
+function frs_uman_available_stock_for_type(string $assetType): ?int
+{
+    $result = fetchUMANAssets(true);
+    if ($result['error'] !== null) {
+        return null;
+    }
+    $count = 0;
+    foreach ($result['data'] as $asset) {
+        if ((string)($asset['asset_type'] ?? '') !== $assetType) {
+            continue;
+        }
+        if ((string)($asset['custody_status'] ?? 'WAREHOUSED') === 'WAREHOUSED') {
+            $count++;
+        }
+    }
+    return $count;
+}
+
 function fetchUMANAssetRequests(?string $status = null, ?int $facilityId = null): array
 {
     $query = [];

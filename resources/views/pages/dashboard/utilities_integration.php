@@ -94,6 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($facilityId <= 0 || $facilityName === '' || $assetType === '') {
             $message = 'Please select a facility and asset type.';
             $messageType = 'error';
+        } elseif (($__availableNow = frs_uman_available_stock_for_type($assetType)) !== null && $quantity > $__availableNow) {
+            $message = "Only {$__availableNow} unit(s) of \"{$assetType}\" are currently available at UMAN (warehoused, not on-loan). Lower the quantity or split the request.";
+            $messageType = 'error';
         } else {
             $extras = [
                 'asset_type_id'        => $assetTypeId,
@@ -245,15 +248,33 @@ $liveTypes = $typesResult['data'] ?? [];
 $typesApiError = $typesResult['error'] ?? null;
 $typesConnected = empty($typesApiError) && $apiKeyConfigured && !empty($liveTypes);
 
+// True "can request this many" stock, not just "in working condition":
+// custody_status WAREHOUSED means the individual unit is sitting at UMAN,
+// not already on-loan/pending-return/condemned. $umanAssets is already
+// filtered to Operational/Needs Inspection condition (fetchUMANAssets(true)).
+$availableCountByType = [];
+foreach ($umanAssets as $asset) {
+    if ((string)($asset['custody_status'] ?? 'WAREHOUSED') !== 'WAREHOUSED') {
+        continue;
+    }
+    $typeName = (string)($asset['asset_type'] ?? '');
+    if ($typeName === '') {
+        continue;
+    }
+    $availableCountByType[$typeName] = ($availableCountByType[$typeName] ?? 0) + 1;
+}
+
 $equipmentTypes = [];
 if ($typesConnected) {
     foreach ($liveTypes as $t) {
+        $name = (string)($t['name'] ?? '');
         $equipmentTypes[] = [
             'id'          => (int)($t['id'] ?? 0),
-            'name'        => (string)($t['name'] ?? ''),
+            'name'        => $name,
             'description' => (string)($t['description'] ?? ''),
             'asset_count' => (int)($t['asset_count'] ?? 0),
             'operational_count' => (int)($t['operational_count'] ?? 0),
+            'available_count' => $availableCountByType[$name] ?? 0,
         ];
     }
     usort($equipmentTypes, fn($a, $b) => strcasecmp($a['name'], $b['name']));
@@ -265,6 +286,7 @@ if ($typesConnected) {
             'description' => '',
             'asset_count' => 0,
             'operational_count' => 0,
+            'available_count' => $availableCountByType[$name] ?? 0,
         ];
     }
 }
@@ -460,21 +482,23 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
                         <option value="">— Select type —</option>
                         <?php foreach ($equipmentTypes as $t):
                             $countStr = $typesConnected && $t['asset_count'] > 0
-                                ? " ({$t['operational_count']}/{$t['asset_count']} oper.)"
+                                ? " ({$t['available_count']} available of {$t['asset_count']})"
                                 : '';
                             $title = $t['description'] !== '' ? ' title="' . htmlspecialchars($t['description']) . '"' : '';
                             $dataId = $t['id'] > 0 ? " data-id=\"{$t['id']}\"" : '';
+                            $dataAvailable = " data-available=\"{$t['available_count']}\"";
                         ?>
-                            <option value="<?= htmlspecialchars($t['name']); ?>"<?= $dataId . $title; ?>><?= htmlspecialchars($t['name'] . $countStr); ?></option>
+                            <option value="<?= htmlspecialchars($t['name']); ?>"<?= $dataId . $dataAvailable . $title; ?>><?= htmlspecialchars($t['name'] . $countStr); ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <small id="f_asset_type_hint" class="mt-1 block text-xs text-slate-500"></small>
                 </label>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                 <label class="block text-sm font-medium text-slate-700">
                     Quantity
-                    <input type="number" name="quantity" id="f_quantity" min="1" max="99" value="1" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                    <input type="number" name="quantity" id="f_quantity" min="1" value="1" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none">
                 </label>
                 <label class="block text-sm font-medium text-slate-700">
                     Urgency
@@ -1000,7 +1024,35 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
     const fResp      = $('f_responsible_office');
     const fQty       = $('f_quantity');
     const btnClear   = $('btn-clear-pin');
+    const fTypeHint  = $('f_asset_type_hint');
     const typeOpts   = fType ? Array.from(fType.querySelectorAll('option')) : [];
+
+    // Cap Quantity at the selected type's actual warehoused stock (data-available)
+    // so staff can't over-request beyond what UMAN can actually fulfill.
+    function syncQuantityLimit() {
+        if (!fType || !fQty) return;
+        const opt = fType.selectedOptions[0];
+        const available = opt ? Number(opt.dataset.available || 0) : 0;
+        if (!opt || opt.value === '') {
+            fQty.removeAttribute('max');
+            if (fTypeHint) fTypeHint.textContent = '';
+            return;
+        }
+        fQty.max = String(available);
+        if (available > 0 && Number(fQty.value) > available) {
+            fQty.value = String(available);
+        }
+        if (fTypeHint) {
+            fTypeHint.textContent = available > 0
+                ? `${available} unit(s) currently available to request.`
+                : 'No units currently available for this type — request will be flagged for UMAN to restock/reassign.';
+            fTypeHint.style.color = available > 0 ? '' : '#b91c1c';
+        }
+    }
+    if (fType) {
+        fType.addEventListener('change', syncQuantityLimit);
+        syncQuantityLimit();
+    }
 
     function pickTypeOption(typeName, typeId) {
         if (!fType) return;
@@ -1019,6 +1071,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         fTypeId.value = payload.typeId || '';
         fCode.value   = payload.code   || '';
         pickTypeOption(payload.type, payload.typeId);
+        syncQuantityLimit();
         if (payload.resp && fResp && fResp.value.trim() === '') {
             fResp.value = payload.resp;
         }
