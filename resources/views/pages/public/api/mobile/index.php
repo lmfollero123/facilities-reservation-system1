@@ -498,17 +498,16 @@ if ($route === 'auth/register' && $method === 'POST') {
     $email = strtolower(trim((string) ($body['email'] ?? '')));
     $password = (string) ($body['password'] ?? '');
     $mobile = trim((string) ($body['mobile'] ?? ''));
-    $street = trim((string) ($body['street'] ?? ''));
-    $houseNumber = trim((string) ($body['house_number'] ?? ''));
+    // Any address within Quezon City — no longer restricted to Barangay
+    // Culiat streets; a referral from a Culiat resident is required at
+    // booking time instead.
+    $address = trim((string) ($body['address'] ?? ''));
 
     if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) {
         mobile_error('Name, valid email, and password (min 8) are required.', 422, 'validation');
     }
-    if ($street === '' || !frs_is_valid_culiat_street($street)) {
-        mobile_error('Please select a valid street.', 422, 'validation');
-    }
-    if ($houseNumber === '') {
-        mobile_error('House number is required.', 422, 'validation');
+    if (strlen($address) < 5) {
+        mobile_error('Please enter your complete address.', 422, 'validation');
     }
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
     $exists->execute([$email]);
@@ -516,7 +515,11 @@ if ($route === 'auth/register' && $method === 'POST') {
         mobile_error('An account with that email already exists.', 409, 'email_taken');
     }
 
-    $address = frs_build_culiat_address($houseNumber, $street);
+    require_once dirname(__DIR__, 6) . '/config/geocoding.php';
+    $coords = geocodeAddress($address);
+    $latitude = ($coords && isset($coords['lat'])) ? $coords['lat'] : null;
+    $longitude = ($coords && isset($coords['lng'])) ? $coords['lng'] : null;
+
     $pwdHash = password_hash($password, PASSWORD_DEFAULT);
     try {
         $cols = ['name', 'email', 'password_hash', 'role', 'status'];
@@ -532,15 +535,12 @@ if ($route === 'auth/register' && $method === 'POST') {
             $cols[] = 'address';
             $vals[] = $address !== '' ? $address : null;
         }
-        $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'street'");
+        $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'latitude'");
         if ($check && $check->fetch()) {
-            $cols[] = 'street';
-            $vals[] = $street;
-        }
-        $check = $pdo->query("SHOW COLUMNS FROM users LIKE 'house_number'");
-        if ($check && $check->fetch()) {
-            $cols[] = 'house_number';
-            $vals[] = $houseNumber;
+            $cols[] = 'latitude';
+            $vals[] = $latitude;
+            $cols[] = 'longitude';
+            $vals[] = $longitude;
         }
         $placeholders = implode(',', array_fill(0, count($cols), '?'));
         $pdo->prepare('INSERT INTO users (' . implode(',', $cols) . ') VALUES (' . $placeholders . ')')

@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../../../config/secure_documents.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
-require_once __DIR__ . '/../../../../config/culiat_streets.php';
+require_once __DIR__ . '/../../../../config/geocoding.php';
 
 $pageTitle = 'Register | LGU Facilities Reservation';
 $message = '';
@@ -38,10 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lastName = sanitizeInput($_POST['last_name'] ?? '');
         $suffix = sanitizeInput($_POST['suffix'] ?? '');
         
-        // Get address fields
-        $street = sanitizeInput($_POST['street'] ?? '');
-        $houseNumber = sanitizeInput($_POST['house_number'] ?? '');
-        
+        // Get address field (any address within Quezon City — no longer
+        // restricted to Barangay Culiat streets; a referral from a Culiat
+        // resident is required at booking time instead).
+        $address = sanitizeInput($_POST['address'] ?? '');
+
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
         $mobile = sanitizeInput($_POST['mobile'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -58,9 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fullName .= ' ' . $suffix;
         }
         
-        // Build full address from parts (for backward compatibility with 'address' column)
-        $fullAddress = frs_build_culiat_address($houseNumber, $street);
-        
+        $fullAddress = $address;
+
         // Validate inputs
         if (empty($firstName) || strlen($firstName) < 2) {
             $message = 'Please enter a valid first name (at least 2 characters).';
@@ -71,11 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = 'Please enter a valid email address.';
             $messageType = 'error';
-        } elseif (empty($street) || !frs_is_valid_culiat_street($street)) {
-            $message = 'Please select a valid street.';
-            $messageType = 'error';
-        } elseif (empty($houseNumber)) {
-            $message = 'Please enter your house number.';
+        } elseif (empty($address) || strlen($address) < 5) {
+            $message = 'Please enter your complete address.';
             $messageType = 'error';
         } elseif (!$acceptTerms) {
             $message = 'You must read and accept the Terms and Conditions and Data Privacy Policy to register.';
@@ -121,10 +118,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // - is_verified = 0 (ID/document verification by admin/staff)
                             // - email_verified = 0 (must verify email via code before login)
                             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-                            
+
+                            // Geocode so chatbot "nearest facility" etc. work right away.
+                            $latitude = null;
+                            $longitude = null;
+                            $coords = geocodeAddress($fullAddress);
+                            if ($coords && isset($coords['lat'], $coords['lng'])) {
+                                $latitude = $coords['lat'];
+                                $longitude = $coords['lng'];
+                            }
+
                             if ($hasVerifiedColumn && $hasNameColumns) {
                                 // New schema with is_verified and name/address columns
-                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, street, house_number, password_hash, role, status, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'active', ?, 0)");
+                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, latitude, longitude, password_hash, role, status, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'active', ?, 0)");
                                 $stmt->execute([
                                     $fullName,
                                     $firstName,
@@ -134,8 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $email,
                                     $mobile ?: null,
                                     $fullAddress,
-                                    $street,
-                                    $houseNumber,
+                                    $latitude,
+                                    $longitude,
                                     $passwordHash,
                                     0  // ID verification handled by admin/staff; email verification handled separately
                                 ]);
@@ -152,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ]);
                             } elseif ($hasNameColumns) {
                                 // Schema with name/address columns but no is_verified
-                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, street, house_number, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'pending')");
+                                $stmt = $pdo->prepare("INSERT INTO users (name, first_name, middle_name, last_name, suffix, email, mobile, address, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Resident', 'pending')");
                                 $stmt->execute([
                                     $fullName,
                                     $firstName,
@@ -162,8 +168,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $email,
                                     $mobile ?: null,
                                     $fullAddress,
-                                    $street,
-                                    $houseNumber,
                                     $passwordHash
                                 ]);
                             } else {
@@ -416,18 +420,11 @@ ob_start();
                         <input name="mobile" type="tel" placeholder="+63 900 000 0000" value="<?= isset($_POST['mobile']) ? e($_POST['mobile']) : ''; ?>">
                     </label>
 
-                    <div class="auth-split-form-row">
-                        <?php
-                        $streetFieldName = 'street';
-                        $houseFieldName = 'house_number';
-                        $selectedStreet = $_POST['street'] ?? '';
-                        $selectedHouseNumber = $_POST['house_number'] ?? '';
-                        $required = true;
-                        $showHint = true;
-                        $hintClass = 'auth-split-hint';
-                        include __DIR__ . '/../../components/culiat_street_fields.php';
-                        ?>
-                    </div>
+                    <label>
+                        Address *
+                        <input name="address" type="text" placeholder="House/Unit No., Street, Barangay, Quezon City" required minlength="5" value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
+                        <small class="auth-split-hint">Any address within Quezon City. Note: a referral from a Barangay Culiat resident is required when making a reservation.</small>
+                    </label>
 
                     <label>
                         Password *
@@ -519,7 +516,7 @@ ob_start();
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
                         <li><strong>Identity Information</strong>: Name, valid ID (optional)</li>
                         <li><strong>Contact Information</strong>: Email address, mobile number</li>
-                        <li><strong>Address Information</strong>: Street, house number (to verify residency in Barangay Culiat)</li>
+                        <li><strong>Address Information</strong>: Your address (used to recommend nearby facilities; a Barangay Culiat resident referral is required at booking time)</li>
                         <li><strong>Reservation Details</strong>: Facility, date, time, purpose, number of attendees</li>
                     </ul>
 
