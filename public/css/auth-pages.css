@@ -1033,12 +1033,40 @@ body.auth-split-page {
 }
 
 .auth-split-terms input[type="checkbox"] {
-    width: 18px !important;
-    height: 18px !important;
-    min-width: 18px;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px;
     margin-top: 0.1rem;
-    accent-color: #059669;
+    border: 2px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
     cursor: pointer;
+    position: relative;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-split-terms input[type="checkbox"]:checked {
+    background: #059669;
+    border-color: #059669;
+}
+
+.auth-split-terms input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.auth-split-terms input[type="checkbox"]:focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 2px;
 }
 
 .auth-split-terms span {
@@ -1401,6 +1429,16 @@ body.auth-split-page {
 
 [data-theme="dark"] .auth-split-terms span {
     color: #cbd5e1;
+}
+
+[data-theme="dark"] .auth-split-terms input[type="checkbox"] {
+    background: #1e293b;
+    border-color: #475569;
+}
+
+[data-theme="dark"] .auth-split-terms input[type="checkbox"]:checked {
+    background: #059669;
+    border-color: #059669;
 }
 
 [data-theme="dark"] .auth-split-section {
