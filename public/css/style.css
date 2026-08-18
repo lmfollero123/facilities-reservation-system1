@@ -12054,7 +12054,11 @@ html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#1e3a5f"],
 html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#374151"],
 html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#4a5568"],
 html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#6b7280"],
-html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#5b6888"] {
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#5b6888"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#0c4a6e"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#065f46"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#92400e"],
+html[data-theme="dark"] .frs-doc-mgmt-page [style*="color:#991b1b"] {
     color: var(--text-secondary) !important;
 }
 
