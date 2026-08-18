@@ -416,6 +416,31 @@ ob_start();
     background: #f0f4ff;
 }
 
+[data-theme="dark"] .image-upload-wrapper {
+    border-color: #475569;
+    background: #1e293b;
+}
+[data-theme="dark"] .image-upload-wrapper:hover {
+    border-color: #6384d2;
+    background: #1e3a5f;
+}
+[data-theme="dark"] .table thead {
+    background: #1e293b;
+    border-bottom-color: #334155;
+}
+[data-theme="dark"] .table th {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .btn-outline-secondary {
+    border-color: #475569;
+    color: #cbd5e1;
+    background: #0f172a;
+}
+[data-theme="dark"] .btn-outline-secondary:hover {
+    border-color: #6384d2;
+    color: #93c5fd;
+}
+
 .image-upload-wrapper input {
     padding: 0.5rem 0 !important;
     border: none !important;

@@ -367,6 +367,7 @@ $utilityMonthNames = [1 => 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug
 
 ob_start();
 ?>
+<div class="uman-integration-page">
 <div class="page-header">
     <div class="breadcrumb">
         <span>Operations</span><span class="sep">/</span><span>UMAN Integration</span>
@@ -1115,6 +1116,29 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
 })();
 </script>
 <?php endif; ?>
+</div>
+
+<style>
+[data-theme="dark"] .uman-integration-page nav.rounded-xl,
+[data-theme="dark"] .uman-integration-page .border-slate-200 { border-color: #334155 !important; }
+[data-theme="dark"] .uman-integration-page .bg-slate-50 { background-color: #1e293b !important; }
+[data-theme="dark"] .uman-integration-page .bg-white { background-color: #0f172a !important; color: #e2e8f0; }
+[data-theme="dark"] .uman-integration-page nav .bg-white { background-color: #1e293b !important; }
+[data-theme="dark"] .uman-integration-page .text-slate-900 { color: #f1f5f9 !important; }
+[data-theme="dark"] .uman-integration-page .text-slate-700,
+[data-theme="dark"] .uman-integration-page .text-slate-600,
+[data-theme="dark"] .uman-integration-page .text-slate-500 { color: #94a3b8 !important; }
+[data-theme="dark"] .uman-integration-page .bg-slate-100 { background-color: #334155 !important; }
+[data-theme="dark"] .uman-integration-page table thead,
+[data-theme="dark"] .uman-integration-page thead { background-color: #1e293b !important; }
+[data-theme="dark"] .uman-integration-page input,
+[data-theme="dark"] .uman-integration-page select,
+[data-theme="dark"] .uman-integration-page textarea {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+</style>
 
 <?php
 $content = ob_get_clean();

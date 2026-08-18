@@ -811,6 +811,29 @@ ob_start();
     color: var(--bo-dow-fg, #64748b);
     padding: 0.25rem 0;
 }
+[data-theme="dark"] .frs-bo-calendar-grid {
+    --bo-dow-fg: #94a3b8;
+    --bo-cell-border: #334155;
+    --bo-cell-bg: #1e293b;
+    --bo-cell-blocked-bg: #450a0a;
+    --bo-cell-blocked-border: #7f1d1d;
+    --bo-cell-blocked-hover: #5c1414;
+    --bo-cell-cimm-bg: #422006;
+    --bo-cell-cimm-border: #92400e;
+    --bo-cell-cimm-hover: #5c2e0a;
+    --bo-cell-ipms-bg: #0c2f4a;
+    --bo-cell-ipms-border: #0369a1;
+    --bo-cell-ipms-hover: #123c5c;
+    --bo-chip-cimm-bg: rgba(251, 191, 36, 0.25);
+    --bo-chip-cimm-fg: #fcd34d;
+    --bo-chip-ipms-bg: rgba(125, 211, 252, 0.25);
+    --bo-chip-ipms-fg: #7dd3fc;
+    --bo-today-ring: #3b82f6;
+    --bo-day-num-fg: #e2e8f0;
+    --bo-today-num-fg: #93c5fd;
+    --bo-chip-bg: rgba(254, 202, 202, 0.25);
+    --bo-chip-fg: #fca5a5;
+}
 .frs-bo-calendar-grid .frs-bo-cal-cell {
     min-height: 4.5rem;
     border-radius: 0.5rem;

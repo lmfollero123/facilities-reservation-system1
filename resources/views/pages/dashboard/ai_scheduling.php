@@ -234,6 +234,26 @@ ob_start();
     box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 }
 
+[data-theme="dark"] .ai-recommendation-card {
+    background: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .ai-recommendation-card:hover {
+    border-color: #667eea;
+}
+[data-theme="dark"] .ai-rec-facility-name,
+[data-theme="dark"] .ai-rec-detail-value {
+    color: #f1f5f9;
+}
+[data-theme="dark"] .ai-rec-reason {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ai-rec-detail {
+    background: #0f172a;
+}
+[data-theme="dark"] .ai-rec-detail-label {
+    color: #94a3b8;
+}
 .ai-rec-fallback-badge {
     display: inline-flex;
     align-items: center;
