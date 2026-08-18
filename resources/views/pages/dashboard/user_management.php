@@ -1521,6 +1521,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('deleteUserForm')?.addEventListener('submit', function(e) {
+        if (this.dataset.frsConfirmed === '1') {
+            this.dataset.frsConfirmed = '';
+            return;
+        }
         const reason = document.getElementById('deleteReasonInput')?.value.trim() || '';
         if (reason.length < 10) {
             e.preventDefault();
@@ -1528,7 +1532,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         e.preventDefault();
-        frsConfirmSubmit(e.target, 'Permanently delete this account? The user will be notified by email.', {title: 'Delete account permanently', danger: true, confirmText: 'Delete account'});
+        const form = e.target;
+        frsConfirm('Permanently delete this account? The user will be notified by email.', {title: 'Delete account permanently', danger: true, confirmText: 'Delete account'}).then(function (ok) {
+            if (ok) {
+                form.dataset.frsConfirmed = '1';
+                form.requestSubmit();
+            }
+        });
     });
 });
 </script>
