@@ -12009,6 +12009,85 @@ html[data-theme="dark"] .frs-blackout-page .frs-bo-tabs.calendar-tabs button.act
     border-bottom-color: #3b82f6;
 }
 
+/* #bo-add-modal / #bo-day-modal are moved to document.body by JS (a portal,
+   so they survive AJAX partial re-renders of the calendar), which takes them
+   out from under the .frs-blackout-page ancestor the rules above rely on. */
+html[data-theme="dark"] #bo-add-modal .absolute.inset-0,
+html[data-theme="dark"] #bo-day-modal .absolute.inset-0 {
+    background: rgba(0, 0, 0, 0.65) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal .relative.bg-white,
+html[data-theme="dark"] #bo-day-modal .relative.bg-white {
+    background: var(--card-bg, #1e293b) !important;
+    color: var(--text-primary, #e2e8f0);
+}
+
+html[data-theme="dark"] #bo-add-modal .border-slate-200,
+html[data-theme="dark"] #bo-add-modal .border-slate-100,
+html[data-theme="dark"] #bo-day-modal .border-slate-200,
+html[data-theme="dark"] #bo-day-modal .border-slate-100 {
+    border-color: var(--border-color, #475569) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal .text-slate-900,
+html[data-theme="dark"] #bo-add-modal .font-semibold.text-slate-900,
+html[data-theme="dark"] #bo-day-modal .text-slate-900,
+html[data-theme="dark"] #bo-day-modal .font-semibold.text-slate-900 {
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal .text-slate-700,
+html[data-theme="dark"] #bo-day-modal .text-slate-700 {
+    color: var(--text-primary, #e2e8f0) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal .text-slate-500,
+html[data-theme="dark"] #bo-day-modal .text-slate-500 {
+    color: var(--text-muted, #94a3b8) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal-close,
+html[data-theme="dark"] #bo-day-modal a[data-bo-modal-close].bg-white {
+    background: var(--card-bg, #1e293b) !important;
+    border-color: var(--border-color, #475569) !important;
+    color: var(--text-muted, #94a3b8) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal-close:hover,
+html[data-theme="dark"] #bo-day-modal a[data-bo-modal-close].bg-white:hover {
+    background: var(--bg-secondary, #334155) !important;
+    color: var(--text-primary, #f1f5f9) !important;
+}
+
+html[data-theme="dark"] #bo-add-modal .frs-bo-tabs.calendar-tabs button {
+    color: var(--text-muted, #94a3b8);
+}
+
+html[data-theme="dark"] #bo-add-modal .frs-bo-tabs.calendar-tabs button.active {
+    color: var(--text-primary, #f1f5f9);
+    border-bottom-color: #3b82f6;
+}
+
+html[data-theme="dark"] #bo-day-modal .border-slate-200.bg-slate-50\/50 {
+    background: var(--bg-secondary, #0f172a) !important;
+    border-color: var(--border-color, #475569) !important;
+}
+
+html[data-theme="dark"] #bo-day-modal .border-amber-200.bg-amber-50\/60 {
+    background: var(--warning-bg, #422006) !important;
+    border-color: var(--warning-border, #b45309) !important;
+}
+
+html[data-theme="dark"] #bo-day-modal .border-sky-200.bg-sky-50\/60 {
+    background: #082f49 !important;
+    border-color: #0369a1 !important;
+}
+
+html[data-theme="dark"] #bo-day-modal .text-amber-800\/80 {
+    color: #fde68a !important;
+}
+
 /* ============================================
    Document Management — theme-aware panels
    ============================================ */
