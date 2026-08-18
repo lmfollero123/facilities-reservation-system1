@@ -1435,6 +1435,76 @@ html[data-theme="dark"] .frs-modal-panel-body p {
     color: var(--text-primary, #f1f5f9);
 }
 
+/* Reports & Analytics inline-styled stat tiles */
+html[data-theme="dark"] [style*="background:#f8fafc"],
+html[data-theme="dark"] [style*="background: #f8fafc"],
+html[data-theme="dark"] [style*="background:#f9fafc"],
+html[data-theme="dark"] [style*="background: #f9fafc"] {
+    background: #1e293b !important;
+}
+html[data-theme="dark"] [style*="background:#ecfdf5"],
+html[data-theme="dark"] [style*="background: #ecfdf5"],
+html[data-theme="dark"] [style*="background:#dcfce7"],
+html[data-theme="dark"] [style*="background: #dcfce7"],
+html[data-theme="dark"] [style*="background:#e8f5e9"],
+html[data-theme="dark"] [style*="background: #e8f5e9"] {
+    background: #14532d !important;
+}
+html[data-theme="dark"] [style*="background:#fef3c7"],
+html[data-theme="dark"] [style*="background: #fef3c7"],
+html[data-theme="dark"] [style*="background:#fff3e0"],
+html[data-theme="dark"] [style*="background: #fff3e0"] {
+    background: #451a03 !important;
+}
+html[data-theme="dark"] [style*="background:#eff6ff"],
+html[data-theme="dark"] [style*="background: #eff6ff"] {
+    background: #1e3a5f !important;
+}
+html[data-theme="dark"] [style*="background:#ffebee"],
+html[data-theme="dark"] [style*="background: #ffebee"] {
+    background: #450a0a !important;
+}
+html[data-theme="dark"] [style*="background:#f5f5f5"],
+html[data-theme="dark"] [style*="background: #f5f5f5"] {
+    background: #334155 !important;
+}
+html[data-theme="dark"] [style*="color:#0f172a"],
+html[data-theme="dark"] [style*="color: #0f172a"],
+html[data-theme="dark"] [style*="color:#6b7280"],
+html[data-theme="dark"] [style*="color: #6b7280"],
+html[data-theme="dark"] [style*="color:#5b6888"],
+html[data-theme="dark"] [style*="color: #5b6888"],
+html[data-theme="dark"] [style*="color:#8b95b5"],
+html[data-theme="dark"] [style*="color: #8b95b5"] {
+    color: #cbd5e1 !important;
+}
+html[data-theme="dark"] [style*="color:#047857"],
+html[data-theme="dark"] [style*="color: #047857"],
+html[data-theme="dark"] [style*="color:#14532d"],
+html[data-theme="dark"] [style*="color: #14532d"],
+html[data-theme="dark"] [style*="color:#388e3c"],
+html[data-theme="dark"] [style*="color: #388e3c"] {
+    color: #86efac !important;
+}
+html[data-theme="dark"] [style*="color:#92400e"],
+html[data-theme="dark"] [style*="color: #92400e"],
+html[data-theme="dark"] [style*="color:#f57c00"],
+html[data-theme="dark"] [style*="color: #f57c00"] {
+    color: #fcd34d !important;
+}
+html[data-theme="dark"] [style*="color:#1d4ed8"],
+html[data-theme="dark"] [style*="color: #1d4ed8"] {
+    color: #93c5fd !important;
+}
+html[data-theme="dark"] [style*="color:#d32f2f"],
+html[data-theme="dark"] [style*="color: #d32f2f"] {
+    color: #fca5a5 !important;
+}
+html[data-theme="dark"] [style*="color:#616161"],
+html[data-theme="dark"] [style*="color: #616161"] {
+    color: #cbd5e1 !important;
+}
+
 html[data-theme="dark"] .frs-modal-panel-body ul {
     color: var(--text-primary, #f1f5f9);
 }

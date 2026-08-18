@@ -655,6 +655,12 @@ ob_start();
         html[data-theme="dark"] .energy-report-tabs { border-color:var(--border-color, #475569); }
         html[data-theme="dark"] .energy-report-kpis article { border-color:var(--border-color, #475569); }
         html[data-theme="dark"] .energy-report-kpis strong { color:var(--text-primary, #f1f5f9); }
+        html[data-theme="dark"] input[type="month"],
+        html[data-theme="dark"] input[type="number"] {
+            background: #0f172a;
+            border-color: #475569 !important;
+            color: #e2e8f0;
+        }
         @media (max-width:900px) { .energy-report-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
         @media (max-width:600px) { .energy-report-kpis, .energy-report-kpis-compact { grid-template-columns:1fr; } .energy-report-filter, .energy-report-filter label, .energy-report-filter select, .energy-report-filter button { width:100%; } }
     </style>

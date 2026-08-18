@@ -197,6 +197,42 @@ if ($occSnapshotJson === false) {
     font-weight: 800;
     color: #0f172a;
 }
+[data-theme="dark"] .occ-kpi {
+    border-color: #334155;
+}
+[data-theme="dark"] .occ-kpi-label {
+    color: #94a3b8;
+}
+[data-theme="dark"] .occ-kpi strong {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#f8fafc"] {
+    background: #1e293b !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#ecfdf5"] {
+    background: #14532d !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#ecfdf5"] strong {
+    color: #86efac !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#dcfce7"] {
+    background: #14532d !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#dcfce7"] strong {
+    color: #86efac !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#fef3c7"] {
+    background: #451a03 !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#fef3c7"] strong {
+    color: #fcd34d !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#eff6ff"] {
+    background: #1e3a5f !important;
+}
+[data-theme="dark"] .occ-kpi[style*="background:#eff6ff"] strong {
+    color: #93c5fd !important;
+}
 .occ-toolbar-grid {
     display: grid;
     grid-template-columns: minmax(160px, 1fr) minmax(200px, 2fr) minmax(140px, auto);
