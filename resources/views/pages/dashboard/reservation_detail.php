@@ -1130,10 +1130,14 @@ async function checkModifyConflict() {
     try {
         let body = `facility_id=${encodeURIComponent(fid)}&date=${encodeURIComponent(date)}&time_slot=${encodeURIComponent(timeSlot)}`;
         if (excludeId) body += `&exclude_reservation_id=${encodeURIComponent(excludeId)}`;
+        if (window.CSRF_TOKEN_NAME && window.CSRF_TOKEN) {
+            body += `&${encodeURIComponent(window.CSRF_TOKEN_NAME)}=${encodeURIComponent(window.CSRF_TOKEN)}`;
+        }
         const resp = await fetch(basePath + '/dashboard/ai-conflict-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body
+            body: body,
+            credentials: 'same-origin'
         });
         if (!resp.ok) { msgBox.style.display = 'none'; return; }
         const data = await resp.json();
