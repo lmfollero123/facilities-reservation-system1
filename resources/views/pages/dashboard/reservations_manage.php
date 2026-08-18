@@ -2196,6 +2196,20 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     color: #64748b;
     line-height: 1.45;
 }
+[data-theme="dark"] .ra-legend-details {
+    border-color: #334155;
+    background: #1e293b;
+}
+[data-theme="dark"] .ra-legend-summary {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-legend-grid {
+    border-top-color: #334155;
+}
+[data-theme="dark"] .ra-legend-item,
+[data-theme="dark"] .ra-legend-note {
+    color: #94a3b8;
+}
 .ra-queue-header {
     margin-bottom: 1rem;
 }
@@ -2484,6 +2498,200 @@ html[data-theme="dark"] .ra-resident-link {
 html[data-theme="dark"] .ra-resident-link:hover,
 html[data-theme="dark"] .ra-resident-link:focus-visible {
     color: #fff;
+}
+[data-theme="dark"] .ra-view-tab:hover {
+    color: #e2e8f0;
+    background: #1e293b;
+}
+[data-theme="dark"] .ra-view-tab.is-active {
+    color: #e2e8f0;
+    border-bottom-color: #60a5fa;
+    background: #0f172a;
+}
+[data-theme="dark"] .ra-view-tab__count {
+    background: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-view-tab.is-active .ra-view-tab__count {
+    background: #1e3a8a;
+    color: #dbeafe;
+}
+[data-theme="dark"] .ra-queue-title {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-queue-count {
+    background: #312e81;
+    color: #c7d2fe;
+}
+[data-theme="dark"] .ra-queue-subtitle {
+    color: #94a3b8;
+}
+[data-theme="dark"] .ra-queue-toolbar {
+    background: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .ra-filter-tab {
+    background: #0f172a;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-filter-tab:hover {
+    border-color: #64748b;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-filter-tab.is-active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+[data-theme="dark"] .ra-filter-tab__count {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-sort-trigger {
+    background: #0f172a;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-sort-trigger:hover,
+[data-theme="dark"] .ra-sort-trigger[aria-expanded="true"],
+[data-theme="dark"] .ra-sort-trigger.is-active {
+    background: #1e3a5f;
+    border-color: #60a5fa;
+    color: #93c5fd;
+}
+[data-theme="dark"] .ra-sort-panel {
+    background: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .ra-sort-panel__title {
+    color: #64748b;
+}
+[data-theme="dark"] .ra-sort-option {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-sort-option:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+[data-theme="dark"] .ra-sort-option.is-selected {
+    background: #1e3a5f;
+    color: #93c5fd;
+}
+[data-theme="dark"] .ra-search-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-empty-panel {
+    background: #1e293b;
+    border-color: #475569;
+    color: #94a3b8;
+}
+[data-theme="dark"] .ra-table-scroll {
+    background: #0f172a;
+    border-color: #334155;
+}
+[data-theme="dark"] .ra-queue-table thead {
+    background: #1e293b;
+}
+[data-theme="dark"] .ra-queue-table th {
+    color: #94a3b8;
+    border-bottom-color: #334155;
+}
+[data-theme="dark"] .ra-queue-table td {
+    border-bottom-color: #1e293b;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-queue-row:hover td {
+    background: #1e293b;
+}
+[data-theme="dark"] .ra-cell-primary {
+    color: #f1f5f9;
+}
+[data-theme="dark"] .ra-cell-meta {
+    color: #64748b;
+}
+[data-theme="dark"] .ra-cell-purpose {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-payment-note {
+    color: #fed7aa;
+    background: #431407;
+    border-color: #9a3412;
+}
+[data-theme="dark"] .ra-pagination {
+    border-top-color: #334155;
+}
+[data-theme="dark"] .ra-page-btn {
+    background: #0f172a;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-page-btn:hover {
+    border-color: #64748b;
+    background: #1e293b;
+}
+[data-theme="dark"] .ra-page-info {
+    color: #94a3b8;
+}
+[data-theme="dark"] .ra-detail-label {
+    color: #64748b;
+}
+[data-theme="dark"] .ra-detail-value {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-review-modal__dialog {
+    background: #1e293b;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+[data-theme="dark"] .ra-review-modal__header,
+[data-theme="dark"] .ra-review-modal__footer {
+    border-color: #334155;
+}
+[data-theme="dark"] .ra-review-modal__eyebrow {
+    color: #94a3b8;
+}
+[data-theme="dark"] .ra-review-modal__header h3 {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-review-modal__close {
+    color: #64748b;
+}
+[data-theme="dark"] .ra-review-purpose {
+    background: #0f172a;
+    border-color: #334155;
+}
+[data-theme="dark"] .ra-review-purpose__text {
+    color: #e2e8f0;
+}
+[data-theme="dark"] .ra-review-alert--info {
+    background: #1e3a5f;
+    border-color: #2563eb;
+    color: #bfdbfe;
+}
+[data-theme="dark"] .ra-review-alert--warn {
+    background: #431407;
+    border-color: #9a3412;
+    color: #fed7aa;
+}
+[data-theme="dark"] .ra-review-note-label {
+    color: #cbd5e1;
+}
+[data-theme="dark"] .ra-review-note-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+@media (max-width: 900px) {
+    [data-theme="dark"] .ra-queue-table tr {
+        background: #0f172a;
+        border-color: #334155;
+    }
+    [data-theme="dark"] .ra-queue-table td::before {
+        color: #64748b;
+    }
 }
 .ra-cell-meta {
     display: block;
