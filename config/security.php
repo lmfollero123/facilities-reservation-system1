@@ -389,6 +389,15 @@ function frs_delete_unverified_user(PDO $pdo, int $userId): bool
         return false;
     }
 
+    // Reservations require a non-null requester, so an account that still has
+    // reservation rows can't be hard-deleted without orphaning real booking
+    // data. Leave the account (still unverified) rather than crash on the FK.
+    $hasReservations = $pdo->prepare('SELECT 1 FROM reservations WHERE user_id = ? LIMIT 1');
+    $hasReservations->execute([$userId]);
+    if ($hasReservations->fetchColumn()) {
+        return false;
+    }
+
     try {
         $pdo->beginTransaction();
         $pdo->prepare('UPDATE reservation_history SET created_by = NULL WHERE created_by = ?')->execute([$userId]);

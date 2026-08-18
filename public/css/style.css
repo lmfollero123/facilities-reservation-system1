@@ -6252,6 +6252,40 @@ input[type="checkbox"] {
     vertical-align: top;
 }
 
+/* Native unchecked checkboxes render as the browser's default white box,
+   which only the accent-color-painted checked state avoids -- so unchecked
+   boxes stay stuck light even in dark mode. Repaint both states ourselves. */
+[data-theme="dark"] input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 2px solid #475569;
+    border-radius: 4px;
+    background: #1e293b;
+    position: relative;
+}
+
+[data-theme="dark"] input[type="checkbox"]:checked {
+    background: var(--gov-blue);
+    border-color: var(--gov-blue);
+}
+
+[data-theme="dark"] input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 0px;
+    width: 4px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+[data-theme="dark"] input[type="checkbox"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Checkbox in labels - better alignment */
 label input[type="checkbox"],
 label>input[type="checkbox"] {
