@@ -277,6 +277,28 @@ ob_start();
     color: #285ccd !important;
     text-decoration: underline;
 }
+
+[data-theme="dark"] .card-elevated table thead tr {
+    background: #1e293b !important;
+    border-bottom: 2px solid #334155 !important;
+}
+
+[data-theme="dark"] .card-elevated table tbody tr {
+    border-bottom: 1px solid #334155 !important;
+}
+
+[data-theme="dark"] .card-elevated table th,
+[data-theme="dark"] .card-elevated table td {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .card-elevated table a {
+    color: #7ba7ff !important;
+}
+
+[data-theme="dark"] .card-elevated table a:hover {
+    color: #7ba7ff !important;
+}
 </style>
 
 <?php
