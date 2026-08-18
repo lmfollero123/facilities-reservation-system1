@@ -118,18 +118,18 @@ ob_start();
     <section class="booking-card" style="grid-column: 1 / -1;">
         <h2>Retention Policies</h2>
         <div class="frs-legal-basis-panel">
-            <h3 style="margin: 0 0 0.75rem 0; color: #1e3a5f; font-size: 1.1rem;">Legal Basis</h3>
-            <p style="margin: 0 0 0.5rem 0; color: #374151; line-height: 1.6; font-size: 0.95rem;">
+            <h3 style="margin: 0 0 0.75rem 0; color:#1e3a5f; font-size: 1.1rem;">Legal Basis</h3>
+            <p style="margin: 0 0 0.5rem 0; color:#374151; line-height: 1.6; font-size: 0.95rem;">
                 Document retention periods are aligned with Philippine laws, including:
             </p>
-            <ul style="margin: 0; padding-left: 1.5rem; color: #4a5568; line-height: 1.8; font-size: 0.9rem;">
+            <ul style="margin: 0; padding-left: 1.5rem; color:#4a5568; line-height: 1.8; font-size: 0.9rem;">
                 <li><strong>Republic Act No. 10173</strong> – Data Privacy Act of 2012</li>
                 <li><strong>Republic Act No. 9470</strong> – National Archives of the Philippines Act of 2007</li>
                 <li><strong>COA Circular No. 2012-003</strong> – Prescribes retention of government records for audit and accountability</li>
                 <li><strong>BIR Revenue Regulations No. 9-2009</strong> – Books of accounts and supporting records (minimum 10 years)</li>
                 <li><strong>Local Government Code of 1991 (RA 7160)</strong> – Establishes LGU accountability, transparency, and records management duties</li>
             </ul>
-            <p style="margin: 0.75rem 0 0 0; color: #6b7280; font-size: 0.85rem; font-style: italic;">
+            <p style="margin: 0.75rem 0 0 0; color:#6b7280; font-size: 0.85rem; font-style: italic;">
                 <strong>Note:</strong> Final disposal of records is subject to LGU approval and applicable COA and National Archives guidelines.
             </p>
         </div>
