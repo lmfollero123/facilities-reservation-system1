@@ -368,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                     // Create notification for the requester
                     $notifMessage = 'Your reservation for ' . $reservationInfo['facility_name'];
                     $notifMessage .= ' on ' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . ' has been extended.';
-                    $notifMessage .= ' New time slot: ' . $result['new_time_slot'] . '. Fee: ₱' . number_format($result['fee'], 2);
+                    $notifMessage .= ' New time slot: ' . ($result['new_time_slot_display'] ?? $result['new_time_slot']) . '. Fee: ₱' . number_format($result['fee'], 2);
                     if ($result['status'] === 'pending') {
                         $notifMessage .= '. Extension is pending approval.';
                     } else {
@@ -384,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                         $emailBody = '<p>Hi ' . htmlspecialchars($reservationInfo['requester_name']) . ',</p>';
                         $emailBody .= '<p>Your reservation for <strong>' . htmlspecialchars($reservationInfo['facility_name']) . '</strong>';
                         $emailBody .= ' on <strong>' . date('F j, Y', strtotime($reservationInfo['reservation_date'])) . '</strong> has been extended.</p>';
-                        $emailBody .= '<p><strong>New Time Slot:</strong> ' . htmlspecialchars($result['new_time_slot']) . '</p>';
+                        $emailBody .= '<p><strong>New Time Slot:</strong> ' . htmlspecialchars($result['new_time_slot_display'] ?? $result['new_time_slot']) . '</p>';
                         $emailBody .= '<p><strong>Extension Fee:</strong> ₱' . number_format($result['fee'], 2) . '</p>';
                         if ($result['status'] === 'pending') {
                             $emailBody .= '<p>Your extension is pending approval. You will be notified once it is reviewed.</p>';
@@ -395,7 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                         sendEmail($reservationInfo['requester_email'], $reservationInfo['requester_name'], $emailSubject, $emailBody);
                     }
 
-                    $message = 'Reservation extended successfully. New time slot: ' . $result['new_time_slot'] . '. Fee: ₱' . number_format($result['fee'], 2) . '.';
+                    $message = 'Reservation extended successfully. New time slot: ' . ($result['new_time_slot_display'] ?? $result['new_time_slot']) . '. Fee: ₱' . number_format($result['fee'], 2) . '.';
                     header('Location: ' . base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
                     exit;
                 } else {

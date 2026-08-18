@@ -262,6 +262,9 @@ if (!function_exists('getTimeSlotStart')) {
      * @return string Start time (H:i)
      */
     function getTimeSlotStart($timeSlot) {
+        if (preg_match('/^\s*(\d{1,2}:\d{2})\s*-\s*\d{1,2}:\d{2}\s*$/', $timeSlot, $matches)) {
+            return $matches[1];
+        }
         if (preg_match('/(\d{1,2}:\d{2}\s*[AP]M)/i', $timeSlot, $matches)) {
             return DateTime::createFromFormat('h:i A', strtoupper($matches[1]))->format('H:i');
         }
@@ -277,6 +280,9 @@ if (!function_exists('getTimeSlotEnd')) {
      * @return string End time (H:i)
      */
     function getTimeSlotEnd($timeSlot) {
+        if (preg_match('/^\s*\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})\s*$/', $timeSlot, $matches)) {
+            return $matches[1];
+        }
         if (preg_match_all('/(\d{1,2}:\d{2}\s*[AP]M)/i', $timeSlot, $matches)) {
             if (isset($matches[1][1])) {
                 return DateTime::createFromFormat('h:i A', strtoupper($matches[1][1]))->format('H:i');
@@ -350,9 +356,12 @@ if (!function_exists('processExtension')) {
         $newEndDateTime->modify('+' . $extensionHours . ' hours');
         $newEndTime = $newEndDateTime->format('H:i');
         
-        // Create new time slot string
-        $newTimeSlot = formatTime($currentStart) . ' - ' . formatTime($newEndTime);
-        
+        // Create new time slot string (store in the same 24-hour "HH:MM - HH:MM"
+        // format every other reservation uses; a 12-hour string here would break
+        // every other time_slot parser in the app).
+        $newTimeSlot = $currentStart . ' - ' . $newEndTime;
+        $newTimeSlotDisplay = formatTime($currentStart) . ' - ' . formatTime($newEndTime);
+
         // Store original end time for audit
         $originalEndTime = formatTime($currentEnd);
         
@@ -399,6 +408,7 @@ if (!function_exists('processExtension')) {
             'success' => true,
             'message' => 'Reservation extended successfully',
             'new_time_slot' => $newTimeSlot,
+            'new_time_slot_display' => $newTimeSlotDisplay,
             'fee' => $fee,
             'status' => $newStatus
         ];
