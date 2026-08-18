@@ -438,7 +438,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 $stmt = $pdo->prepare(
     'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
-            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate
+            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate, f.extension_fee_per_hour AS facility_extension_fee_per_hour
      FROM reservations r
      JOIN users u ON r.user_id = u.id
      JOIN facilities f ON r.facility_id = f.id
@@ -1023,7 +1023,7 @@ ob_start();
             </div>
 
             <div style="margin-bottom: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
-                <strong>Extension Fee:</strong> <span id="extension_fee_display">₱10.00</span> per hour
+                <strong>Extension Fee:</strong> <span id="extension_fee_display">₱<?= number_format((float)($reservation['facility_extension_fee_per_hour'] ?? 10.00), 2); ?></span> per hour
             </div>
 
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
@@ -1232,10 +1232,11 @@ function closeExtendModal() {
     document.getElementById('extendModal').style.display = 'none';
 }
 
+const EXTENSION_FEE_PER_HOUR = <?= json_encode((float)($reservation['facility_extension_fee_per_hour'] ?? 10.00)); ?>;
+
 function updateExtensionFee() {
     const hours = parseFloat(document.getElementById('extension_hours').value) || 0;
-    const feePerHour = 10.00; // Default fee, can be updated from facility data
-    const totalFee = hours * feePerHour;
+    const totalFee = hours * EXTENSION_FEE_PER_HOUR;
     document.getElementById('total_extension_fee').textContent = '₱' + totalFee.toFixed(2);
 }
 
