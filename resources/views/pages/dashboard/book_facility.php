@@ -2950,7 +2950,7 @@ function openBookingConfirmModal() {
     const facilityName = selectedOption.text;
     const facilityData = <?= $frsJsonForInlineScript($facilities); ?>;
     const facilityInfo = facilityData.find(f => f.id == facilitySelect.value);
-    const ratePerHour = facilityInfo ? parseFloat(facilityInfo.base_rate) : 0;
+    const ratePerHour = facilityInfo ? (parseFloat(facilityInfo.base_rate) || 0) : 0;
     const totalCost = ratePerHour * durationHours;
 
     // Populate modal
