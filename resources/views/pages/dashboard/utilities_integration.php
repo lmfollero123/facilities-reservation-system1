@@ -932,7 +932,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="delete_utility_reading">
                                         <input type="hidden" name="reading_id" value="<?= (int)$r['id']; ?>">
-                                        <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" onclick="return confirm('Delete this reading?')"><i class="bi bi-trash"></i> Delete</button>
+                                        <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" onclick="return frsConfirmSubmit(this.form, 'Delete this reading?', {title: 'Delete reading', danger: true});"><i class="bi bi-trash"></i> Delete</button>
                                     </form>
                                 <?php endif; ?>
                             </td>

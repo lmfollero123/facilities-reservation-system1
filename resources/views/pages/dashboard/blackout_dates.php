@@ -535,7 +535,7 @@ ob_start();
                                         <p class="text-xs text-slate-400">Recorded <?= htmlspecialchars(date('M j, Y g:i A', strtotime($b['created_at']))); ?></p>
                                     <?php endif; ?>
                                     <?php if (!empty($b['is_removable'])): ?>
-                                    <form method="POST" class="mt-3" onsubmit="return confirm('Remove this blackout?');">
+                                    <form method="POST" class="mt-3" onsubmit="return frsConfirmSubmit(this, 'Remove this blackout?', {title: 'Remove blackout', danger: true});">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="blackout_id" value="<?= (int)$b['id']; ?>">

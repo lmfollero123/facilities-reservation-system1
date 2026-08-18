@@ -1223,17 +1223,19 @@ document.getElementById('umanReturnForm')?.addEventListener('submit', (e) => {
             alert('Please tick the decommission confirmation checkbox before proceeding.');
             return;
         }
-        if (!confirm('WARNING: Decommissioning (WMR) writes off this asset permanently. This cannot be undone. Continue?')) {
-            e.preventDefault();
-            return;
-        }
+        e.preventDefault();
+        const form = e.target;
+        frsConfirm('WARNING: Decommissioning (WMR) writes off this asset permanently. This cannot be undone. Continue?', {title: 'Decommission asset', danger: true, confirmText: 'Decommission'}).then((ok) => {
+            if (ok) { form.submit(); }
+        });
     }
 });
-function submitUmanCancelReturn(facilityId, assetId, reason) {
+async function submitUmanCancelReturn(facilityId, assetId, reason) {
     const r = (reason && typeof reason === 'string' && reason.trim() !== '')
         ? reason.trim()
         : ('Cancelled by ' + (document.body.dataset.userName || 'CPRF staff') + ' via Facility Management UI');
-    if (!confirm('Cancel the pending return request for this asset?')) return;
+    const ok = await frsConfirm('Cancel the pending return request for this asset?', {title: 'Cancel return request', danger: true, confirmText: 'Cancel request'});
+    if (!ok) return;
     const form = document.getElementById('umanCancelReturnForm');
     if (!form) return;
     document.getElementById('umanCancelFacilityId').value = String(facilityId || 0);

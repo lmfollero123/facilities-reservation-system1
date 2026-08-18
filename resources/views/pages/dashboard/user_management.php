@@ -1527,9 +1527,8 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Please enter a deletion reason of at least 10 characters.');
             return;
         }
-        if (!confirm('Permanently delete this account? The user will be notified by email.')) {
-            e.preventDefault();
-        }
+        e.preventDefault();
+        frsConfirmSubmit(e.target, 'Permanently delete this account? The user will be notified by email.', {title: 'Delete account permanently', danger: true, confirmText: 'Delete account'});
     });
 });
 </script>

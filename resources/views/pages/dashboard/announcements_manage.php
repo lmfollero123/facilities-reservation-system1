@@ -290,7 +290,7 @@ ob_start();
                                 <small><?= date('M d, Y g:i A', strtotime($announcement['created_at'])); ?></small>
                             </td>
                             <td>
-                                <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this announcement?');">
+                                <form method="POST" style="display: inline;" onsubmit="return frsConfirmSubmit(this, 'Are you sure you want to delete this announcement?', {title: 'Delete announcement', danger: true});">
             <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="announcement_id" value="<?= (int)$announcement['id']; ?>">

@@ -1938,12 +1938,12 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-function confirmDeactivation(event) {
+async function confirmDeactivation(event) {
     event.preventDefault();
-    
+
     const form = document.getElementById('deactivate-form');
     const reason = form.querySelector('[name="deactivation_reason"]').value.trim();
-    
+
     const confirmMsg = '⚠️ ACCOUNT DEACTIVATION CONFIRMATION\n\n' +
         'Are you sure you want to deactivate your account?\n\n' +
         'This will:\n' +
@@ -1953,22 +1953,23 @@ function confirmDeactivation(event) {
         'To restore access, you must contact the LGU IT office.\n\n' +
         'This action cannot be undone by you.\n\n' +
         'Type "DEACTIVATE" (in all caps) to confirm:';
-    
+
     const userInput = prompt(confirmMsg);
-    
+
     if (userInput === 'DEACTIVATE') {
         // Double confirmation
-        const finalConfirm = confirm(
-            'Final confirmation: This will immediately deactivate your account and log you out. Continue?'
+        const finalConfirm = await frsConfirm(
+            'This will immediately deactivate your account and log you out. Continue?',
+            {title: 'Final confirmation', danger: true, confirmText: 'Deactivate'}
         );
-        
+
         if (finalConfirm) {
             form.submit();
         }
     } else if (userInput !== null) {
         alert('Confirmation text did not match. Account deactivation cancelled.');
     }
-    
+
     return false;
 }
 

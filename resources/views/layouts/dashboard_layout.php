@@ -102,10 +102,13 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     $frsAnimJsVer = is_file($frsAnimJsPath) ? (string)filemtime($frsAnimJsPath) : '1';
     $frsToastJsPath = dirname(__DIR__, 3) . '/public/js/frs-toast.js';
     $frsToastJsVer = is_file($frsToastJsPath) ? (string)filemtime($frsToastJsPath) : '1';
+    $frsConfirmJsPath = dirname(__DIR__, 3) . '/public/js/frs-confirm.js';
+    $frsConfirmJsVer = is_file($frsConfirmJsPath) ? (string)filemtime($frsConfirmJsPath) : '1';
     ?>
     <script src="<?= base_path(); ?>/public/js/frs-form-validation.js?v=<?= htmlspecialchars($formValidationJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/frs-animations.js?v=<?= htmlspecialchars($frsAnimJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/frs-toast.js?v=<?= htmlspecialchars($frsToastJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script src="<?= base_path(); ?>/public/js/frs-confirm.js?v=<?= htmlspecialchars($frsConfirmJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php
     $dashboardChartsJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-charts.js';
     $dashboardChartsJsVer = is_file($dashboardChartsJsPath) ? (string)filemtime($dashboardChartsJsPath) : '1';

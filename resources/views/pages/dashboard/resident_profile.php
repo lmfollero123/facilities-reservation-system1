@@ -214,7 +214,7 @@ ob_start();
                 <form method="POST" style="display:inline;">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" value="reset_password">
-                    <button type="submit" class="btn-outline" onclick="return confirm('Reset this user\'s password?')">Reset Password</button>
+                    <button type="submit" class="btn-outline" onclick="return frsConfirmSubmit(this.form, 'Reset this user\'s password?', {title: 'Reset password'});">Reset Password</button>
                 </form>
                 <?php if ($viewedUser['status'] === 'locked'): ?>
                     <form method="POST" style="display:inline;">
@@ -223,7 +223,7 @@ ob_start();
                         <button type="submit" class="btn-outline">Unlock Account</button>
                     </form>
                 <?php elseif ((int)$currentUserId !== $viewedUserId): ?>
-                    <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return confirm('Lock this account?')">
+                    <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return frsConfirmSubmit(this, 'Lock this account?', {title: 'Lock account'});">
                         <?= csrf_field(); ?>
                         <input type="hidden" name="action" value="lock">
                         <input type="text" name="lock_reason" placeholder="Reason (optional)" style="padding:0.6rem;">
@@ -232,7 +232,7 @@ ob_start();
                 <?php endif; ?>
             <?php endif; ?>
             <?php if ($canDeleteUsers && (int)$currentUserId !== $viewedUserId): ?>
-                <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return confirm('Delete this account permanently?')">
+                <form method="POST" style="display:flex; gap:0.4rem; align-items:center;" onsubmit="return frsConfirmSubmit(this, 'Delete this account permanently?', {title: 'Delete account permanently', danger: true, confirmText: 'Delete account'});">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" value="delete">
                     <input type="text" name="delete_reason" placeholder="Deletion reason (min 10 chars)" required minlength="10" style="padding:0.6rem; min-width:220px;">

@@ -205,7 +205,7 @@ ob_start();
                                     $addUrl = base_path() . '/dashboard/facility-management?' . http_build_query($prefillParams);
                                     ?>
                                     <a href="<?= htmlspecialchars($addUrl); ?>" class="btn-primary" style="padding:0.4rem 0.75rem; font-size:0.85rem; text-decoration:none;">Add as Facility</a>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Mark this project as not a facility? It will stop appearing here.');">
+                                    <form method="POST" style="display:inline;" onsubmit="return frsConfirmSubmit(this, 'Mark this project as not a facility? It will stop appearing here.', {title: 'Dismiss project'});">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="dismiss_candidate">
                                         <input type="hidden" name="project_key" value="<?= htmlspecialchars($c['project_key']); ?>">

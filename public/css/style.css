@@ -12162,3 +12162,70 @@ html[data-theme="dark"] .frs-doc-mgmt-page [style*="background:#f3f4f6"] {
    used (background-image divs and <img> tags alike) with no markup changes. */
 [style*="geralt-maintenance"] { background-position: center 75% !important; }
 img[src*="geralt-maintenance"] { object-position: center 75% !important; }
+
+/* ============================================
+   Shared confirm modal (public/js/frs-confirm.js)
+   Replaces native window.confirm() dialogs. Self-contained and appended
+   directly to <body>, so theming never depends on a page-scoped ancestor.
+   ============================================ */
+.frs-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.frs-confirm-modal.hidden {
+    display: none;
+}
+
+.frs-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.frs-confirm-box {
+    position: relative;
+    width: 100%;
+    max-width: 26rem;
+    border-radius: 16px;
+    padding: 1.5rem;
+    background: var(--card-bg, #ffffff);
+    color: var(--text-primary, #1b1b1f);
+    border: 1px solid var(--border-color, #e1e7f0);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+}
+
+.frs-confirm-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary, #1b1b1f);
+}
+
+.frs-confirm-message {
+    margin: 0 0 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-secondary, #4a5568);
+}
+
+.frs-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.frs-confirm-ok--danger {
+    background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
+    box-shadow: 0 10px 24px rgba(239, 68, 68, 0.28) !important;
+}
+
+.frs-confirm-ok--danger:hover {
+    background: linear-gradient(135deg, #f87171, #dc2626) !important;
+    box-shadow: 0 6px 15px rgba(239, 68, 68, 0.45) !important;
+}
