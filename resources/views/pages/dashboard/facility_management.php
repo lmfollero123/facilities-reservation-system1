@@ -1381,6 +1381,23 @@ function closeFacilityModal() {
     document.body.style.overflow = '';
 }
 
+// The AJAX layer's generic close-on-success (data-frs-ajax-close) only sets
+// style.display='none', but .facility-modal.open forces display:flex via
+// !important in CSS — the inline style alone can't win. Watch for it and
+// finish the close (drop the 'open' class) whenever that happens.
+(function() {
+    const modal = document.getElementById('facilityModal');
+    if (!modal) return;
+    const observer = new MutationObserver(function() {
+        if (modal.style.display === 'none' && modal.classList.contains('open')) {
+            modal.classList.remove('open');
+            modal.style.display = '';
+            document.body.style.overflow = '';
+        }
+    });
+    observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
+})();
+
 function cancelFacilityForm() {
     closeFacilityModal();
     resetFacilityForm();
