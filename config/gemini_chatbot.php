@@ -168,6 +168,128 @@ PROMPT;
 }
 
 /**
+ * Resolve the Groq API key from env (~/private/cprf.env or .env), same
+ * lookup pattern as frs_gemini_api_key().
+ */
+function frs_groq_api_key(): string
+{
+    $fromEnv = function_exists('env_value')
+        ? trim((string) env_value('GROQ_API_KEY', ''))
+        : trim((string) (getenv('GROQ_API_KEY') ?: ''));
+    return ($fromEnv !== '' && $fromEnv !== 'YOUR_GROQ_API_KEY_HERE') ? $fromEnv : '';
+}
+
+/**
+ * Same purpose gate as frs_gemini_check_purpose(), backed by Groq's free
+ * tier instead - used as a fallback when Gemini is unavailable (quota/rate
+ * limit/timeout). Groq's OpenAI-compatible chat completions API, model
+ * llama-3.1-8b-instant (small/fast, plenty for a valid/gibberish + category
+ * classification). Returns null if Groq is unavailable/fails too - caller
+ * falls back further to the local sklearn model.
+ *
+ * @return array{valid: bool, category: string, reason: string}|null
+ */
+function frs_groq_check_purpose(string $purpose): ?array
+{
+    $purpose = trim($purpose);
+    if ($purpose === '') {
+        return ['valid' => false, 'category' => 'other', 'reason' => 'Purpose is empty.'];
+    }
+
+    $apiKey = frs_groq_api_key();
+    if ($apiKey === '') {
+        return null;
+    }
+
+    $systemPrompt = <<<PROMPT
+You screen short "purpose of booking" text submitted on a Philippine barangay facility reservation form.
+Respond with ONLY raw JSON, no markdown fences, no extra commentary:
+{"valid": true or false, "category": "sports" | "assembly" | "celebration" | "cultural" | "other", "reason": "short reason, max 12 words"}
+
+Rules:
+- valid=false ONLY for gibberish/keyboard-mashing (e.g. "asdkjaskdjaksjd", "qwertyuiop zxcvbnm"), pure random
+  characters, or text that gives absolutely no indication of what the event actually is.
+- valid=true for ANY genuine (even brief) description of an activity or event, in English, Filipino, or Taglish.
+  Err on the side of valid=true when in doubt - only reject clear gibberish.
+- category is your best classification when valid=true; use "other" if unsure. Never return null for category.
+PROMPT;
+
+    $payload = [
+        'model' => 'llama-3.1-8b-instant',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $purpose],
+        ],
+        'temperature' => 0.1,
+        'max_completion_tokens' => 200,
+        'response_format' => ['type' => 'json_object'],
+    ];
+
+    $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $raw = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false || $httpCode !== 200) {
+        error_log("Groq purpose-check failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $text = $data['choices'][0]['message']['content'] ?? null;
+    if (!is_string($text) || $text === '') {
+        return null;
+    }
+
+    $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
+    $json = json_decode((string) $text, true);
+    if (!is_array($json) || !array_key_exists('valid', $json)) {
+        return null;
+    }
+
+    $allowedCategories = ['sports', 'assembly', 'celebration', 'cultural', 'other'];
+    $category = is_string($json['category'] ?? null) ? $json['category'] : 'other';
+    if (!in_array($category, $allowedCategories, true)) {
+        $category = 'other';
+    }
+
+    return [
+        'valid' => (bool) $json['valid'],
+        'category' => $category,
+        'reason' => is_string($json['reason'] ?? null) ? $json['reason'] : '',
+    ];
+}
+
+/**
+ * Orchestrates the full purpose-gate fallback chain: Gemini -> Groq -> null
+ * (caller falls back further to the local sklearn model). Each stage only
+ * runs if the previous one was unavailable (returned null) - a stage that
+ * actually ran and returned a valid/invalid verdict is trusted as final.
+ *
+ * @return array{valid: bool, category: string, reason: string}|null
+ */
+function frs_check_purpose_gate(string $purpose): ?array
+{
+    $result = frs_gemini_check_purpose($purpose);
+    if ($result !== null) {
+        return $result;
+    }
+    return frs_groq_check_purpose($purpose);
+}
+
+/**
  * Call Gemini API and return text response.
  *
  * @param string $systemPrompt System/context prompt

@@ -45,11 +45,11 @@ if (strlen($purpose) < 3) {
 // Gate out gibberish before computing any recommendations. Gemini is the
 // primary check (the local sklearn purpose_unclear_model has a structural
 // blind spot on genuinely novel gibberish - its TF-IDF vectorizer sees an
-// empty feature vector for unseen text and defaults to "probably clear").
-// Falls back to the local model, then a length-only heuristic, if Gemini is
-// unavailable - never hard-block a booking preview just because an external
-// API call failed.
-$purposeCheck = frs_gemini_check_purpose($purpose);
+// empty feature vector for unseen text and defaults to "probably clear"),
+// with Groq's free tier as a fallback when Gemini is rate-limited/down, and
+// the local model as the last resort - never hard-block a booking preview
+// just because every external API call failed.
+$purposeCheck = frs_check_purpose_gate($purpose);
 if ($purposeCheck === null && function_exists('detectUnclearPurpose')) {
     $unclear = detectUnclearPurpose($purpose);
     if (!isset($unclear['error']) && ($unclear['is_unclear'] ?? false) && ($unclear['probability'] ?? 0) > 0.7) {
