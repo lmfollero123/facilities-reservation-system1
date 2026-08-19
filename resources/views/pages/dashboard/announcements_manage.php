@@ -124,6 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             }
         }
     }
+
+    if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm' && $messageType !== '') {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+        $message = '';
+    }
 }
 
 // Fetch all public announcements (user_id IS NULL)
@@ -142,6 +147,7 @@ ob_start();
     <h1 class="frs-heading-with-tip"><i class="bi bi-megaphone"></i> Announcements Management <?= frs_field_tip('Published items appear on the public homepage and announcements page.'); ?></h1>
 </div>
 
+<div data-frs-partial-id="announcements-list" data-frs-partial-root>
 <?php if ($message): ?>
     <div class="alert alert-<?= $messageType === 'error' ? 'danger' : 'success'; ?> alert-dismissible fade show" role="alert">
         <i class="bi bi-<?= $messageType === 'error' ? 'exclamation-circle' : 'check-circle'; ?>"></i>
@@ -175,7 +181,7 @@ ob_start();
         <h2>Create New Announcement</h2>
     </div>
     
-    <form method="POST" enctype="multipart/form-data" class="announcement-form">
+    <form method="POST" enctype="multipart/form-data" class="announcement-form" data-frs-ajax data-frs-ajax-target="announcements-list">
             <?= csrf_field(); ?>
         <input type="hidden" name="action" value="create">
         
@@ -290,7 +296,7 @@ ob_start();
                                 <small><?= date('M d, Y g:i A', strtotime($announcement['created_at'])); ?></small>
                             </td>
                             <td>
-                                <form method="POST" style="display: inline;" onsubmit="return frsConfirmSubmit(this, 'Are you sure you want to delete this announcement?', {title: 'Delete announcement', danger: true});">
+                                <form method="POST" style="display: inline;" data-frs-ajax data-frs-ajax-target="announcements-list" onsubmit="return frsConfirmSubmit(this, 'Are you sure you want to delete this announcement?', {title: 'Delete announcement', danger: true});">
             <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="announcement_id" value="<?= (int)$announcement['id']; ?>">
@@ -305,6 +311,7 @@ ob_start();
             </table>
         </div>
     <?php endif; ?>
+</div>
 </div>
 
 <style>
