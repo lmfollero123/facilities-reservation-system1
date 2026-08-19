@@ -26,6 +26,7 @@ $pageTitle = 'User Management | LGU Facilities Reservation';
 
 $message = '';
 $messageType = 'success';
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
 // Handle user actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
@@ -511,6 +512,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isAjaxPost && $message !== '') {
+    header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+    $message = '';
+}
+
 // Get filter parameters
 $umView = trim((string)($_GET['view'] ?? $_POST['view'] ?? 'all'));
 if (!in_array($umView, ['all', 'id_pending'], true)) {
@@ -684,6 +690,7 @@ ob_start();
     <?= frs_page_title('User Management', 'Manage resident accounts, roles, verification, and access.'); ?>
 </div>
 
+<div data-frs-partial-id="um-content" data-frs-partial-root>
 <?php if ($message): ?>
     <div class="um-alert um-alert-<?= $messageType === 'success' ? 'success' : 'error'; ?>" role="status">
         <?= htmlspecialchars($message); ?>
@@ -889,7 +896,7 @@ ob_start();
 
                     <div class="um-user-side">
                         <?php if ($umView === 'all' && $isPageAdmin): ?>
-                        <form method="POST" class="role-change-form um-role-form">
+                        <form method="POST" class="role-change-form um-role-form" data-frs-ajax data-frs-ajax-target="um-content">
                             <?= csrf_field(); ?>
                             <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                             <input type="hidden" name="action" value="change_role">
@@ -927,7 +934,7 @@ ob_start();
 
                         <div class="um-actions">
                             <?php if ($umView === 'id_pending' && !$isIdVerified && $hasValidIdDoc): ?>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="id_pending">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -936,14 +943,14 @@ ob_start();
                                 </form>
                             <?php else: ?>
                             <?php if ($user['status'] === 'pending'): ?>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
                                     <input type="hidden" name="action" value="approve">
                                     <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Approve this account?">Approve</button>
                                 </form>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -953,7 +960,7 @@ ob_start();
                             <?php endif; ?>
 
                             <?php if (!$isIdVerified && $hasValidIdDoc): ?>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -964,7 +971,7 @@ ob_start();
 
                             <?php if ($user['role'] === 'Resident'): ?>
                                 <?php if ($isCuliatResidentUser): ?>
-                                    <form method="POST" class="um-inline-form">
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                         <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -972,7 +979,7 @@ ob_start();
                                         <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove Barangay Culiat resident status? This user will need a referral on future reservations.">Remove Culiat status</button>
                                     </form>
                                 <?php elseif ($isIdVerified): ?>
-                                    <form method="POST" class="um-inline-form">
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                         <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -987,7 +994,7 @@ ob_start();
                             <?php if ($user['status'] === 'active' && !$isSelf): ?>
                                 <button type="button" class="btn-outline um-btn-sm js-open-lock-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>">Lock</button>
                             <?php elseif ($user['status'] === 'locked' && !$isSelf): ?>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -997,7 +1004,7 @@ ob_start();
                             <?php endif; ?>
 
                             <?php if (in_array($user['status'], ['active', 'locked'], true) && !$isSelf): ?>
-                                <form method="POST" class="um-inline-form">
+                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
                                     <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
@@ -1053,13 +1060,14 @@ ob_start();
         </div>
     </aside>
 </div>
+</div>
 
 <div id="createUserModal" class="um-modal" aria-hidden="true">
     <div class="um-modal-backdrop js-close-modal" data-target="createUserModal"></div>
     <div class="um-modal-panel um-modal-panel-wide" role="dialog" aria-labelledby="createUserModalTitle" aria-modal="true">
         <h3 id="createUserModalTitle">Create account</h3>
         <p class="um-modal-sub">Add a resident<?= $isPageAdmin ? ' or staff member' : ''; ?> with login credentials sent by email.</p>
-        <form method="POST" class="um-create-form">
+        <form method="POST" class="um-create-form" data-frs-ajax data-frs-ajax-target="um-content" data-frs-ajax-close="#createUserModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="create_user">
             <div class="um-create-grid">
@@ -1124,7 +1132,7 @@ ob_start();
     <div class="um-modal-panel um-modal-panel-wide" role="dialog" aria-labelledby="bulkImportModalTitle" aria-modal="true">
         <h3 id="bulkImportModalTitle">Bulk import users (CSV)</h3>
         <p class="um-modal-sub">Columns: <code>name, email</code> required; optional <code>mobile, street, house_number, role</code> (Staff only for Admin).</p>
-        <form method="POST" enctype="multipart/form-data">
+        <form method="POST" enctype="multipart/form-data" data-frs-ajax data-frs-ajax-target="um-content" data-frs-ajax-close="#bulkImportModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="bulk_import_users">
             <label>
@@ -1144,7 +1152,7 @@ ob_start();
     <div class="um-modal-panel" role="dialog" aria-labelledby="lockModalTitle" aria-modal="true">
         <h3 id="lockModalTitle">Lock account</h3>
         <p class="um-modal-sub" id="lockModalUser"></p>
-        <form method="POST" id="lockUserForm">
+        <form method="POST" id="lockUserForm" data-frs-ajax data-frs-ajax-target="um-content" data-frs-ajax-close="#lockUserModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="user_id" id="lockUserId" value="">
             <input type="hidden" name="action" value="lock">
@@ -1166,7 +1174,7 @@ ob_start();
         <h3 id="deleteModalTitle">Delete account permanently</h3>
         <p class="um-modal-sub" id="deleteModalUser"></p>
         <p class="um-modal-warning">This cannot be undone. The user will receive an email with your reason before the account is removed.</p>
-        <form method="POST" id="deleteUserForm">
+        <form method="POST" id="deleteUserForm" data-frs-ajax data-frs-ajax-target="um-content" data-frs-ajax-close="#deleteUserModal">
             <?= csrf_field(); ?>
             <input type="hidden" name="user_id" id="deleteUserId" value="">
             <input type="hidden" name="action" value="delete">
@@ -1407,20 +1415,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const acceptBtn = modal.querySelector('[data-confirm-accept]');
         let pendingSelect = null;
 
-        document.querySelectorAll('.role-select').forEach(function(select) {
-            if (select.disabled) return;
-            select.addEventListener('change', function() {
-                const newRole = this.value;
-                const originalRole = this.dataset.originalRole;
-                const userName = this.dataset.userName || 'this user';
-                if (newRole === originalRole) {
-                    this.value = originalRole;
-                    return;
-                }
-                pendingSelect = this;
-                messageEl.textContent = 'Change ' + userName + '\'s role from ' + originalRole + ' to ' + newRole + '?';
-                modal.classList.add('open');
-            });
+        // Delegated on document (not bound per-element): the accounts list this
+        // select lives in gets replaced wholesale after every AJAX action, which
+        // would silently drop a directly-bound listener.
+        document.addEventListener('change', function(e) {
+            const select = e.target.closest('.role-select');
+            if (!select || select.disabled) return;
+            const newRole = select.value;
+            const originalRole = select.dataset.originalRole;
+            const userName = select.dataset.userName || 'this user';
+            if (newRole === originalRole) {
+                select.value = originalRole;
+                return;
+            }
+            pendingSelect = select;
+            messageEl.textContent = 'Change ' + userName + '\'s role from ' + originalRole + ' to ' + newRole + '?';
+            modal.classList.add('open');
         });
 
         if (cancelBtn && acceptBtn) {
@@ -1433,7 +1443,14 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             acceptBtn.addEventListener('click', function() {
                 if (pendingSelect) {
-                    pendingSelect.closest('.role-change-form')?.submit();
+                    const roleForm = pendingSelect.closest('.role-change-form');
+                    if (roleForm) {
+                        if (typeof roleForm.requestSubmit === 'function') {
+                            roleForm.requestSubmit();
+                        } else {
+                            roleForm.submit();
+                        }
+                    }
                     pendingSelect = null;
                 }
                 modal.classList.remove('open');
@@ -1458,6 +1475,7 @@ document.addEventListener('DOMContentLoaded', function() {
             portalModal(el);
             el.classList.add('open');
             el.setAttribute('aria-hidden', 'false');
+            el.style.display = ''; // clear inline display a prior frs-ajax-close may have left
             syncBodyScrollLock();
         }
     }
@@ -1476,16 +1494,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    document.querySelectorAll('.js-open-create-user-modal').forEach(function(btn) {
-        btn.addEventListener('click', function() {
+    // Delegated: these buttons live inside the um-content region that gets
+    // replaced after every AJAX action, so a directly-bound listener would
+    // only work until the first swap.
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.js-open-create-user-modal')) {
+            document.querySelector('#createUserModal form')?.reset();
             openModal('createUserModal');
-        });
+        } else if (e.target.closest('.js-open-bulk-import-modal')) {
+            document.querySelector('#bulkImportModal form')?.reset();
+            openModal('bulkImportModal');
+        }
     });
 
-    document.querySelectorAll('.js-open-bulk-import-modal').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            openModal('bulkImportModal');
+    // Any modal that frs-partial-update.js's data-frs-ajax-close hid via
+    // inline style after a successful submit still needs its 'open' class
+    // and aria-hidden/scroll-lock state reconciled to match.
+    document.addEventListener('frs:partial-loaded', function(e) {
+        if (!e.detail || e.detail.id !== 'um-content') return;
+        document.querySelectorAll('.um-modal').forEach(function(el) {
+            if (el.style.display === 'none') {
+                el.classList.remove('open');
+                el.setAttribute('aria-hidden', 'true');
+                el.style.display = '';
+            }
         });
+        syncBodyScrollLock();
     });
 
     const createRoleSelect = document.querySelector('#createUserModal [name="create_role"]');
@@ -1502,22 +1536,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     syncCreateAddressRequired();
 
-    document.querySelectorAll('.js-open-lock-modal').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.getElementById('lockUserId').value = this.dataset.userId;
-            document.getElementById('lockModalUser').textContent = 'Lock account for ' + this.dataset.userName + '?';
+    // Delegated for the same reason as the create/bulk-import buttons above:
+    // these live in the accounts list that gets swapped after every action.
+    document.addEventListener('click', function(e) {
+        const lockBtn = e.target.closest('.js-open-lock-modal');
+        if (lockBtn) {
+            document.getElementById('lockUserId').value = lockBtn.dataset.userId;
+            document.getElementById('lockModalUser').textContent = 'Lock account for ' + lockBtn.dataset.userName + '?';
+            const lockReasonInput = document.querySelector('#lockUserForm [name="lock_reason"]');
+            if (lockReasonInput) lockReasonInput.value = '';
             openModal('lockUserModal');
-        });
-    });
-
-    document.querySelectorAll('.js-open-delete-modal').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.getElementById('deleteUserId').value = this.dataset.userId;
+            return;
+        }
+        const deleteBtn = e.target.closest('.js-open-delete-modal');
+        if (deleteBtn) {
+            document.getElementById('deleteUserId').value = deleteBtn.dataset.userId;
             document.getElementById('deleteReasonInput').value = '';
             document.getElementById('deleteModalUser').textContent =
-                'Delete ' + this.dataset.userName + ' (' + this.dataset.userEmail + ')?';
+                'Delete ' + deleteBtn.dataset.userName + ' (' + deleteBtn.dataset.userEmail + ')?';
             openModal('deleteUserModal');
-        });
+        }
     });
 
     document.getElementById('deleteUserForm')?.addEventListener('submit', function(e) {
