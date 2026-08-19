@@ -1018,7 +1018,7 @@ function setSecurityHeaders(): void
     header("Content-Security-Policy: $csp");
     
     // Permissions Policy
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    header('Permissions-Policy: geolocation=(), microphone=(self), camera=()');
     
     // Force HTTPS in production (uncomment when deploying with SSL certificate)
     // NOTE: Uncomment this after obtaining SSL certificate and configuring HTTPS
