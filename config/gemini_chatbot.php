@@ -222,7 +222,6 @@ PROMPT;
         ],
         'temperature' => 0.1,
         'max_completion_tokens' => 200,
-        'response_format' => ['type' => 'json_object'],
     ];
 
     $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
