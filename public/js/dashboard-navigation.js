@@ -210,6 +210,37 @@
             navigate(resolved);
         });
 
+        // Prefetch the target page's HTML on hover so the full reload that
+        // follows a click feels near-instant (browser cache is already warm).
+        const prefetched = new Set();
+        function prefetchLink(link) {
+            if (shouldSkipLink(link)) {
+                return;
+            }
+            const href = link.getAttribute('href');
+            const resolved = new URL(href, window.location.href).href;
+            if (prefetched.has(resolved) || pathOnly(resolved) === pathOnly(window.location.href)) {
+                return;
+            }
+            prefetched.add(resolved);
+            const el = document.createElement('link');
+            el.rel = 'prefetch';
+            el.href = resolved;
+            document.head.appendChild(el);
+        }
+        document.addEventListener('mouseover', function (event) {
+            const link = event.target.closest('a');
+            if (link) {
+                prefetchLink(link);
+            }
+        });
+        document.addEventListener('touchstart', function (event) {
+            const link = event.target.closest('a');
+            if (link) {
+                prefetchLink(link);
+            }
+        }, { passive: true });
+
         // Initial active state (helpful after hard loads with odd URLs)
         updateActiveNav(window.location.href);
 

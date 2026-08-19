@@ -240,7 +240,22 @@ $sidebarAvatarInitial = function_exists('mb_substr')
             <?php endforeach; ?>
         </div>
     </nav>
-    
+    <script>
+    (function () {
+        try {
+            var state = JSON.parse(localStorage.getItem('collapse-state-dashboard') || '{}');
+            document.querySelectorAll('.collapsible-content[data-collapsed]').forEach(function (body) {
+                if (!body.id || !(body.id in state)) return;
+                var collapsed = state[body.id] === true;
+                body.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
+                var header = document.querySelector('[data-collapse-target="' + body.id + '"]');
+                var chevron = header && header.querySelector('.chevron-icon');
+                if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            });
+        } catch (e) {}
+    })();
+    </script>
+
     <div class="sidebar-user-footer">
         <div class="sidebar-user-info">
             <div class="sidebar-user-avatar">

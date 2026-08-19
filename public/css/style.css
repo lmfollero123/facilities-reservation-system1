@@ -1,6 +1,13 @@
 /* MOBILE-RESPONSIVE REFACTOR - Mobile-First Approach */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
 
+/* Smooths full-page dashboard navigation (cross-page sidebar clicks are real
+   browser reloads, not AJAX) into a cross-fade instead of a hard flash.
+   No-op in browsers without support (Firefox, older Safari/Chrome). */
+@view-transition {
+    navigation: auto;
+}
+
 /* ============================================
    THEME VARIABLES - Light & Dark Mode
    ============================================ */
