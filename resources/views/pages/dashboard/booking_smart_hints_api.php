@@ -24,6 +24,7 @@ require_once __DIR__ . '/../../../../config/geocoding.php';
 require_once __DIR__ . '/../../../../config/ai_helpers.php';
 require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
 require_once __DIR__ . '/../../../../config/booking_calendar_status.php';
+require_once __DIR__ . '/../../../../config/gemini_chatbot.php';
 
 header('Content-Type: application/json');
 
@@ -40,6 +41,36 @@ if (strlen($purpose) < 3) {
     echo json_encode(['error' => 'Purpose too short', 'highlight_dates' => [], 'facilities' => []]);
     exit;
 }
+
+// Gate out gibberish before computing any recommendations. Gemini is the
+// primary check (the local sklearn purpose_unclear_model has a structural
+// blind spot on genuinely novel gibberish - its TF-IDF vectorizer sees an
+// empty feature vector for unseen text and defaults to "probably clear").
+// Falls back to the local model, then a length-only heuristic, if Gemini is
+// unavailable - never hard-block a booking preview just because an external
+// API call failed.
+$purposeCheck = frs_gemini_check_purpose($purpose);
+if ($purposeCheck === null && function_exists('detectUnclearPurpose')) {
+    $unclear = detectUnclearPurpose($purpose);
+    if (!isset($unclear['error']) && ($unclear['is_unclear'] ?? false) && ($unclear['probability'] ?? 0) > 0.7) {
+        $purposeCheck = ['valid' => false, 'category' => 'other', 'reason' => 'Purpose seems unclear or too brief.'];
+    }
+}
+
+if ($purposeCheck !== null && $purposeCheck['valid'] === false) {
+    echo json_encode([
+        'highlight_dates' => [],
+        'facilities' => [],
+        'primary_facility_id' => null,
+        'message' => 'unclear_purpose',
+        'purpose_feedback' => $purposeCheck['reason'] !== ''
+            ? $purposeCheck['reason']
+            : 'Please describe your event purpose more clearly.',
+    ]);
+    exit;
+}
+
+$purposeCategory = $purposeCheck['category'] ?? null;
 
 if ($year < 2000 || $year > 2100) {
     $year = (int)date('Y');
@@ -234,6 +265,32 @@ try {
         $recs = array_slice($scoredFacilities, 0, 8);
     }
 
+    // Approval-rate + purpose-category-conditioned popularity apply to
+    // whichever branch produced $recs (ML model or the local fallback
+    // scorer above) - re-sort once afterward since both can shift scores.
+    if ($recs !== []) {
+        if (function_exists('getFacilityApprovalRates') && function_exists('applyFacilityApprovalRateBoost')) {
+            $approvalRates = getFacilityApprovalRates($pdo);
+            if ($approvalRates !== []) {
+                $recs = applyFacilityApprovalRateBoost($recs, $approvalRates);
+            }
+        }
+        if ($purposeCategory !== null && function_exists('getPurposeCategoryPopularityCounts') && function_exists('applyPurposeCategoryPopularityBoost')) {
+            $categoryCounts = getPurposeCategoryPopularityCounts($pdo, $purposeCategory);
+            if ($categoryCounts !== []) {
+                $recs = applyPurposeCategoryPopularityBoost($recs, $categoryCounts, $purposeCategory);
+            }
+        }
+        usort($recs, static function ($a, $b) {
+            $sA = $a['ml_relevance_score'] ?? 0;
+            $sB = $b['ml_relevance_score'] ?? 0;
+            if ($sB !== $sA) {
+                return $sB <=> $sA;
+            }
+            return ($a['distance_km'] ?? 999) <=> ($b['distance_km'] ?? 999);
+        });
+    }
+
     $primaryId = (int)($recs[0]['id'] ?? 0);
     $highlightDates = [];
     if ($primaryId > 0 && function_exists('frs_facility_calendar_matrix')) {
@@ -267,12 +324,14 @@ try {
             'score' => isset($row['ml_relevance_score']) ? round((float)$row['ml_relevance_score'], 2) : null,
             'distance' => $row['distance'] ?? null,
             'distance_km' => isset($row['distance_km']) ? round((float)$row['distance_km'], 2) : null,
+            'reason' => $row['reason'] ?? null,
         ];
     }
 
     echo json_encode([
         'highlight_dates' => $highlightDates,
         'primary_facility_id' => $primaryId ?: null,
+        'purpose_category' => $purposeCategory,
         'facilities' => $outFacilities,
         'best_times_label' => $suggestedTimes['label'] ?? '',
         'suggested_times' => $suggestedTimes['slots'] ?? [],

@@ -37,6 +37,115 @@ function frs_gemini_api_key(): string
 }
 
 /**
+ * Validate a booking "purpose" description and classify it into an event
+ * category, via Gemini. Used to gate facility recommendations away from
+ * gibberish/meaningless input — the local sklearn purpose_unclear_model has
+ * a structural blind spot here: its TF-IDF vectorizer produces a near-empty
+ * feature vector for text it never saw in training, so genuinely novel
+ * gibberish ("asdkjaskdjaksjd") scores as confidently clear. Gemini has no
+ * such blind spot.
+ *
+ * Returns null when Gemini is unavailable or the call fails — callers should
+ * fall back to the local model (fail open, never block a real resident's
+ * booking just because an external API hiccuped).
+ *
+ * @return array{valid: bool, category: string, reason: string}|null
+ */
+function frs_gemini_check_purpose(string $purpose): ?array
+{
+    $purpose = trim($purpose);
+    if ($purpose === '') {
+        return ['valid' => false, 'category' => 'other', 'reason' => 'Purpose is empty.'];
+    }
+
+    $apiKey = frs_gemini_api_key();
+    if ($apiKey === '') {
+        return null;
+    }
+
+    $systemPrompt = <<<PROMPT
+You screen short "purpose of booking" text submitted on a Philippine barangay facility reservation form.
+Respond with ONLY raw JSON, no markdown fences, no extra commentary:
+{"valid": true or false, "category": "sports" | "assembly" | "celebration" | "cultural" | "other", "reason": "short reason, max 12 words"}
+
+Rules:
+- valid=false ONLY for gibberish/keyboard-mashing (e.g. "asdkjaskdjaksjd", "qwertyuiop zxcvbnm"), pure random
+  characters, or text that gives absolutely no indication of what the event actually is.
+- valid=true for ANY genuine (even brief) description of an activity or event, in English, Filipino, or Taglish.
+  Err on the side of valid=true when in doubt - only reject clear gibberish.
+- category is your best classification when valid=true; use "other" if unsure. Never return null for category.
+PROMPT;
+
+    $models = ['gemini-flash-latest', 'gemini-2.0-flash'];
+    $raw = false;
+    $httpCode = 0;
+
+    foreach ($models as $model) {
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        $payload = [
+            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            'contents' => [['role' => 'user', 'parts' => [['text' => $purpose]]]],
+            'generationConfig' => [
+                'temperature' => 0.1,
+                'maxOutputTokens' => 200,
+                'responseMimeType' => 'application/json',
+            ],
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $apiKey,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT => 8,
+        ]);
+        $raw = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($raw !== false && $httpCode === 200) {
+            break;
+        }
+        error_log("Gemini purpose-check model {$model} failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
+    }
+
+    if ($raw === false || $httpCode !== 200) {
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+    if (!is_string($text) || $text === '') {
+        return null;
+    }
+
+    // Defensive strip in case a model still wraps the JSON in a fenced block.
+    $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
+    $json = json_decode((string) $text, true);
+    if (!is_array($json) || !array_key_exists('valid', $json)) {
+        return null;
+    }
+
+    $allowedCategories = ['sports', 'assembly', 'celebration', 'cultural', 'other'];
+    $category = is_string($json['category'] ?? null) ? $json['category'] : 'other';
+    if (!in_array($category, $allowedCategories, true)) {
+        $category = 'other';
+    }
+
+    return [
+        'valid' => (bool) $json['valid'],
+        'category' => $category,
+        'reason' => is_string($json['reason'] ?? null) ? $json['reason'] : '',
+    ];
+}
+
+/**
  * Call Gemini API and return text response.
  *
  * @param string $systemPrompt System/context prompt

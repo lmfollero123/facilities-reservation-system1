@@ -530,6 +530,170 @@ function applyFacilityBookingPopularityBoost(array $recommendations, array $faci
 }
 
 /**
+ * Approval vs. denial rate per facility - a facility booked often but denied
+ * often should rank lower, not higher. Facilities with fewer than $minDecided
+ * decided (approved+denied) reservations in the window are omitted entirely:
+ * there isn't enough data to judge them confidently either way, so they stay
+ * neutral rather than getting an unfairly extreme rate from a tiny sample.
+ *
+ * @return array<int, array{rate: float, n: int}>
+ */
+function getFacilityApprovalRates(PDO $pdo, int $monthsBack = 6, int $minDecided = 5): array {
+    if ($monthsBack < 1) {
+        $monthsBack = 1;
+    }
+    if ($monthsBack > 60) {
+        $monthsBack = 60;
+    }
+    $stmt = $pdo->prepare(
+        'SELECT facility_id, status, COUNT(*) AS c
+         FROM reservations
+         WHERE status IN (\'approved\', \'denied\')
+           AND reservation_date >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
+         GROUP BY facility_id, status'
+    );
+    $stmt->execute(['months' => $monthsBack]);
+
+    $byFacility = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $fid = (int)$row['facility_id'];
+        $byFacility[$fid][$row['status']] = (int)$row['c'];
+    }
+
+    $out = [];
+    foreach ($byFacility as $fid => $counts) {
+        $approved = $counts['approved'] ?? 0;
+        $denied = $counts['denied'] ?? 0;
+        $total = $approved + $denied;
+        if ($total < $minDecided) {
+            continue;
+        }
+        $out[$fid] = ['rate' => $approved / $total, 'n' => $total];
+    }
+    return $out;
+}
+
+/**
+ * Adjust relevance scores based on each facility's approval rate. Confidence
+ * floor (minimum sample size) is already applied by getFacilityApprovalRates
+ * - facilities absent from $approvalRates are left untouched (neutral).
+ *
+ * @param array<int, array<string, mixed>> $recommendations
+ * @param array<int, array{rate: float, n: int}> $approvalRates
+ * @return array<int, array<string, mixed>>
+ */
+function applyFacilityApprovalRateBoost(array $recommendations, array $approvalRates): array {
+    foreach ($recommendations as &$r) {
+        $fid = (int)($r['id'] ?? 0);
+        $info = $approvalRates[$fid] ?? null;
+        if ($info === null) {
+            continue;
+        }
+        $rate = $info['rate'];
+        $adjustment = 0.0;
+        $note = null;
+        if ($rate >= 0.85) {
+            $adjustment = 3.0;
+            $note = 'High approval rate (' . round($rate * 100) . '%)';
+        } elseif ($rate < 0.4) {
+            $adjustment = -5.0;
+            $note = 'Frequently denied (' . round($rate * 100) . '% approved)';
+        } elseif ($rate < 0.6) {
+            $adjustment = -2.0;
+        }
+        if ($adjustment === 0.0) {
+            continue;
+        }
+        $base = (float)($r['ml_relevance_score'] ?? 0);
+        $r['ml_relevance_score'] = round($base + $adjustment, 2);
+        if ($note !== null) {
+            $reason = trim((string)($r['reason'] ?? ''));
+            $r['reason'] = $reason === '' ? $note : $reason . '; ' . $note;
+        }
+    }
+    unset($r);
+    return $recommendations;
+}
+
+/**
+ * Count recent APPROVED reservations per facility whose purpose text matches
+ * the given event category's keywords - "most booked for events like this",
+ * not just "most booked overall". No-op (empty result) for null/'other'
+ * categories, since 'other' has no keyword list to match against.
+ *
+ * @return array<int, int> facility_id => matching approved booking count
+ */
+function getPurposeCategoryPopularityCounts(PDO $pdo, ?string $category, int $monthsBack = 6): array {
+    if ($category === null || $category === 'other') {
+        return [];
+    }
+    $map = frs_event_category_keyword_map();
+    $keywords = $map[$category]['purpose_keywords'] ?? [];
+    if ($keywords === []) {
+        return [];
+    }
+    if ($monthsBack < 1) {
+        $monthsBack = 1;
+    }
+    if ($monthsBack > 60) {
+        $monthsBack = 60;
+    }
+
+    $conds = [];
+    $params = ['months' => $monthsBack];
+    foreach ($keywords as $i => $kw) {
+        $key = 'kw' . $i;
+        $conds[] = 'LOWER(purpose) LIKE :' . $key;
+        $params[$key] = '%' . strtolower($kw) . '%';
+    }
+
+    $sql = 'SELECT facility_id, COUNT(*) AS c
+            FROM reservations
+            WHERE status = \'approved\'
+              AND reservation_date >= DATE_SUB(CURDATE(), INTERVAL :months MONTH)
+              AND (' . implode(' OR ', $conds) . ')
+            GROUP BY facility_id';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    $out = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $out[(int)$row['facility_id']] = (int)$row['c'];
+    }
+    return $out;
+}
+
+/**
+ * Boost relevance scores using purpose-category-specific booking frequency
+ * (log-scaled, same shape as applyFacilityBookingPopularityBoost but scoped
+ * to "bookings for this kind of event" rather than all bookings).
+ *
+ * @param array<int, array<string, mixed>> $recommendations
+ * @param array<int, int> $categoryCounts
+ * @return array<int, array<string, mixed>>
+ */
+function applyPurposeCategoryPopularityBoost(array $recommendations, array $categoryCounts, string $category): array {
+    if ($categoryCounts === []) {
+        return $recommendations;
+    }
+    foreach ($recommendations as &$r) {
+        $fid = (int)($r['id'] ?? 0);
+        $c = $categoryCounts[$fid] ?? 0;
+        if ($c <= 0) {
+            continue;
+        }
+        $boost = round(min(4.0, log(1 + $c, 10) * 5.0), 2);
+        $base = (float)($r['ml_relevance_score'] ?? 0);
+        $r['ml_relevance_score'] = round($base + $boost, 2);
+        $suffix = 'Popular choice for ' . $category . ' events (' . $c . ' recent booking' . ($c === 1 ? '' : 's') . ')';
+        $reason = trim((string)($r['reason'] ?? ''));
+        $r['reason'] = $reason === '' ? $suffix : $reason . '; ' . $suffix;
+    }
+    unset($r);
+    return $recommendations;
+}
+
+/**
  * Popular time_slot values from real reservations (optionally filtered by purpose keywords).
  *
  * @return array{slots: string[], label: string, source: string}|null Null if not enough data
@@ -663,9 +827,12 @@ function matchCapacity($expectedAttendance, $facilityCapacity) {
             return ['score' => 40, 'reason' => 'Perfect capacity match (' . $expected . ' of ' . $capacity . ')'];
         } elseif ($ratio >= 0.5) {
             return ['score' => 30, 'reason' => 'Good capacity fit (' . $expected . ' of ' . $capacity . ')'];
-        } else {
-            return ['score' => 20, 'reason' => 'Adequate capacity (' . $expected . ' of ' . $capacity . ')'];
+        } elseif ($ratio >= 0.25) {
+            return ['score' => 15, 'reason' => 'Adequate capacity (' . $expected . ' of ' . $capacity . ')'];
         }
+        // Gross over-provisioning (e.g. a 5-person meeting in a 100-cap hall) -
+        // technically fits, but it's a poor fit, not a good recommendation.
+        return ['score' => 5, 'reason' => 'Capacity much larger than needed (' . $expected . ' of ' . $capacity . ')'];
     }
     
     return ['score' => 0, 'reason' => 'Capacity may be insufficient'];
@@ -709,8 +876,37 @@ function matchAmenities($requiredAmenities, $facilityAmenities) {
 }
 
 /**
+ * Shared event-category keyword map. Hoisted out of matchPurpose() so
+ * purpose-conditioned popularity scoring (getPurposeCategoryPopularityCounts)
+ * can bucket historical reservations into the same categories without the
+ * two lists drifting apart.
+ *
+ * @return array<string, array{purpose_keywords: string[], facility_keywords: string[]}>
+ */
+function frs_event_category_keyword_map(): array {
+    return [
+        'sports' => [
+            'purpose_keywords' => ['sport', 'game', 'tournament', 'athletic', 'basketball', 'volleyball', 'badminton', 'tennis', 'fitness', 'exercise', 'zumba', 'dance', 'dancing', 'workout', 'gym', 'physical'],
+            'facility_keywords' => ['court', 'sport', 'athletic', 'gym', 'fitness', 'basketball', 'volleyball', 'badminton', 'covered court', 'sports complex', 'multi-purpose', 'hall']
+        ],
+        'assembly' => [
+            'purpose_keywords' => ['assembly', 'meeting', 'gathering', 'conference', 'seminar', 'workshop', 'training', 'forum', 'discussion', 'session'],
+            'facility_keywords' => ['hall', 'convention', 'convention hall', 'function hall', 'meeting', 'room', 'center', 'centre', 'multi-purpose']
+        ],
+        'celebration' => [
+            'purpose_keywords' => ['celebration', 'party', 'festival', 'event', 'program', 'programme', 'ceremony', 'anniversary', 'birthday', 'fiesta'],
+            'facility_keywords' => ['hall', 'convention', 'amphitheater', 'amphitheatre', 'park', 'open space', 'multi-purpose']
+        ],
+        'cultural' => [
+            'purpose_keywords' => ['cultural', 'show', 'performance', 'concert', 'presentation', 'exhibition', 'display', 'program', 'programme'],
+            'facility_keywords' => ['hall', 'amphitheater', 'amphitheatre', 'theater', 'theatre', 'stage', 'convention', 'multi-purpose']
+        ],
+    ];
+}
+
+/**
  * Match purpose keywords with facility description - IMPROVED for general terms
- * 
+ *
  * @param string $purpose Event purpose
  * @param string $facilityText Facility name and description
  * @return array Match score and reason
@@ -745,25 +941,8 @@ function matchPurpose($purpose, $facilityText) {
     }
     
     // Enhanced event type matching (more flexible - matches purpose to facility type)
-    $eventPatterns = [
-        'sports' => [
-            'purpose_keywords' => ['sport', 'game', 'tournament', 'athletic', 'basketball', 'volleyball', 'badminton', 'tennis', 'fitness', 'exercise', 'zumba', 'dance', 'dancing', 'workout', 'gym', 'physical'],
-            'facility_keywords' => ['court', 'sport', 'athletic', 'gym', 'fitness', 'basketball', 'volleyball', 'badminton', 'covered court', 'sports complex', 'multi-purpose', 'hall']
-        ],
-        'assembly' => [
-            'purpose_keywords' => ['assembly', 'meeting', 'gathering', 'conference', 'seminar', 'workshop', 'training', 'forum', 'discussion', 'session'],
-            'facility_keywords' => ['hall', 'convention', 'convention hall', 'function hall', 'meeting', 'room', 'center', 'centre', 'multi-purpose']
-        ],
-        'celebration' => [
-            'purpose_keywords' => ['celebration', 'party', 'festival', 'event', 'program', 'programme', 'ceremony', 'anniversary', 'birthday', 'fiesta'],
-            'facility_keywords' => ['hall', 'convention', 'amphitheater', 'amphitheatre', 'park', 'open space', 'multi-purpose']
-        ],
-        'cultural' => [
-            'purpose_keywords' => ['cultural', 'show', 'performance', 'concert', 'presentation', 'exhibition', 'display', 'program', 'programme'],
-            'facility_keywords' => ['hall', 'amphitheater', 'amphitheatre', 'theater', 'theatre', 'stage', 'convention', 'multi-purpose']
-        ],
-    ];
-    
+    $eventPatterns = frs_event_category_keyword_map();
+
     $matchedEventType = null;
     foreach ($eventPatterns as $type => $pattern) {
         $purposeMatches = false;

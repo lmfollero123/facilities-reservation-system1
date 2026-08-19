@@ -3226,6 +3226,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function bcfApplyCalendarAiHints(payload) {
         bcfClearCalendarAiHints();
         const bar = document.getElementById('bcf-smart-hints-bar');
+        if (payload && payload.message === 'unclear_purpose') {
+            if (bar) {
+                bar.innerHTML = '<span style="opacity:.85">' + bcfHintEscape(payload.purpose_feedback || 'Please describe your event purpose more clearly.') + '</span>';
+                bar.classList.add('is-visible');
+            }
+            return;
+        }
         const dates = payload && payload.highlight_dates ? payload.highlight_dates : [];
         const dateSet = new Set(dates);
         document.querySelectorAll('[data-cal-date]').forEach(function (cell) {
