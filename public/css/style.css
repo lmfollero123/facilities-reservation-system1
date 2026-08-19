@@ -8459,6 +8459,34 @@ html {
     color: rgb(178, 48, 48) !important;
 }
 
+/* When conflict warning has yellow background (pending/soft warning), keep it yellow */
+#conflict-warning[style*="background: rgb(255, 244, 229)"],
+#conflict-warning[style*="background: #fff4e5"] {
+    background: rgb(255, 244, 229) !important;
+    border-color: rgb(255, 193, 7) !important;
+}
+
+#conflict-warning[style*="background: rgb(255, 244, 229)"] h4,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] p,
+#conflict-warning[style*="background: #fff4e5"] h4,
+#conflict-warning[style*="background: #fff4e5"] p {
+    color: rgb(133, 100, 4) !important;
+}
+
+/* When conflict warning has blue background (holiday notice, low actual risk), keep it blue */
+#conflict-warning[style*="background: rgb(239, 246, 255)"],
+#conflict-warning[style*="background: #eff6ff"] {
+    background: rgb(239, 246, 255) !important;
+    border-color: rgb(37, 99, 235) !important;
+}
+
+#conflict-warning[style*="background: rgb(239, 246, 255)"] h4,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] p,
+#conflict-warning[style*="background: #eff6ff"] h4,
+#conflict-warning[style*="background: #eff6ff"] p {
+    color: rgb(30, 64, 175) !important;
+}
+
 /* ============================================
    FIX: Collapsible Body Containers - Dark Mode
    ============================================ */
@@ -8542,6 +8570,42 @@ html {
     color: rgb(178, 48, 48) !important;
 }
 
+/* Yellow (Pending/Soft) - Override all text elements */
+#conflict-warning[style*="background: rgb(255, 244, 229)"] #conflict-title,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] #conflict-message,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] #conflict-risk,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] p,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] h4,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] li,
+#conflict-warning[style*="background: rgb(255, 244, 229)"] strong,
+#conflict-warning[style*="background: #fff4e5"] #conflict-title,
+#conflict-warning[style*="background: #fff4e5"] #conflict-message,
+#conflict-warning[style*="background: #fff4e5"] #conflict-risk,
+#conflict-warning[style*="background: #fff4e5"] p,
+#conflict-warning[style*="background: #fff4e5"] h4,
+#conflict-warning[style*="background: #fff4e5"] li,
+#conflict-warning[style*="background: #fff4e5"] strong {
+    color: rgb(133, 100, 4) !important;
+}
+
+/* Blue (Holiday Notice, low actual risk) - Override all text elements */
+#conflict-warning[style*="background: rgb(239, 246, 255)"] #conflict-title,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] #conflict-message,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] #conflict-risk,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] p,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] h4,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] li,
+#conflict-warning[style*="background: rgb(239, 246, 255)"] strong,
+#conflict-warning[style*="background: #eff6ff"] #conflict-title,
+#conflict-warning[style*="background: #eff6ff"] #conflict-message,
+#conflict-warning[style*="background: #eff6ff"] #conflict-risk,
+#conflict-warning[style*="background: #eff6ff"] p,
+#conflict-warning[style*="background: #eff6ff"] h4,
+#conflict-warning[style*="background: #eff6ff"] li,
+#conflict-warning[style*="background: #eff6ff"] strong {
+    color: rgb(30, 64, 175) !important;
+}
+
 /* Override the general dark mode error text rule for conflict warnings */
 [data-theme="dark"] #conflict-warning[style*="background: rgb(227, 248, 239)"] *,
 [data-theme="dark"] #conflict-warning[style*="background: #e3f8ef"] * {
@@ -8551,6 +8615,16 @@ html {
 [data-theme="dark"] #conflict-warning[style*="background: rgb(253, 236, 238)"] *,
 [data-theme="dark"] #conflict-warning[style*="background: #fdecee"] * {
     color: rgb(178, 48, 48) !important;
+}
+
+[data-theme="dark"] #conflict-warning[style*="background: rgb(255, 244, 229)"] *,
+[data-theme="dark"] #conflict-warning[style*="background: #fff4e5"] * {
+    color: rgb(133, 100, 4) !important;
+}
+
+[data-theme="dark"] #conflict-warning[style*="background: rgb(239, 246, 255)"] *,
+[data-theme="dark"] #conflict-warning[style*="background: #eff6ff"] * {
+    color: rgb(30, 64, 175) !important;
 }
 
 
