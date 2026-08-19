@@ -43,10 +43,15 @@ if ($calMonth < 1 || $calMonth > 12) {
     $calMonth = ((int)date('Y') === $filterYear) ? (int)date('m') : 1;
 }
 
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
+        if ($isAjaxPost) {
+            header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => 'error'])));
+        }
     } else {
         $action = (string)($_POST['action'] ?? '');
 
@@ -147,9 +152,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                     $redirectYear = (int)date('Y', strtotime($startDate));
                 }
             }
-            $_SESSION['blackout_flash'] = ['msg' => $message, 'type' => $messageType];
-            header('Location: ' . blackout_filter_url($redirectYear, $redirectMonth, $redirectFacility, $redirectDate));
-            exit;
+
+            // AJAX submits (data-frs-ajax) stay on this request instead of a
+            // redirect: the toast header carries the message and the filter
+            // vars below are overridden so the re-rendered bo-calendar
+            // partial reflects the same state the redirect would have shown.
+            if ($isAjaxPost) {
+                header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => 'success'])));
+                $filterYear = $redirectYear;
+                $calMonth = $redirectMonth;
+                $filterFacility = $redirectFacility;
+                $_GET['selected_date'] = $redirectDate ?? '';
+                $message = '';
+            } else {
+                $_SESSION['blackout_flash'] = ['msg' => $message, 'type' => $messageType];
+                header('Location: ' . blackout_filter_url($redirectYear, $redirectMonth, $redirectFacility, $redirectDate));
+                exit;
+            }
+        } elseif ($isAjaxPost) {
+            header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => 'error'])));
         }
     }
 }
@@ -535,7 +556,7 @@ ob_start();
                                         <p class="text-xs text-slate-400">Recorded <?= htmlspecialchars(date('M j, Y g:i A', strtotime($b['created_at']))); ?></p>
                                     <?php endif; ?>
                                     <?php if (!empty($b['is_removable'])): ?>
-                                    <form method="POST" class="mt-3" onsubmit="return frsConfirmSubmit(this, 'Remove this blackout?', {title: 'Remove blackout', danger: true});">
+                                    <form method="POST" class="mt-3" data-frs-ajax data-frs-ajax-target="bo-calendar" onsubmit="return frsConfirmSubmit(this, 'Remove this blackout?', {title: 'Remove blackout', danger: true});">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="blackout_id" value="<?= (int)$b['id']; ?>">
@@ -589,7 +610,7 @@ ob_start();
                 </div>
 
                 <div id="bo-panel-single" role="tabpanel" class="p-4 sm:p-6">
-                    <form method="POST" class="booking-form book-facility-compact frs-bo-form-grid grid grid-cols-1 gap-4 items-end">
+                    <form method="POST" class="booking-form book-facility-compact frs-bo-form-grid grid grid-cols-1 gap-4 items-end" data-frs-ajax data-frs-ajax-target="bo-calendar" data-frs-ajax-close="#bo-add-modal">
                         <?= csrf_field(); ?>
                         <input type="hidden" name="action" value="add">
                         <input type="hidden" name="bo_year" value="<?= (int)$filterYear; ?>">
@@ -638,7 +659,7 @@ ob_start();
 
                 <div id="bo-panel-range" role="tabpanel" class="hidden p-4 sm:p-6 border-t border-slate-100">
                     <p class="text-xs text-slate-500 mb-4">Block every day between two dates (max 366 days)&mdash;ideal for week-long events.</p>
-                    <form method="POST" class="booking-form book-facility-compact frs-bo-form-grid grid grid-cols-1 gap-4 items-end">
+                    <form method="POST" class="booking-form book-facility-compact frs-bo-form-grid grid grid-cols-1 gap-4 items-end" data-frs-ajax data-frs-ajax-target="bo-calendar" data-frs-ajax-close="#bo-add-modal">
                         <?= csrf_field(); ?>
                         <input type="hidden" name="action" value="add_range">
                         <input type="hidden" name="bo_year" value="<?= (int)$filterYear; ?>">
@@ -972,7 +993,9 @@ ob_start();
                 if (modal) {
                     if (modal.parentNode !== document.body) document.body.appendChild(modal);
                     modal.classList.remove('hidden');
+                    modal.style.display = ''; // clear inline display left by frsAjaxForm's data-frs-ajax-close
                     document.body.style.overflow = 'hidden';
+                    modal.querySelectorAll('form').forEach(function (f) { f.reset(); });
                 }
             });
         }
