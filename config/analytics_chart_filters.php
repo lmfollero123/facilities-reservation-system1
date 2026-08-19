@@ -154,7 +154,7 @@ if (!function_exists('frs_reports_period_filter_form')) {
 
         ob_start();
         ?>
-        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>">
+        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>" data-frs-partial="reports-content">
             <?= frs_chart_hidden_preserve(array_merge($skipPrefixes, [$prefix])); ?>
             <div class="chart-filter-fields">
                 <label class="chart-filter-item">

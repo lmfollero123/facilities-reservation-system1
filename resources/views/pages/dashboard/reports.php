@@ -852,6 +852,7 @@ if (isset($_GET['live_occupancy'])) {
 
 ob_start();
 ?>
+<div data-frs-partial-id="reports-content" data-frs-partial-root>
 <div class="page-header">
     <div class="breadcrumb">
         <span>Analytics</span><span class="sep">/</span><span>Reports</span>
@@ -911,24 +912,6 @@ ob_start();
             </label>
         </div>
     </form>
-</div>
-
-<div id="frsAiSummaryModal" class="frs-modal-overlay" role="dialog" aria-labelledby="aiSummaryTitle" aria-modal="true">
-    <div class="frs-modal-panel">
-        <div class="frs-modal-panel-header">
-            <div>
-                <h3 id="aiSummaryTitle">AI Summary</h3>
-                <small id="aiSummaryMeta" class="frs-modal-meta">Uses Overview KPIs filter.</small>
-            </div>
-            <div style="display:flex; gap:0.5rem;">
-                <button class="btn-outline" type="button" onclick="printAiSummary()">🖨️ Print</button>
-                <button class="btn-outline" type="button" onclick="closeAiSummaryModal()">✕ Close</button>
-            </div>
-        </div>
-        <div id="aiSummaryContent" class="frs-modal-panel-body">
-            <p>Click “Generate AI Summary” to load insights.</p>
-        </div>
-    </div>
 </div>
 
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
@@ -1145,6 +1128,40 @@ ob_start();
 </section>
 
 <script>
+if (window.frsInitReservationCharts) {
+    window.frsInitReservationCharts({
+        monthlyLabels: <?= json_encode($monthlyLabels); ?>,
+        monthlyData: <?= json_encode($monthlyData); ?>,
+        statusLabels: <?= json_encode($statusLabels); ?>,
+        statusCounts: <?= json_encode($statusCounts); ?>,
+        statusColors: <?= json_encode($statusColors); ?>,
+        facilityLabels: <?= json_encode($facilityLabels); ?>,
+        facilityCounts: <?= json_encode($facilityCounts); ?>,
+        showValueLabels: true
+    });
+}
+</script>
+</div>
+
+<div id="frsAiSummaryModal" class="frs-modal-overlay" role="dialog" aria-labelledby="aiSummaryTitle" aria-modal="true">
+    <div class="frs-modal-panel">
+        <div class="frs-modal-panel-header">
+            <div>
+                <h3 id="aiSummaryTitle">AI Summary</h3>
+                <small id="aiSummaryMeta" class="frs-modal-meta">Uses Overview KPIs filter.</small>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn-outline" type="button" onclick="printAiSummary()">🖨️ Print</button>
+                <button class="btn-outline" type="button" onclick="closeAiSummaryModal()">✕ Close</button>
+            </div>
+        </div>
+        <div id="aiSummaryContent" class="frs-modal-panel-body">
+            <p>Click “Generate AI Summary” to load insights.</p>
+        </div>
+    </div>
+</div>
+
+<script>
 function closeAiSummaryModal() {
     const modal = document.getElementById('frsAiSummaryModal');
     if (modal) {
@@ -1258,8 +1275,12 @@ function applyGlobalFilter() {
         url.searchParams.set(prefix + '_year', year);
     });
 
-    // Redirect to apply filters
-    window.location.href = url.toString();
+    // Apply filters in place without a full page reload.
+    if (window.frsPartialLoad) {
+        window.frsPartialLoad(url.toString(), 'reports-content');
+    } else {
+        window.location.href = url.toString();
+    }
 }
 
 function printAiSummary() {
@@ -1307,18 +1328,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         modal.addEventListener('click', function (e) {
             if (e.target === modal) closeAiSummaryModal();
-        });
-    }
-    if (window.frsInitReservationCharts) {
-        window.frsInitReservationCharts({
-            monthlyLabels: <?= json_encode($monthlyLabels); ?>,
-            monthlyData: <?= json_encode($monthlyData); ?>,
-            statusLabels: <?= json_encode($statusLabels); ?>,
-            statusCounts: <?= json_encode($statusCounts); ?>,
-            statusColors: <?= json_encode($statusColors); ?>,
-            facilityLabels: <?= json_encode($facilityLabels); ?>,
-            facilityCounts: <?= json_encode($facilityCounts); ?>,
-            showValueLabels: true
         });
     }
 
