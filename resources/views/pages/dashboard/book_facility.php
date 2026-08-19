@@ -4024,6 +4024,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (conflictIcon) conflictIcon.textContent = '⚠️';
             if (conflictTitle) conflictTitle.textContent = 'High Demand Period';
             if (conflictTitle) conflictTitle.style.color = '#dc2626';
+        } else if (conflictType === 'holiday-low-risk') {
+            // Holiday, but the model's actual predicted risk for this
+            // facility/slot is low - informational, not alarming red.
+            messageBox.style.background = '#eff6ff';
+            messageBox.style.border = '2px solid #2563eb';
+            messageText.style.color = '#1e40af';
+            if (conflictIcon) conflictIcon.textContent = 'ℹ️';
+            if (conflictTitle) conflictTitle.textContent = 'Holiday Notice';
+            if (conflictTitle) conflictTitle.style.color = '#1e40af';
         } else {
             // Hard conflict (approved) - red/error, blocks submission
             messageBox.style.background = '#fdecee';
@@ -4183,10 +4192,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // High risk or holiday
             else if ((data.risk_score ?? 0) >= 50 || eventLabel) {
                 window._bcfLastConflictHard = false;
-                const msg = eventLabel
-                    ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
-                    : 'Higher demand expected. Consider alternative slots.';
-                showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel, 'risk');
+                const score = data.risk_score ?? 0;
+                const isHighRisk = score >= 50;
+                // A holiday alone used to always title this "High Demand
+                // Period" in red, even when the model's actual predicted
+                // risk for this specific facility/slot was Low - directly
+                // contradicting the "Risk level: Low" line shown right
+                // below it. Only use the high-demand framing when the
+                // score itself backs it up.
+                const msg = isHighRisk
+                    ? (eventLabel
+                        ? `Higher demand expected (${eventLabel}). Consider alternative slots.`
+                        : 'Higher demand expected. Consider alternative slots.')
+                    : `${eventLabel} is a holiday, but predicted demand for this facility and time is low. Booking should be smooth.`;
+                showMessage(msg, data.alternatives || [], data.risk_score ?? null, eventLabel, isHighRisk ? 'risk' : 'holiday-low-risk');
                 showDemandPrediction(data);
                 lastShown = {fid, date, timeSlot};
             } else {
