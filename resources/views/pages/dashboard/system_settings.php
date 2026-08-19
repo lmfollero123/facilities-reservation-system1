@@ -20,6 +20,7 @@ $pdo = db();
 $pageTitle = 'System Settings | LGU Facilities Reservation';
 $message = '';
 $messageType = 'success';
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 $tablesReady = frs_lookups_table_ready($pdo);
 $rolePermissionsTableReady = false;
 try {
@@ -151,6 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
         $message = 'Unable to save changes. Please try again.';
         $messageType = 'error';
     }
+
+    if ($isAjaxPost && $message !== '') {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+        $message = '';
+    }
 }
 
 $categories = frs_lookup_categories($pdo);
@@ -220,7 +226,8 @@ ob_start();
         <nav class="ss-cat-nav" aria-label="Lookup categories">
             <?php foreach ($categories as $cat): ?>
                 <a href="?category=<?= urlencode($cat['slug']); ?>"
-                   class="ss-cat-link<?= $activeCategory === $cat['slug'] ? ' is-active' : ''; ?>">
+                   class="ss-cat-link<?= $activeCategory === $cat['slug'] ? ' is-active' : ''; ?>"
+                   data-frs-partial="ss-main">
                     <i class="bi bi-folder ss-cat-icon"></i>
                     <span class="ss-cat-name"><?= htmlspecialchars($cat['name']); ?></span>
                     <?php if ($activeCategory === $cat['slug']): ?>
@@ -235,7 +242,7 @@ ob_start();
     </aside>
 
     <!-- Main Content -->
-    <main class="ss-main">
+    <main class="ss-main" data-frs-partial-id="ss-main" data-frs-partial-root>
         <?php
         $catMeta = null;
         foreach ($categories as $cat) {
@@ -255,7 +262,7 @@ ob_start();
                 <?php endif; ?>
             </div>
             <?php if ($isLookupCategory): ?>
-            <button type="button" class="ss-btn-primary ss-btn-large" onclick="document.getElementById('add-modal').classList.add('is-open')">
+            <button type="button" class="ss-btn-primary ss-btn-large" onclick="openAddModal()">
                 <i class="bi bi-plus-lg ss-btn-icon"></i>
                 Add New <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?>
             </button>
@@ -349,7 +356,7 @@ ob_start();
                                 <?php
                                 $perms = $allPermissions[$role][$key] ?? ['create' => false, 'read' => false, 'update' => false, 'delete' => false];
                                 ?>
-                                <form method="POST" class="ss-perm-form">
+                                <form method="POST" class="ss-perm-form" data-frs-ajax>
                                     <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="update_permissions">
                                     <input type="hidden" name="role" value="<?= htmlspecialchars($role); ?>">
@@ -357,22 +364,22 @@ ob_start();
                                     <div class="ss-perm-checks">
                                         <label class="ss-perm-check">
                                             <input type="hidden" name="can_create" value="0">
-                                            <input type="checkbox" name="can_create" value="1" <?= $perms['create'] ? 'checked' : ''; ?> onchange="this.form.submit()">
+                                            <input type="checkbox" name="can_create" value="1" <?= $perms['create'] ? 'checked' : ''; ?> onchange="this.form.requestSubmit()">
                                             <span>Create</span>
                                         </label>
                                         <label class="ss-perm-check">
                                             <input type="hidden" name="can_read" value="0">
-                                            <input type="checkbox" name="can_read" value="1" <?= $perms['read'] ? 'checked' : ''; ?> onchange="this.form.submit()">
+                                            <input type="checkbox" name="can_read" value="1" <?= $perms['read'] ? 'checked' : ''; ?> onchange="this.form.requestSubmit()">
                                             <span>Read</span>
                                         </label>
                                         <label class="ss-perm-check">
                                             <input type="hidden" name="can_update" value="0">
-                                            <input type="checkbox" name="can_update" value="1" <?= $perms['update'] ? 'checked' : ''; ?> onchange="this.form.submit()">
+                                            <input type="checkbox" name="can_update" value="1" <?= $perms['update'] ? 'checked' : ''; ?> onchange="this.form.requestSubmit()">
                                             <span>Update</span>
                                         </label>
                                         <label class="ss-perm-check">
                                             <input type="hidden" name="can_delete" value="0">
-                                            <input type="checkbox" name="can_delete" value="1" <?= $perms['delete'] ? 'checked' : ''; ?> onchange="this.form.submit()">
+                                            <input type="checkbox" name="can_delete" value="1" <?= $perms['delete'] ? 'checked' : ''; ?> onchange="this.form.requestSubmit()">
                                             <span>Delete</span>
                                         </label>
                                     </div>
@@ -410,7 +417,7 @@ ob_start();
             }
         ?>
         <div class="booking-card" style="max-width: 640px;">
-            <form method="POST">
+            <form method="POST" data-frs-ajax>
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="update_security_timers">
 
@@ -494,7 +501,7 @@ ob_start();
                     <h3>No items yet</h3>
                     <p>Add your first <?= htmlspecialchars($catMeta['name'] ?? 'item'); ?> to get started.</p>
                     <?php if ($isLookupCategory): ?>
-                    <button type="button" class="ss-btn-primary" onclick="document.getElementById('add-modal').classList.add('is-open')">
+                    <button type="button" class="ss-btn-primary" onclick="openAddModal()">
                         Add First <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?>
                     </button>
                     <?php endif; ?>
@@ -595,7 +602,7 @@ ob_start();
             <h2>Add New <?= htmlspecialchars($catMeta['name'] ?? 'Item'); ?></h2>
             <button type="button" class="ss-modal-close" onclick="document.getElementById('add-modal').classList.remove('is-open')">×</button>
         </div>
-        <form method="POST" class="ss-modal-form">
+        <form method="POST" class="ss-modal-form" data-frs-ajax data-frs-ajax-target="ss-main" data-frs-ajax-close="#add-modal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="add_value">
             <input type="hidden" name="category" value="<?= htmlspecialchars($activeCategory); ?>">
@@ -634,7 +641,7 @@ ob_start();
             <h2>Edit Item</h2>
             <button type="button" class="ss-modal-close" onclick="document.getElementById('edit-modal').classList.remove('is-open')">×</button>
         </div>
-        <form method="POST" class="ss-modal-form">
+        <form method="POST" class="ss-modal-form" data-frs-ajax data-frs-ajax-target="ss-main" data-frs-ajax-close="#edit-modal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="update_value">
             <input type="hidden" name="value_id" id="edit-value-id">
@@ -676,7 +683,7 @@ ob_start();
         <div class="ss-modal-body">
             <p>Are you sure you want to delete <strong id="delete-item-name"></strong>? This action cannot be undone.</p>
         </div>
-        <form method="POST" class="ss-modal-actions">
+        <form method="POST" class="ss-modal-actions" data-frs-ajax data-frs-ajax-target="ss-main" data-frs-ajax-close="#delete-modal">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="delete_value">
             <input type="hidden" name="value_id" id="delete-value-id">
@@ -687,6 +694,13 @@ ob_start();
 </div>
 
 <script>
+function openAddModal() {
+    const modal = document.getElementById('add-modal');
+    if (!modal) return;
+    modal.style.display = '';
+    modal.classList.add('is-open');
+}
+
 function openEditFromRow(btn) {
     openEditModal(
         btn.dataset.editId,
@@ -709,13 +723,17 @@ function openEditModal(id, label, slug, isActive, blocksBooking) {
     if (blocksBookingEl) {
         blocksBookingEl.checked = blocksBooking;
     }
-    document.getElementById('edit-modal').classList.add('is-open');
+    const editModal = document.getElementById('edit-modal');
+    editModal.style.display = '';
+    editModal.classList.add('is-open');
 }
 
 function confirmDelete(id, name) {
     document.getElementById('delete-value-id').value = id;
     document.getElementById('delete-item-name').textContent = name;
-    document.getElementById('delete-modal').classList.add('is-open');
+    const deleteModal = document.getElementById('delete-modal');
+    deleteModal.style.display = '';
+    deleteModal.classList.add('is-open');
 }
 
 function filterTable() {
@@ -729,33 +747,36 @@ function filterTable() {
     });
 }
 
-document.querySelectorAll('[data-cimm-sync]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        const url = btn.getAttribute('data-sync-url');
-        if (!url) return;
-        const original = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Syncing…';
-        fetch(url, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }
-        })
-        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
-        .then(function(result) {
-            if (result.ok && result.data && result.data.success) {
-                window.location.href = window.location.pathname + '?category=integrations';
-                return;
-            }
-            alert((result.data && (result.data.message || result.data.error)) || 'Sync failed.');
-            btn.disabled = false;
-            btn.textContent = original;
-        })
-        .catch(function() {
-            alert('Sync request failed. Check server logs or cron configuration.');
-            btn.disabled = false;
-            btn.textContent = original;
-        });
+// Delegated (not bound per-button) — the integrations tab content is
+// re-rendered via AJAX when switching category tabs, which would otherwise
+// leave a freshly-rendered "Sync Now" button with no click handler at all.
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-cimm-sync]');
+    if (!btn) return;
+    const url = btn.getAttribute('data-sync-url');
+    if (!url) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'FRS-CIMM-Sync' }
+    })
+    .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+    .then(function(result) {
+        if (result.ok && result.data && result.data.success) {
+            window.location.href = window.location.pathname + '?category=integrations';
+            return;
+        }
+        alert((result.data && (result.data.message || result.data.error)) || 'Sync failed.');
+        btn.disabled = false;
+        btn.textContent = original;
+    })
+    .catch(function() {
+        alert('Sync request failed. Check server logs or cron configuration.');
+        btn.disabled = false;
+        btn.textContent = original;
     });
 });
 
