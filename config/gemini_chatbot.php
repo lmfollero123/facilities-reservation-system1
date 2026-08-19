@@ -76,11 +76,20 @@ Rules:
 - category is your best classification when valid=true; use "other" if unsure. Never return null for category.
 PROMPT;
 
-    $models = ['gemini-flash-latest', 'gemini-2.0-flash'];
+    // Same model list/timeouts as geminiChatbotResponse() above - proven to
+    // work in production for the chatbot; gemini-2.0-flash and older names
+    // 404 on newer projects, gemini-flash-latest can be slow to first byte.
+    $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
     $raw = false;
     $httpCode = 0;
+    $attemptedModels = 0;
+    $maxModelAttempts = 3;
 
     foreach ($models as $model) {
+        if ($attemptedModels >= $maxModelAttempts) {
+            break;
+        }
+        $attemptedModels++;
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
         $payload = [
             'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
@@ -101,8 +110,8 @@ PROMPT;
                 'x-goog-api-key: ' . $apiKey,
             ],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 4,
-            CURLOPT_TIMEOUT => 8,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 20,
         ]);
         $raw = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
