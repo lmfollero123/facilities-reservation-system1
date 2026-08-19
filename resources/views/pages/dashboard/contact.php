@@ -22,6 +22,7 @@ $message = '';
 $messageType = '';
 $success = '';
 $error = '';
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
 // Determine active tab
 $activeTab = $_GET['tab'] ?? 'information';
@@ -75,6 +76,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_contact_info']
             $messageType = 'error';
         }
     }
+
+    if ($isAjaxPost && $message !== '') {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+        $message = '';
+    }
 }
 
 // Handle Inquiry status update
@@ -88,14 +94,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         
         if (in_array($status, ['new', 'in_progress', 'resolved', 'closed'])) {
             $stmt = $pdo->prepare(
-                'UPDATE contact_inquiries 
-                 SET status = ?, admin_notes = ?, responded_by = ?, 
+                'UPDATE contact_inquiries
+                 SET status = ?, admin_notes = ?, responded_by = ?,
                      responded_at = CASE WHEN ? != "new" THEN NOW() ELSE responded_at END
                  WHERE id = ?'
             );
             $stmt->execute([$status, $notes ?: null, $_SESSION['user_id'], $status, $inquiryId]);
             $success = 'Inquiry status updated successfully.';
         }
+    }
+
+    if ($isAjaxPost && ($success !== '' || $error !== '')) {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $success !== '' ? $success : $error, 'type' => $error !== '' ? 'error' : 'success'])));
+        $success = '';
+        $error = '';
     }
 }
 
@@ -167,38 +179,22 @@ ob_start();
     </button>
 </div>
 
-<?php if ($message): ?>
-    <div class="alert alert-<?= $messageType === 'error' ? 'danger' : ($messageType === 'success' ? 'success' : 'info'); ?> alert-dismissible fade show" role="alert">
-        <i class="bi bi-<?= $messageType === 'error' ? 'exclamation-circle' : ($messageType === 'success' ? 'check-circle' : 'info-circle'); ?>"></i>
-        <?= htmlspecialchars($message); ?>
-        <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (!empty($success)): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle"></i>
-        <?= htmlspecialchars($success); ?>
-        <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (!empty($error)): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-circle"></i>
-        <?= htmlspecialchars($error); ?>
-        <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
 <!-- Contact Information Tab -->
 <div class="tab-content <?= $activeTab === 'information' ? 'active' : ''; ?>" id="tab-information">
+    <div data-frs-partial-id="contact-info" data-frs-partial-root>
+    <?php if ($message): ?>
+        <div class="alert alert-<?= $messageType === 'error' ? 'danger' : ($messageType === 'success' ? 'success' : 'info'); ?> alert-dismissible fade show" role="alert">
+            <i class="bi bi-<?= $messageType === 'error' ? 'exclamation-circle' : ($messageType === 'success' ? 'check-circle' : 'info-circle'); ?>"></i>
+            <?= htmlspecialchars($message); ?>
+            <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
     <div class="booking-card">
         <div class="card-header-custom">
             <?= frs_heading_with_tip('Update Contact Information', 'Office name, hours, phone, and email shown on the public Contact page.'); ?>
         </div>
-        
-        <form method="POST" class="contact-info-form">
+
+        <form method="POST" class="contact-info-form" data-frs-ajax data-frs-ajax-target="contact-info">
             <?= csrf_field(); ?>
             <input type="hidden" name="update_contact_info" value="1">
             
@@ -245,16 +241,32 @@ ob_start();
             </div>
         </form>
     </div>
+    </div>
 </div>
 
 <!-- Contact Inquiries Tab -->
 <div class="tab-content <?= $activeTab === 'inquiries' ? 'active' : ''; ?>" id="tab-inquiries">
+    <div data-frs-partial-id="contact-inquiries" data-frs-partial-root>
+    <?php if (!empty($success)): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle"></i>
+            <?= htmlspecialchars($success); ?>
+            <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+    <?php if (!empty($error)): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <?= htmlspecialchars($error); ?>
+            <button type="button" class="btn-close" onclick="this.closest('.alert').remove()" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
     <?php if ($inquiry): ?>
         <!-- Detail View -->
         <div class="card-elevated">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h2 style="color: #1b1b1f;">Inquiry Details</h2>
-                <a href="?tab=inquiries" class="btn btn-outline">← Back to List</a>
+                <a href="?tab=inquiries" data-frs-partial-url="?tab=inquiries" data-frs-partial="contact-inquiries" class="btn btn-outline">← Back to List</a>
             </div>
             
             <div style="background: #f5f7fd; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
@@ -291,7 +303,7 @@ ob_start();
                 </div>
             </div>
             
-            <form method="POST" class="booking-form">
+            <form method="POST" class="booking-form" data-frs-ajax data-frs-ajax-target="contact-inquiries">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="inquiry_id" value="<?= $inquiry['id']; ?>">
                 
@@ -325,11 +337,11 @@ ob_start();
         <div class="card-elevated">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <a href="?tab=inquiries&status=all" class="btn <?= $statusFilter === 'all' ? 'btn-primary' : 'btn-outline'; ?>">All</a>
-                    <a href="?tab=inquiries&status=new" class="btn <?= $statusFilter === 'new' ? 'btn-primary' : 'btn-outline'; ?>">New</a>
-                    <a href="?tab=inquiries&status=in_progress" class="btn <?= $statusFilter === 'in_progress' ? 'btn-primary' : 'btn-outline'; ?>">In Progress</a>
-                    <a href="?tab=inquiries&status=resolved" class="btn <?= $statusFilter === 'resolved' ? 'btn-primary' : 'btn-outline'; ?>">Resolved</a>
-                    <a href="?tab=inquiries&status=closed" class="btn <?= $statusFilter === 'closed' ? 'btn-primary' : 'btn-outline'; ?>">Closed</a>
+                    <a href="?tab=inquiries&status=all" data-frs-partial-url="?tab=inquiries&status=all" data-frs-partial="contact-inquiries" class="btn <?= $statusFilter === 'all' ? 'btn-primary' : 'btn-outline'; ?>">All</a>
+                    <a href="?tab=inquiries&status=new" data-frs-partial-url="?tab=inquiries&status=new" data-frs-partial="contact-inquiries" class="btn <?= $statusFilter === 'new' ? 'btn-primary' : 'btn-outline'; ?>">New</a>
+                    <a href="?tab=inquiries&status=in_progress" data-frs-partial-url="?tab=inquiries&status=in_progress" data-frs-partial="contact-inquiries" class="btn <?= $statusFilter === 'in_progress' ? 'btn-primary' : 'btn-outline'; ?>">In Progress</a>
+                    <a href="?tab=inquiries&status=resolved" data-frs-partial-url="?tab=inquiries&status=resolved" data-frs-partial="contact-inquiries" class="btn <?= $statusFilter === 'resolved' ? 'btn-primary' : 'btn-outline'; ?>">Resolved</a>
+                    <a href="?tab=inquiries&status=closed" data-frs-partial-url="?tab=inquiries&status=closed" data-frs-partial="contact-inquiries" class="btn <?= $statusFilter === 'closed' ? 'btn-primary' : 'btn-outline'; ?>">Closed</a>
                 </div>
             </div>
             
@@ -361,7 +373,7 @@ ob_start();
                                     </td>
                                     <td style="padding: 0.75rem; color: #1b1b1f;"><?= date('M d, Y', strtotime($inq['created_at'])); ?></td>
                                     <td style="padding: 0.75rem; color: #1b1b1f;">
-                                        <a href="?tab=inquiries&id=<?= $inq['id']; ?>" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">View</a>
+                                        <a href="?tab=inquiries&id=<?= $inq['id']; ?>" data-frs-partial-url="?tab=inquiries&status=<?= htmlspecialchars($statusFilter); ?>&id=<?= $inq['id']; ?>" data-frs-partial="contact-inquiries" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">View</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -371,6 +383,7 @@ ob_start();
             <?php endif; ?>
         </div>
     <?php endif; ?>
+    </div>
 </div>
 
 <style>
