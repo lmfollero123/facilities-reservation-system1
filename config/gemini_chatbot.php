@@ -76,14 +76,17 @@ Rules:
 - category is your best classification when valid=true; use "other" if unsure. Never return null for category.
 PROMPT;
 
-    // Same model list/timeouts as geminiChatbotResponse() above - proven to
-    // work in production for the chatbot; gemini-2.0-flash and older names
-    // 404 on newer projects, gemini-flash-latest can be slow to first byte.
-    $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
+    // Shorter budget than geminiChatbotResponse() above - this runs on the
+    // critical path of a live-as-you-type preview, with Groq waiting as a
+    // fast fallback right after. Live-tested: on a hung/degraded Gemini,
+    // the chatbot's generous 3-attempt/20s-each budget stacked to 37s
+    // before Groq ever got a chance - unacceptable for a debounced preview.
+    // 2 attempts x ~7s caps worst case around 14s instead.
+    $models = ['gemini-flash-latest', 'gemini-3.5-flash'];
     $raw = false;
     $httpCode = 0;
     $attemptedModels = 0;
-    $maxModelAttempts = 3;
+    $maxModelAttempts = 2;
 
     foreach ($models as $model) {
         if ($attemptedModels >= $maxModelAttempts) {
@@ -109,8 +112,8 @@ PROMPT;
                 'x-goog-api-key: ' . $apiKey,
             ],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 20,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 7,
         ]);
         $raw = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
