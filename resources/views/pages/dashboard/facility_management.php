@@ -38,6 +38,7 @@ $canDeleteFacilities = frs_can_delete($role, 'facilities');
 $message = '';
 $messageType = '';
 $hasFacilityQr = frs_facility_qr_column_exists($pdo);
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Handle AJAX geocoding request
@@ -524,6 +525,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     }
     }
+
+    if ($isAjaxPost && $message !== '') {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+        $message = '';
+    }
 }
 
 $facilityTab = ($_GET['tab'] ?? 'active') === 'deleted' ? 'deleted' : 'active';
@@ -637,6 +643,7 @@ ob_start();
         <?php endif; ?>
     </div>
 
+    <div data-frs-partial-id="facility-list" data-frs-partial-root>
     <nav class="booking-hub-tabs" aria-label="Facility list sections" style="margin-bottom: 1rem;">
         <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active" data-frs-partial="facility-list">
             Active Facilities (<?= $activeFacilityCount; ?>)
@@ -652,7 +659,6 @@ ob_start();
             <span class="chevron">▼</span>
         </button>
         <div class="collapsible-body" id="facilities-list">
-            <div data-frs-partial-id="facility-list" data-frs-partial-root>
             <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
                     <p><?= $facilityTab === 'deleted' ? 'No deleted facilities.' : 'No facilities added yet. Click "Add Facility" to add your first facility.'; ?></p>
@@ -711,13 +717,13 @@ ob_start();
                             <?php endif; ?>
                             <?php if ($canDeleteFacilities): ?>
                                 <?php if ($facility['status'] === 'deleted'): ?>
-                                    <form method="POST" style="display:inline;">
+                                    <form method="POST" style="display:inline;" data-frs-ajax>
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
                                         <button type="submit" name="action" value="restore_facility" class="btn btn-outline confirm-action" data-message="Restore &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot; and set it to Available?">Restore</button>
                                     </form>
                                 <?php else: ?>
-                                    <form method="POST" style="display:inline;">
+                                    <form method="POST" style="display:inline;" data-frs-ajax>
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
                                         <button type="submit" name="action" value="delete_facility" class="btn btn-outline btn-danger confirm-action" data-message="Delete &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot;? It will be hidden from public listings and booking. Any pending or approved future reservations will be cancelled/postponed and residents notified. You can restore it later.">Delete</button>
@@ -740,9 +746,9 @@ ob_start();
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
-            </div>
         </div>
     </section>
+    </div>
 </div>
 
 <style>
@@ -799,7 +805,7 @@ ob_start();
                 <button type="button" class="facility-modal-close" onclick="closeFacilityModal()" aria-label="Close">×</button>
             </div>
             <div class="facility-modal-body">
-                <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm">
+                <form class="facility-form" method="POST" enctype="multipart/form-data" id="facilityForm" data-frs-ajax data-frs-ajax-target="facility-list" data-frs-ajax-close="#facilityModal">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="facility_id" id="facility_id">
                     <input type="hidden" name="ipms_project_key" id="form-ipms-project-key" value="">
@@ -1057,7 +1063,7 @@ ob_start();
                     <a id="facilityQrPrintLink" href="#" target="_blank" rel="noopener" class="btn-primary">Open print poster</a>
                     <button type="button" class="btn-outline" id="facilityQrCopyBtn">Copy URL</button>
                 </div>
-                <form method="POST" class="fm-qr-regen-form" id="facilityQrRegenForm">
+                <form method="POST" class="fm-qr-regen-form" id="facilityQrRegenForm" data-frs-ajax data-frs-ajax-target="facility-list">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" value="regenerate_facility_qr">
                     <input type="hidden" name="facility_id" id="facilityQrRegenId" value="">
@@ -1329,6 +1335,7 @@ function setOperatingHoursFields(stored) {
 function openFacilityModal(resetForm = true) {
     const modal = document.getElementById('facilityModal');
     if (!modal) return;
+    modal.style.display = '';
     if (modal.parentNode !== document.body) document.body.appendChild(modal);
     if (resetForm) {
         resetFacilityForm();
@@ -2316,6 +2323,18 @@ window.closeFacilityModal = closeFacilityModal;
     // new page's buttons with no click handler at all.
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('.js-open-qr-modal');
+        if (btn) openQrModal(btn);
+    });
+
+    // After a QR regenerate (or any facility-list AJAX refresh), if this
+    // modal is open, re-read the fresh data-qr-* attributes for the same
+    // facility so the shown image/URL reflect the new token.
+    document.addEventListener('frs:partial-loaded', function(e) {
+        if (e.detail.id !== 'facility-list') return;
+        if (modal.getAttribute('aria-hidden') === 'true') return;
+        const fid = regenIdEl ? regenIdEl.value : '';
+        if (!fid) return;
+        const btn = document.querySelector('.js-open-qr-modal[data-facility-id="' + fid + '"]');
         if (btn) openQrModal(btn);
     });
 
