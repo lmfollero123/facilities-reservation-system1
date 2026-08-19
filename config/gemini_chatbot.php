@@ -221,7 +221,14 @@ PROMPT;
             ['role' => 'user', 'content' => $purpose],
         ],
         'temperature' => 0.1,
-        'max_completion_tokens' => 200,
+        // gpt-oss-20b is a reasoning model - its internal reasoning tokens
+        // count against max_completion_tokens too. At the default reasoning
+        // effort it burned the whole budget "thinking" about ambiguous
+        // (gibberish) input and never reached the actual JSON answer
+        // (finish_reason: "length", content: ""). Low effort + headroom
+        // fixes it.
+        'reasoning_effort' => 'low',
+        'max_completion_tokens' => 400,
     ];
 
     $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
