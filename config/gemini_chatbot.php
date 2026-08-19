@@ -97,7 +97,6 @@ PROMPT;
             'generationConfig' => [
                 'temperature' => 0.1,
                 'maxOutputTokens' => 200,
-                'responseMimeType' => 'application/json',
             ],
         ];
 
@@ -129,12 +128,26 @@ PROMPT;
     }
 
     $data = json_decode((string) $raw, true);
-    $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+    // Newer models may return multiple parts; join text parts (same handling
+    // as geminiChatbotResponse above).
+    $text = null;
+    $parts = $data['candidates'][0]['content']['parts'] ?? null;
+    if (is_array($parts)) {
+        $chunks = [];
+        foreach ($parts as $part) {
+            if (is_array($part) && isset($part['text']) && is_string($part['text']) && $part['text'] !== '') {
+                $chunks[] = $part['text'];
+            }
+        }
+        if ($chunks !== []) {
+            $text = implode('', $chunks);
+        }
+    }
     if (!is_string($text) || $text === '') {
         return null;
     }
 
-    // Defensive strip in case a model still wraps the JSON in a fenced block.
+    // Defensive strip in case a model wraps the JSON in a fenced block.
     $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
     $json = json_decode((string) $text, true);
     if (!is_array($json) || !array_key_exists('valid', $json)) {
