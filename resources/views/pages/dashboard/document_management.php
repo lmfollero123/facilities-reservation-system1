@@ -21,6 +21,7 @@ $currentUserId = $_SESSION['user_id'] ?? null;
 
 $success = '';
 $error = '';
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
 // Handle archival actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
@@ -57,6 +58,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             $error = 'Failed to restore documents: ' . $e->getMessage();
         }
     }
+
+    if ($isAjaxPost) {
+        $toastMessage = $error !== '' ? $error : $success;
+        if ($toastMessage !== '') {
+            header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $toastMessage, 'type' => $error !== '' ? 'error' : 'success'])));
+        }
+        $error = '';
+        $success = '';
+    }
 }
 
 // Get storage statistics
@@ -92,6 +102,7 @@ ob_start();
 <?php endif; ?>
 
 <div class="booking-wrapper frs-doc-mgmt-page">
+    <div data-frs-partial-id="doc-archival" data-frs-partial-root style="display:contents;">
     <!-- Storage Statistics -->
     <section class="booking-card" style="grid-column: 1 / -1;">
         <h2>Storage Statistics</h2>
@@ -370,7 +381,7 @@ ob_start();
                                     </span>
                                 </td>
                                 <td style="padding:0.75rem; text-align:center;">
-                                    <form method="POST" style="display:inline;" onsubmit="return frsConfirmSubmit(this, 'Archive all documents for <?= htmlspecialchars($user['name'], ENT_QUOTES); ?>? Documents will be moved to archive storage.', {title: 'Archive documents'});">
+                                    <form method="POST" style="display:inline;" data-frs-ajax onsubmit="return frsConfirmSubmit(this, 'Archive all documents for <?= htmlspecialchars($user['name'], ENT_QUOTES); ?>? Documents will be moved to archive storage.', {title: 'Archive documents'});">
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="user_id" value="<?= $user['user_id']; ?>">
                                         <input type="hidden" name="archive_user" value="1">
@@ -389,6 +400,7 @@ ob_start();
             <?php endif; ?>
         <?php endif; ?>
     </section>
+    </div>
 </div>
 
 <?php
