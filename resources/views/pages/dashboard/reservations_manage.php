@@ -33,6 +33,7 @@ $autoDeclined = autoDeclineExpiredReservations();
 
 $message = '';
 $messageType = 'success';
+$isAjaxPost = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 if ($autoDeclined > 0) {
     $message = $autoDeclined . ' pending reservation(s) automatically denied due to expired reservation time.';
 }
@@ -357,7 +358,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     }
 }
 
-if ($message !== '' && $messageType === 'success') {
+if ($isAjaxPost && $message !== '') {
+    header('X-FRS-Toast: ' . rawurlencode(json_encode(['message' => $message, 'type' => $messageType === 'error' ? 'error' : 'success'])));
+    $message = '';
+} elseif ($message !== '' && $messageType === 'success') {
     frs_flash_success($message);
     $message = '';
 }
@@ -1970,20 +1974,28 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
             }
         });
 
-        document.addEventListener('submit', function(e) {
-            const form = e.target.closest('#reviewDecisionForm');
-            if (!form) return;
-            const actionInput = document.getElementById('review_action');
-            const noteInput = document.getElementById('review_note');
-            if (!actionInput || !noteInput) return;
-            if (actionInput.value === 'denied' && !noteInput.value.trim()) {
-                e.preventDefault();
-                noteInput.focus();
-                noteInput.classList.add('ra-input-error');
-                return;
-            }
-            noteInput.classList.remove('ra-input-error');
-        });
+        // Bound directly to the form (not delegated on document) so this runs
+        // in the "at target" phase, before frs-partial-update.js's own
+        // document-level submit listener sees the event — a document-level
+        // listener registered here would fire after it (both are bubble-phase
+        // on document, in registration order), too late to preventDefault()
+        // before the AJAX handler already started the fetch.
+        const reviewDecisionFormEl = document.getElementById('reviewDecisionForm');
+        if (reviewDecisionFormEl && !reviewDecisionFormEl.dataset.raNoteGuardBound) {
+            reviewDecisionFormEl.dataset.raNoteGuardBound = '1';
+            reviewDecisionFormEl.addEventListener('submit', function(e) {
+                const actionInput = document.getElementById('review_action');
+                const noteInput = document.getElementById('review_note');
+                if (!actionInput || !noteInput) return;
+                if (actionInput.value === 'denied' && !noteInput.value.trim()) {
+                    e.preventDefault();
+                    noteInput.focus();
+                    noteInput.classList.add('ra-input-error');
+                    return;
+                }
+                noteInput.classList.remove('ra-input-error');
+            });
+        }
     }
 })();
 </script>
