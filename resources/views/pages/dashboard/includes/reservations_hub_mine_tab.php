@@ -26,7 +26,6 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     border: 1px solid var(--border-color, #e5e7eb);
     padding: 1.25rem;
     margin-bottom: 1.5rem;
-    min-height: 60vh;
     min-width: 0;
     width: 100%;
     max-width: 100%;
@@ -50,7 +49,7 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     min-width: 0;
     width: 100%;
     max-width: 100%;
-    grid-auto-rows: minmax(90px, 1fr);
+    grid-auto-rows: minmax(64px, auto);
 }
 .my-reservations-calendar-dayname {
     font-size: 0.8rem;
