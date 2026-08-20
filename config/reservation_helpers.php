@@ -1162,29 +1162,41 @@ function frs_staff_apply_status_decision(
         }
     }
 
-    if ($finalAction === 'pending_payment') {
-        $hold = frs_payment_hold_timestamps();
-        $stmt = $pdo->prepare(
-            'UPDATE reservations SET status = :status, payment_due_at = :payment_due_at, expires_at = :expires_at, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
-        );
-        $stmt->execute([
-            'status' => $finalAction,
-            'payment_due_at' => $hold['payment_due_at'],
-            'expires_at' => $hold['expires_at'],
-            'id' => $reservationId,
-        ]);
-    } elseif ($finalAction === 'approved' && ($reservation['status'] ?? '') === 'postponed') {
-        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, postponed_priority = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-        $stmt->execute([
-            'status' => $finalAction,
-            'id' => $reservationId,
-        ]);
-    } else {
-        $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-        $stmt->execute([
-            'status' => $finalAction,
-            'id' => $reservationId,
-        ]);
+    try {
+        if ($finalAction === 'pending_payment') {
+            $hold = frs_payment_hold_timestamps();
+            $stmt = $pdo->prepare(
+                'UPDATE reservations SET status = :status, payment_due_at = :payment_due_at, expires_at = :expires_at, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
+            );
+            $stmt->execute([
+                'status' => $finalAction,
+                'payment_due_at' => $hold['payment_due_at'],
+                'expires_at' => $hold['expires_at'],
+                'id' => $reservationId,
+            ]);
+        } elseif ($finalAction === 'approved' && ($reservation['status'] ?? '') === 'postponed') {
+            $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_at = NULL, postponed_priority = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $stmt->execute([
+                'status' => $finalAction,
+                'id' => $reservationId,
+            ]);
+        } else {
+            $stmt = $pdo->prepare('UPDATE reservations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $stmt->execute([
+                'status' => $finalAction,
+                'id' => $reservationId,
+            ]);
+        }
+    } catch (PDOException $e) {
+        // DB-level backstop: uniq_approved_facility_slot catches a race that
+        // slipped past the app-level conflict check above (two approvals for
+        // the exact same facility/date/time_slot landing at once).
+        if ($e->getCode() === '23000' && stripos($e->getMessage(), 'uniq_approved_facility_slot') !== false) {
+            throw new Exception(
+                'Cannot approve: another reservation was just approved for this exact facility, date, and time slot. Please refresh and choose a different slot.'
+            );
+        }
+        throw $e;
     }
 
     // Handle refund for cancelled and denied reservations with payments
