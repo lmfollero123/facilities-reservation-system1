@@ -1863,7 +1863,25 @@ ul.bcf-scroll-select-menu {
 
 .my-reservations-calendar-cell {
     position: relative;
-    min-height: 70px;
+    min-height: 56px;
+}
+
+.booking-hub-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+@media (min-width: 1025px) {
+    .booking-hub-grid.bcf-has-aside {
+        /* Calendar takes the remaining space next to a fixed-width sidebar,
+           instead of a fixed ratio - so the calendar doesn't shrink/grow
+           awkwardly as the sidebar's own content height changes. */
+        grid-template-columns: minmax(0, 1fr) 320px;
+    }
+}
+.bcf-aside-col {
+    margin-top: 0;
 }
 
 .status-blackout {
@@ -2124,7 +2142,7 @@ ul.bcf-scroll-select-menu {
 
     <div id="booking-pane-book" style="display: <?= !$reservationsHubMine ? 'block' : 'none'; ?>;">
         <?php require __DIR__ . '/partials/ai_demo_scenario_panel.php'; ?>
-        <div class="booking-hub-grid">
+        <div class="booking-hub-grid" id="bcf-hub-grid">
             <div class="booking-card booking-calendar-myres-panel">
                 <h2 class="bcf-label-row" style="margin-top:0;">
                     Book a facility
@@ -3660,12 +3678,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const facilityDetailsContainer = document.getElementById('facility-details-container');
     const facilityDetailsTitle = document.getElementById('facility-details-title');
     const facilityDetailsContent = document.getElementById('facility-details-content');
+    const bcfHubGrid = document.getElementById('bcf-hub-grid');
 
     // Function to fetch and display facility details
     async function loadFacilityDetails(facilityId) {
         if (!facilityId || facilityId === '') {
-            // No facility selected yet - hide the whole sidebar instead of a placeholder
+            // No facility selected yet - hide the whole sidebar and let the
+            // calendar reclaim its column width instead of leaving it empty.
             if (facilityDetailsAside) facilityDetailsAside.style.display = 'none';
+            if (bcfHubGrid) bcfHubGrid.classList.remove('bcf-has-aside');
             const aeClear = document.getElementById('expected-attendees');
             if (aeClear) aeClear.removeAttribute('max');
             refreshBookingGates();
@@ -3675,6 +3696,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Show loading state
             if (facilityDetailsAside) facilityDetailsAside.style.display = '';
+            if (bcfHubGrid) bcfHubGrid.classList.add('bcf-has-aside');
             if (facilityDetailsContainer) {
                 facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #8b95b5;"><p>Loading facility details...</p></div>';
             }

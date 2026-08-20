@@ -4049,6 +4049,25 @@ footer small {
     color: #65739a;
 }
 
+/* Compact mode: drop the breadcrumb + page title everywhere - pure chrome
+   that just pushed real content down. Descendant selectors (not
+   .page-header itself) so action buttons a few pages nest inside
+   .page-header (Reports' AI Summary controls, Reservation Approvals'
+   "Open All Reservations", Calendar's .ics export link) stay visible. */
+.page-header .breadcrumb,
+.page-header h1,
+.page-header small {
+    display: none !important;
+}
+.page-header,
+.page-header + * {
+    margin-top: 0 !important;
+}
+.page-header {
+    margin-bottom: 0.5rem !important;
+    gap: 0 !important;
+}
+
 .breadcrumb {
     display: flex;
     flex-wrap: wrap;
