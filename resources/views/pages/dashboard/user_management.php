@@ -652,12 +652,6 @@ $idPendingCount = (int)$idPendingCountStmt->fetchColumn();
 $totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users');
 $totalUsersCount = (int)$totalUsersStmt->fetchColumn();
 
-$activeStaffStmt = $pdo->query('SELECT COUNT(*) FROM users WHERE role IN ("Admin", "Staff") AND status = "active"');
-$activeStaffCount = (int)$activeStaffStmt->fetchColumn();
-
-$lastApprovalStmt = $pdo->query('SELECT MAX(updated_at) FROM users WHERE status = "active" AND updated_at != created_at');
-$lastApproval = $lastApprovalStmt->fetchColumn();
-
 $retentionHours = (int) (defined('UNVERIFIED_ACCOUNT_RETENTION_HOURS') ? UNVERIFIED_ACCOUNT_RETENTION_HOURS : 24);
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 
@@ -1041,29 +1035,6 @@ ob_start();
             <?php endif; ?>
         <?php endif; ?>
     </section>
-
-    <aside class="booking-card um-aside">
-        <h2>Approval queue</h2>
-        <p class="resource-meta">Overview of registration and staff activity.</p>
-        <ul class="audit-list um-aside-list">
-            <li><strong><?= $pendingCount; ?></strong> <?= $pendingCount === 1 ? 'account' : 'accounts'; ?> awaiting approval.</li>
-            <li><strong><?= $idPendingCount; ?></strong> with valid ID awaiting verification.</li>
-            <li><strong><?= $emailUnverifiedCount; ?></strong> with unverified email<?= $retentionHours ? ' (purged after ' . $retentionHours . 'h)' : ''; ?>.</li>
-            <?php if ($lastApproval): ?>
-                <li>Last approval: <?= date('M j, Y', strtotime($lastApproval)); ?>.</li>
-            <?php else: ?>
-                <li>No approvals processed yet.</li>
-            <?php endif; ?>
-            <li><strong><?= $activeStaffCount; ?></strong> active staff/admin <?= $activeStaffCount === 1 ? 'account' : 'accounts'; ?>.</li>
-        </ul>
-        <?php if ($idPendingCount > 0): ?>
-        <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'id_pending', 'page' => 1, 'role' => '', 'status' => '', 'q' => ''])); ?>" class="btn-primary um-aside-cta">Review ID queue (<?= $idPendingCount; ?>)</a>
-        <?php endif; ?>
-        <div class="um-policy-note">
-            <strong>Deletion policy</strong>
-            <p>Accounts with reservation history cannot be deleted — lock them instead. Deletion requires a reason and notifies the user by email.</p>
-        </div>
-    </aside>
 </div>
 </div>
 
@@ -1239,13 +1210,9 @@ ob_start();
 .um-search-wide { grid-column: auto; }
 .um-docs--prominent .um-doc-link { font-size: 0.85rem; padding: 0.4rem 0.75rem; background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: 600; }
 .um-btn-verify { padding: 0.5rem 1rem !important; font-size: 0.88rem !important; }
-.um-aside-cta { display: inline-block; margin-top: 0.85rem; padding: 0.55rem 0.9rem; text-decoration: none; font-size: 0.88rem; border-radius: 8px; }
 .um-stat-label { display: block; font-size: 0.82rem; color: #64748b; margin-bottom: 0.35rem; }
 .um-stat-value { font-size: 1.75rem; color: #1e293b; line-height: 1; }
 .um-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
-.um-aside { display: flex; flex-direction: column; }
-.um-aside-list { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; list-style: none; margin: 0.5rem 0; padding: 0; }
-.um-aside .um-policy-note { margin-top: 0.5rem; }
 .um-section-head { margin-bottom: 1rem; }
 .um-section-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .um-role-readonly { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -1326,9 +1293,6 @@ ob_start();
 .um-btn-danger-solid { background: #dc2626 !important; border-color: #dc2626 !important; }
 .um-empty { padding: 2rem; text-align: center; color: #64748b; background: #f8fafc; border-radius: 10px; }
 .um-pagination { margin-top: 1.25rem; }
-.um-aside-list { margin-top: 0.75rem; }
-.um-policy-note { margin-top: 1rem; padding: 0.85rem; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.85rem; color: #475569; }
-.um-policy-note p { margin: 0.35rem 0 0; }
 .um-field-hint { display: block; margin-top: 0.2rem; color: #94a3b8; font-size: 0.78rem; font-weight: 400; }
 .um-modal { position: fixed; inset: 0; z-index: 10050; display: none; align-items: center; justify-content: center; padding: 1rem; }
 .um-modal.open { display: flex; }
@@ -1395,7 +1359,6 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-violation-meta { color: #64748b; }
 [data-theme="dark"] .um-doc-link { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 [data-theme="dark"] .um-empty { color: #94a3b8; background: #1e293b; }
-[data-theme="dark"] .um-policy-note { background: #1e293b; border-color: #334155; color: #cbd5e1; }
 [data-theme="dark"] .um-field-hint { color: #64748b; }
 [data-theme="dark"] .um-modal-backdrop { background: rgba(0, 0, 0, 0.6); }
 [data-theme="dark"] .um-modal-panel { background: #1e293b; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5); }

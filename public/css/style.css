@@ -5395,7 +5395,11 @@ html[data-theme="dark"] .ee-readings-card .table-responsive.is-scrollable::after
 }
 .input-wrapper:has(.input-icon) > input,
 .input-wrapper:has(.input-icon) > select {
-    padding-left: 2.5rem;
+    padding: 0.6rem 0.85rem 0.6rem 2.5rem;
+    font-size: 0.92rem;
+    border: 1px solid #d7deed;
+    border-radius: 8px;
+    box-sizing: border-box;
 }
 
 .facility-form input,

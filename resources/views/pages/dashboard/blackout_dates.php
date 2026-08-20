@@ -244,21 +244,10 @@ $filterBaseUrl = blackout_filter_url($filterYear, $calMonth, $filterFacility);
 
 ob_start();
 ?>
-<div class="frs-blackout-page max-w-6xl mx-auto w-full pb-8">
+<div class="frs-blackout-page w-full pb-8">
     <!-- Header -->
-    <header class="mb-6">
-        <nav class="text-sm text-slate-500 mb-2" aria-label="Breadcrumb">
-            <span>Facilities</span>
-            <span class="mx-1.5 text-slate-300">/</span>
-            <span class="text-slate-700 font-medium">Blackout dates</span>
-        </nav>
-        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight frs-heading-with-tip">
-                    Facility blackout dates
-                    <?= frs_field_tip('Block days when a facility cannot be booked (events, holidays, maintenance). Residents see these as unavailable on the booking calendar.'); ?>
-                </h1>
-            </div>
+    <header class="mb-3">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-4">
             <?php if ($hasTable): ?>
                 <div class="frs-bo-year-total flex-shrink-0 rounded-xl bg-slate-100 px-4 py-2.5 text-sm flex flex-col gap-1">
                     <div>
