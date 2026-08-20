@@ -3524,7 +3524,7 @@ footer small {
     z-index: 1100 !important;
     /* Slide-in animation */
     transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 4px 0 18px rgba(0, 0, 0, 0.4);
     overflow-y: auto;
     overflow-x: hidden;
@@ -8193,6 +8193,7 @@ aside.sidebar .sidebar-user-footer,
     /* Adjust main content to account for fixed sidebar */
     .dashboard-main {
         margin-left: 280px !important;
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* When sidebar is collapsed, reduce margin */
