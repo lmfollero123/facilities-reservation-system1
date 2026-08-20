@@ -705,6 +705,9 @@ function buildRuleBasedReportInsights(array $stats): array {
     $highlights[] = 'Total reservations: ' . number_format((int)($stats['total_reservations'] ?? 0));
     $highlights[] = 'Approved: ' . number_format((int)($stats['approved_count'] ?? 0)) . ' (' . round((float)($stats['approval_rate'] ?? 0), 1) . '%)';
     $highlights[] = 'Pending: ' . number_format((int)($stats['pending_count'] ?? 0));
+    if (($stats['occupancy_now']['rate'] ?? null) !== null) {
+        $highlights[] = 'Current occupancy: ' . $stats['occupancy_now']['rate'] . '% (' . (int)($stats['occupancy_now']['checked_in'] ?? 0) . ' checked in)';
+    }
 
     $riskFlags = [];
     if (($stats['pending_count'] ?? 0) > ($stats['approved_count'] ?? 0)) {
@@ -716,6 +719,9 @@ function buildRuleBasedReportInsights(array $stats): array {
     if (($stats['cancelled_count'] ?? 0) > 0 && ($stats['cancelled_count'] / max(1, $stats['total_reservations'])) > 0.20) {
         $riskFlags[] = 'Cancellation share is elevated (>20%).';
     }
+    if ((int)($stats['occupancy_now']['no_show_risk'] ?? 0) > 0) {
+        $riskFlags[] = (int)$stats['occupancy_now']['no_show_risk'] . ' checked-in booking(s) at no-show risk right now.';
+    }
 
     $recommendations = [];
     $recommendations[] = 'Review top denied reasons and publish clearer booking guidance.';
@@ -723,6 +729,35 @@ function buildRuleBasedReportInsights(array $stats): array {
         $recommendations[] = 'Prioritize queue cleanup and follow-up for pending requests.';
     }
     $recommendations[] = 'Monitor top utilized facilities and prepare overflow alternatives.';
+    if (!empty($stats['underused_facilities'])) {
+        $recommendations[] = 'Promote underused facilities (' . implode(', ', array_slice($stats['underused_facilities'], 0, 3)) . ') to balance demand.';
+    }
+
+    $trendValues = $stats['monthly_trend']['values'] ?? [];
+    $forecastValues = $stats['forecast']['values'] ?? [];
+    $trendAnalysis = 'Not enough monthly data to describe a trend yet.';
+    if (count($trendValues) >= 2) {
+        $first = (float)$trendValues[0];
+        $last = (float)$trendValues[count($trendValues) - 1];
+        if ($last > $first) {
+            $trendAnalysis = 'Reservation volume has been trending upward over the recent months.';
+        } elseif ($last < $first) {
+            $trendAnalysis = 'Reservation volume has been trending downward over the recent months.';
+        } else {
+            $trendAnalysis = 'Reservation volume has held roughly flat over the recent months.';
+        }
+        if (!empty($forecastValues)) {
+            $trendAnalysis .= ' Simple linear projection expects about ' . implode(', ', $forecastValues) . ' reservations over the next ' . count($forecastValues) . ' month(s).';
+        }
+    }
+
+    $facilityInsights = [];
+    if (!empty($stats['top_facilities'][0]['name'] ?? null)) {
+        $facilityInsights[] = $stats['top_facilities'][0]['name'] . ' is the most-approved facility for this period.';
+    }
+    if (!empty($stats['underused_facilities'])) {
+        $facilityInsights[] = count($stats['underused_facilities']) . ' facility(ies) had zero approved reservations this period: ' . implode(', ', array_slice($stats['underused_facilities'], 0, 5)) . '.';
+    }
 
     return [
         'source' => 'Rule-based',
@@ -730,6 +765,36 @@ function buildRuleBasedReportInsights(array $stats): array {
         'highlights' => $highlights,
         'risk_flags' => $riskFlags,
         'recommendations' => $recommendations,
+        'trend_analysis' => $trendAnalysis,
+        'facility_insights' => $facilityInsights,
+    ];
+}
+
+/**
+ * Shared JSON-schema instructions for both AI providers, so the parsed
+ * shape (and the deterministic fallback's shape) always line up.
+ */
+function frsReportInsightsSystemPrompt(): string {
+    return "You are a municipal analytics assistant reviewing barangay facility booking data. Return concise, actionable insights.\n" .
+        "Output STRICT JSON only, no markdown, no code fences, with keys:\n" .
+        "summary (string, 1-2 sentences), highlights (array of 3-5 short strings), risk_flags (array of strings, empty array if none), " .
+        "recommendations (array of 3-5 short strings), trend_analysis (string, 1-2 sentences about the monthly trend and forecast), " .
+        "facility_insights (array of 2-4 short strings about specific facilities - most utilized, underused, or notable gaps).";
+}
+
+/**
+ * Normalize a provider's parsed JSON reply into the report-insights shape,
+ * discarding non-string entries so a malformed field can't break rendering.
+ */
+function frsNormalizeReportInsights(array $parsed, string $source): array {
+    return [
+        'source' => $source,
+        'summary' => (string)($parsed['summary'] ?? ''),
+        'highlights' => array_values(array_filter((array)($parsed['highlights'] ?? []), 'is_string')),
+        'risk_flags' => array_values(array_filter((array)($parsed['risk_flags'] ?? []), 'is_string')),
+        'recommendations' => array_values(array_filter((array)($parsed['recommendations'] ?? []), 'is_string')),
+        'trend_analysis' => (string)($parsed['trend_analysis'] ?? ''),
+        'facility_insights' => array_values(array_filter((array)($parsed['facility_insights'] ?? []), 'is_string')),
     ];
 }
 
@@ -741,12 +806,8 @@ function buildGeminiReportInsights(array $stats): ?array {
         return null;
     }
 
-    $systemPrompt = "You are a municipal analytics assistant. Return concise actionable insights for booking analytics.\n" .
-        "Output STRICT JSON only with keys: summary (string), highlights (array of 3-5 strings), risk_flags (array of strings), recommendations (array of 3-5 strings).\n" .
-        "No markdown, no code fences.";
-
     $userMessage = "Generate insights for this report stats JSON:\n" . json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    $resp = geminiChatbotResponse($systemPrompt, $userMessage, []);
+    $resp = geminiChatbotResponse(frsReportInsightsSystemPrompt(), $userMessage, []);
     if (!$resp || empty($resp['reply'])) {
         return null;
     }
@@ -762,14 +823,35 @@ function buildGeminiReportInsights(array $stats): ?array {
         return null;
     }
 
-    return [
-        'source' => 'AI (Gemini)',
-        'summary' => (string)($parsed['summary'] ?? ''),
-        'highlights' => array_values(array_filter((array)($parsed['highlights'] ?? []), 'is_string')),
-        'risk_flags' => array_values(array_filter((array)($parsed['risk_flags'] ?? []), 'is_string')),
-        'recommendations' => array_values(array_filter((array)($parsed['recommendations'] ?? []), 'is_string')),
-    ];
+    return frsNormalizeReportInsights($parsed, 'AI (Gemini)');
 }
+
+/**
+ * Groq fallback for report insights - same JSON schema as Gemini, used
+ * when Gemini is unavailable (quota/rate limit/timeout/no API key).
+ */
+function buildGroqReportInsights(array $stats): ?array {
+    if (!function_exists('frs_groq_chat_json')) {
+        return null;
+    }
+
+    $userMessage = "Generate insights for this report stats JSON:\n" . json_encode($stats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $parsed = frs_groq_chat_json([
+        ['role' => 'system', 'content' => frsReportInsightsSystemPrompt()],
+        ['role' => 'user', 'content' => $userMessage],
+    ], 800);
+
+    if ($parsed === null) {
+        return null;
+    }
+
+    return frsNormalizeReportInsights($parsed, 'AI (Groq)');
+}
+
+$underusedFacilities = array_values(array_map(
+    static fn(array $f): string => (string)($f['name'] ?? ''),
+    array_filter($facilityData, static fn(array $f): bool => (int)($f['approved_count'] ?? 0) === 0)
+));
 
 $reportStatsForAI = [
     'period_label' => $filterLabel,
@@ -781,15 +863,26 @@ $reportStatsForAI = [
     'approval_rate' => $approvalRate,
     'utilization' => $utilization,
     'avg_reservations_per_user' => $avgReservationsPerUser,
+    'outcomes_share' => $outcomesShare,
     'top_facilities' => array_slice(array_map(function ($f) {
         return [
             'name' => $f['name'] ?? '',
             'approved_count' => (int)($f['approved_count'] ?? 0),
         ];
     }, $facilityData), 0, 5),
+    'underused_facilities' => array_slice($underusedFacilities, 0, 5),
     'monthly_trend' => [
         'labels' => $monthlyLabels,
         'values' => $monthlyData,
+    ],
+    'forecast' => [
+        'labels' => $forecastLabels,
+        'values' => $forecastValues,
+    ],
+    'occupancy_now' => [
+        'rate' => $occupancyNow['occupancy_rate'] ?? 0,
+        'checked_in' => $occupancyNow['checked_in'] ?? 0,
+        'no_show_risk' => $occupancyNow['no_show_risk'] ?? 0,
     ],
 ];
 
@@ -809,6 +902,9 @@ if (isset($_GET['ai_summary'])) {
         exit;
     }
     $insights = buildGeminiReportInsights($reportStatsForAI);
+    if (!$insights) {
+        $insights = buildGroqReportInsights($reportStatsForAI);
+    }
     if (!$insights) {
         $insights = buildRuleBasedReportInsights($reportStatsForAI);
     }
@@ -1197,6 +1293,14 @@ function renderAiSummaryContent(payload) {
         <div style="margin-bottom:0.9rem;">
             <div style="font-weight:700; margin-bottom:0.35rem;">Highlights</div>
             ${list(insights.highlights || [])}
+        </div>
+        <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Trend &amp; Forecast</div>
+            <p style="margin:0; color:#374151;">${esc(insights.trend_analysis || 'No trend data available.')}</p>
+        </div>
+        <div style="margin-bottom:0.9rem;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">Facility Insights</div>
+            ${list(insights.facility_insights || [])}
         </div>
         <div style="margin-bottom:0.9rem;">
             <div style="font-weight:700; margin-bottom:0.35rem;">Risk Flags</div>

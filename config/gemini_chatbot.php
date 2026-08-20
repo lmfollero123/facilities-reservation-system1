@@ -183,55 +183,27 @@ function frs_groq_api_key(): string
 }
 
 /**
- * Same purpose gate as frs_gemini_check_purpose(), backed by Groq's free
- * tier instead - used as a fallback when Gemini is unavailable (quota/rate
- * limit/timeout). Groq's OpenAI-compatible chat completions API, model
- * llama-3.1-8b-instant (small/fast, plenty for a valid/gibberish + category
- * classification). Returns null if Groq is unavailable/fails too - caller
- * falls back further to the local sklearn model.
- *
- * @return array{valid: bool, category: string, reason: string}|null
+ * Low-level Groq chat completion call, shared by every Groq-backed feature.
+ * Returns the raw text content of the model's reply, or null if the API
+ * key is missing, the request fails, or the response has no content.
+ * gpt-oss-20b is a reasoning model - its internal reasoning tokens count
+ * against max_completion_tokens too, so keep reasoning_effort low or a
+ * hard task can burn the whole budget "thinking" and return empty content
+ * (finish_reason: "length").
  */
-function frs_groq_check_purpose(string $purpose): ?array
+function frs_groq_chat_raw(array $messages, int $maxCompletionTokens = 400, float $temperature = 0.1): ?string
 {
-    $purpose = trim($purpose);
-    if ($purpose === '') {
-        return ['valid' => false, 'category' => 'other', 'reason' => 'Purpose is empty.'];
-    }
-
     $apiKey = frs_groq_api_key();
     if ($apiKey === '') {
         return null;
     }
 
-    $systemPrompt = <<<PROMPT
-You screen short "purpose of booking" text submitted on a Philippine barangay facility reservation form.
-Respond with ONLY raw JSON, no markdown fences, no extra commentary:
-{"valid": true or false, "category": "sports" | "assembly" | "celebration" | "cultural" | "other", "reason": "short reason, max 12 words"}
-
-Rules:
-- valid=false ONLY for gibberish/keyboard-mashing (e.g. "asdkjaskdjaksjd", "qwertyuiop zxcvbnm"), pure random
-  characters, or text that gives absolutely no indication of what the event actually is.
-- valid=true for ANY genuine (even brief) description of an activity or event, in English, Filipino, or Taglish.
-  Err on the side of valid=true when in doubt - only reject clear gibberish.
-- category is your best classification when valid=true; use "other" if unsure. Never return null for category.
-PROMPT;
-
     $payload = [
         'model' => 'openai/gpt-oss-20b',
-        'messages' => [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $purpose],
-        ],
-        'temperature' => 0.1,
-        // gpt-oss-20b is a reasoning model - its internal reasoning tokens
-        // count against max_completion_tokens too. At the default reasoning
-        // effort it burned the whole budget "thinking" about ambiguous
-        // (gibberish) input and never reached the actual JSON answer
-        // (finish_reason: "length", content: ""). Low effort + headroom
-        // fixes it.
+        'messages' => $messages,
+        'temperature' => $temperature,
         'reasoning_effort' => 'low',
-        'max_completion_tokens' => 400,
+        'max_completion_tokens' => $maxCompletionTokens,
     ];
 
     $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
@@ -252,19 +224,66 @@ PROMPT;
     curl_close($ch);
 
     if ($raw === false || $httpCode !== 200) {
-        error_log("Groq purpose-check failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
+        error_log("Groq chat call failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
         return null;
     }
 
     $data = json_decode((string) $raw, true);
     $text = $data['choices'][0]['message']['content'] ?? null;
-    if (!is_string($text) || $text === '') {
+    return (is_string($text) && $text !== '') ? $text : null;
+}
+
+/**
+ * Runs a Groq chat call and decodes the reply as JSON, stripping any
+ * markdown code fences the model adds despite being told not to.
+ * Returns null on any failure (network, empty reply, invalid JSON).
+ */
+function frs_groq_chat_json(array $messages, int $maxCompletionTokens = 400, float $temperature = 0.1): ?array
+{
+    $text = frs_groq_chat_raw($messages, $maxCompletionTokens, $temperature);
+    if ($text === null) {
         return null;
     }
 
     $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
     $json = json_decode((string) $text, true);
-    if (!is_array($json) || !array_key_exists('valid', $json)) {
+    return is_array($json) ? $json : null;
+}
+
+/**
+ * Same purpose gate as frs_gemini_check_purpose(), backed by Groq's free
+ * tier instead - used as a fallback when Gemini is unavailable (quota/rate
+ * limit/timeout). Returns null if Groq is unavailable/fails too - caller
+ * falls back further to the local sklearn model.
+ *
+ * @return array{valid: bool, category: string, reason: string}|null
+ */
+function frs_groq_check_purpose(string $purpose): ?array
+{
+    $purpose = trim($purpose);
+    if ($purpose === '') {
+        return ['valid' => false, 'category' => 'other', 'reason' => 'Purpose is empty.'];
+    }
+
+    $systemPrompt = <<<PROMPT
+You screen short "purpose of booking" text submitted on a Philippine barangay facility reservation form.
+Respond with ONLY raw JSON, no markdown fences, no extra commentary:
+{"valid": true or false, "category": "sports" | "assembly" | "celebration" | "cultural" | "other", "reason": "short reason, max 12 words"}
+
+Rules:
+- valid=false ONLY for gibberish/keyboard-mashing (e.g. "asdkjaskdjaksjd", "qwertyuiop zxcvbnm"), pure random
+  characters, or text that gives absolutely no indication of what the event actually is.
+- valid=true for ANY genuine (even brief) description of an activity or event, in English, Filipino, or Taglish.
+  Err on the side of valid=true when in doubt - only reject clear gibberish.
+- category is your best classification when valid=true; use "other" if unsure. Never return null for category.
+PROMPT;
+
+    $json = frs_groq_chat_json([
+        ['role' => 'system', 'content' => $systemPrompt],
+        ['role' => 'user', 'content' => $purpose],
+    ], 400);
+
+    if ($json === null || !array_key_exists('valid', $json)) {
         return null;
     }
 
