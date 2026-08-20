@@ -31,6 +31,17 @@ header('Content-Type: application/json');
 $pdo = db();
 $userId = (int)($_SESSION['user_id'] ?? 0);
 
+// This endpoint fires on every purpose keystroke pause and calls Gemini
+// (via frs_check_purpose_gate below) -- the client-side debounce is the only
+// thing normally limiting call frequency, so a scripted/replayed request
+// could otherwise trigger unlimited Gemini calls. Cap per-user, generous
+// enough for real typing.
+if (!checkRateLimit('booking_smart_hints', (string)$userId, 30, 60)) {
+    http_response_code(429);
+    echo json_encode(['error' => 'Too many requests, please slow down.', 'highlight_dates' => [], 'facilities' => []]);
+    exit;
+}
+
 $purpose = trim((string)($_POST['purpose'] ?? $_GET['purpose'] ?? ''));
 $year = (int)($_POST['year'] ?? $_GET['year'] ?? (int)date('Y'));
 $month = (int)($_POST['month'] ?? $_GET['month'] ?? (int)date('n'));
