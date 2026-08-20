@@ -1269,7 +1269,7 @@ ob_start();
 .um-table .um-cell-status { min-width: 170px; }
 .um-table .um-cell-registered { min-width: 110px; font-size: 0.85rem; color: #64748b; white-space: nowrap; }
 .um-actions-th { text-align: right; }
-.um-cell-actions { text-align: right; }
+.um-cell-actions { text-align: right; min-width: 200px; }
 .um-user-row--id-pending { background: #fffbeb; }
 .um-name-cell { display: flex; gap: 0.6rem; min-width: 0; }
 .um-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 0.8rem; }
