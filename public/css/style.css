@@ -7240,6 +7240,15 @@ body,
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
+/* Restore the transform/width slide animation for .sidebar on desktop --
+   the rule above matches the same selector/specificity and wins by source
+   order, which was silently dropping the collapse/expand animation. */
+@media (min-width: 961px) {
+    .sidebar {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+}
+
 
 /* ============================================
    APPLY THEME VARIABLES TO COMPONENTS
