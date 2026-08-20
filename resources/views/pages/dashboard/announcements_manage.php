@@ -300,8 +300,8 @@ ob_start();
             <?= csrf_field(); ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="announcement_id" value="<?= (int)$announcement['id']; ?>">
-                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete announcement">
-                                        <i class="bi bi-trash"></i> Delete
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete announcement" aria-label="Delete announcement">
+                                        <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
                             </td>
