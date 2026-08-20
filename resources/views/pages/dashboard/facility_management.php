@@ -351,6 +351,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $operatingHours = trim($_POST['operating_hours'] ?? '');
     $extensionAutoApproveMaxHours = !empty($_POST['extension_auto_approve_max_hours']) ? (float)$_POST['extension_auto_approve_max_hours'] : null;
     $allowSameDayExtension = isset($_POST['allow_same_day_extension']) && $_POST['allow_same_day_extension'] === '1';
+    $requiresDocument = isset($_POST['requires_document']) && $_POST['requires_document'] === '1';
+    $documentRequirementNote = $requiresDocument ? trim((string)($_POST['document_requirement_note'] ?? '')) : null;
 
     // Handle image upload (optional) with enhanced security
     $imagePath = null;
@@ -389,6 +391,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$name) {
         $message = 'Facility name is required.';
+        $messageType = 'error';
+    } elseif ($requiresDocument && $documentRequirementNote === '') {
+        $message = 'Describe what document is required (e.g. "Requires approval from the school principal").';
         $messageType = 'error';
     } elseif ($rateInput !== '') {
         // Accept formatted input like "2,500" but store as whole-number pesos only.
@@ -430,8 +435,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, is_free = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ?, extension_fee_per_hour = ?, extension_auto_approve_max_hours = ?, allow_same_day_extension = ? WHERE id = ?');
-                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $facilityId]);
+                $stmt = $pdo->prepare('UPDATE facilities SET name = ?, description = ?, base_rate = ?, is_free = ?, image_path = ?, image_citation = ?, location = ?, latitude = ?, longitude = ?, capacity = ?, amenities = ?, rules = ?, status = ?, auto_approve = ?, capacity_threshold = ?, max_duration_hours = ?, operating_hours = ?, extension_fee_per_hour = ?, extension_auto_approve_max_hours = ?, allow_same_day_extension = ?, requires_document = ?, document_requirement_note = ? WHERE id = ?');
+                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $requiresDocument ? 1 : 0, $documentRequirementNote ?: null, $facilityId]);
                 
                 // Log audit event
                 $details = $name;
@@ -490,8 +495,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, is_free, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours, extension_fee_per_hour, extension_auto_approve_max_hours, allow_same_day_extension) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0]);
+                $stmt = $pdo->prepare('INSERT INTO facilities (name, description, base_rate, is_free, image_path, image_citation, location, latitude, longitude, capacity, amenities, rules, status, auto_approve, capacity_threshold, max_duration_hours, operating_hours, extension_fee_per_hour, extension_auto_approve_max_hours, allow_same_day_extension, requires_document, document_requirement_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$name, $description, $rate, $isFree ? 1 : 0, $imagePath, $imageCitation ?: null, $location, $latitude, $longitude, $capacity, $amenities, $rules, $status, $autoApprove ? 1 : 0, $capacityThreshold, $maxDurationHours, $operatingHours ?: null, $extensionFeePerHour, $extensionAutoApproveMaxHours, $allowSameDayExtension ? 1 : 0, $requiresDocument ? 1 : 0, $documentRequirementNote ?: null]);
                 
                 // Log audit event
                 logAudit('Created facility', 'Facility Management', $name . ' (' . $status . ')');
@@ -986,6 +991,29 @@ ob_start();
                         </div>
                     </div>
 
+                    <!-- Document Requirement -->
+                    <div class="collapsible-card" style="margin-top: 1.5rem;">
+                        <button type="button" class="collapsible-header" id="document-requirement-header" onclick="toggleDocumentRequirementSection(event);" style="cursor: pointer;">
+                            <span>Document Requirement</span>
+                            <span class="chevron" id="document-requirement-chevron">▼</span>
+                        </button>
+                        <div class="collapsible-body is-collapsed" id="document-requirement-settings">
+                            <p style="margin:0 0 1rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                                <span style="font-weight:600;">Supporting document</span>
+                                <?= frs_field_tip('Use this when the facility itself needs a specific approval before it can be booked - e.g. a school gym needs the principal\'s sign-off because it is inside school premises. The resident must attach a document to submit the booking, and this facility is never auto-approved.'); ?>
+                            </p>
+                            <label style="display:flex; align-items:flex-start; gap:0.5rem; margin-bottom:1rem; cursor:pointer;">
+                                <input type="checkbox" name="requires_document" value="1" id="form-requires-document" style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;" onchange="toggleDocumentRequirementNote();">
+                                <span style="flex:1; line-height:1.5;">This facility requires a supporting document to book</span>
+                            </label>
+
+                            <label id="form-document-requirement-note-wrap" style="display:none;">
+                                <span class="bcf-label-row">Requirement description <?= frs_field_tip('Shown to residents on the booking form and to staff on the review page.'); ?></span>
+                                <textarea name="document_requirement_note" id="form-document-requirement-note" rows="2" maxlength="255" placeholder="e.g. Requires approval from the school principal (facility is inside school premises)."></textarea>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Extension Settings as Collapsible Section -->
                     <div class="collapsible-card" style="margin-top: 1.5rem;">
                         <button type="button" class="collapsible-header" id="extension-header" onclick="toggleExtensionSection(event);" style="cursor: pointer;">
@@ -1421,6 +1449,30 @@ function toggleAutoApprovalSection(event) {
     }
 }
 
+function toggleDocumentRequirementSection(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const section = document.getElementById('document-requirement-settings');
+    const chevron = document.getElementById('document-requirement-chevron');
+    const isCollapsed = section.classList.contains('is-collapsed');
+
+    if (isCollapsed) {
+        section.classList.remove('is-collapsed');
+        chevron.style.transform = 'rotate(0deg)';
+    } else {
+        section.classList.add('is-collapsed');
+        chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+
+function toggleDocumentRequirementNote() {
+    const checked = document.getElementById('form-requires-document').checked;
+    const wrap = document.getElementById('form-document-requirement-note-wrap');
+    if (wrap) wrap.style.display = checked ? 'block' : 'none';
+}
+
 function toggleExtensionSection(event) {
     if (event) {
         event.preventDefault();
@@ -1723,6 +1775,9 @@ function editFacility(payload) {
     updateExtensionFeeFromRate();
     document.getElementById('form-extension-auto-approve').value = facility.extension_auto_approve_max_hours || '';
     document.getElementById('form-allow-same-day').checked = (facility.allow_same_day_extension == 1 || facility.allow_same_day_extension === true);
+    document.getElementById('form-requires-document').checked = (facility.requires_document == 1 || facility.requires_document === true);
+    document.getElementById('form-document-requirement-note').value = facility.document_requirement_note || '';
+    toggleDocumentRequirementNote();
 
     // Update map if coordinates exist
     if (facility.latitude && facility.longitude) {
@@ -1801,6 +1856,9 @@ function resetFacilityForm() {
     setVal('form-operating-hours-end', '');
     setVal('form-operating-hours', '');
     setChecked('form-auto-approve', false);
+    setChecked('form-requires-document', false);
+    setVal('form-document-requirement-note', '');
+    toggleDocumentRequirementNote();
     setVal('form-capacity-threshold', '');
     setVal('form-max-duration', '');
     setVal('form-extension-fee', '');

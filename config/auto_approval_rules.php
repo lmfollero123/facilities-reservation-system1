@@ -219,6 +219,22 @@ function frs_auto_approval_rules(
         $reason = $reason ?: 'Reservation date is outside advance booking window';
     }
 
+    // Condition 9: Facility must not require a supporting document - a
+    // document needs a human to actually read it, so auto-approval is never
+    // eligible here regardless of the auto_approve flag or any other rule.
+    $requiresDocument = (bool)($facility['requires_document'] ?? false);
+    $conditions['no_document_requirement'] = [
+        'passed' => !$requiresDocument,
+        'message' => $requiresDocument
+            ? 'Facility requires a supporting document - always needs manual review'
+            : 'Facility does not require a supporting document'
+    ];
+
+    if ($requiresDocument) {
+        $allPassed = false;
+        $reason = $reason ?: 'Facility requires a supporting document and needs manual review';
+    }
+
     // Final determination
     $result['eligible'] = $allPassed;
     $result['auto_approve'] = $allPassed && $facilityAutoApprove;

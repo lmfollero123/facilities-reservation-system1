@@ -7,7 +7,7 @@ namespace Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The eight auto-approval conditions (config/auto_approval_rules.php).
+ * The nine auto-approval conditions (config/auto_approval_rules.php).
  * These are the barangay-defined rules the thesis documents in section 5.4;
  * each test flips exactly one condition against a known-good baseline.
  */
@@ -194,6 +194,25 @@ final class AutoApprovalRulesTest extends TestCase
     {
         $this->assertTrue($this->evaluate(['reservationDate' => self::TODAY])['eligible']);
         $this->assertTrue($this->evaluate(['reservationDate' => '2026-09-22'])['eligible']); // exactly +60
+    }
+
+    public function testCondition9DocumentRequiredBlocksAutoApprovalEvenIfFacilityAllowsIt(): void
+    {
+        $result = $this->evaluate(['facility' => [
+            'auto_approve' => 1, 'capacity_threshold' => 100,
+            'max_duration_hours' => 8.0, 'capacity' => '200', 'status' => 'available',
+            'requires_document' => 1,
+        ]]);
+        $this->assertFalse($result['eligible']);
+        $this->assertFalse($result['auto_approve']);
+        $this->assertFalse($result['conditions']['no_document_requirement']['passed']);
+        $this->assertSame('Facility requires a supporting document and needs manual review', $result['reason']);
+    }
+
+    public function testCondition9NoDocumentRequirementPasses(): void
+    {
+        $result = $this->evaluate();
+        $this->assertTrue($result['conditions']['no_document_requirement']['passed']);
     }
 
     public function testFirstFailureWinsAsPrimaryReason(): void

@@ -121,7 +121,7 @@ if ($canBookOnBehalf && $bookingSubjectId !== $sessionActorId) {
 }
 
 try {
-    $facilitiesStmt = $pdo->query("SELECT id, name, base_rate, status, operating_hours FROM facilities WHERE status != 'deleted' ORDER BY name");
+    $facilitiesStmt = $pdo->query("SELECT id, name, base_rate, status, operating_hours, requires_document, document_requirement_note FROM facilities WHERE status != 'deleted' ORDER BY name");
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
     $upcomingCimmByFacility = frs_facilities_upcoming_cimm_maintenance_map($pdo);
 } catch (Throwable $e) {
@@ -407,14 +407,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
 
     if (!$error) {
         // Check facility status - prevent booking if under maintenance or offline
-        $facilityStatusStmt = $pdo->prepare('SELECT status, name FROM facilities WHERE id = :id');
+        $facilityStatusStmt = $pdo->prepare('SELECT status, name, requires_document, document_requirement_note FROM facilities WHERE id = :id');
         $facilityStatusStmt->execute(['id' => $facilityId]);
         $facilityStatus = $facilityStatusStmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$facilityStatus || $facilityStatus['status'] === 'deleted') {
             $error = 'Invalid facility selected. Please select a valid facility.';
         } elseif ($facilityStatus['status'] === 'offline') {
             $error = '⚠️ This facility is currently offline and unavailable for booking. Please select a different facility.';
+        } elseif (!empty($facilityStatus['requires_document']) && (empty($eventPermitFile['tmp_name']) || ($eventPermitFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)) {
+            $error = '⚠️ This facility requires a supporting document to book: ' . ($facilityStatus['document_requirement_note'] ?: 'Please attach the required document.');
         }
         // status === maintenance: do NOT blanket-reject. CIMM sets that status for the
         // active window but dated blackouts define which days are blocked (e.g. Jul 12–Aug 9).
@@ -2385,11 +2387,13 @@ ul.bcf-scroll-select-menu {
                             $upcomingCimm = $upcomingCimmByFacility[$fid] ?? null;
                             $upcomingLabel = $upcomingCimm ? frs_format_cimm_maintenance_window($upcomingCimm) : '';
                         ?>
-                            <option value="<?= $facility['id']; ?>" 
+                            <option value="<?= $facility['id']; ?>"
                                     data-status="<?= htmlspecialchars($facility['status']); ?>"
                                     data-operating-hours="<?= htmlspecialchars($facility['operating_hours'] ?? ''); ?>"
                                     data-upcoming-cimm="<?= htmlspecialchars($upcomingLabel, ENT_QUOTES, 'UTF-8'); ?>"
-                                    data-upcoming-cimm-reason="<?= htmlspecialchars($upcomingCimm['display_reason'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                    data-upcoming-cimm-reason="<?= htmlspecialchars($upcomingCimm['display_reason'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-requires-document="<?= !empty($facility['requires_document']) ? '1' : '0'; ?>"
+                                    data-document-note="<?= htmlspecialchars($facility['document_requirement_note'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                 <?= htmlspecialchars($facility['name']); ?><?= $upcomingLabel !== '' ? ' — maintenance ' . $upcomingLabel : ''; ?>
                             </option>
                         <?php endforeach; ?>
@@ -2508,11 +2512,12 @@ ul.bcf-scroll-select-menu {
                 <p class="bcf-char-count" id="booking-notes-char-count" aria-live="polite">0 / <?= (int)FRS_BOOKING_NOTES_MAX; ?></p>
             </label>
 
-            <div class="frs-notice-panel frs-notice-muted">
+            <div class="frs-notice-panel frs-notice-muted" id="bcf-document-panel">
                 <h4 class="bcf-label-row" style="margin:0 0 0.75rem; font-size:0.95rem; color:var(--text-primary, inherit);">
-                    Supporting document (optional)
+                    <span id="bcf-document-panel-label">Supporting document (optional)</span>
                     <?= frs_field_tip('Event permit, barangay resolution, or letter of request — recommended for large events.'); ?>
                 </h4>
+                <p id="bcf-document-required-note" style="display:none; margin:0 0 0.75rem; padding:0.6rem 0.75rem; background:#fff4e5; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:0.88rem;"></p>
                 <label style="display:block; margin-bottom:0.5rem;">
                     Document type
                     <select name="event_document_type" style="width:100%; padding:0.5rem; border-radius:8px; margin-top:0.25rem;">
@@ -2524,7 +2529,7 @@ ul.bcf-scroll-select-menu {
                 </label>
                 <label>
                     Upload file (PDF or image, max 8MB)
-                    <input type="file" name="event_supporting_doc" accept=".pdf,image/*" style="margin-top:0.35rem; width:100%;">
+                    <input type="file" name="event_supporting_doc" id="bcf-event-supporting-doc" accept=".pdf,image/*" style="margin-top:0.35rem; width:100%;">
                 </label>
             </div>
 
@@ -3854,6 +3859,30 @@ document.addEventListener('DOMContentLoaded', function() {
     facilitySel?.addEventListener('change', function() {
         const facilityId = this.value;
         loadFacilityDetails(facilityId);
+    });
+
+    // Toggle the supporting-document requirement for facilities that need one
+    // (e.g. a school gym needing the principal's approval).
+    facilitySel?.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const panelLabel = document.getElementById('bcf-document-panel-label');
+        const noteEl = document.getElementById('bcf-document-required-note');
+        const fileInput = document.getElementById('bcf-event-supporting-doc');
+        if (!panelLabel || !noteEl || !fileInput) return;
+
+        const requiresDoc = selectedOption && selectedOption.getAttribute('data-requires-document') === '1';
+        const note = selectedOption ? (selectedOption.getAttribute('data-document-note') || '') : '';
+
+        if (requiresDoc) {
+            panelLabel.textContent = 'Supporting document (required for this facility)';
+            noteEl.textContent = note || 'This facility requires a supporting document before it can be booked.';
+            noteEl.style.display = 'block';
+            fileInput.setAttribute('required', 'required');
+        } else {
+            panelLabel.textContent = 'Supporting document (optional)';
+            noteEl.style.display = 'none';
+            fileInput.removeAttribute('required');
+        }
     });
 
     // Check facility status when selected

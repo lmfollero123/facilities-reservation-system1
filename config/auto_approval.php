@@ -14,6 +14,7 @@
  * 6. Reservation does not conflict with existing approved bookings
  * 7. User has no previous violations
  * 8. Reservation is within allowed advance booking window
+ * 9. Facility does not require a supporting document (always manual review if it does)
  * 
  * @package FacilitiesReservation
  */
@@ -60,7 +61,7 @@ function evaluateAutoApproval(
     // frs_auto_approval_rules() (config/auto_approval_rules.php) so it can
     // be unit-tested without a database.
     $facilityStmt = $pdo->prepare(
-        'SELECT auto_approve, capacity_threshold, max_duration_hours, capacity, status
+        'SELECT auto_approve, capacity_threshold, max_duration_hours, capacity, status, requires_document
          FROM facilities
          WHERE id = :facility_id'
     );

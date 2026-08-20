@@ -438,7 +438,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 $stmt = $pdo->prepare(
     'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
-            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate, f.extension_fee_per_hour AS facility_extension_fee_per_hour
+            f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate, f.extension_fee_per_hour AS facility_extension_fee_per_hour,
+            f.requires_document AS facility_requires_document, f.document_requirement_note AS facility_document_requirement_note
      FROM reservations r
      JOIN users u ON r.user_id = u.id
      JOIN facilities f ON r.facility_id = f.id
@@ -682,6 +683,14 @@ ob_start();
 
     <section class="booking-card">
         <h2>Supporting Documents</h2>
+        <?php if (!empty($reservation['facility_requires_document'])): ?>
+            <div style="margin:0 0 1rem; padding:0.75rem 1rem; border-radius:8px; <?= empty($reservationDocuments) ? 'background:#fff4e5; border:1px solid #ffc107; color:#856404;' : 'background:#e7f3ff; border:1px solid #2196F3; color:#1976D2;'; ?>">
+                <strong><?= empty($reservationDocuments) ? '⚠️ Document required, none submitted yet.' : '📋 Document required — review before approving.'; ?></strong>
+                <?php if (!empty($reservation['facility_document_requirement_note'])): ?>
+                    <div style="margin-top:0.25rem; font-size:0.9rem;"><?= htmlspecialchars((string)$reservation['facility_document_requirement_note']); ?></div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
         <?php if (empty($reservationDocuments)): ?>
             <p style="margin:0; color:#8b95b5; font-size:0.95rem;">No event permit or supporting files were uploaded with this request.</p>
         <?php else: ?>
