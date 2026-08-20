@@ -7931,6 +7931,7 @@ aside.sidebar .sidebar-user-footer,
     box-sizing: border-box !important;
     overflow: hidden !important;
     margin: 0 !important;
+    transition: width 0.3s ease, left 0.3s ease !important;
 }
 
 /* User info - prevent overflow */
