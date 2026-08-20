@@ -1242,7 +1242,10 @@ ob_start();
 .um-aside-cta { display: inline-block; margin-top: 0.85rem; padding: 0.55rem 0.9rem; text-decoration: none; font-size: 0.88rem; border-radius: 8px; }
 .um-stat-label { display: block; font-size: 0.82rem; color: #64748b; margin-bottom: 0.35rem; }
 .um-stat-value { font-size: 1.75rem; color: #1e293b; line-height: 1; }
-.um-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1.25rem; align-items: start; }
+.um-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+.um-aside { display: flex; flex-direction: column; }
+.um-aside-list { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; list-style: none; margin: 0.5rem 0; padding: 0; }
+.um-aside .um-policy-note { margin-top: 0.5rem; }
 .um-section-head { margin-bottom: 1rem; }
 .um-section-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .um-role-readonly { display: flex; flex-direction: column; gap: 0.35rem; }
