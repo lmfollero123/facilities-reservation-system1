@@ -538,22 +538,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $facilityTab = ($_GET['tab'] ?? 'active') === 'deleted' ? 'deleted' : 'active';
+$searchQuery = trim((string)($_GET['q'] ?? ''));
 
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
+// Tab badge counts are always unfiltered totals - only the list/pagination below narrows by search.
 $activeFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status != 'deleted'")->fetchColumn();
 $deletedFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status = 'deleted'")->fetchColumn();
 
-$totalFacilities = $facilityTab === 'deleted' ? $deletedFacilityCount : $activeFacilityCount;
+$statusClause = $facilityTab === 'deleted' ? "status = 'deleted'" : "status != 'deleted'";
+$searchClause = $searchQuery !== '' ? ' AND (name LIKE :q OR location LIKE :q)' : '';
+
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM facilities WHERE {$statusClause}{$searchClause}");
+if ($searchQuery !== '') {
+    $countStmt->bindValue(':q', '%' . $searchQuery . '%');
+}
+$countStmt->execute();
+$totalFacilities = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalFacilities / $perPage));
 
 $facilitiesStmt = $pdo->prepare(
     "SELECT *, latitude, longitude, operating_hours FROM facilities
-     WHERE status " . ($facilityTab === 'deleted' ? "= 'deleted'" : "!= 'deleted'") . "
+     WHERE {$statusClause}{$searchClause}
      ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
 );
+if ($searchQuery !== '') {
+    $facilitiesStmt->bindValue(':q', '%' . $searchQuery . '%');
+}
 $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $facilitiesStmt->execute();
@@ -650,13 +663,22 @@ ob_start();
 
     <div data-frs-partial-id="facility-list" data-frs-partial-root>
     <nav class="booking-hub-tabs" aria-label="Facility list sections" style="margin-bottom: 1rem;">
-        <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active" data-frs-partial="facility-list">
+        <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
             Active Facilities (<?= $activeFacilityCount; ?>)
         </a>
-        <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted" data-frs-partial="facility-list">
+        <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
             Deleted Facilities (<?= $deletedFacilityCount; ?>)
         </a>
     </nav>
+
+    <form method="get" data-frs-partial="facility-list" style="margin-bottom: 1rem;">
+        <input type="hidden" name="tab" value="<?= htmlspecialchars($facilityTab); ?>">
+        <input type="hidden" name="page" value="1">
+        <div class="input-wrapper" style="max-width: 360px;">
+            <i class="bi bi-search input-icon"></i>
+            <input type="text" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search by name or location..." style="width:100%;">
+        </div>
+    </form>
 
     <section class="collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="facilities-list">
@@ -666,7 +688,13 @@ ob_start();
         <div class="collapsible-body" id="facilities-list">
             <?php if (empty($facilities)): ?>
                 <article class="facility-card-admin">
-                    <p><?= $facilityTab === 'deleted' ? 'No deleted facilities.' : 'No facilities added yet. Click "Add Facility" to add your first facility.'; ?></p>
+                    <p>
+                        <?php if ($searchQuery !== ''): ?>
+                            No facilities match "<?= htmlspecialchars($searchQuery); ?>".
+                        <?php else: ?>
+                            <?= $facilityTab === 'deleted' ? 'No deleted facilities.' : 'No facilities added yet. Click "Add Facility" to add your first facility.'; ?>
+                        <?php endif; ?>
+                    </p>
                 </article>
             <?php else: ?>
                 <?php foreach ($facilities as $facility): ?>
@@ -740,13 +768,14 @@ ob_start();
                 <?php endforeach; ?>
 
                 <?php if ($totalPages > 1): ?>
+                    <?php $pgQuerySuffix = $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
-                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page - 1; ?>" data-frs-partial="facility-list">&larr; Prev</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page - 1; ?><?= $pgQuerySuffix; ?>" data-frs-partial="facility-list">&larr; Prev</a>
                         <?php endif; ?>
                         <span class="current">Page <?= $page; ?> of <?= $totalPages; ?></span>
                         <?php if ($page < $totalPages): ?>
-                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page + 1; ?>" data-frs-partial="facility-list">Next &rarr;</a>
+                            <a href="?tab=<?= $facilityTab; ?>&page=<?= $page + 1; ?><?= $pgQuerySuffix; ?>" data-frs-partial="facility-list">Next &rarr;</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>

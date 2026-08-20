@@ -2305,19 +2305,13 @@ ul.bcf-scroll-select-menu {
                 </div>
             </div>
 
-            <aside class="booking-card bcf-aside-col">
-                <div id="facility-details-container" style="display: none;">
+            <aside class="booking-card bcf-aside-col" id="facility-details-aside" style="display: none;">
+                <div id="facility-details-container">
                     <h2 id="facility-details-title">Facility Details</h2>
                     <div id="facility-details-content">
                         <div style="text-align: center; padding: 2rem; color: #8b95b5;">
                             <p>Select a facility from the calendar dropdown to view details.</p>
                         </div>
-                    </div>
-                </div>
-                <div id="facility-placeholder" style="display: block;">
-                    <h2>Facility Details</h2>
-                    <div style="text-align: center; padding: 2rem; color: #8b95b5;">
-                        <p>Select a facility from the calendar dropdown to view details.</p>
                     </div>
                 </div>
             </aside>
@@ -3662,31 +3656,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const preAttendees = qp.get('expected_attendees');
     
     // Facility details container elements
+    const facilityDetailsAside = document.getElementById('facility-details-aside');
     const facilityDetailsContainer = document.getElementById('facility-details-container');
-    const facilityPlaceholder = document.getElementById('facility-placeholder');
     const facilityDetailsTitle = document.getElementById('facility-details-title');
     const facilityDetailsContent = document.getElementById('facility-details-content');
-    
+
     // Function to fetch and display facility details
     async function loadFacilityDetails(facilityId) {
         if (!facilityId || facilityId === '') {
-            // Hide details, show placeholder
-            if (facilityDetailsContainer) facilityDetailsContainer.style.display = 'none';
-            if (facilityPlaceholder) facilityPlaceholder.style.display = 'block';
+            // No facility selected yet - hide the whole sidebar instead of a placeholder
+            if (facilityDetailsAside) facilityDetailsAside.style.display = 'none';
             const aeClear = document.getElementById('expected-attendees');
             if (aeClear) aeClear.removeAttribute('max');
             refreshBookingGates();
             return;
         }
-        
+
         try {
             // Show loading state
+            if (facilityDetailsAside) facilityDetailsAside.style.display = '';
             if (facilityDetailsContainer) {
-                facilityDetailsContainer.style.display = 'block';
                 facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #8b95b5;"><p>Loading facility details...</p></div>';
             }
-            if (facilityPlaceholder) facilityPlaceholder.style.display = 'none';
-            
+
             // Fetch facility details via AJAX
             const response = await bcfFetchPost(basePath + '/dashboard/facility-details-api', { facility_id: facilityId });
             
