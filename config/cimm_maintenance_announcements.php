@@ -20,7 +20,7 @@ function frs_cimm_maintenance_announcements_state_path(): string
 }
 
 /**
- * @return array<string, array{notification_id: int, facility_id: int, created_at: string}>
+ * @return array<string, array{notification_id: int, facility_id: int, created_at: string, start_date: string, end_date: string}>
  */
 function frs_cimm_load_maintenance_announcement_state(): array
 {
@@ -47,6 +47,8 @@ function frs_cimm_load_maintenance_announcement_state(): array
             'notification_id' => $notificationId,
             'facility_id' => (int)($row['facility_id'] ?? 0),
             'created_at' => (string)($row['created_at'] ?? ''),
+            'start_date' => (string)($row['start_date'] ?? ''),
+            'end_date' => (string)($row['end_date'] ?? ''),
         ];
     }
     return $out;
@@ -95,14 +97,128 @@ function frs_cimm_schedule_is_announceable(array $schedule, ?int $now = null): b
 }
 
 /**
+ * CIMM's "report" feed (rep_id) can re-emit a fresh id for the same ongoing
+ * issue on every sync -- each one passes the exact-id dedup check above
+ * because the id itself is new. Catch those near-duplicates by facility +
+ * date window instead: if we already announced this facility for an
+ * overlapping (or near-adjacent) window recently, skip it.
+ *
+ * @param array<string, array{notification_id: int, facility_id: int, created_at: string, start_date?: string, end_date?: string}> $state
+ */
+function frs_cimm_state_has_overlapping_window(
+    array $state,
+    int $facilityId,
+    string $startDate,
+    string $endDate,
+    int $graceDays = 3
+): bool {
+    if ($startDate === '') {
+        return false;
+    }
+    $newStart = strtotime($startDate);
+    $newEnd = strtotime($endDate !== '' ? $endDate : $startDate);
+    if (!$newStart) {
+        return false;
+    }
+    if (!$newEnd || $newEnd < $newStart) {
+        $newEnd = $newStart;
+    }
+    $grace = $graceDays * 86400;
+
+    foreach ($state as $entry) {
+        if ((int)($entry['facility_id'] ?? 0) !== $facilityId) {
+            continue;
+        }
+        $existingStart = strtotime((string)($entry['start_date'] ?? ''));
+        if (!$existingStart) {
+            continue;
+        }
+        $existingEnd = strtotime((string)($entry['end_date'] ?? '')) ?: $existingStart;
+
+        // Overlap (with a grace buffer) = same ongoing issue re-reported under a new id.
+        if ($newStart <= $existingEnd + $grace && $newEnd >= $existingStart - $grace) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Delete the public announcement for any tracked CIMM maintenance record that
+ * has since been marked completed/cancelled, or whose window ended (with a
+ * grace period) and no longer appears in the current CIMM feed at all.
+ *
  * @param array<int,array<string,mixed>> $mappedSchedules
- * @return array{created: int, skipped: int, errors: list<string>, created_titles: list<string>}
+ * @param array<string, array{notification_id: int, facility_id: int, created_at: string, start_date: string, end_date: string}> $state
+ * @return array{deleted: int, state: array<string, array<string, mixed>>}
+ */
+function frs_cimm_cleanup_completed_announcements(PDO $pdo, array $mappedSchedules, array $state): array
+{
+    $deleted = 0;
+    if (empty($state)) {
+        return ['deleted' => 0, 'state' => $state];
+    }
+
+    $scheduleById = [];
+    foreach ($mappedSchedules as $schedule) {
+        $id = trim((string)($schedule['id'] ?? ''));
+        if ($id !== '') {
+            $scheduleById[$id] = $schedule;
+        }
+    }
+
+    $today = strtotime(date('Y-m-d'));
+    $graceSeconds = 2 * 86400;
+
+    foreach ($state as $cimmId => $entry) {
+        $isDone = false;
+
+        if (isset($scheduleById[$cimmId])) {
+            $status = cimmNormalizeMaintenanceStatus((string)($scheduleById[$cimmId]['status'] ?? ''));
+            if (in_array($status, ['completed', 'cancelled'], true)) {
+                $isDone = true;
+            }
+        } else {
+            // No longer in the CIMM feed at all -- if its window ended a couple
+            // days ago, treat it as finished rather than leaving it up forever.
+            $endTs = strtotime((string)($entry['end_date'] ?? ''));
+            if ($endTs && $today > $endTs + $graceSeconds) {
+                $isDone = true;
+            }
+        }
+
+        if (!$isDone) {
+            continue;
+        }
+
+        $notificationId = (int)($entry['notification_id'] ?? 0);
+        if ($notificationId > 0) {
+            try {
+                $pdo->prepare('DELETE FROM notifications WHERE id = ? AND user_id IS NULL')
+                    ->execute([$notificationId]);
+            } catch (Throwable $e) {
+                error_log('CIMM completed-announcement cleanup failed for ' . $cimmId . ': ' . $e->getMessage());
+                continue;
+            }
+        }
+
+        unset($state[$cimmId]);
+        $deleted++;
+    }
+
+    return ['deleted' => $deleted, 'state' => $state];
+}
+
+/**
+ * @param array<int,array<string,mixed>> $mappedSchedules
+ * @return array{created: int, skipped: int, deleted: int, errors: list<string>, created_titles: list<string>}
  */
 function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedules): array
 {
     $result = [
         'created' => 0,
         'skipped' => 0,
+        'deleted' => 0,
         'errors' => [],
         'created_titles' => [],
     ];
@@ -123,6 +239,22 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
     }
 
     $state = frs_cimm_load_maintenance_announcement_state();
+
+    $cleanup = frs_cimm_cleanup_completed_announcements($pdo, $mappedSchedules, $state);
+    if ($cleanup['deleted'] > 0) {
+        $state = $cleanup['state'];
+        frs_cimm_save_maintenance_announcement_state($state);
+        $result['deleted'] = $cleanup['deleted'];
+        if (function_exists('logAudit')) {
+            require_once __DIR__ . '/audit.php';
+            logAudit(
+                'Auto-removed completed CIMM maintenance announcements',
+                'Announcements',
+                "Deleted {$cleanup['deleted']} announcement(s) for completed/cancelled/expired maintenance"
+            );
+        }
+    }
+
     $now = time();
 
     foreach ($mappedSchedules as $schedule) {
@@ -155,6 +287,11 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
             'start_date' => $startDate !== '' ? date('Y-m-d', strtotime($startDate)) : '',
             'end_date' => $endDate !== '' ? date('Y-m-d', strtotime($endDate)) : '',
         ];
+
+        if (frs_cimm_state_has_overlapping_window($state, $facilityId, $window['start_date'], $window['end_date'])) {
+            $result['skipped']++;
+            continue;
+        }
         $windowLabel = frs_format_cimm_maintenance_window([
             'start_date' => $window['start_date'],
             'end_date' => $window['end_date'] ?: $window['start_date'],
@@ -203,6 +340,8 @@ function frs_sync_cimm_maintenance_announcements(PDO $pdo, array $mappedSchedule
                 'notification_id' => $notificationId,
                 'facility_id' => $facilityId,
                 'created_at' => date('c'),
+                'start_date' => $window['start_date'],
+                'end_date' => $window['end_date'] ?: $window['start_date'],
             ];
             frs_cimm_save_maintenance_announcement_state($state);
 
