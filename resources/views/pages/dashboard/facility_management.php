@@ -748,7 +748,7 @@ ob_start();
                                     data-qr-url="<?= htmlspecialchars($qr['url'], ENT_QUOTES); ?>"
                                     data-qr-image="<?= htmlspecialchars($qr['qr'], ENT_QUOTES); ?>"
                                     data-print-url="<?= htmlspecialchars($qr['print_url'], ENT_QUOTES); ?>"
-                                ><i class="bi bi-qr-code"></i></button>
+                                ><i class="bi bi-upc-scan"></i></button>
                             <?php elseif (!$hasFacilityQr): ?>
                                 <span class="fm-qr-hint">Run <code>migration_add_facility_checkin_qr.sql</code> to enable facility QR posters.</span>
                             <?php endif; ?>
