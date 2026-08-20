@@ -90,15 +90,21 @@ class RecommendationService
         foreach ($availableFacilities as $facility) {
             $score = $this->calculateFacilityScore($facility, $patterns, $userHistory);
             if ($score > 0) {
+                // Suggestions use this facility's own history where available
+                // (falling back to the user's overall patterns) -- otherwise
+                // every card ends up with the exact same suggested date/time,
+                // since the aggregated $patterns are identical for all of them.
+                $facilityPatterns = $this->analyzeFacilityPatterns($userHistory, $facility['id'], $patterns);
+
                 $recommendations[] = [
                     'facility_id' => $facility['id'],
                     'facility_name' => $facility['name'],
                     'score' => $score,
                     'reasons' => $this->generateReasons($facility, $patterns, $score),
-                    'suggested_date' => $this->suggestDate($patterns),
-                    'suggested_time' => $this->suggestTime($patterns),
-                    'suggested_duration' => $patterns['typical_duration'],
-                    'suggested_attendees' => $patterns['typical_attendees']
+                    'suggested_date' => $this->suggestDate($facilityPatterns),
+                    'suggested_time' => $this->suggestTime($facilityPatterns),
+                    'suggested_duration' => $facilityPatterns['typical_duration'],
+                    'suggested_attendees' => $facilityPatterns['typical_attendees']
                 ];
             }
         }
@@ -199,6 +205,26 @@ class RecommendationService
         return $patterns;
     }
     
+    /**
+     * Same shape as analyzeUserPatterns(), but scoped to one facility's slice
+     * of the history -- so each recommendation card suggests a date/time
+     * that's actually specific to that facility, not the user's global
+     * average across every facility they've ever booked. Falls back to the
+     * overall $globalPatterns when the user has no history at this facility.
+     */
+    private function analyzeFacilityPatterns($userHistory, $facilityId, $globalPatterns)
+    {
+        $facilityHistory = array_values(array_filter($userHistory, function ($reservation) use ($facilityId) {
+            return $reservation['facility_id'] == $facilityId;
+        }));
+
+        if (empty($facilityHistory)) {
+            return $globalPatterns;
+        }
+
+        return $this->analyzeUserPatterns($facilityHistory);
+    }
+
     /**
      * Extract duration in hours from time slot
      */
