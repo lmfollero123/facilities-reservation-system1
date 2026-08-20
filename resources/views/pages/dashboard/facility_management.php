@@ -549,11 +549,14 @@ $activeFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE s
 $deletedFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status = 'deleted'")->fetchColumn();
 
 $statusClause = $facilityTab === 'deleted' ? "status = 'deleted'" : "status != 'deleted'";
-$searchClause = $searchQuery !== '' ? ' AND (name LIKE :q OR location LIKE :q)' : '';
+// Native (non-emulated) prepared statements don't allow the same named
+// placeholder to appear twice in one query, so name/location get separate ones.
+$searchClause = $searchQuery !== '' ? ' AND (name LIKE :q1 OR location LIKE :q2)' : '';
 
 $countStmt = $pdo->prepare("SELECT COUNT(*) FROM facilities WHERE {$statusClause}{$searchClause}");
 if ($searchQuery !== '') {
-    $countStmt->bindValue(':q', '%' . $searchQuery . '%');
+    $countStmt->bindValue(':q1', '%' . $searchQuery . '%');
+    $countStmt->bindValue(':q2', '%' . $searchQuery . '%');
 }
 $countStmt->execute();
 $totalFacilities = (int)$countStmt->fetchColumn();
@@ -565,7 +568,8 @@ $facilitiesStmt = $pdo->prepare(
      ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
 );
 if ($searchQuery !== '') {
-    $facilitiesStmt->bindValue(':q', '%' . $searchQuery . '%');
+    $facilitiesStmt->bindValue(':q1', '%' . $searchQuery . '%');
+    $facilitiesStmt->bindValue(':q2', '%' . $searchQuery . '%');
 }
 $facilitiesStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
 $facilitiesStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
