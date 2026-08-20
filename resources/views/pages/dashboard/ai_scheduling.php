@@ -916,7 +916,7 @@ html[data-theme="dark"] .ai-empty-icon {
 <div class="ai-scheduler-container">
     <div class="ai-page-header">
         <h1 class="ai-page-title">Personalized Recommendations</h1>
-        <p class="ai-page-description">AI-powered suggestions based on your reservation history and preferences</p>
+        <p class="ai-page-description">Personalized suggestions based on your reservation history and preferences</p>
     </div>
 
     <!-- Welcome Section -->
