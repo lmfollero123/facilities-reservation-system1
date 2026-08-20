@@ -3809,6 +3809,43 @@ footer small {
     pointer-events: none !important;
 }
 
+/* Icon rail (desktop collapsed) must win over the collapsed-group hidden
+   state -- otherwise sections the user had closed (data-collapsed="true")
+   vanish entirely instead of showing their icon, leaving uneven gaps
+   between the icons that do render. Higher specificity than the hiding
+   rules above so it wins regardless of source order. */
+.sidebar.collapsed .collapsible-content[data-collapsed="true"],
+.sidebar.collapsed .collapsible-content[data-collapsed="true"] > * {
+    display: block !important;
+    max-height: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: normal !important;
+    font-size: inherit !important;
+}
+
+.sidebar.collapsed .collapsible-content[data-collapsed="true"] a {
+    display: flex !important;
+    justify-content: center;
+    padding: 0.75rem !important;
+    margin: 0 !important;
+    max-height: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    line-height: normal !important;
+    font-size: inherit !important;
+}
+
 .sidebar-bottom {
     margin-top: auto;
     padding-top: 1rem;
@@ -7245,7 +7282,12 @@ body,
    order, which was silently dropping the collapse/expand animation. */
 @media (min-width: 961px) {
     .sidebar {
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        /* min-width must animate alongside width -- otherwise it snaps to its
+           new value instantly and clamps the rendered width with it, which is
+           invisible while collapsing (target min-width is smaller than the
+           animating width) but makes expanding look instant (min-width jumps
+           straight to 260px while width is still animating up from 70px). */
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     }
 }
 
