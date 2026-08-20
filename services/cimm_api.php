@@ -472,6 +472,51 @@ function frs_cimm_sync_state_path(): string
 }
 
 /**
+ * Path to the cached, already-mapped CIMM schedule list - lets pages render
+ * the schedules table/calendar instantly instead of making a live CIMM API
+ * call (and running the full DB sync) on every page view. Populated by
+ * frs_cimm_run_sync() (the cron job, and the "Sync Now" button).
+ */
+function frs_cimm_schedules_cache_path(): string
+{
+    $root = function_exists('app_root_path') ? app_root_path() : dirname(__DIR__);
+    return $root . '/storage/cimm_schedules_cache.json';
+}
+
+/**
+ * @param array<int,array<string,mixed>> $mappedSchedules
+ */
+function frs_cimm_save_schedules_cache(array $mappedSchedules): void
+{
+    $path = frs_cimm_schedules_cache_path();
+    $payload = [
+        'cached_at' => date('c'),
+        'schedules' => $mappedSchedules,
+    ];
+    file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * @return array{cached_at: ?string, schedules: array<int,array<string,mixed>>}
+ */
+function frs_cimm_load_schedules_cache(): array
+{
+    $path = frs_cimm_schedules_cache_path();
+    if (!is_file($path)) {
+        return ['cached_at' => null, 'schedules' => []];
+    }
+    $raw = file_get_contents($path);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($data)) {
+        return ['cached_at' => null, 'schedules' => []];
+    }
+    return [
+        'cached_at' => isset($data['cached_at']) ? (string)$data['cached_at'] : null,
+        'schedules' => is_array($data['schedules'] ?? null) ? $data['schedules'] : [],
+    ];
+}
+
+/**
  * Path to facility IDs that CIMM sync set to maintenance (not manual staff changes).
  */
 function frs_cimm_managed_maintenance_path(): string
@@ -624,6 +669,7 @@ function frs_cimm_run_sync(PDO $pdo): array
     }
 
     $mappedSchedules = mapCIMMToCPRF($rawSchedules);
+    frs_cimm_save_schedules_cache($mappedSchedules);
     $syncSummary = syncFacilitiesFromCIMM($pdo, $mappedSchedules);
 
     $announcementSummary = ['created' => 0, 'skipped' => 0, 'errors' => [], 'created_titles' => []];

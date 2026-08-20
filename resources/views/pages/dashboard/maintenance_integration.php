@@ -53,41 +53,42 @@ if ($activeTab === 'insights' && ($_GET['export'] ?? '') === 'csv') {
     exit;
 }
 
-// Action feedback (reserved for future maintenance-integration actions)
+// Action feedback
 $success = '';
 $error = '';
+$isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
-// Fetch maintenance schedules from CIMM API, then sync facility status + blackouts to the local DB.
-$apiResult = fetchCIMMMaintenanceSchedules();
-$rawSchedules = $apiResult['data'] ?? [];
-$apiError = $apiResult['error'] ?? null;
-$maintenanceSchedules = mapCIMMToCPRF($rawSchedules);
-
-$syncSummary = [
-    'updated_to_maintenance' => 0,
-    'updated_to_available' => 0,
-    'blackouts_added' => 0,
-    'blackouts_removed' => 0,
-    'matched_schedule_count' => 0,
-    'unmatched_schedule_count' => 0,
-    'errors' => [],
-];
-
-if (empty($apiError)) {
-    $syncSummary = syncFacilitiesFromCIMM($pdo, $maintenanceSchedules);
-    $announcementHelper = __DIR__ . '/../../../../config/cimm_maintenance_announcements.php';
-    if (is_file($announcementHelper)) {
-        require_once $announcementHelper;
-        $announcementSummary = frs_sync_cimm_maintenance_announcements($pdo, $maintenanceSchedules);
-        $syncSummary['announcements_created'] = $announcementSummary['created'];
-        $syncSummary['announcements_skipped'] = $announcementSummary['skipped'];
-        $syncSummary['announcement_errors'] = $announcementSummary['errors'];
-        if (!empty($announcementSummary['created_titles'])) {
-            $syncSummary['announcement_titles'] = $announcementSummary['created_titles'];
+// Manual "Sync Now" - runs the same fetch+sync the cron does
+// (scripts/sync_cimm_maintenance.php), on demand. Page loads otherwise only
+// read the cache below - no live CIMM API call on every view.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['sync_now'])) {
+    if (!$canSubmit) {
+        $error = 'You do not have permission to sync CIMM maintenance data.';
+    } else {
+        $syncResult = frs_cimm_run_sync($pdo);
+        if ($syncResult['success']) {
+            $s = $syncResult['summary'];
+            $success = 'CIMM sync complete: ' . (int)($s['matched_schedule_count'] ?? 0) . ' schedule(s) matched, '
+                . (int)($s['updated_to_maintenance'] ?? 0) . ' facility(ies) set to maintenance, '
+                . (int)($s['updated_to_available'] ?? 0) . ' returned to available.';
+        } else {
+            $error = 'CIMM sync failed: ' . (string)($syncResult['error'] ?? 'Unknown error');
         }
     }
-    frs_cimm_save_sync_state($syncSummary);
+    if ($isAjaxRequest && ($success !== '' || $error !== '')) {
+        header('X-FRS-Toast: ' . rawurlencode(json_encode([
+            'message' => $success !== '' ? $success : $error,
+            'type' => $success !== '' ? 'success' : 'error',
+        ])));
+    }
 }
+
+// Schedules come from the cache frs_cimm_run_sync() populates (cron job or
+// the Sync Now action above) - rendering this page never makes a live CIMM
+// API call itself.
+$schedulesCache = frs_cimm_load_schedules_cache();
+$maintenanceSchedules = $schedulesCache['schedules'];
+$schedulesCachedAt = $schedulesCache['cached_at'];
 
 $cimmSyncState = frs_cimm_load_sync_state();
 
@@ -111,18 +112,25 @@ foreach ($maintenanceSchedules as $schedule) {
     }
 }
 
-// Use upcoming schedules for the main list (full set for calendar/schedule list)
-$mockMaintenanceSchedules = $upcomingSchedules;
-
-// Filters and pagination for "Upcoming Maintenance Schedules" table only
+// Filters and pagination for the maintenance schedules table
 $statusFilter = $_GET['status'] ?? 'all';
 $priorityFilter = $_GET['priority'] ?? 'all';
+$searchFilter = trim((string)($_GET['q'] ?? ''));
 $upcomingFiltered = $upcomingSchedules;
 if ($statusFilter !== 'all') {
     $upcomingFiltered = array_filter($upcomingFiltered, fn($s) => (strtolower($s['status'] ?? '') === $statusFilter));
 }
 if ($priorityFilter !== 'all') {
     $upcomingFiltered = array_filter($upcomingFiltered, fn($s) => (strtolower($s['priority'] ?? '') === $priorityFilter));
+}
+if ($searchFilter !== '') {
+    $needle = strtolower($searchFilter);
+    $upcomingFiltered = array_filter($upcomingFiltered, function ($s) use ($needle) {
+        $haystack = strtolower(
+            ($s['facility_name'] ?? '') . ' ' . ($s['maintenance_type'] ?? '') . ' ' . ($s['category'] ?? '')
+        );
+        return str_contains($haystack, $needle);
+    });
 }
 $totalFiltered = count($upcomingFiltered);
 $perPage = 10;
@@ -131,18 +139,6 @@ $totalPages = max(1, (int)ceil($totalFiltered / $perPage));
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 $upcomingPaginated = array_slice(array_values($upcomingFiltered), $offset, $perPage);
-
-// Get real facilities for dropdown
-$facilities = [];
-try {
-    $facilitiesStmt = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name");
-    $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    // Ignore error
-}
-
-// Integration status (API read + last persisted sync run)
-$lastSyncAt = $cimmSyncState['last_sync_at'] ?? null;
 
 ob_start();
 ?>
@@ -201,18 +197,23 @@ ob_start();
 .pm-modal textarea { width:100%; min-height:84px; border:1px solid #dbe2ef; border-radius:8px; padding:0.55rem; }
 .pm-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem; }
 .pm-modal-actions .primary { background:#0284c7; color:#fff; border:none; border-radius:8px; padding:0.45rem 0.85rem; font-weight:700; cursor:pointer; }
-.mi-cimm-info {
-    background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:0.85rem 1rem; margin-bottom:1rem;
-    font-size:0.88rem; color:#0c4a6e; line-height:1.5;
+.mi-sync-bar {
+    display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;
+    background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:0.75rem 1rem; margin-bottom:1.25rem;
+    font-size:0.85rem; color:#0c4a6e;
 }
-.mi-cimm-info ul { margin:0.45rem 0 0.65rem 1.1rem; padding:0; }
-.mi-cimm-info li { margin-bottom:0.25rem; }
-.mi-sync-meta { margin:0; font-size:0.82rem; color:#0369a1; }
-.mi-sync-warn { margin:0.35rem 0 0; color:#b45309; font-weight:600; }
+.mi-sync-bar .mi-sync-meta { margin:0; }
+.mi-sync-bar .mi-sync-warn { color:#b45309; font-weight:600; }
 .mi-schedule-layout { grid-template-columns: 1fr !important; }
-.mi-calendar-toolbar { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; }
-.mi-open-schedules-btn { display:inline-flex; align-items:center; gap:0.45rem; padding:0.55rem 1rem; font-weight:700; }
-#upcomingSchedulesModal .modal-dialog { max-width: 1100px; width: 94%; }
+.mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; gap:0.5rem; }
+.mi-view-toggle-btn { padding:0.4rem 0.85rem; font-size:0.85rem; }
+.mi-view-toggle-btn.active { background:#0284c7; color:#fff; border-color:#0284c7; }
+.mi-filter-bar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+.mi-filter-bar input[type="text"], .mi-filter-bar select {
+    padding:0.5rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.85rem;
+}
+.mi-filter-bar input[type="text"] { flex:1; min-width:180px; }
+.frs-partial-loading { opacity:0.5; pointer-events:none; transition:opacity 0.15s; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -236,74 +237,47 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<!-- <?php if ($activeTab === 'schedules'): ?>
-<div class="mi-cimm-info" role="note">
-    <strong>How CIMM affects resident booking</strong>
-    <ul>
-        <li>The facility badge stays <strong>Available</strong> until maintenance actually starts (e.g. Pael on Jul 12 remains bookable for Jul 12–21).</li>
-        <li>Future maintenance dates are blocked on the Book Facility calendar immediately via <strong>CIMM Sync</strong> blackout dates (e.g. Jul 22 onward cannot be reserved in advance).</li>
-        <li>Residents see an upcoming-maintenance notice when they select a facility that has a scheduled CIMM window.</li>
-        <li>When <strong>GEMINI_API_KEY</strong> is set, new matched schedules can auto-publish a public announcement (with the facility photo) on the homepage and <a href="<?= htmlspecialchars($base); ?>/announcements">Announcements</a> page. Disable with <code>CIMM_AUTO_ANNOUNCEMENTS=false</code> in <code>.env</code>.</li>
-    </ul>
-    <?php if (!empty($apiError)): ?>
-        <p class="mi-sync-warn">CIMM API unavailable: <?= htmlspecialchars((string)$apiError); ?></p>
-    <?php else: ?>
-        <p class="mi-sync-meta">
-            Sync on this page load:
-            <?= (int)($syncSummary['blackouts_added'] ?? 0); ?> blackout day(s) added,
-            <?= (int)($syncSummary['blackouts_removed'] ?? 0); ?> removed,
-            <?= (int)($syncSummary['matched_schedule_count'] ?? 0); ?> schedule(s) matched to facilities
-            <?php if ((int)($syncSummary['announcements_created'] ?? 0) > 0): ?>
-                · <strong><?= (int)$syncSummary['announcements_created']; ?> AI announcement(s) published</strong>
-            <?php endif; ?>
-            <?php if ((int)($syncSummary['unmatched_schedule_count'] ?? 0) > 0): ?>
-                · <strong><?= (int)$syncSummary['unmatched_schedule_count']; ?> unmatched</strong> (verify facility names in CIMM vs CPRF)
-            <?php endif; ?>
-            <?php if ($lastSyncAt): ?>
-                · Last saved sync: <?= htmlspecialchars((string)$lastSyncAt); ?>
-            <?php endif; ?>
-        </p>
-        <?php if (!empty($syncSummary['announcement_titles'])): ?>
-            <p class="mi-sync-meta" style="margin-top:0.35rem;">
-                New announcements: <?= htmlspecialchars(implode('; ', array_map('strval', $syncSummary['announcement_titles']))); ?>
-            </p>
+<div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
+
+<div class="mi-sync-bar">
+    <span class="mi-sync-meta">
+        <?php if ($schedulesCachedAt): ?>
+            Schedule data synced <?= htmlspecialchars(date('M j, Y g:i A', strtotime($schedulesCachedAt))); ?>
+        <?php else: ?>
+            <span class="mi-sync-warn">No CIMM sync has run yet — click Sync Now.</span>
         <?php endif; ?>
+        <?php $lastUnmatched = (int)($cimmSyncState['last_summary']['unmatched_schedule_count'] ?? 0); ?>
+        <?php if ($lastUnmatched > 0): ?>
+            · <strong><?= $lastUnmatched; ?> unmatched</strong> last sync (verify facility names in CIMM vs CPRF)
+        <?php endif; ?>
+    </span>
+    <?php if ($canSubmit): ?>
+        <form method="post" style="margin:0;">
+            <input type="hidden" name="sync_now" value="1">
+            <input type="hidden" name="tab" value="schedules">
+            <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">
+                🔄 Sync Now
+            </button>
+        </form>
     <?php endif; ?>
 </div>
-<?php endif; ?> -->
 
-<div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
-<div class="booking-wrapper mi-schedule-layout">
+<div class="mi-view-toggle">
+    <button type="button" id="mi-view-calendar-btn" class="btn-outline mi-view-toggle-btn active">📅 Calendar</button>
+    <button type="button" id="mi-view-table-btn" class="btn-outline mi-view-toggle-btn">📋 Table</button>
+</div>
+
+<div class="booking-wrapper mi-schedule-layout" id="mi-calendar-view-wrap">
     <!-- Maintenance Calendar (New Design) -->
     <aside class="booking-card maintenance-calendar-wrapper">
-        <div class="mi-calendar-toolbar">
-            <button type="button" class="btn-outline mi-open-schedules-btn" onclick="openUpcomingSchedulesModal()">
-                📋 View Upcoming Schedules
-            </button>
-        </div>
         <h2>Maintenance Calendar</h2>
-
-        <!-- Mobile Controls (Mobile Only) -->
-        <div class="mobile-controls" id="mobileListControls" style="display:none;">
-            <input id="mobileScheduleSearch" type="text" placeholder="Search schedules...">
-            <button id="mobileToCalendarBtn" class="mobile-calendar-btn">📅</button>
-        </div>
-        <div class="mobile-controls" id="mobileCalendarControls" style="display:none;">
-            <button id="mobilePrevMonth" class="mobile-toggle-btn">&#8592;</button>
-            <span id="mobileMonthLabel" title="Click to jump date"></span>
-            <button id="mobileToListBtn" class="mobile-schedule-btn">📋</button>
-            <button id="mobileNextMonth" class="mobile-toggle-btn">&#8594;</button>
-        </div>
 
         <!-- Calendar View -->
         <div id="calendarView">
             <div class="calendar-header">
                 <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
                 <span id="monthLabel" title="Click to jump date"></span>
-                <div style="display:flex; gap:8px;">
-                    <button id="toListBtn" class="schedule-btn" title="Schedule List">📋</button>
-                    <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
-                </div>
+                <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
             </div>
             <div class="calendar-weekdays">
                 <div>Sunday</div>
@@ -322,99 +296,31 @@ ob_start();
                 <div class="scroll-indicator">⌄</div>
             </div>
         </div>
-
-        <!-- List View -->
-        <div id="scheduleView" class="hidden">
-            <div style="display:flex; gap:10px; align-items:center;">
-                <input id="scheduleSearch" type="text" placeholder="Search by task, location, category, status, or date..." style="flex:1;">
-                <button id="toCalendarBtn" class="calendar-btn" title="Calendar View">📅</button>
-            </div>
-            <div id="scheduleListHolder">
-                <?php if (empty($mockMaintenanceSchedules)): ?>
-                    <p id="noScheduleMsg">No scheduled maintenance.</p>
-                <?php else:
-                    foreach ($mockMaintenanceSchedules as $row):
-                        $scheduleDate = date('Y-m-d', strtotime($row['scheduled_start'] ?? 'now'));
-                ?>
-                    <div class="schedule-item"
-                        data-task="<?= htmlspecialchars(strtolower($row['maintenance_type'] ?? $row['task'] ?? '')) ?>"
-                        data-location="<?= htmlspecialchars(strtolower($row['facility_name'] ?? $row['location'] ?? '')) ?>"
-                        data-category="<?= htmlspecialchars(strtolower($row['category'] ?? '')) ?>"
-                        data-status="<?= htmlspecialchars(strtolower($row['status_label'] ?? $row['status'] ?? '')) ?>"
-                        data-priority="<?= htmlspecialchars(strtolower($row['priority'] ?? '')) ?>"
-                        data-date="<?= htmlspecialchars(strtolower(date("F d, Y", strtotime($scheduleDate)) . '|' . $scheduleDate)) ?>">
-                        <div>
-                            <strong><?= htmlspecialchars($row['maintenance_type'] ?? $row['task'] ?? 'Maintenance') ?></strong><br>
-                            <?= htmlspecialchars($row['facility_name'] ?? $row['location'] ?? '') ?><br>
-                            <?php if (!empty($row['category'])): ?>
-                                <span class="badge badge-category"><?= htmlspecialchars($row['category']) ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="schedule-date">
-                            <?= date("F d, Y", strtotime($scheduleDate)) ?><br>
-                            <?php
-                                $priorityClass = 'badge-priority-low';
-                                $priorityLower = strtolower($row['priority'] ?? '');
-                                if ($priorityLower === 'medium') {
-                                    $priorityClass = 'badge-priority-medium';
-                                } elseif ($priorityLower === 'high') {
-                                    $priorityClass = 'badge-priority-high';
-                                } elseif ($priorityLower === 'critical') {
-                                    $priorityClass = 'badge-priority-critical';
-                                }
-
-                                $statusClass = 'badge-status-planned';
-                                $statusLower = strtolower($row['status_label'] ?? $row['status'] ?? '');
-                                if ($statusLower === 'completed') {
-                                    $statusClass = 'badge-status-completed';
-                                } elseif ($statusLower === 'in progress' || $statusLower === 'in_progress') {
-                                    $statusClass = 'badge-status-in-progress';
-                                } elseif ($statusLower === 'delayed') {
-                                    $statusClass = 'badge-status-delayed';
-                                } elseif ($statusLower === 'scheduled') {
-                                    $statusClass = 'badge-status-scheduled';
-                                }
-                            ?>
-                            <?php if (!empty($row['status_label'])): ?>
-                                <span class="badge <?= $statusClass ?>"><?= htmlspecialchars($row['status_label']) ?></span>
-                            <?php endif; ?>
-                            <?php if (!empty($row['priority'])): ?>
-                                <span class="badge <?= $priorityClass ?>"><?= htmlspecialchars($row['priority']) ?> priority</span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                    <p id="noResultMsg" style="display:none;">No matching data or result.</p>
-                <?php endif; ?>
-            </div>
-        </div>
     </aside>
 </div>
 
-<!-- Upcoming Maintenance Schedules Modal -->
-<div id="upcomingSchedulesModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-dialog" style="border-radius: 8px; padding: 2rem; max-height: 90vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2 style="margin:0;">Upcoming Maintenance Schedules</h2>
-            <button onclick="closeUpcomingSchedulesModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
-        </div>
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-            <div style="display: flex; gap: 0.5rem;">
-                <select id="filterStatus" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
-                    <option value="scheduled" <?= $statusFilter === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
-                    <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                    <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                    <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                </select>
-                <select id="filterPriority" onchange="applyMaintenanceFilters()" style="padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px;">
-                    <option value="all" <?= $priorityFilter === 'all' ? 'selected' : ''; ?>>All Priorities</option>
-                    <option value="high" <?= $priorityFilter === 'high' ? 'selected' : ''; ?>>High</option>
-                    <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
-                    <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
-                </select>
-            </div>
-        </div>
+<div class="booking-card" id="mi-table-view-wrap" data-frs-partial-id="mi-schedule-table" data-frs-partial-root style="display:none;">
+        <h2 style="margin-top:0;">Upcoming Maintenance Schedules</h2>
+
+        <form method="get" data-frs-partial="mi-schedule-table" data-frs-partial-auto class="mi-filter-bar">
+            <input type="hidden" name="tab" value="schedules">
+            <input type="hidden" name="page" value="1">
+            <input type="text" name="q" value="<?= htmlspecialchars($searchFilter); ?>" placeholder="Search facility, type, or category...">
+            <select name="status">
+                <option value="all" <?= $statusFilter === 'all' ? 'selected' : ''; ?>>All Status</option>
+                <option value="scheduled" <?= $statusFilter === 'scheduled' ? 'selected' : ''; ?>>Scheduled</option>
+                <option value="in_progress" <?= $statusFilter === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+            </select>
+            <select name="priority">
+                <option value="all" <?= $priorityFilter === 'all' ? 'selected' : ''; ?>>All Priorities</option>
+                <option value="high" <?= $priorityFilter === 'high' ? 'selected' : ''; ?>>High</option>
+                <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
+            </select>
+            <button type="submit" class="btn-outline" style="padding:0.5rem 0.85rem; font-size:0.85rem;">Filter</button>
+        </form>
 
         <?php if ($totalFiltered === 0): ?>
             <p style="color: #8b95b5; text-align: center; padding: 2rem;">No upcoming maintenance schedules.</p>
@@ -482,7 +388,12 @@ ob_start();
                 </table>
             </div>
             <?php
-            $linkParams = array_filter(['status' => $statusFilter !== 'all' ? $statusFilter : null, 'priority' => $priorityFilter !== 'all' ? $priorityFilter : null]);
+            $linkParams = array_filter([
+                'tab' => 'schedules',
+                'status' => $statusFilter !== 'all' ? $statusFilter : null,
+                'priority' => $priorityFilter !== 'all' ? $priorityFilter : null,
+                'q' => $searchFilter !== '' ? $searchFilter : null,
+            ]);
             $prevQuery = $page > 1 ? http_build_query($linkParams + ['page' => $page - 1]) : '';
             $nextQuery = $page < $totalPages ? http_build_query($linkParams + ['page' => $page + 1]) : '';
             ?>
@@ -492,20 +403,19 @@ ob_start();
                 </span>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <?php if ($prevQuery): ?>
-                        <a href="?<?= htmlspecialchars($prevQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
+                        <a href="?<?= htmlspecialchars($prevQuery); ?>" data-frs-partial="mi-schedule-table" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
                     <?php else: ?>
                         <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">← Prev</span>
                     <?php endif; ?>
                     <span style="font-size: 0.9rem; color: #4b5563;">Page <?= $page; ?> of <?= $totalPages; ?></span>
                     <?php if ($nextQuery): ?>
-                        <a href="?<?= htmlspecialchars($nextQuery); ?>" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
+                        <a href="?<?= htmlspecialchars($nextQuery); ?>" data-frs-partial="mi-schedule-table" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
                     <?php else: ?>
                         <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">Next →</span>
                     <?php endif; ?>
                 </div>
             </div>
         <?php endif; ?>
-    </div>
 </div>
 
 <!-- Maintenance History Section -->
@@ -572,22 +482,6 @@ ob_start();
 </div>
 
 <script>
-function applyMaintenanceFilters() {
-    var params = new URLSearchParams(window.location.search);
-    params.set('tab', 'schedules');
-    params.set('status', document.getElementById('filterStatus').value);
-    params.set('priority', document.getElementById('filterPriority').value);
-    params.set('page', '1');
-    window.location.href = window.location.pathname + '?' + params.toString();
-}
-
-function updateMaintenanceCalendar() {
-    // Placeholder for calendar update
-    const facilityId = document.getElementById('calendarFacility').value;
-    console.log('Updating calendar for facility:', facilityId);
-    // Will filter maintenance schedules by facility when API is integrated
-}
-
 function viewMaintenanceDetails(maintenanceId, date = null) {
     if (!maintenanceId && !date) return;
     
@@ -680,19 +574,29 @@ document.getElementById('maintenanceModal').addEventListener('click', function(e
     }
 });
 
-function openUpcomingSchedulesModal() {
-    document.getElementById('upcomingSchedulesModal').style.display = 'flex';
-}
+// =============== CALENDAR / TABLE VIEW TOGGLE ===============
+(function () {
+    const calendarBtn = document.getElementById('mi-view-calendar-btn');
+    const tableBtn = document.getElementById('mi-view-table-btn');
+    const calendarWrap = document.getElementById('mi-calendar-view-wrap');
+    const tableWrap = document.getElementById('mi-table-view-wrap');
+    if (!calendarBtn || !tableBtn || !calendarWrap || !tableWrap) return;
 
-function closeUpcomingSchedulesModal() {
-    document.getElementById('upcomingSchedulesModal').style.display = 'none';
-}
-
-document.getElementById('upcomingSchedulesModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeUpcomingSchedulesModal();
+    function showCalendar() {
+        calendarWrap.style.display = '';
+        tableWrap.style.display = 'none';
+        calendarBtn.classList.add('active');
+        tableBtn.classList.remove('active');
     }
-});
+    function showTable() {
+        calendarWrap.style.display = 'none';
+        tableWrap.style.display = '';
+        tableBtn.classList.add('active');
+        calendarBtn.classList.remove('active');
+    }
+    calendarBtn.addEventListener('click', showCalendar);
+    tableBtn.addEventListener('click', showTable);
+})();
 
 // =============== SCHEDULE DATA FOR CALENDAR ===============
 window.scheduleData = <?= json_encode(array_map(function($schedule) {
@@ -725,29 +629,13 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
     const calendarGrid = document.getElementById('calendarGrid');
     const calendarDetails = document.getElementById('calendarDetails');
     const monthLabel = document.getElementById('monthLabel');
-    const mobileMonthLabel = document.getElementById('mobileMonthLabel');
-    const calendarView = document.getElementById('calendarView');
-    const scheduleView = document.getElementById('scheduleView');
-    const scheduleSearch = document.getElementById('scheduleSearch');
-    const scheduleListHolder = document.getElementById('scheduleListHolder');
-    const noResultMsg = document.getElementById('noResultMsg');
-    const toCalendarBtn = document.getElementById('toCalendarBtn');
-    const toListBtn = document.getElementById('toListBtn');
-    const mobileListControls = document.getElementById('mobileListControls');
-    const mobileCalendarControls = document.getElementById('mobileCalendarControls');
-    const mobileToCalendarBtn = document.getElementById('mobileToCalendarBtn');
-    const mobileToListBtn = document.getElementById('mobileToListBtn');
-    const mobilePrevMonth = document.getElementById('mobilePrevMonth');
-    const mobileNextMonth = document.getElementById('mobileNextMonth');
-    const mobileScheduleSearch = document.getElementById('mobileScheduleSearch');
     const prevMonthBtn = document.getElementById('prevMonth');
     const nextMonthBtn = document.getElementById('nextMonth');
-    
+
     if (!calendarGrid || !calendarDetails) return;
-    
+
     let currentDate = new Date();
-    let showingCalendar = true;
-    
+
     function getStatusKey(statusLabel) {
         const s = (statusLabel || '').toLowerCase();
         if (!s) return 'upcoming';
@@ -766,7 +654,6 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         const month = currentDate.getMonth();
         const monthText = currentDate.toLocaleString('default', {month: 'long', year: 'numeric'});
         if (monthLabel) monthLabel.textContent = monthText;
-        if (mobileMonthLabel) mobileMonthLabel.textContent = monthText;
         
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -892,41 +779,6 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         modal.style.display = 'flex';
     }
     
-    function showCalendarView() {
-        if (!calendarView || !scheduleView) return;
-        calendarView.classList.remove('hidden');
-        scheduleView.classList.add('hidden');
-        showingCalendar = true;
-        updateMobileControls();
-    }
-    
-    function showListView() {
-        if (!calendarView || !scheduleView) return;
-        calendarView.classList.add('hidden');
-        scheduleView.classList.remove('hidden');
-        showingCalendar = false;
-        updateMobileControls();
-    }
-    
-    function updateMobileControls() {
-        if (!mobileListControls || !mobileCalendarControls) return;
-        if (!isMobileView()) {
-            mobileListControls.style.display = 'none';
-            mobileCalendarControls.style.display = 'none';
-            return;
-        }
-        if (showingCalendar) {
-            mobileCalendarControls.style.display = '';
-            mobileListControls.style.display = 'none';
-            if (mobileMonthLabel && monthLabel) {
-                mobileMonthLabel.textContent = monthLabel.textContent;
-            }
-        } else {
-            mobileListControls.style.display = '';
-            mobileCalendarControls.style.display = 'none';
-        }
-    }
-    
     if (prevMonthBtn) prevMonthBtn.onclick = () => {
         currentDate.setMonth(currentDate.getMonth() - 1);
         renderCalendar();
@@ -935,63 +787,9 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
     };
-    if (toCalendarBtn) toCalendarBtn.onclick = showCalendarView;
-    if (toListBtn) toListBtn.onclick = showListView;
-    if (mobileToCalendarBtn) mobileToCalendarBtn.onclick = showCalendarView;
-    if (mobileToListBtn) mobileToListBtn.onclick = showListView;
-    if (mobilePrevMonth) mobilePrevMonth.onclick = () => {
-        currentDate.setMonth(currentDate.getMonth() - 1);
-        renderCalendar();
-        updateMobileControls();
-    };
-    if (mobileNextMonth) mobileNextMonth.onclick = () => {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-        renderCalendar();
-        updateMobileControls();
-    };
-    
-    if (scheduleSearch && scheduleListHolder) {
-        scheduleSearch.addEventListener('input', function() {
-            const searchVal = this.value.trim().toLowerCase();
-            const items = scheduleListHolder.querySelectorAll('.schedule-item');
-            let shownCount = 0;
-            if (!searchVal.length) {
-                items.forEach(i => i.style.display = '');
-                if (noResultMsg) noResultMsg.style.display = 'none';
-                return;
-            }
-            items.forEach(item => {
-                const task = item.getAttribute('data-task') || '';
-                const loc = item.getAttribute('data-location') || '';
-                const date = item.getAttribute('data-date') || '';
-                const cat = item.getAttribute('data-category') || '';
-                const stat = item.getAttribute('data-status') || '';
-                const prio = item.getAttribute('data-priority') || '';
-                if (task.includes(searchVal) || loc.includes(searchVal) || date.includes(searchVal) || 
-                    cat.includes(searchVal) || stat.includes(searchVal) || prio.includes(searchVal)) {
-                    item.style.display = '';
-                    shownCount++;
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-            if (noResultMsg) {
-                noResultMsg.style.display = shownCount === 0 ? '' : 'none';
-            }
-        });
-    }
-    
-    if (mobileScheduleSearch && scheduleSearch) {
-        mobileScheduleSearch.addEventListener('input', e => {
-            scheduleSearch.value = e.target.value;
-            scheduleSearch.dispatchEvent(new Event('input'));
-        });
-    }
-    
-    window.addEventListener('resize', updateMobileControls);
+
     renderCalendar();
-    updateMobileControls();
-    
+
     function updateWeekdayLabels() {
         const desktopDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         const shortDays = ['S','M','T','W','T','F','S'];
