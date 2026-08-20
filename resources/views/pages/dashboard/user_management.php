@@ -805,7 +805,18 @@ ob_start();
                 <?php endif; ?>
             </div>
         <?php else: ?>
-            <div class="um-user-list">
+            <div class="table-responsive um-table-wrap">
+            <table class="table um-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Registered</th>
+                        <th class="um-actions-th">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
                 <?php foreach ($users as $user):
                     $isSelf = ((int)$user['id'] === $currentUserId);
                     $initial = strtoupper(substr((string)$user['name'], 0, 1));
@@ -817,17 +828,90 @@ ob_start();
                     $statusClass = $user['status'] === 'active' ? 'active' : ($user['status'] === 'pending' ? 'pending' : 'locked');
                     $statusLabel = $user['status'] === 'pending' ? 'Pending approval' : ucfirst($user['status']);
                 ?>
-                <article class="um-user-card<?= $umView === 'id_pending' ? ' um-user-card--id-pending' : ''; ?>">
-                    <div class="um-user-main">
-                        <div class="um-avatar" aria-hidden="true"><?= htmlspecialchars($initial); ?></div>
-                        <div class="um-user-info">
-                            <div class="um-user-title">
-                                <h3><?= htmlspecialchars($user['name']); ?></h3>
-                                <?php if ($isSelf): ?><span class="um-badge um-badge-self">You</span><?php endif; ?>
+                    <tr class="um-user-row<?= $umView === 'id_pending' ? ' um-user-row--id-pending' : ''; ?>">
+                        <td class="um-cell-user">
+                            <div class="um-name-cell">
+                                <div class="um-avatar" aria-hidden="true"><?= htmlspecialchars($initial); ?></div>
+                                <div class="um-name-info">
+                                    <div class="um-user-title">
+                                        <strong><?= htmlspecialchars($user['name']); ?></strong>
+                                        <?php if ($isSelf): ?><span class="um-badge um-badge-self">You</span><?php endif; ?>
+                                    </div>
+                                    <div class="um-email"><?= htmlspecialchars($user['email']); ?></div>
+                                    <?php if (!empty($docsByUser[$user['id']])): ?>
+                                        <div class="um-docs<?= $umView === 'id_pending' ? ' um-docs--prominent' : ''; ?>">
+                                            <?php
+                                            require_once __DIR__ . '/../../../../config/secure_documents.php';
+                                            foreach ($docsByUser[$user['id']] as $doc):
+                                                $docId = $doc['id'] ?? null;
+                                                if (!$docId) continue;
+                                                $secureUrl = getSecureDocumentUrl($docId, 'view');
+                                            ?>
+                                                <a href="#" class="um-doc-link" onclick="frsOpenDocPreview('<?= htmlspecialchars($secureUrl, ENT_QUOTES); ?>', '<?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type'])), ENT_QUOTES); ?>'); return false;">
+                                                    <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php
+                                    $uid = (int)$user['id'];
+                                    $vTotal = $violationCountsByUser[$uid]['total'] ?? 0;
+                                    $vHigh = $violationCountsByUser[$uid]['high_critical'] ?? 0;
+                                    $userViolations = $violationsByUser[$uid] ?? [];
+                                    ?>
+                                    <?php if ($vTotal > 0): ?>
+                                        <details class="um-violations-details">
+                                            <summary>
+                                                <span class="um-badge um-badge-violation<?= $vHigh > 0 ? ' um-badge-violation-high' : ''; ?>">
+                                                    <?= $vTotal; ?> violation<?= $vTotal === 1 ? '' : 's'; ?>
+                                                </span>
+                                                <?php if ($vHigh > 0): ?>
+                                                    <span class="um-badge um-badge-warn"><?= $vHigh; ?> high/critical</span>
+                                                <?php endif; ?>
+                                            </summary>
+                                            <ul class="um-violations-list">
+                                                <?php foreach ($userViolations as $v): ?>
+                                                    <li class="um-violation-item um-violation-sev-<?= htmlspecialchars($v['severity']); ?>">
+                                                        <div class="um-violation-top">
+                                                            <strong><?= htmlspecialchars(frs_violation_type_label($v['violation_type'])); ?></strong>
+                                                            <span class="um-violation-severity"><?= htmlspecialchars(ucfirst($v['severity'])); ?></span>
+                                                        </div>
+                                                        <p class="um-violation-desc"><?= htmlspecialchars($v['description'] ?: 'No description provided.'); ?></p>
+                                                        <p class="um-violation-meta">
+                                                            <?= date('M j, Y g:i A', strtotime($v['created_at'])); ?>
+                                                            <?php if (!empty($v['facility_name'])): ?>
+                                                                · <?= htmlspecialchars($v['facility_name']); ?>
+                                                                <?php if (!empty($v['reservation_date'])): ?>
+                                                                    (<?= date('M j, Y', strtotime($v['reservation_date'])); ?>)
+                                                                <?php endif; ?>
+                                                            <?php endif; ?>
+                                                        </p>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </details>
+                                    <?php endif; ?>
+                                </div>
                             </div>
-                            <p class="um-email"><?= htmlspecialchars($user['email']); ?></p>
-                            <div class="um-badges">
+                        </td>
+                        <td class="um-cell-role">
+                            <?php if ($umView === 'all' && $isPageAdmin): ?>
+                            <form method="POST" class="role-change-form um-role-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                <?= csrf_field(); ?>
+                                <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                <input type="hidden" name="action" value="change_role">
+                                <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" <?= $isSelf ? 'disabled' : ''; ?>>
+                                    <option value="Admin" <?= $user['role'] === 'Admin' ? 'selected' : ''; ?>>Admin</option>
+                                    <option value="Staff" <?= $user['role'] === 'Staff' ? 'selected' : ''; ?>>Staff</option>
+                                    <option value="Resident" <?= $user['role'] === 'Resident' ? 'selected' : ''; ?>>Resident</option>
+                                </select>
+                            </form>
+                            <?php else: ?>
                                 <span class="um-badge um-badge-role"><?= htmlspecialchars($user['role']); ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="um-cell-status">
+                            <div class="um-badges">
                                 <span class="um-badge um-badge-<?= $statusClass; ?>"><?= htmlspecialchars($statusLabel); ?></span>
                                 <?php if (!$emailVerified): ?>
                                     <span class="um-badge um-badge-warn">Email not verified</span>
@@ -839,188 +923,109 @@ ob_start();
                                 <?php else: ?>
                                     <span class="um-badge um-badge-muted">No ID on file</span>
                                 <?php endif; ?>
-                            </div>
-                            <p class="um-meta">
-                                Registered <?= date('M j, Y', strtotime($user['created_at'])); ?>
-                                <?php if ($umView === 'id_pending' && !empty($user['id_uploaded_at'])): ?>
-                                    · ID uploaded <?= date('M j, Y g:i A', strtotime((string)$user['id_uploaded_at'])); ?>
-                                <?php endif; ?>
-                            </p>
-                            <?php
-                            $uid = (int)$user['id'];
-                            $vTotal = $violationCountsByUser[$uid]['total'] ?? 0;
-                            $vHigh = $violationCountsByUser[$uid]['high_critical'] ?? 0;
-                            $userViolations = $violationsByUser[$uid] ?? [];
-                            ?>
-                            <div class="um-violations">
-                                <div class="um-violations-head">
-                                    <?php if ($vTotal > 0): ?>
-                                        <span class="um-badge um-badge-violation<?= $vHigh > 0 ? ' um-badge-violation-high' : ''; ?>">
-                                            <?= $vTotal; ?> violation<?= $vTotal === 1 ? '' : 's'; ?>
-                                        </span>
-                                        <?php if ($vHigh > 0): ?>
-                                            <span class="um-badge um-badge-warn"><?= $vHigh; ?> high/critical</span>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        <span class="um-badge um-badge-muted">No violations</span>
-                                    <?php endif; ?>
-                                </div>
-                                <?php if ($vTotal > 0): ?>
-                                    <details class="um-violations-details">
-                                        <summary>View violation history</summary>
-                                        <ul class="um-violations-list">
-                                            <?php foreach ($userViolations as $v): ?>
-                                                <li class="um-violation-item um-violation-sev-<?= htmlspecialchars($v['severity']); ?>">
-                                                    <div class="um-violation-top">
-                                                        <strong><?= htmlspecialchars(frs_violation_type_label($v['violation_type'])); ?></strong>
-                                                        <span class="um-violation-severity"><?= htmlspecialchars(ucfirst($v['severity'])); ?></span>
-                                                    </div>
-                                                    <p class="um-violation-desc"><?= htmlspecialchars($v['description'] ?: 'No description provided.'); ?></p>
-                                                    <p class="um-violation-meta">
-                                                        <?= date('M j, Y g:i A', strtotime($v['created_at'])); ?>
-                                                        <?php if (!empty($v['facility_name'])): ?>
-                                                            · <?= htmlspecialchars($v['facility_name']); ?>
-                                                            <?php if (!empty($v['reservation_date'])): ?>
-                                                                (<?= date('M j, Y', strtotime($v['reservation_date'])); ?>)
-                                                            <?php endif; ?>
-                                                        <?php endif; ?>
-                                                    </p>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </details>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="um-user-side">
-                        <?php if ($umView === 'all' && $isPageAdmin): ?>
-                        <form method="POST" class="role-change-form um-role-form" data-frs-ajax data-frs-ajax-target="um-content">
-                            <?= csrf_field(); ?>
-                            <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                            <input type="hidden" name="action" value="change_role">
-                            <label class="um-role-label">
-                                Role
-                                <select name="new_role" data-original-role="<?= htmlspecialchars($user['role']); ?>" data-user-name="<?= htmlspecialchars($user['name']); ?>" class="role-select" <?= $isSelf ? 'disabled' : ''; ?>>
-                                    <option value="Admin" <?= $user['role'] === 'Admin' ? 'selected' : ''; ?>>Admin</option>
-                                    <option value="Staff" <?= $user['role'] === 'Staff' ? 'selected' : ''; ?>>Staff</option>
-                                    <option value="Resident" <?= $user['role'] === 'Resident' ? 'selected' : ''; ?>>Resident</option>
-                                </select>
-                            </label>
-                        </form>
-                        <?php elseif ($umView === 'all'): ?>
-                        <div class="um-role-readonly">
-                            <span class="um-role-label">Role</span>
-                            <span class="um-badge um-badge-role"><?= htmlspecialchars($user['role']); ?></span>
-                        </div>
-                        <?php endif; ?>
-
-                        <?php if (!empty($docsByUser[$user['id']])): ?>
-                            <div class="um-docs<?= $umView === 'id_pending' ? ' um-docs--prominent' : ''; ?>">
-                                <?php
-                                require_once __DIR__ . '/../../../../config/secure_documents.php';
-                                foreach ($docsByUser[$user['id']] as $doc):
-                                    $docId = $doc['id'] ?? null;
-                                    if (!$docId) continue;
-                                    $secureUrl = getSecureDocumentUrl($docId, 'view');
-                                ?>
-                                    <a href="#" class="um-doc-link" onclick="frsOpenDocPreview('<?= htmlspecialchars($secureUrl, ENT_QUOTES); ?>', '<?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type'])), ENT_QUOTES); ?>'); return false;">
-                                        <?= htmlspecialchars(ucwords(str_replace('_', ' ', $doc['document_type']))); ?>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <div class="um-actions">
-                            <?php if ($umView === 'id_pending' && !$isIdVerified && $hasValidIdDoc): ?>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="id_pending">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="verify">
-                                    <button type="submit" class="btn-primary um-btn-sm um-btn-verify confirm-action" data-message="Verify this resident's ID and enable auto-approval features?">Verify ID</button>
-                                </form>
-                            <?php else: ?>
-                            <?php if ($user['status'] === 'pending'): ?>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="approve">
-                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Approve this account?">Approve</button>
-                                </form>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="deny">
-                                    <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove this pending registration?">Deny</button>
-                                </form>
-                            <?php endif; ?>
-
-                            <?php if (!$isIdVerified && $hasValidIdDoc): ?>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="verify">
-                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Verify this user's ID and enable auto-approval features?">Verify ID</button>
-                                </form>
-                            <?php endif; ?>
-
-                            <?php if ($user['role'] === 'Resident'): ?>
                                 <?php if ($isCuliatResidentUser): ?>
+                                    <span class="um-badge um-badge-ok" title="Barangay Culiat resident">Culiat resident</span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <td class="um-cell-registered">
+                            <?= date('M j, Y', strtotime($user['created_at'])); ?>
+                            <?php if ($umView === 'id_pending' && !empty($user['id_uploaded_at'])): ?>
+                                <div class="um-meta-sub">ID uploaded <?= date('M j, Y g:i A', strtotime((string)$user['id_uploaded_at'])); ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="um-cell-actions">
+                            <div class="um-actions">
+                                <?php if ($umView === 'id_pending' && !$isIdVerified && $hasValidIdDoc): ?>
                                     <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
                                         <?= csrf_field(); ?>
-                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="view" value="id_pending">
                                         <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                        <input type="hidden" name="action" value="unset_culiat_resident">
-                                        <button type="submit" class="btn-outline um-btn-sm confirm-action" data-message="Remove Barangay Culiat resident status? This user will need a referral on future reservations.">Remove Culiat status</button>
-                                    </form>
-                                <?php elseif ($isIdVerified): ?>
-                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                        <?= csrf_field(); ?>
-                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                        <input type="hidden" name="action" value="set_culiat_resident">
-                                        <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Mark as a Barangay Culiat resident? They will no longer need a referral for reservations.">Mark Culiat resident</button>
+                                        <input type="hidden" name="action" value="verify">
+                                        <button type="submit" class="btn btn-primary um-icon-btn confirm-action" data-message="Verify this resident's ID and enable auto-approval features?" title="Verify ID" aria-label="Verify ID"><i class="bi bi-patch-check-fill"></i></button>
                                     </form>
                                 <?php else: ?>
-                                    <span class="um-btn-sm" style="color:#8b95b5; font-size:0.82rem;" title="Verify this user's ID first">Culiat status: verify ID first</span>
+                                <?php if ($user['status'] === 'pending'): ?>
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="approve">
+                                        <button type="submit" class="btn btn-primary um-icon-btn confirm-action" data-message="Approve this account?" title="Approve" aria-label="Approve"><i class="bi bi-check-lg"></i></button>
+                                    </form>
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="deny">
+                                        <button type="submit" class="btn btn-outline um-icon-btn confirm-action" data-message="Remove this pending registration?" title="Deny" aria-label="Deny"><i class="bi bi-x-lg"></i></button>
+                                    </form>
                                 <?php endif; ?>
-                            <?php endif; ?>
 
-                            <?php if ($user['status'] === 'active' && !$isSelf): ?>
-                                <button type="button" class="btn-outline um-btn-sm js-open-lock-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>">Lock</button>
-                            <?php elseif ($user['status'] === 'locked' && !$isSelf): ?>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="unlock">
-                                    <button type="submit" class="btn-primary um-btn-sm confirm-action" data-message="Unlock this account?">Unlock</button>
-                                </form>
-                            <?php endif; ?>
+                                <?php if (!$isIdVerified && $hasValidIdDoc): ?>
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="verify">
+                                        <button type="submit" class="btn btn-primary um-icon-btn confirm-action" data-message="Verify this user's ID and enable auto-approval features?" title="Verify ID" aria-label="Verify ID"><i class="bi bi-patch-check-fill"></i></button>
+                                    </form>
+                                <?php endif; ?>
 
-                            <?php if (in_array($user['status'], ['active', 'locked'], true) && !$isSelf): ?>
-                                <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
-                                    <?= csrf_field(); ?>
-                                    <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
-                                    <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
-                                    <input type="hidden" name="action" value="reset_password">
-                                    <button type="submit" class="btn-outline um-btn-sm um-btn-warn confirm-action" data-message="Reset password? New credentials will be emailed to the user.">Reset password</button>
-                                </form>
-                            <?php endif; ?>
+                                <?php if ($user['role'] === 'Resident'): ?>
+                                    <?php if ($isCuliatResidentUser): ?>
+                                        <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                            <?= csrf_field(); ?>
+                                            <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                            <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                            <input type="hidden" name="action" value="unset_culiat_resident">
+                                            <button type="submit" class="btn btn-outline um-icon-btn confirm-action" data-message="Remove Barangay Culiat resident status? This user will need a referral on future reservations." title="Remove Culiat resident status" aria-label="Remove Culiat resident status"><i class="bi bi-geo-alt-fill"></i></button>
+                                        </form>
+                                    <?php elseif ($isIdVerified): ?>
+                                        <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                            <?= csrf_field(); ?>
+                                            <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                            <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                            <input type="hidden" name="action" value="set_culiat_resident">
+                                            <button type="submit" class="btn btn-outline um-icon-btn confirm-action" data-message="Mark as a Barangay Culiat resident? They will no longer need a referral for reservations." title="Mark as Culiat resident" aria-label="Mark as Culiat resident"><i class="bi bi-geo-alt"></i></button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span class="um-icon-btn um-icon-btn-disabled" title="Culiat resident status: verify ID first"><i class="bi bi-geo-alt"></i></span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
 
-                            <?php if ($isPageAdmin && !$isSelf): ?>
-                                <button type="button" class="btn-outline um-btn-sm um-btn-danger js-open-delete-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" data-user-email="<?= htmlspecialchars($user['email'], ENT_QUOTES); ?>">Delete account</button>
-                            <?php endif; ?>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </article>
+                                <?php if ($user['status'] === 'active' && !$isSelf): ?>
+                                    <button type="button" class="btn btn-outline um-icon-btn js-open-lock-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" title="Lock account" aria-label="Lock account"><i class="bi bi-lock-fill"></i></button>
+                                <?php elseif ($user['status'] === 'locked' && !$isSelf): ?>
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="unlock">
+                                        <button type="submit" class="btn btn-primary um-icon-btn confirm-action" data-message="Unlock this account?" title="Unlock account" aria-label="Unlock account"><i class="bi bi-unlock-fill"></i></button>
+                                    </form>
+                                <?php endif; ?>
+
+                                <?php if (in_array($user['status'], ['active', 'locked'], true) && !$isSelf): ?>
+                                    <form method="POST" class="um-inline-form" data-frs-ajax data-frs-ajax-target="um-content">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="view" value="<?= htmlspecialchars($umView); ?>">
+                                        <input type="hidden" name="user_id" value="<?= (int)$user['id']; ?>">
+                                        <input type="hidden" name="action" value="reset_password">
+                                        <button type="submit" class="btn btn-outline um-icon-btn um-btn-warn confirm-action" data-message="Reset password? New credentials will be emailed to the user." title="Reset password" aria-label="Reset password"><i class="bi bi-key-fill"></i></button>
+                                    </form>
+                                <?php endif; ?>
+
+                                <?php if ($isPageAdmin && !$isSelf): ?>
+                                    <button type="button" class="btn btn-outline um-icon-btn um-btn-danger js-open-delete-modal" data-user-id="<?= (int)$user['id']; ?>" data-user-name="<?= htmlspecialchars($user['name'], ENT_QUOTES); ?>" data-user-email="<?= htmlspecialchars($user['email'], ENT_QUOTES); ?>" title="Delete account" aria-label="Delete account"><i class="bi bi-trash"></i></button>
+                                <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
                 <?php endforeach; ?>
+                </tbody>
+            </table>
             </div>
 
             <?php if ($totalPages > 1): ?>
@@ -1232,7 +1237,6 @@ ob_start();
 .um-view-tab.is-active .um-view-tab__count { background: #dbeafe; color: #1e40af; }
 .um-toolbar-id-pending { grid-template-columns: 1fr auto auto; }
 .um-search-wide { grid-column: auto; }
-.um-user-card--id-pending { border-color: #fde68a; background: linear-gradient(180deg, #fffdf5 0%, #fff 100%); }
 .um-docs--prominent .um-doc-link { font-size: 0.85rem; padding: 0.4rem 0.75rem; background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: 600; }
 .um-btn-verify { padding: 0.5rem 1rem !important; font-size: 0.88rem !important; }
 .um-aside-cta { display: inline-block; margin-top: 0.85rem; padding: 0.55rem 0.9rem; text-decoration: none; font-size: 0.88rem; border-radius: 8px; }
@@ -1258,14 +1262,22 @@ ob_start();
 .um-toolbar label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; color: #475569; }
 .um-toolbar select, .um-search input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #d7deed; border-radius: 8px; background: #fff; }
 .um-filter-btn { padding: 0.55rem 1rem; white-space: nowrap; }
-.um-user-list { display: flex; flex-direction: column; gap: 0.55rem; }
-.um-user-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr); gap: 0.75rem; padding: 0.65rem 0.85rem; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
-.um-user-main { display: flex; gap: 0.65rem; min-width: 0; }
-.um-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 0.85rem; }
-.um-user-info { min-width: 0; }
+.um-table-wrap { margin: 0; }
+.um-table th, .um-table td { vertical-align: top; }
+.um-table .um-cell-user { min-width: 220px; }
+.um-table .um-cell-role { min-width: 130px; }
+.um-table .um-cell-status { min-width: 170px; }
+.um-table .um-cell-registered { min-width: 110px; font-size: 0.85rem; color: #64748b; white-space: nowrap; }
+.um-actions-th { text-align: right; }
+.um-cell-actions { text-align: right; }
+.um-user-row--id-pending { background: #fffbeb; }
+.um-name-cell { display: flex; gap: 0.6rem; min-width: 0; }
+.um-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6384d2, #285ccd); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 0.8rem; }
+.um-name-info { min-width: 0; }
 .um-user-title { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.um-user-title h3 { margin: 0; font-size: 0.95rem; color: #0f172a; }
-.um-email { margin: 0.1rem 0 0.35rem; color: #64748b; font-size: 0.82rem; word-break: break-word; }
+.um-user-title strong { font-size: 0.9rem; color: #0f172a; }
+.um-email { margin: 0.1rem 0 0.35rem; color: #64748b; font-size: 0.8rem; word-break: break-word; }
+.um-meta-sub { font-size: 0.75rem; color: #94a3b8; margin-top: 0.15rem; }
 .um-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.3rem; }
 .um-badge { display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
 .um-badge-role { background: #eef2ff; color: #3730a3; }
@@ -1291,14 +1303,21 @@ ob_start();
 .um-violation-sev-high .um-violation-severity, .um-violation-sev-critical .um-violation-severity { color: #b91c1c; }
 .um-violation-desc { margin: 0.3rem 0 0; font-size: 0.8rem; color: #334155; line-height: 1.4; }
 .um-violation-meta { margin: 0.25rem 0 0; font-size: 0.75rem; color: #94a3b8; }
-.um-user-side { display: flex; flex-direction: column; gap: 0.5rem; border-left: 1px solid #eef2f7; padding-left: 0.85rem; }
-.um-role-label { font-size: 0.82rem; color: #475569; display: flex; flex-direction: column; gap: 0.35rem; }
-.um-role-form select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 8px; border: 1px solid #d7deed; }
-.um-docs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.um-doc-link { font-size: 0.78rem; padding: 0.25rem 0.55rem; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; text-decoration: none; }
-.um-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.um-role-form select { padding: 0.35rem 0.5rem; border-radius: 8px; border: 1px solid #d7deed; font-size: 0.85rem; }
+.um-docs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+.um-doc-link { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; text-decoration: none; }
+.um-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; }
 .um-inline-form { display: inline; }
-.um-btn-sm { padding: 0.38rem 0.7rem !important; font-size: 0.82rem !important; }
+.um-icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0 !important; font-size: 0.9rem;
+    border-radius: 8px; flex-shrink: 0;
+}
+.um-icon-btn-disabled {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px;
+    color: #cbd5e1; background: #f8fafc; border: 1px solid #e2e8f0; cursor: not-allowed;
+}
 .um-btn-warn { border-color: #fb923c !important; color: #c2410c !important; }
 .um-btn-danger { border-color: #f87171 !important; color: #b91c1c !important; }
 .um-btn-danger-solid { background: #dc2626 !important; border-color: #dc2626 !important; }
@@ -1328,7 +1347,7 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-view-tab.is-active { color: #e2e8f0; border-bottom-color: #60a5fa; background: #0f172a; }
 [data-theme="dark"] .um-view-tab__count { background: #334155; color: #cbd5e1; }
 [data-theme="dark"] .um-view-tab.is-active .um-view-tab__count { background: #1e3a8a; color: #dbeafe; }
-[data-theme="dark"] .um-user-card--id-pending { border-color: #92400e; background: linear-gradient(180deg, #422006 0%, #1e293b 100%); }
+[data-theme="dark"] .um-user-row--id-pending { background: #422006; }
 [data-theme="dark"] .um-docs--prominent .um-doc-link { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
 [data-theme="dark"] .um-stat-label { color: #94a3b8; }
 [data-theme="dark"] .um-stat-value { color: #e2e8f0; }
@@ -1347,8 +1366,7 @@ body.um-modal-open { overflow: hidden; }
     color: #e2e8f0;
 }
 [data-theme="dark"] .um-toolbar label { color: #cbd5e1; }
-[data-theme="dark"] .um-user-card { background: #1e293b; border-color: #334155; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
-[data-theme="dark"] .um-user-title h3 { color: #f1f5f9; }
+[data-theme="dark"] .um-user-title strong { color: #f1f5f9; }
 [data-theme="dark"] .um-email { color: #94a3b8; }
 [data-theme="dark"] .um-badge-role { background: #312e81; color: #c7d2fe; }
 [data-theme="dark"] .um-badge-active,
@@ -1372,8 +1390,6 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-violation-sev-critical .um-violation-severity { color: #fca5a5; }
 [data-theme="dark"] .um-violation-desc { color: #cbd5e1; }
 [data-theme="dark"] .um-violation-meta { color: #64748b; }
-[data-theme="dark"] .um-user-side { border-left-color: #334155; }
-[data-theme="dark"] .um-role-label { color: #cbd5e1; }
 [data-theme="dark"] .um-doc-link { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 [data-theme="dark"] .um-empty { color: #94a3b8; background: #1e293b; }
 [data-theme="dark"] .um-policy-note { background: #1e293b; border-color: #334155; color: #cbd5e1; }
@@ -1385,13 +1401,8 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-modal-warning { background: #450a0a; color: #fca5a5; }
 [data-theme="dark"] .um-modal-panel label { color: #cbd5e1; }
 @media (max-width: 1100px) {
-    [data-theme="dark"] .um-user-side { border-top-color: #334155; }
-}
-@media (max-width: 1100px) {
     .um-layout { grid-template-columns: 1fr; }
     .um-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .um-user-card { grid-template-columns: 1fr; }
-    .um-user-side { border-left: 0; padding-left: 0; border-top: 1px solid #eef2f7; padding-top: 0.85rem; }
 }
 @media (max-width: 720px) {
     .um-toolbar { grid-template-columns: 1fr; }
