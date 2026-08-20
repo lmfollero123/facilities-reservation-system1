@@ -131,21 +131,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     }
 }
 
-// Fetch all public announcements (user_id IS NULL)
-$announcementsStmt = $pdo->query(
-    'SELECT id, title, message, link, image_path, created_at 
-     FROM notifications 
-     WHERE user_id IS NULL 
-     ORDER BY created_at DESC'
+$anTab = ($_GET['tab'] ?? 'published') === 'create' ? 'create' : 'published';
+
+// Fetch public announcements (user_id IS NULL), paginated
+$anPerPage = 10;
+$anPage = max(1, (int)($_GET['page'] ?? 1));
+
+$anTotalStmt = $pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id IS NULL');
+$anTotal = (int)$anTotalStmt->fetchColumn();
+$anTotalPages = max(1, (int)ceil($anTotal / $anPerPage));
+$anPage = min($anPage, $anTotalPages);
+$anOffset = ($anPage - 1) * $anPerPage;
+
+$announcementsStmt = $pdo->prepare(
+    'SELECT id, title, message, link, image_path, created_at
+     FROM notifications
+     WHERE user_id IS NULL
+     ORDER BY created_at DESC
+     LIMIT :limit OFFSET :offset'
 );
+$announcementsStmt->bindValue(':limit', $anPerPage, PDO::PARAM_INT);
+$announcementsStmt->bindValue(':offset', $anOffset, PDO::PARAM_INT);
+$announcementsStmt->execute();
 $announcements = $announcementsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 ob_start();
 ?>
 
-<div class="dashboard-header-section">
-    <h1 class="frs-heading-with-tip"><i class="bi bi-megaphone"></i> Announcements Management <?= frs_field_tip('Published items appear on the public homepage and announcements page.'); ?></h1>
-</div>
 
 <div data-frs-partial-id="announcements-list" data-frs-partial-root>
 <?php if ($message): ?>
@@ -156,7 +168,16 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<?php if ($cimmAutoAnnouncementsEnabled || $cprfAutoAnnouncementsEnabled): ?>
+<nav class="booking-hub-tabs" aria-label="Announcements sections" style="margin-bottom: 1rem;">
+    <a class="booking-hub-tab <?= $anTab === 'published' ? 'is-active' : ''; ?>" href="?tab=published" data-frs-partial="announcements-list">
+        Published (<?= $anTotal; ?>)
+    </a>
+    <a class="booking-hub-tab <?= $anTab === 'create' ? 'is-active' : ''; ?>" href="?tab=create" data-frs-partial="announcements-list">
+        Create New
+    </a>
+</nav>
+
+<?php if ($anTab === 'published' && ($cimmAutoAnnouncementsEnabled || $cprfAutoAnnouncementsEnabled)): ?>
     <div class="alert alert-info" role="status">
         <i class="bi bi-robot"></i>
         <strong>Gemini auto-announcements are enabled.</strong>
@@ -175,15 +196,17 @@ ob_start();
     </div>
 <?php endif; ?>
 
+<?php if ($anTab === 'create'): ?>
 <!-- Create Announcement Form -->
 <div class="booking-card mb-4">
     <div class="card-header-custom">
         <h2>Create New Announcement</h2>
     </div>
-    
+
     <form method="POST" enctype="multipart/form-data" class="announcement-form" data-frs-ajax data-frs-ajax-target="announcements-list">
             <?= csrf_field(); ?>
         <input type="hidden" name="action" value="create">
+        <input type="hidden" name="tab" value="create">
         
         <div class="form-group">
             <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
@@ -238,12 +261,12 @@ ob_start();
         </div>
     </form>
 </div>
-
+<?php else: ?>
 <!-- Existing Announcements -->
 <div class="booking-card">
     <div class="card-header-custom">
         <h2>Published Announcements</h2>
-        <small><?= count($announcements); ?> announcement(s) published</small>
+        <small><?= $anTotal; ?> announcement(s) published</small>
     </div>
     
     <?php if (empty($announcements)): ?>
@@ -310,35 +333,24 @@ ob_start();
                 </tbody>
             </table>
         </div>
+        <?php if ($anTotalPages > 1): ?>
+            <div class="pagination">
+                <?php if ($anPage > 1): ?>
+                    <a href="?tab=published&page=<?= $anPage - 1; ?>" data-frs-partial="announcements-list">&larr; Prev</a>
+                <?php endif; ?>
+                <span class="current">Page <?= $anPage; ?> of <?= $anTotalPages; ?></span>
+                <?php if ($anPage < $anTotalPages): ?>
+                    <a href="?tab=published&page=<?= $anPage + 1; ?>" data-frs-partial="announcements-list">Next &rarr;</a>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 </div>
 
 <style>
 /* Announcement Management Styles */
-.dashboard-header-section {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    padding: 1.5rem;
-    background: linear-gradient(135deg, #6384d2 0%, #285ccd 100%);
-    border-radius: 12px;
-    color: white;
-}
-
-.dashboard-header-section h1 {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 700;
-}
-
-.dashboard-header-section p {
-    margin: 0;
-    color: rgba(255,255,255,0.9);
-    font-size: 0.95rem;
-}
-
 .card-header-custom {
     border-bottom: 1px solid #e5e7eb;
     margin: -1.5rem -1.5rem 1.5rem -1.5rem;
