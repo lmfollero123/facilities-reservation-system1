@@ -783,18 +783,37 @@ function frsReportInsightsSystemPrompt(): string {
 }
 
 /**
+ * Look up a key in a provider's parsed JSON reply, tolerating naming
+ * drift (e.g. Gemini has been observed returning "riskflags"/"trendanalysis"
+ * despite an explicit snake_case instruction) - tries the exact key first,
+ * then a case/underscore-insensitive match against every key present.
+ */
+function frsPickInsightField(array $parsed, string $key) {
+    if (array_key_exists($key, $parsed)) {
+        return $parsed[$key];
+    }
+    $normalizedTarget = str_replace('_', '', strtolower($key));
+    foreach ($parsed as $k => $v) {
+        if (is_string($k) && str_replace('_', '', strtolower($k)) === $normalizedTarget) {
+            return $v;
+        }
+    }
+    return null;
+}
+
+/**
  * Normalize a provider's parsed JSON reply into the report-insights shape,
  * discarding non-string entries so a malformed field can't break rendering.
  */
 function frsNormalizeReportInsights(array $parsed, string $source): array {
     return [
         'source' => $source,
-        'summary' => (string)($parsed['summary'] ?? ''),
-        'highlights' => array_values(array_filter((array)($parsed['highlights'] ?? []), 'is_string')),
-        'risk_flags' => array_values(array_filter((array)($parsed['risk_flags'] ?? []), 'is_string')),
-        'recommendations' => array_values(array_filter((array)($parsed['recommendations'] ?? []), 'is_string')),
-        'trend_analysis' => (string)($parsed['trend_analysis'] ?? ''),
-        'facility_insights' => array_values(array_filter((array)($parsed['facility_insights'] ?? []), 'is_string')),
+        'summary' => (string)(frsPickInsightField($parsed, 'summary') ?? ''),
+        'highlights' => array_values(array_filter((array)(frsPickInsightField($parsed, 'highlights') ?? []), 'is_string')),
+        'risk_flags' => array_values(array_filter((array)(frsPickInsightField($parsed, 'risk_flags') ?? []), 'is_string')),
+        'recommendations' => array_values(array_filter((array)(frsPickInsightField($parsed, 'recommendations') ?? []), 'is_string')),
+        'trend_analysis' => (string)(frsPickInsightField($parsed, 'trend_analysis') ?? ''),
+        'facility_insights' => array_values(array_filter((array)(frsPickInsightField($parsed, 'facility_insights') ?? []), 'is_string')),
     ];
 }
 
