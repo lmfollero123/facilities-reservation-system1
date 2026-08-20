@@ -135,24 +135,36 @@ def _holiday_set(year: int) -> set:
     return d
 
 
-def classify_facility(name: str, description: str) -> str:
-    """Infer a facility's category affinity from its name/description text."""
+def classify_facility(name: str, description: str) -> list:
+    """Infer a facility's category affinities from its name/description
+    text. Returns ALL categories tied at the top score, not just one - a
+    "Multipurpose Hall" genuinely matches both 'assembly' and 'celebration'
+    keyword lists (both include 'hall'), and real multipurpose halls really
+    do host both meetings and wedding receptions. Picking a single
+    "canonical" category here would just be a tie-break artifact of
+    dict/list iteration order, not a real distinction - so a facility with
+    a tie keeps every tied category as a valid affinity and pick_category()
+    samples among them."""
     text = f"{name or ''} {description or ''}".lower()
     scores = {cat: 0 for cat in FACILITY_CATEGORY_KEYWORDS}
     for cat, keywords in FACILITY_CATEGORY_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
                 scores[cat] += 1
-    best_cat = max(scores, key=scores.get)
-    return best_cat if scores[best_cat] > 0 else 'other'
+    best_score = max(scores.values())
+    if best_score == 0:
+        return ['other']
+    return [cat for cat, s in scores.items() if s == best_score]
 
 
-def pick_category(facility_category: str) -> str:
-    """75% of bookings match the facility's inferred affinity; 25% are
-    genuinely off-type (real venues do host the occasional out-of-type
-    event) so the signal is strong but not deterministic."""
+def pick_category(facility_categories: list) -> str:
+    """75% of bookings match one of the facility's inferred affinities
+    (sampled per-row when there's a tie, e.g. a hall alternating between
+    assembly and celebration bookings); 25% are genuinely off-type (real
+    venues do host the occasional out-of-type event) so the signal is
+    strong but not deterministic."""
     if random.random() < 0.75:
-        return facility_category
+        return random.choice(facility_categories)
     return random.choice(CATEGORIES)
 
 
@@ -232,13 +244,17 @@ def generate_sample_reservations(count: int = 50, approved_ratio: float = 0.6):
             return
 
         facility_ids = [f['id'] for f in facilities]
-        facility_category = {f['id']: classify_facility(f.get('name', ''), f.get('description', '')) for f in facilities}
+        # Each facility maps to a LIST of tied top-scoring categories, not a
+        # single one - see classify_facility()'s docstring for why.
+        facility_categories = {f['id']: classify_facility(f.get('name', ''), f.get('description', '')) for f in facilities}
 
         cat_counts = {}
-        for cat in facility_category.values():
-            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        for cats in facility_categories.values():
+            for cat in cats:
+                cat_counts[cat] = cat_counts.get(cat, 0) + 1
         print(f"\nFound {len(user_ids)} users and {len(facility_ids)} facilities")
-        print("Facility category affinity: " + ", ".join(f"{c}={n}" for c, n in cat_counts.items()))
+        print("Facility category affinity (ties count toward every tied category): "
+              + ", ".join(f"{c}={n}" for c, n in cat_counts.items()))
         print(f"Generating {count} sample reservations...")
         print(f"Baseline approved ratio: {approved_ratio * 100:.0f}% (adjusted per-row by risk proxy)")
 
@@ -260,7 +276,7 @@ def generate_sample_reservations(count: int = 50, approved_ratio: float = 0.6):
 
             # Category driven by the facility's inferred affinity, not
             # independent of it
-            category = pick_category(facility_category[facility_id])
+            category = pick_category(facility_categories[facility_id])
             purpose = random.choice(CATEGORY_PURPOSES[category])
             if random.random() < 0.3:
                 purpose += f" - {random.choice(['Annual', 'Monthly', 'Weekly', 'Special', 'Regular'])}"
