@@ -4130,11 +4130,6 @@ footer small {
     backdrop-filter: blur(8px);
 }
 
-.sidebar {
-    background: linear-gradient(180deg, #101a3c, #050b1e);
-    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.4);
-}
-
 .sidebar .brand {
     display: flex;
     align-items: center;
@@ -7908,179 +7903,13 @@ aside.sidebar nav .collapsible-content a.active {
     /* Space for the fixed footer */
 }
 
-/* User footer - fixed at bottom of sidebar */
-.sidebar-user-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 280px;
-    /* Match sidebar width */
-    background: var(--sidebar-bg);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1rem;
-    z-index: 10;
-    transition: width 0.3s ease, left 0.3s ease;
-}
-
-/* User info container */
-.sidebar-user-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-/* User avatar circle */
-.sidebar-user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: var(--primary-color);
-    color: #ffffff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 1.1rem;
-    flex-shrink: 0;
-}
-
-/* User details */
-.sidebar-user-details {
-    flex: 1;
-    min-width: 0;
-    /* Allow text truncation */
-}
-
-.sidebar-user-name {
-    color: var(--sidebar-text);
-    font-weight: 500;
-    font-size: 0.9rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.sidebar-user-role {
-    color: var(--sidebar-text-muted);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* When sidebar is collapsed (desktop) */
-.sidebar.collapsed .sidebar-user-footer {
-    width: 70px;
-}
-
-.sidebar.collapsed .sidebar-user-details {
-    display: none;
-}
-
-.sidebar.collapsed .sidebar-user-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
-}
-
-/* Mobile - sidebar is off-screen when collapsed */
-@media (max-width: 960px) {
-    .sidebar-user-footer {
-        width: 280px;
-        left: 0;
-    }
-
-    /* When sidebar is collapsed on mobile, footer moves with it */
-    .sidebar.collapsed .sidebar-user-footer {
-        left: -280px;
-    }
-}
-
-/* Tablet and up - sidebar is always visible */
-@media (min-width: 961px) {
-    .sidebar-user-footer {
-        left: 0;
-    }
-
-    .sidebar.collapsed .sidebar-user-footer {
-        width: 70px;
-        left: 0;
-    }
-}
-
-
-/* ============================================
-   FIX: Sidebar User Footer Overflow
-   ============================================ */
-
-/* Fix overflow issue - ensure footer stays within sidebar bounds */
-.sidebar-user-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 280px;
-    /* Match sidebar width */
-    max-width: 280px;
-    /* Prevent overflow */
-    background: var(--sidebar-bg);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.875rem 1rem;
-    /* Reduced padding */
-    z-index: 10;
-    transition: width 0.3s ease, left 0.3s ease;
-    box-sizing: border-box;
-    /* Include padding in width calculation */
-    overflow: hidden;
-    /* Prevent content overflow */
-}
-
-/* User avatar - support for profile pictures */
-.sidebar-user-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-/* Ensure user info doesn't overflow */
-.sidebar-user-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    max-width: 100%;
-    overflow: hidden;
-}
-
-/* Ensure details container doesn't overflow */
-.sidebar-user-details {
-    flex: 1;
-    min-width: 0;
-    /* Allow text truncation */
-    max-width: calc(100% - 56px);
-    /* Account for avatar + gap */
-}
-
-/* When sidebar is collapsed */
-.sidebar.collapsed .sidebar-user-footer {
-    width: 70px;
-    max-width: 70px;
-    padding: 0.875rem 0.5rem;
-}
-
-/* Mobile responsiveness */
-@media (max-width: 960px) {
-    .sidebar-user-footer {
-        width: 280px;
-        max-width: 280px;
-        left: 0;
-    }
-
-    .sidebar.collapsed .sidebar-user-footer {
-        left: -280px;
-        width: 280px;
-    }
-}
-
+/* NOTE: three earlier generations of ".sidebar-user-footer" rules used to
+   live here (a base version, then a non-!important "fix overflow" revision).
+   Every property either set was overridden by the !important rules below
+   (either the general one, or the higher-specificity ".sidebar.collapsed
+   .sidebar-user-footer" one for the collapsed state) -- they were 100% dead
+   and have been removed. This is the only surviving generation; edit it
+   directly rather than adding another "fix" layer on top. */
 
 /* ============================================
    CRITICAL FIX: Sidebar User Footer - Force Correct Width
@@ -8196,13 +8025,13 @@ aside.sidebar .sidebar-user-footer,
    FINAL FIX: Sidebar Footer - Absolute Positioning
    ============================================ */
 
-/* Make sidebar position relative to contain absolute footer (desktop layout only) */
-@media (min-width: 961px) {
-    .sidebar,
-    aside.sidebar {
-        position: relative !important;
-    }
-}
+/* NOTE: an earlier version of this fix set .sidebar to position:relative on
+   desktop so it would contain the absolute-positioned footer below. A later
+   "Sidebar Should Be Fixed/Sticky on Scroll" rule (also !important, same
+   specificity, later in source) forces .sidebar to position:fixed instead,
+   which always wins -- the relative rule was dead and has been removed.
+   A fixed-position ancestor still establishes the containing block the
+   absolute footer needs, so removing it changes nothing. */
 
 /* Change footer to absolute positioning within sidebar */
 .sidebar .sidebar-user-footer,
@@ -8406,30 +8235,9 @@ p[style*="color: rgb(178, 48, 48)"] {
 
 
 /* ============================================
-   FIX: Remove White Border Between Sidebar and Main Content
-   ============================================ */
-
-/* Remove any borders or shadows from sidebar */
-.sidebar,
-aside.sidebar {
-    border-right: none !important;
-    box-shadow: none !important;
-}
-
-/* Ensure no border on dashboard main either */
-.dashboard-main {
-    border-left: none !important;
-}
-
-/* Remove any separator lines */
-.sidebar::after,
-.sidebar::before {
-    display: none !important;
-}
-
-
-/* ============================================
-   CRITICAL FIX: Remove White Line Between Sidebar and Content
+   FIX: Remove White Line Between Sidebar and Content
+   (supersedes an earlier duplicate "remove white border" block that set
+   a strict subset of these same properties -- consolidated here)
    ============================================ */
 
 /* Force sidebar to have no right border or margin */
@@ -8449,22 +8257,12 @@ aside.sidebar {
     padding-left: 0 !important;
 }
 
-@media (min-width: 961px) {
-    .dashboard-main {
-        margin-left: 280px !important;
-    }
-
-    .sidebar.collapsed ~ .dashboard-main,
-    body.sidebar-collapsed .dashboard-main {
-        margin-left: 70px !important;
-    }
-}
-
-@media (max-width: 960px) {
-    .dashboard-main {
-        margin-left: 0 !important;
-    }
-}
+/* margin-left for the fixed-sidebar offset (desktop 280px/70px, mobile 0)
+   lives in the single "Sidebar Should Be Fixed/Sticky on Scroll" block
+   above -- this used to be duplicated here with the exact same values but
+   no transition declaration, which is exactly the kind of split that
+   silently broke the collapse animation once already. Do not re-add it
+   here; edit the block above instead. */
 
 /* Remove any pseudo-elements that might create lines */
 .sidebar::after,
