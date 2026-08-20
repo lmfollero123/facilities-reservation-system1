@@ -691,14 +691,7 @@ ob_start();
     <div class="breadcrumb">
         <span>Reservations</span><span class="sep">/</span><span>Approvals</span>
     </div>
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
-        <div style="flex: 1;">
-            <?= frs_page_title('Reservation Approvals', 'Review pending requests or manage upcoming approved bookings using the tabs below.'); ?>
-        </div>
-        <button type="button" onclick="openAllReservationsModal()" class="btn-primary" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap;">
-            All Reservations
-        </button>
-    </div>
+    <?= frs_page_title('Reservation Approvals', 'Review pending requests or manage upcoming approved bookings using the tabs below.'); ?>
 </div>
 
 <div class="booking-wrapper ra-approvals-layout">
@@ -723,22 +716,27 @@ ob_start();
                 <?= htmlspecialchars($message); ?>
             </div>
         <?php endif; ?>
-        <nav class="ra-view-tabs" aria-label="Approval sections">
-            <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => 1])); ?>"
-               class="ra-view-tab<?= $approvalsView === 'pending' ? ' is-active' : ''; ?>"
-               data-frs-partial="ra-approvals-main"
-               <?= $approvalsView === 'pending' ? 'aria-current="page"' : ''; ?>>
-                Pending Requests
-                <span class="ra-view-tab__count"><?= (int)$pendingTotal; ?></span>
-            </a>
-            <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => 1])); ?>"
-               class="ra-view-tab<?= $approvalsView === 'approved' ? ' is-active' : ''; ?>"
-               data-frs-partial="ra-approvals-main"
-               <?= $approvalsView === 'approved' ? 'aria-current="page"' : ''; ?>>
-                Approved
-                <span class="ra-view-tab__count"><?= (int)$approvedTotal; ?></span>
-            </a>
-        </nav>
+        <div class="ra-view-tabs-row">
+            <nav class="ra-view-tabs" aria-label="Approval sections">
+                <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'pending', 'pending_page' => 1])); ?>"
+                   class="ra-view-tab<?= $approvalsView === 'pending' ? ' is-active' : ''; ?>"
+                   data-frs-partial="ra-approvals-main"
+                   <?= $approvalsView === 'pending' ? 'aria-current="page"' : ''; ?>>
+                    Pending Requests
+                    <span class="ra-view-tab__count"><?= (int)$pendingTotal; ?></span>
+                </a>
+                <a href="<?= htmlspecialchars($raBuildPendingQuery(['view' => 'approved', 'approved_page' => 1])); ?>"
+                   class="ra-view-tab<?= $approvalsView === 'approved' ? ' is-active' : ''; ?>"
+                   data-frs-partial="ra-approvals-main"
+                   <?= $approvalsView === 'approved' ? 'aria-current="page"' : ''; ?>>
+                    Approved
+                    <span class="ra-view-tab__count"><?= (int)$approvedTotal; ?></span>
+                </a>
+            </nav>
+            <button type="button" onclick="openAllReservationsModal()" class="btn-primary ra-all-reservations-btn">
+                All Reservations
+            </button>
+        </div>
 
         <?php if ($approvalsView === 'pending'): ?>
         <div class="ra-view-panel" id="ra-panel-pending">
@@ -2123,12 +2121,29 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     width: 100% !important;
     max-width: 100%;
 }
+.ra-view-tabs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    border-bottom: 2px solid #e2e8f0;
+    margin: 0 0 1.25rem;
+}
 .ra-view-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 0;
-    margin: 0 0 1.25rem;
-    border-bottom: 2px solid #e2e8f0;
+}
+.ra-all-reservations-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    margin-bottom: 0.4rem;
 }
 .ra-view-tab {
     display: inline-flex;

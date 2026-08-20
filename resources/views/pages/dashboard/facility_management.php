@@ -656,31 +656,30 @@ ob_start();
 <?php endif; ?>
 
 <div class="facility-admin">
-    <div style="margin-bottom: 1.5rem;">
+    <div data-frs-partial-id="facility-list" data-frs-partial-root>
+    <div class="fm-tabs-row">
+        <nav class="booking-hub-tabs" aria-label="Facility list sections">
+            <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
+                Active Facilities (<?= $activeFacilityCount; ?>)
+            </a>
+            <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
+                Deleted Facilities (<?= $deletedFacilityCount; ?>)
+            </a>
+        </nav>
         <?php if (frs_can_create($role, 'facilities')): ?>
-        <button class="btn-primary" type="button" onclick="openFacilityModal()" style="display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 1.75rem; font-size: 1rem; font-weight: 600;">
-            <span style="font-size: 1.2rem;">➕</span>
+        <button class="btn-primary fm-add-btn" type="button" onclick="openFacilityModal()" title="Add Facility">
+            <i class="bi bi-plus-lg"></i>
             <span>Add Facility</span>
         </button>
         <?php endif; ?>
     </div>
 
-    <div data-frs-partial-id="facility-list" data-frs-partial-root>
-    <nav class="booking-hub-tabs" aria-label="Facility list sections" style="margin-bottom: 1rem;">
-        <a class="booking-hub-tab <?= $facilityTab === 'active' ? 'is-active' : ''; ?>" href="?tab=active<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
-            Active Facilities (<?= $activeFacilityCount; ?>)
-        </a>
-        <a class="booking-hub-tab <?= $facilityTab === 'deleted' ? 'is-active' : ''; ?>" href="?tab=deleted<?= $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>" data-frs-partial="facility-list">
-            Deleted Facilities (<?= $deletedFacilityCount; ?>)
-        </a>
-    </nav>
-
-    <form method="get" data-frs-partial="facility-list" style="margin-bottom: 1rem;">
+    <form method="get" data-frs-partial="facility-list" class="fm-search-row">
         <input type="hidden" name="tab" value="<?= htmlspecialchars($facilityTab); ?>">
         <input type="hidden" name="page" value="1">
-        <div class="input-wrapper" style="max-width: 360px;">
+        <div class="input-wrapper fm-search-wrapper">
             <i class="bi bi-search input-icon"></i>
-            <input type="text" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search by name or location..." style="width:100%;">
+            <input type="text" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search by name or location...">
         </div>
     </form>
 
@@ -703,34 +702,36 @@ ob_start();
             <?php else: ?>
                 <?php foreach ($facilities as $facility): ?>
                     <article class="facility-card-admin">
-                        <header>
-                            <div>
-                                <h3><?= htmlspecialchars($facility['name']); ?></h3>
-                                <?php if ($facility['base_rate'] !== null && $facility['base_rate'] !== ''): ?>
-                                    <small>₱<?= number_format((int)$facility['base_rate']); ?></small>
-                                <?php endif; ?>
+                        <div class="fm-row-main">
+                            <header>
+                                <div>
+                                    <h3><?= htmlspecialchars($facility['name']); ?></h3>
+                                    <?php if ($facility['base_rate'] !== null && $facility['base_rate'] !== ''): ?>
+                                        <small>₱<?= number_format((int)$facility['base_rate']); ?></small>
+                                    <?php endif; ?>
+                                </div>
+                                <span class="status-badge <?= htmlspecialchars(frs_facility_status_badge_class($pdo, (string)$facility['status'])); ?>">
+                                    <?= htmlspecialchars(frs_lookup_label($pdo, 'facility_status', (string)$facility['status'])); ?>
+                                </span>
+                            </header>
+                            <?php if ($facility['description']): ?>
+                                <p style="margin:0.35rem 0 0.5rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
+                            <?php endif; ?>
+                            <?php if ($hasUmanEquipment && !empty($equipmentByFacility[(int)$facility['id']])): ?>
+                                <p style="margin:0 0 0.5rem; font-size:0.85rem; color:#0066cc;">
+                                    <strong>UMAN equipment:</strong>
+                                    <?= htmlspecialchars(implode(', ', array_map(static fn($e) => $e['asset_name'], $equipmentByFacility[(int)$facility['id']]))); ?>
+                                </p>
+                            <?php endif; ?>
+                            <div class="availability-toggle" style="display:flex; align-items:flex-start; gap:0.5rem;">
+                                <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled style="width:16px; height:16px; min-width:16px; flex-shrink:0; margin-top:0.15rem;">
+                                <span style="line-height:1.4; font-size:0.88rem;"><?php
+                                    $fsLabel = frs_lookup_label($pdo, 'facility_status', (string)$facility['status']);
+                                    echo frs_facility_status_blocks_booking($pdo, (string)$facility['status'])
+                                        ? htmlspecialchars($fsLabel) . ' — booking blocked'
+                                        : 'Available for booking';
+                                ?></span>
                             </div>
-                            <span class="status-badge <?= htmlspecialchars(frs_facility_status_badge_class($pdo, (string)$facility['status'])); ?>">
-                                <?= htmlspecialchars(frs_lookup_label($pdo, 'facility_status', (string)$facility['status'])); ?>
-                            </span>
-                        </header>
-                        <?php if ($facility['description']): ?>
-                            <p style="margin:0.5rem 0 1rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
-                        <?php endif; ?>
-                        <?php if ($hasUmanEquipment && !empty($equipmentByFacility[(int)$facility['id']])): ?>
-                            <p style="margin:0 0 0.75rem; font-size:0.85rem; color:#0066cc;">
-                                <strong>UMAN equipment:</strong>
-                                <?= htmlspecialchars(implode(', ', array_map(static fn($e) => $e['asset_name'], $equipmentByFacility[(int)$facility['id']]))); ?>
-                            </p>
-                        <?php endif; ?>
-                        <div class="availability-toggle" style="display:flex; align-items:flex-start; gap:0.5rem;">
-                            <input type="checkbox" <?= $facility['status'] === 'available' ? 'checked' : ''; ?> disabled style="width:18px; height:18px; min-width:18px; flex-shrink:0; margin-top:0.125rem;">
-                            <span style="line-height:1.5;"><?php
-                                $fsLabel = frs_lookup_label($pdo, 'facility_status', (string)$facility['status']);
-                                echo frs_facility_status_blocks_booking($pdo, (string)$facility['status'])
-                                    ? htmlspecialchars($fsLabel) . ' — booking blocked'
-                                    : 'Available for booking';
-                            ?></span>
                         </div>
                         <?php $payload = htmlspecialchars(json_encode($facility), ENT_QUOTES, 'UTF-8'); ?>
                         <div class="facility-card-actions">
@@ -738,32 +739,34 @@ ob_start();
                                 <?php $qr = $facilityQrById[(int)$facility['id']]; ?>
                                 <button
                                     type="button"
-                                    class="btn btn-primary js-open-qr-modal"
+                                    class="btn btn-primary fm-icon-btn js-open-qr-modal"
+                                    title="Check-In QR"
+                                    aria-label="Check-In QR"
                                     data-facility-id="<?= (int)$facility['id']; ?>"
                                     data-facility-name="<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>"
                                     data-facility-location="<?= htmlspecialchars($facility['location'] ?? '', ENT_QUOTES); ?>"
                                     data-qr-url="<?= htmlspecialchars($qr['url'], ENT_QUOTES); ?>"
                                     data-qr-image="<?= htmlspecialchars($qr['qr'], ENT_QUOTES); ?>"
                                     data-print-url="<?= htmlspecialchars($qr['print_url'], ENT_QUOTES); ?>"
-                                >Check-In QR</button>
+                                ><i class="bi bi-qr-code"></i></button>
                             <?php elseif (!$hasFacilityQr): ?>
                                 <span class="fm-qr-hint">Run <code>migration_add_facility_checkin_qr.sql</code> to enable facility QR posters.</span>
                             <?php endif; ?>
                             <?php if ($canUpdateFacilities): ?>
-                            <button class="btn btn-outline confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>'>Edit Details</button>
+                            <button class="btn btn-outline fm-icon-btn confirm-action" data-message="Load facility data for editing?" type="button" data-facility='<?= $payload; ?>' title="Edit Details" aria-label="Edit Details"><i class="bi bi-pencil-square"></i></button>
                             <?php endif; ?>
                             <?php if ($canDeleteFacilities): ?>
                                 <?php if ($facility['status'] === 'deleted'): ?>
                                     <form method="POST" style="display:inline;" data-frs-ajax>
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
-                                        <button type="submit" name="action" value="restore_facility" class="btn btn-outline confirm-action" data-message="Restore &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot; and set it to Available?">Restore</button>
+                                        <button type="submit" name="action" value="restore_facility" class="btn btn-outline fm-icon-btn confirm-action" data-message="Restore &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot; and set it to Available?" title="Restore" aria-label="Restore"><i class="bi bi-arrow-counterclockwise"></i></button>
                                     </form>
                                 <?php else: ?>
                                     <form method="POST" style="display:inline;" data-frs-ajax>
                                         <?= csrf_field(); ?>
                                         <input type="hidden" name="facility_id" value="<?= (int)$facility['id']; ?>">
-                                        <button type="submit" name="action" value="delete_facility" class="btn btn-outline btn-danger confirm-action" data-message="Delete &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot;? It will be hidden from public listings and booking. Any pending or approved future reservations will be cancelled/postponed and residents notified. You can restore it later.">Delete</button>
+                                        <button type="submit" name="action" value="delete_facility" class="btn btn-outline btn-danger fm-icon-btn confirm-action" data-message="Delete &quot;<?= htmlspecialchars($facility['name'], ENT_QUOTES); ?>&quot;? It will be hidden from public listings and booking. Any pending or approved future reservations will be cancelled/postponed and residents notified. You can restore it later." title="Delete" aria-label="Delete"><i class="bi bi-trash"></i></button>
                                     </form>
                                 <?php endif; ?>
                             <?php endif; ?>
@@ -796,7 +799,69 @@ ob_start();
     top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
     width: 100vw !important; height: 100vh !important;
 }
-.facility-card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+.fm-tabs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+.fm-tabs-row .booking-hub-tabs { margin-bottom: 0; }
+.fm-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.fm-search-row { margin-bottom: 0.85rem; }
+.fm-search-wrapper { max-width: 320px; }
+.fm-search-wrapper input { width: 100%; }
+
+/* Facility list rows - name/details on the left, small icon action buttons
+   on the right, in line (not stacked below). */
+.facility-card-admin {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.6rem;
+}
+.facility-card-admin .fm-row-main {
+    flex: 1;
+    min-width: 0;
+}
+.facility-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+.fm-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1rem;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+@media (max-width: 640px) {
+    .facility-card-admin {
+        flex-direction: column;
+    }
+    .facility-card-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
 .fm-qr-hint { font-size: 0.82rem; color: #64748b; }
 .fm-qr-modal {
     position: fixed; inset: 0; z-index: 1300; display: none; align-items: center; justify-content: center; padding: 1rem;

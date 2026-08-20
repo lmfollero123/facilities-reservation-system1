@@ -5379,6 +5379,25 @@ html[data-theme="dark"] .ee-readings-card .table-responsive.is-scrollable::after
     pointer-events: none;
 }
 
+/* Generic fallback for any bare .input-wrapper/.input-icon pair not scoped
+   to .auth-form/.booking-form/.facility-form (e.g. plain filter/search bars) */
+.input-wrapper:has(.input-icon) {
+    position: relative;
+}
+.input-wrapper:has(.input-icon) > .input-icon {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b95b5;
+    pointer-events: none;
+    z-index: 1;
+}
+.input-wrapper:has(.input-icon) > input,
+.input-wrapper:has(.input-icon) > select {
+    padding-left: 2.5rem;
+}
+
 .facility-form input,
 .facility-form textarea,
 .facility-form select {
