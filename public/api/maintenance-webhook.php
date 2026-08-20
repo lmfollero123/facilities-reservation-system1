@@ -61,6 +61,8 @@ try {
     $maintenanceStatus = (string)($data['maintenance_status'] ?? '');
     $action = (string)$data['action'];
     $facilityIdInput = isset($data['facility_id']) ? (int)$data['facility_id'] : 0;
+    $category = (string)($data['category'] ?? '');
+    $task = (string)($data['task'] ?? '');
 
     $facility = null;
     if ($facilityIdInput > 0) {
@@ -108,7 +110,14 @@ try {
 
     switch ($action) {
         case 'start_maintenance':
-            if ($currentStatus !== 'maintenance') {
+            if (!cimmCategoryAffectsFacility($category, $task)) {
+                $result['action_taken'] = "Ignored: category '{$category}' ({$task}) does not affect this facility's usability";
+                logAudit(
+                    'Facility maintenance push ignored (vicinity-only category)',
+                    'LGU Integration',
+                    "{$facilityName} (ID {$facilityId}) - category '{$category}' task '{$task}'"
+                );
+            } elseif ($currentStatus !== 'maintenance') {
                 $updateStmt = $pdo->prepare(
                     'UPDATE facilities SET status = "maintenance", updated_at = NOW() WHERE id = :id'
                 );

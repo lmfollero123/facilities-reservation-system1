@@ -226,6 +226,67 @@ function cimmIsActiveMaintenanceSchedule(array $schedule, ?int $now = null): boo
 }
 
 /**
+ * Bucket a maintenance category/task/location string into one of CIMM's own
+ * infra-type buckets (mirrors includes/core/infra_type.php's
+ * cimm_normalize_infra_type() in the CIMM repo - kept in sync manually since
+ * the two codebases don't share PHP files).
+ */
+function cimmNormalizeInfraBucket(string $text): string
+{
+    $t = strtolower(trim($text));
+    if ($t === '') {
+        return 'others';
+    }
+    $has = static function (array $needles) use ($t): bool {
+        foreach ($needles as $n) {
+            if (str_contains($t, $n)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if ($has(['street light', 'streetlight', 'lamp post', 'lamppost', 'lighting', 'light post'])) {
+        return 'street lights';
+    }
+    if ($has(['road', 'street', 'pavement', 'sidewalk', 'asphalt', 'pothole', 'curb', 'bridge'])) {
+        return 'roads';
+    }
+    if ($has(['drain', 'sewer', 'canal', 'flood', 'manhole', 'culvert'])) {
+        return 'drainage';
+    }
+    if ($has(['public facilit', 'park', 'plaza', 'building', 'playground', 'court', 'hall', 'facility', 'restroom', 'comfort room'])) {
+        return 'public facilities';
+    }
+    if ($has(['water', 'pipe', 'pump', 'hydrant', 'valve', 'supply'])) {
+        return 'water supply';
+    }
+    if ($has(['electric', 'power', 'wiring', 'wire', 'cable', 'transformer', 'outlet', 'circuit'])) {
+        return 'electrical';
+    }
+    return 'others';
+}
+
+/**
+ * Whether a maintenance category/task actually affects the facility's own
+ * usability, or is just work happening nearby (roads, street lights,
+ * drainage) that CIMM's location-text facility matching pulled in.
+ *
+ * Denylist, not allowlist: unrecognized/blank text defaults to true (affects
+ * facility) - only categories positively identified as vicinity-only infra
+ * are excluded, so an unfamiliar category never silently gets ignored.
+ *
+ * CPRF applies this independently of whatever CIMM sends (pull sync and the
+ * push webhook both call this) - the system that owns "does this block
+ * bookings" should not blindly trust the upstream source's own filtering.
+ */
+function cimmCategoryAffectsFacility(string $category, string $task = ''): bool
+{
+    $bucket = cimmNormalizeInfraBucket(trim($category . ' ' . $task));
+    return !in_array($bucket, ['roads', 'street lights', 'drainage'], true);
+}
+
+/**
  * True when a schedule is not completed/cancelled and its maintenance window starts in the future.
  */
 function cimmIsFutureScheduledMaintenance(array $schedule, ?int $now = null): bool
@@ -623,7 +684,10 @@ function cimmScheduleDateRange(array $schedule): array
  *
  * Rules:
  * - Facility goes `maintenance` when CIMM work is active now (in_progress/delayed, or scheduled
- *   and today is inside the maintenance window). Until then the facility stays `available`.
+ *   and today is inside the maintenance window) AND the category actually affects the facility
+ *   itself (cimmCategoryAffectsFacility()) - vicinity-only infra (roads, street lights, drainage)
+ *   never flips the status, even if a location-text match pulled it in. Until then the facility
+ *   stays `available`.
  * - All upcoming/active CIMM windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix)
  *   so residents cannot book those dates in advance (e.g. Pael scheduled Jul 22 is blocked from Jul 12).
  * - Facility returns to `available` only if CIMM sync previously set it to maintenance
@@ -699,7 +763,8 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         $summary['matched_schedule_count']++;
         $matchedSchedulesForBlackout[] = ['facility_id' => $facilityId, 'schedule' => $schedule];
 
-        if (cimmIsActiveMaintenanceSchedule($schedule, $now)) {
+        if (cimmIsActiveMaintenanceSchedule($schedule, $now)
+            && cimmCategoryAffectsFacility((string)($schedule['category'] ?? ''), (string)($schedule['maintenance_type'] ?? ''))) {
             $activeMaintenanceFacilityIds[$facilityId] = true;
         }
     }
