@@ -352,6 +352,13 @@ ob_start();
                 </div>
             <?php endif; ?>
 
+            <?php if (isset($_GET['timeout']) && $_GET['timeout'] == '1'): ?>
+                <div class="auth-split-alert is-warning" role="alert">
+                    <strong>Session expired</strong>
+                    <p style="margin: 0.35rem 0 0;">You were logged out due to inactivity. Please log in again.</p>
+                </div>
+            <?php endif; ?>
+
             <?php if ($error): ?>
                 <div class="auth-split-alert is-error" role="alert">
                     <?= htmlspecialchars($error); ?>
