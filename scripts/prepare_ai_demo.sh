@@ -47,12 +47,10 @@ echo "[2/4] Seeding curated demo scenarios..."
 echo "[3/4] Training all ML models..."
 TRAIN_FAILED=()
 for script in \
-  train_conflict_detection.py \
   train_auto_approval_risk.py \
   train_chatbot_intents.py \
   train_purpose_analysis.py \
-  train_facility_recommendation.py \
-  train_demand_forecasting.py
+  train_facility_recommendation.py
 do
   echo "  -> $script"
   if ! "$PY" "scripts/$script"; then
@@ -64,8 +62,6 @@ done
 echo "[4/4] Verifying model files..."
 MISSING=()
 for model in \
-  conflict_detection.pkl \
-  conflict_detection_features.pkl \
   auto_approval_risk_model.pkl \
   auto_approval_risk_encoders.pkl \
   chatbot_intent_model.pkl \
@@ -75,8 +71,7 @@ for model in \
   purpose_unclear_model.pkl \
   purpose_unclear_vectorizer.pkl \
   facility_recommendation_model.pkl \
-  facility_recommendation_encoders.pkl \
-  demand_forecasting_model.pkl
+  facility_recommendation_encoders.pkl
 do
   if [[ -f "$MODELS_DIR/$model" ]]; then
     echo "  OK  $model"

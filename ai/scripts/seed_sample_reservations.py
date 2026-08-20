@@ -387,15 +387,8 @@ def generate_sample_reservations(count: int = 50, approved_ratio: float = 0.6):
         else:
             print(f"\n[WARN] Need {5 - approved_count} more approved reservations for Facility Recommendation model")
 
-        total_count = sum(status_counts.values())
-        if total_count >= 30:
-            print("\n[OK] Enough reservations for Demand Forecasting model!")
-        else:
-            print(f"\n[WARN] Need {30 - total_count} more reservations for Demand Forecasting model")
-
         print("\nNext: train the models:")
         print("   python scripts/train_facility_recommendation.py")
-        print("   python scripts/train_demand_forecasting.py")
 
     except Exception as e:
         print(f"\n[ERROR] {e}")

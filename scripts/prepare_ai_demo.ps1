@@ -73,12 +73,10 @@ if ($LASTEXITCODE -ne 0) { throw ('Demo scenario seed failed (exit {0})' -f $LAS
 
 Write-Host '[3/4] Training all ML models...' -ForegroundColor Yellow
 $trainScripts = @(
-    'train_conflict_detection.py',
     'train_auto_approval_risk.py',
     'train_chatbot_intents.py',
     'train_purpose_analysis.py',
-    'train_facility_recommendation.py',
-    'train_demand_forecasting.py'
+    'train_facility_recommendation.py'
 )
 $trainFailed = @()
 foreach ($script in $trainScripts) {
@@ -92,8 +90,6 @@ foreach ($script in $trainScripts) {
 
 Write-Host '[4/4] Verifying model files...' -ForegroundColor Yellow
 $expectedModels = @(
-    'conflict_detection.pkl',
-    'conflict_detection_features.pkl',
     'auto_approval_risk_model.pkl',
     'auto_approval_risk_encoders.pkl',
     'chatbot_intent_model.pkl',
@@ -103,8 +99,7 @@ $expectedModels = @(
     'purpose_unclear_model.pkl',
     'purpose_unclear_vectorizer.pkl',
     'facility_recommendation_model.pkl',
-    'facility_recommendation_encoders.pkl',
-    'demand_forecasting_model.pkl'
+    'facility_recommendation_encoders.pkl'
 )
 $missing = @()
 foreach ($model in $expectedModels) {

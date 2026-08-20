@@ -58,28 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
     
     try {
         switch ($testType) {
-            case 'conflict':
-                if (!function_exists('predictConflictML')) {
-                    echo json_encode(['success' => false, 'error' => 'Function predictConflictML not available']);
-                    exit;
-                }
-                
-                $result = predictConflictML(
-                    $input['facility_id'],
-                    $input['reservation_date'],
-                    $input['time_slot'],
-                    $input['expected_attendees'],
-                    $input['is_commercial'],
-                    $input['capacity']
-                );
-                
-                echo json_encode([
-                    'success' => !isset($result['error']),
-                    'result' => $result,
-                    'stderr' => $result['stderr'] ?? null
-                ]);
-                break;
-                
             case 'risk':
                 if (!function_exists('assessRiskML')) {
                     echo json_encode(['success' => false, 'error' => 'Function assessRiskML not available']);
@@ -208,40 +186,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
                 echo json_encode([
                     'success' => !isset($result['error']),
                     'result' => $result
-                ]);
-                break;
-                
-            case 'demand_forecasting':
-                if (!function_exists('forecastDemandML')) {
-                    echo json_encode(['success' => false, 'error' => 'Function forecastDemandML not available']);
-                    exit;
-                }
-                
-                $results = [];
-                $testDates = [
-                    date('Y-m-d', strtotime('+7 days')),
-                    date('Y-m-d', strtotime('+14 days')),
-                    date('Y-m-d', strtotime('+30 days')),
-                ];
-                
-                foreach ($testDates as $date) {
-                    $result = forecastDemandML(
-                        facilityId: $input['facility_id'] ?? 1,
-                        date: $date,
-                        historicalData: null
-                    );
-                    $results[] = [
-                        'date' => $date,
-                        'facility_id' => $input['facility_id'] ?? 1,
-                        'predicted_count' => $result['predicted_count'] ?? 0.0,
-                        'confidence' => $result['confidence'] ?? 0.0,
-                        'error' => $result['error'] ?? null
-                    ];
-                }
-                
-                echo json_encode([
-                    'success' => true,
-                    'results' => $results
                 ]);
                 break;
                 
@@ -422,13 +366,11 @@ pre {
     
     // Define integration status
     $integrationStatus = [
-        'conflict_detection' => true,  // Integrated in ai_helpers.php
         'auto_approval_risk' => true,  // Integrated in auto_approval.php
         'chatbot_intent' => true,      // Integrated in ai_chatbot.php
         'purpose_category' => true,    // Integrated in book_facility.php
         'purpose_unclear' => true,     // Integrated in book_facility.php
         'facility_recommendation' => true,  // Integrated in book_facility.php (facility_recommendations_api.php)
-        'demand_forecasting' => true,  // Integrated (API available, can be used in scheduling pages)
     ];
     ?>
 
@@ -494,24 +436,6 @@ pre {
                 </div>
             <?php endforeach; ?>
         </div>
-    </div>
-
-    <!-- Test 1: Conflict Detection -->
-    <div class="test-section">
-        <h2>1. Conflict Detection Model</h2>
-        <p><strong>Status:</strong> 
-            <span class="status-badge <?= ($integrationStatus['conflict_detection'] && $modelStatus['conflict_detection']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
-                <?= ($integrationStatus['conflict_detection'] && $modelStatus['conflict_detection']['available']) ? 'Integrated & Available' : 'Not Ready' ?>
-            </span>
-        </p>
-        <p><strong>Integration:</strong> Used in booking conflict detection (<code>config/ai_helpers.php</code>)</p>
-        
-        <?php if ($modelStatus['conflict_detection']['available'] && function_exists('predictConflictML')): ?>
-            <button class="test-button" onclick="testConflictDetection()">Run Test</button>
-            <div id="conflict-result"></div>
-        <?php else: ?>
-            <p style="color: #991b1b;">Model not available or function not loaded.</p>
-        <?php endif; ?>
     </div>
 
     <!-- Test 2: Auto-Approval Risk -->
@@ -605,54 +529,9 @@ pre {
         <?php endif; ?>
     </div>
 
-    <!-- Test 7: Demand Forecasting -->
-    <div class="test-section">
-        <h2>7. Demand Forecasting</h2>
-        <p><strong>Status:</strong>
-            <span class="status-badge <?= ($integrationStatus['demand_forecasting'] && $modelStatus['demand_forecasting']['available']) ? 'status-integrated' : 'status-unavailable' ?>">
-                <?= ($integrationStatus['demand_forecasting'] && $modelStatus['demand_forecasting']['available']) ? 'Integrated & Available' : ($integrationStatus['demand_forecasting'] ? 'Integrated (Needs Training)' : 'Not Ready') ?>
-            </span>
-        </p>
-        <p><strong>Integration:</strong> API available for scheduling pages (<code>config/ai_ml_integration.php</code>)</p>
-        <p><small>Note: Requires 30+ reservations to train. Can be integrated into Smart Scheduler page.</small></p>
-        
-        <?php if (function_exists('forecastDemandML')): ?>
-            <button class="test-button" onclick="testDemandForecasting()">Run Test</button>
-            <div id="demand-forecasting-result"></div>
-        <?php else: ?>
-            <p style="color: #991b1b;">Function not available.</p>
-        <?php endif; ?>
-    </div>
 </div>
 
 <script>
-function testConflictDetection() {
-    const resultDiv = document.getElementById('conflict-result');
-    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
-    
-    fetch('<?= $frsAiLabApiUrl; ?>?test=conflict', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            facility_id: 1,
-            reservation_date: '2026-02-15',
-            time_slot: '08:00 - 12:00',
-            expected_attendees: 50,
-            is_commercial: false,
-            capacity: '200'
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
-            <pre>${JSON.stringify(data, null, 2)}</pre>
-        </div>`;
-    })
-    .catch(err => {
-        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
-    });
-}
-
 function testRiskAssessment() {
     const resultDiv = document.getElementById('risk-result');
     resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
@@ -791,27 +670,6 @@ function testFacilityRecommendation() {
     });
 }
 
-function testDemandForecasting() {
-    const resultDiv = document.getElementById('demand-forecasting-result');
-    resultDiv.innerHTML = '<div class="test-result">Testing... Please wait.</div>';
-    
-    fetch('<?= $frsAiLabApiUrl; ?>?test=demand_forecasting', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            facility_id: 1
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        resultDiv.innerHTML = `<div class="test-result ${data.success ? 'success' : 'error'}">
-            <pre>${JSON.stringify(data, null, 2)}</pre>
-        </div>`;
-    })
-    .catch(err => {
-        resultDiv.innerHTML = `<div class="test-result error">Error: ${err.message}</div>`;
-    });
-}
 </script>
 
 <?php

@@ -329,50 +329,6 @@ function callPythonModel(string $scriptPath, array $args = [], ?array $inputData
 }
 
 /**
- * Predict conflict probability using ML model
- * 
- * @param int $facilityId Facility ID
- * @param string $reservationDate Reservation date (Y-m-d format)
- * @param string $timeSlot Time slot string
- * @param int|null $expectedAttendees Expected attendees
- * @param bool $isCommercial Is commercial reservation
- * @param string $capacity Facility capacity
- * @return array Conflict prediction result
- */
-function predictConflictML(
-    int $facilityId,
-    string $reservationDate,
-    string $timeSlot,
-    ?int $expectedAttendees,
-    bool $isCommercial,
-    string $capacity = '100'
-): array {
-    $inputData = [
-        'facility_id' => $facilityId,
-        'reservation_date' => $reservationDate,
-        'time_slot' => $timeSlot,
-        'expected_attendees' => $expectedAttendees ?? 50,
-        'is_commercial' => $isCommercial,
-        'capacity' => $capacity,
-    ];
-    
-    $result = callPythonModel('api/predict_conflict.py', [], $inputData);
-    
-    // Return default if error
-    if (isset($result['error'])) {
-        return [
-            'conflict_probability' => 0.5,
-            'is_conflict' => false,
-            'confidence' => 0.0,
-            'error' => $result['error'],
-            'stderr' => $result['stderr'] ?? null,
-        ];
-    }
-    
-    return $result;
-}
-
-/**
  * Assess reservation risk using ML model
  * 
  * @param int $facilityId Facility ID
@@ -547,39 +503,6 @@ function recommendFacilitiesML(
 }
 
 /**
- * Forecast booking demand for a facility on a specific date
- * 
- * @param int $facilityId Facility ID
- * @param string $date Date (Y-m-d format)
- * @param array|null $historicalData Optional historical booking data
- * @return array Demand forecast result
- */
-function forecastDemandML(
-    int $facilityId,
-    string $date,
-    ?array $historicalData = null
-): array {
-    $inputData = [
-        'facility_id' => $facilityId,
-        'date' => $date,
-        'historical_data' => $historicalData,
-    ];
-    
-    $result = callPythonModel('api/forecast_demand.py', [], $inputData);
-    
-    // Return default if error
-    if (isset($result['error'])) {
-        return [
-            'predicted_count' => 0.0,
-            'confidence' => 0.0,
-            'error' => $result['error'],
-        ];
-    }
-    
-    return $result;
-}
-
-/**
  * Check if ML models are available
  * 
  * @return array Status of each model
@@ -589,13 +512,11 @@ function checkMLModelsStatus(): array {
     $modelsDir = $aiPath . '/models';
     
     $models = [
-        'conflict_detection' => 'conflict_detection.pkl',
         'auto_approval_risk' => 'auto_approval_risk_model.pkl',
         'chatbot_intent' => 'chatbot_intent_model.pkl',
         'purpose_category' => 'purpose_category_model.pkl',
         'purpose_unclear' => 'purpose_unclear_model.pkl',
         'facility_recommendation' => 'facility_recommendation_model.pkl',
-        'demand_forecasting' => 'demand_forecasting_model.pkl',
     ];
     
     $status = [];

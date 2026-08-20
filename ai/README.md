@@ -4,12 +4,10 @@ This folder contains Python AI/ML models for the Facilities Reservation System.
 
 ## Features
 
-1. **Intelligent Conflict Detection** ✅ - Predict booking conflicts before they occur
-2. **Smart Facility Recommendation** ✅ - Recommend facilities based on user requirements  
-3. **Automated Approval Workflow** ✅ - Risk assessment for auto-approval
-4. **Demand Forecasting** ✅ - Predict future booking demand
-5. **NLP Purpose Analysis** ✅ - Analyze and categorize reservation purposes
-6. **Chatbot Intent Classification** ✅ - Classify user questions for chatbot responses
+1. **Smart Facility Recommendation** ✅ - Recommend facilities based on user requirements  
+2. **Automated Approval Workflow** ✅ - Risk assessment for auto-approval
+3. **NLP Purpose Analysis** ✅ - Analyze and categorize reservation purposes
+4. **Chatbot Intent Classification** ✅ - Classify user questions for chatbot responses
 
 ## Setup
 
@@ -35,7 +33,6 @@ python scripts/extract_data.py
 
 5. Train models:
 ```bash
-python scripts/train_conflict_detection.py
 python scripts/train_facility_recommendation.py  # Requires at least 5 approved reservations
 ```
 
@@ -47,18 +44,15 @@ ai/
 ├── requirements.txt
 ├── config.py                 # Database configuration
 ├── models/                   # Trained model files
-│   ├── conflict_detection.pkl
-│   ├── facility_recommendation.pkl
+│   ├── facility_recommendation_model.pkl
 │   └── ...
 ├── scripts/                  # Training scripts
 │   ├── extract_data.py
-│   ├── train_conflict_detection.py
 │   ├── train_facility_recommendation.py
 │   └── ...
 ├── src/                      # Source code modules
 │   ├── __init__.py
 │   ├── data_loader.py        # Database connection and data loading
-│   ├── conflict_detection.py # Conflict detection model
 │   ├── facility_recommendation.py # Recommendation model
 │   └── utils.py              # Utility functions
 └── api/                      # Flask/FastAPI endpoints (future)

@@ -47,20 +47,7 @@ This will create CSV files in the `data/` directory:
 
 ## Step 4: Train Models
 
-### Train Conflict Detection Model
-
-```bash
-python scripts/train_conflict_detection.py
-```
-
-This will:
-- Load reservation data
-- Extract features (time, date, facility, user attributes)
-- Train a Random Forest classifier
-- Save the model to `models/conflict_detection.pkl`
-- Display accuracy and feature importance
-
-**Note:** You need at least 10-20 reservations for meaningful training. If you have fewer, the system will use rule-based conflict detection (already implemented in PHP).
+Booking conflict detection uses rule-based logic in PHP (`calculateConflictRiskSimple()` in `config/ai_helpers.php`), not a trained model - there's no separate conflict-detection model to train.
 
 ## What's Next?
 
@@ -121,17 +108,7 @@ This will:
    
    **Output**: Purpose category classifier and unclear purpose detector models.
 
-5. **Train Demand Forecasting Model**:
-
-   Predicts future booking demand for facilities using time series analysis.
-   
-   **Requirements**: At least 30 reservations for meaningful forecasting.
-   
-   ```bash
-   python scripts/train_demand_forecasting.py
-   ```
-
-6. **Train Chatbot Intent Classification Model**:
+5. **Train Chatbot Intent Classification Model**:
 
    Classifies user questions into intents for the chatbot.
    
@@ -147,10 +124,8 @@ This will:
 - Project structure
 - Data extraction script
 - Database connection utilities
-- Conflict detection model ✅
 - Facility recommendation model (script ready)
 - Auto-approval risk assessment model ✅
-- Demand forecasting model (script ready)
 - NLP purpose analysis model ✅
 - Chatbot intent classification model ✅
 
@@ -167,7 +142,6 @@ This will:
 - Verify database name is correct
 
 ### Not Enough Data
-- The system currently uses rule-based conflict detection (PHP)
 - ML models need at least 10-20 samples per class to train effectively
 - Continue using the system - data will accumulate over time
 
@@ -178,8 +152,4 @@ This will:
 
 ## Model Files
 
-Trained models are saved in `models/` directory:
-- `conflict_detection.pkl` - Conflict prediction model
-- `conflict_detection_features.pkl` - Feature names for inference
-
-**Important:** Don't commit model files to git (they're in `.gitignore`)
+Trained models are saved in `models/` directory. **Important:** Don't commit model files to git (they're in `.gitignore`)

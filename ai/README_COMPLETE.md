@@ -6,25 +6,7 @@ This directory contains machine learning models for the Facilities Reservation S
 
 ## Available Models
 
-### 1. ✅ Conflict Detection Model
-**File**: `models/conflict_detection.pkl`  
-**Training Script**: `scripts/train_conflict_detection.py`  
-**Status**: ✅ Trained and ready
-
-Predicts booking conflicts before they occur.
-
-**Features**:
-- Time features (start/end hour, duration)
-- Date features (day of week, month, weekend, holiday)
-- Facility features (capacity)
-- User features (expected attendees, capacity ratio)
-- Commercial flag
-
-**Usage**: Loads model and predicts conflict probability for new reservations.
-
----
-
-### 2. ✅ Facility Recommendation Model
+### 1. ✅ Facility Recommendation Model
 **Files**: 
 - `models/facility_recommendation_model.pkl`
 - `models/facility_recommendation_encoders.pkl`
@@ -44,7 +26,7 @@ Recommends facilities based on user requirements and booking history.
 
 ---
 
-### 3. ✅ Auto-Approval Risk Assessment Model
+### 2. ✅ Auto-Approval Risk Assessment Model
 **Files**:
 - `models/auto_approval_risk_model.pkl`
 - `models/auto_approval_risk_encoders.pkl`
@@ -64,25 +46,7 @@ Predicts risk level for reservations (low risk = auto-approve, high risk = manua
 
 ---
 
-### 4. ✅ Demand Forecasting Model
-**File**: `models/demand_forecasting_model.pkl`  
-**Training Script**: `scripts/train_demand_forecasting.py`  
-**Status**: ✅ Training script ready (needs 30+ reservations)
-
-Predicts future booking demand for facilities.
-
-**Features**:
-- Time series features (year, month, day, day of week, week)
-- Lag features (previous day, week, month)
-- Rolling averages (7-day, 30-day)
-- Holiday flags
-- Facility ID
-
-**Usage**: Forecasts booking demand for future dates.
-
----
-
-### 5. ✅ NLP Purpose Analysis Model
+### 3. ✅ NLP Purpose Analysis Model
 **Files**:
 - `models/purpose_category_model.pkl`
 - `models/purpose_category_vectorizer.pkl`
@@ -102,7 +66,7 @@ Categorizes reservation purposes and detects unclear/suspicious purposes.
 
 ---
 
-### 6. ✅ Chatbot Intent Classification Model
+### 4. ✅ Chatbot Intent Classification Model
 **Files**:
 - `models/chatbot_intent_model.pkl`
 - `models/chatbot_intent_vectorizer.pkl`
@@ -129,10 +93,8 @@ venv\Scripts\activate  # Windows
 source venv/bin/activate  # Linux/Mac
 
 # Train all models
-python scripts/train_conflict_detection.py
 python scripts/train_facility_recommendation.py
 python scripts/train_auto_approval_risk.py
-python scripts/train_demand_forecasting.py
 python scripts/train_purpose_analysis.py
 python scripts/train_chatbot_intents.py
 ```
@@ -141,12 +103,12 @@ python scripts/train_chatbot_intents.py
 
 | Model | Minimum Data | Status |
 |-------|-------------|--------|
-| Conflict Detection | 10 reservations | ✅ Ready |
 | Facility Recommendation | 5 approved reservations | ⚠️ Needs more data |
 | Auto-Approval Risk | 10 reservations | ✅ Ready |
-| Demand Forecasting | 30 reservations | ⚠️ Needs more data |
 | Purpose Analysis | 10 reservations | ✅ Ready |
 | Chatbot Intents | N/A (synthetic data) | ✅ Ready |
+
+Booking conflict detection and demand forecasting use rule-based logic in PHP (`config/ai_helpers.php`, `services/PredictionService.php`) rather than trained models - the earlier `conflict_detection`/`demand_forecasting_model` sklearn models were removed since nothing in the live app called them.
 
 ## Integration with PHP
 
@@ -163,10 +125,8 @@ See individual model documentation files for integration examples.
 ai/
 ├── models/                    # Trained model files (*.pkl)
 ├── scripts/                   # Training scripts
-│   ├── train_conflict_detection.py
 │   ├── train_facility_recommendation.py
 │   ├── train_auto_approval_risk.py
-│   ├── train_demand_forecasting.py
 │   ├── train_purpose_analysis.py
 │   └── train_chatbot_intents.py
 ├── src/                       # Inference modules
