@@ -23,10 +23,10 @@ function frs_app_settings_table_ready(PDO $pdo): bool
 /**
  * @return array<string, string> setting_key => setting_value
  */
-function frs_get_app_settings_map(PDO $pdo): array
+function frs_get_app_settings_map(PDO $pdo, bool $forceRefresh = false): array
 {
     static $map = null;
-    if ($map !== null) {
+    if ($map !== null && !$forceRefresh) {
         return $map;
     }
     $map = [];
@@ -65,4 +65,10 @@ function frs_set_app_setting(PDO $pdo, string $key, string $value, ?int $userId 
          ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)'
     );
     $stmt->execute(['key' => $key, 'value' => $value, 'user_id' => $userId]);
+
+    // frs_get_app_settings_map() caches its result in a static for the rest
+    // of the request -- without this, a write followed by a read in the same
+    // request (e.g. the System Settings save handler re-reading to confirm)
+    // would silently see the pre-write value.
+    frs_get_app_settings_map($pdo, true);
 }
