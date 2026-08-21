@@ -32,13 +32,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['test'])) {
     }
 
     require_once __DIR__ . '/../../../../config/ai_ml_integration.php';
-    
+
     // Suppress any output before JSON
     if (ob_get_level()) {
         ob_clean();
     }
     header('Content-Type: application/json');
-    
+
+    // Body is raw JSON (php://input), not form-encoded, so the token can
+    // only arrive via the X-CSRF-Token header -- frs_request_csrf_token()
+    // already checks that header as a fallback.
+    if (!verifyCSRFToken(frs_request_csrf_token())) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Invalid or missing security token. Refresh the page and try again.']);
+        exit;
+    }
+
     $testType = $_GET['test'];
     $inputJson = file_get_contents('php://input');
     $input = json_decode($inputJson, true);
@@ -538,7 +547,7 @@ function testRiskAssessment() {
     
     fetch('<?= $frsAiLabApiUrl; ?>?test=risk', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || ''},
         body: JSON.stringify({
             facility_id: 1,
             user_id: <?= $userId; ?>,
@@ -572,7 +581,7 @@ function testChatbotIntent() {
     
     fetch('<?= $frsAiLabApiUrl; ?>?test=chatbot', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || ''},
         body: JSON.stringify({messages: testMessages})
     })
     .then(res => res.json())
@@ -601,7 +610,7 @@ function testPurposeCategory() {
     
     fetch('<?= $frsAiLabApiUrl; ?>?test=purpose_category', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || ''},
         body: JSON.stringify({purposes: testPurposes})
     })
     .then(res => res.json())
@@ -630,7 +639,7 @@ function testPurposeUnclear() {
     
     fetch('<?= $frsAiLabApiUrl; ?>?test=purpose_unclear', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || ''},
         body: JSON.stringify({purposes: testPurposes})
     })
     .then(res => res.json())
@@ -650,7 +659,7 @@ function testFacilityRecommendation() {
     
     fetch('<?= $frsAiLabApiUrl; ?>?test=facility_recommendation', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || ''},
         body: JSON.stringify({
             purpose: 'Community General Assembly',
             expected_attendees: 100,

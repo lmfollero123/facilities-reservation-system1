@@ -62,7 +62,9 @@ $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 // (scripts/sync_cimm_maintenance.php), on demand. Page loads otherwise only
 // read the cache below - no live CIMM API call on every view.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['sync_now'])) {
-    if (!$canSubmit) {
+    if (!frs_csrf_ok()) {
+        $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+    } elseif (!$canSubmit) {
         $error = 'You do not have permission to sync CIMM maintenance data.';
     } else {
         $syncResult = frs_cimm_run_sync($pdo);
@@ -253,6 +255,7 @@ ob_start();
     </span>
     <?php if ($canSubmit): ?>
         <form method="post" style="margin:0;">
+            <?= csrf_field(); ?>
             <input type="hidden" name="sync_now" value="1">
             <input type="hidden" name="tab" value="schedules">
             <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">

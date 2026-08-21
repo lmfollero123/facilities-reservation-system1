@@ -24,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=UTF-8');
     @set_time_limit(45);
 
+    frs_reject_invalid_csrf_json();
+
     if (!($_SESSION['user_authenticated'] ?? false) || empty($_SESSION['user_id'])) {
         http_response_code(401);
         echo json_encode([
@@ -610,13 +612,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const formData = new URLSearchParams();
         formData.append('message', message);
 
+        const chatHeaders = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        };
+        if (window.CSRF_TOKEN) {
+            chatHeaders['X-CSRF-Token'] = window.CSRF_TOKEN;
+        }
+
         fetch(basePath + '/dashboard/ai-chatbot', {
             method: 'POST',
             credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json'
-            },
+            headers: chatHeaders,
             body: formData
         })
         .then(function (response) {
