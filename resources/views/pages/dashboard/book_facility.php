@@ -168,9 +168,9 @@ $hasPriorityLevelColumn = isset($reservationColumns['priority_level']);
 $hasExpiresAtColumn = isset($reservationColumns['expires_at']);
 $hasPaymentDueAtColumn = isset($reservationColumns['payment_due_at']);
 $hasReferralColumns = isset($reservationColumns['referral_name']);
-$activeBookingStatusesSql = $supportsPendingPayment
-    ? '"pending_payment","pending","approved"'
-    : '"pending","approved"';
+// Shared with the reschedule flow (frs_validate_resident_booking_limits_excluding)
+// so both paths always agree on which statuses still hold a slot.
+$activeBookingStatusesSql = frs_active_booking_statuses_sql($pdo);
 
 // Prepare base path for AJAX calls
 $basePath = base_path();

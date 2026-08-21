@@ -530,18 +530,26 @@ function frs_active_booking_statuses_sql(PDO $pdo): string
     if ($sql !== null) {
         return $sql;
     }
-    $supportsPendingPayment = false;
+    $type = '';
     try {
         $stmt = $pdo->query("SHOW COLUMNS FROM reservations LIKE 'status'");
         $col = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
         $type = (string) ($col['Type'] ?? '');
-        $supportsPendingPayment = stripos($type, 'pending_payment') !== false;
     } catch (Throwable $e) {
-        $supportsPendingPayment = true;
+        $type = '';
     }
-    $sql = $supportsPendingPayment
-        ? '"pending_payment","pending","approved"'
-        : '"pending","approved"';
+    // Both pending_payment (a paid hold) and postponed (blocks_booking:true
+    // in the status lookup) still occupy the slot, same as pending/approved.
+    // Omitting either here let a resident's booking-limit count silently
+    // drift below their actual number of slot-holding reservations.
+    $statuses = ['pending', 'approved'];
+    if ($type === '' || stripos($type, 'pending_payment') !== false) {
+        $statuses[] = 'pending_payment';
+    }
+    if ($type === '' || stripos($type, 'postponed') !== false) {
+        $statuses[] = 'postponed';
+    }
+    $sql = '"' . implode('","', $statuses) . '"';
     return $sql;
 }
 
