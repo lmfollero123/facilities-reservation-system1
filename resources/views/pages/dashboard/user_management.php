@@ -533,6 +533,10 @@ $searchQuery = trim($_GET['q'] ?? '');
 // Build query with filters
 $whereConditions = [];
 $params = [];
+// $usersFrom / $usersOrderBy are spliced directly into SQL below with no
+// parameter binding possible (they're a FROM clause and an ORDER BY list,
+// not values) -- they must only ever be assigned from the hardcoded
+// literals below, never from $_GET/$_POST, or this becomes SQL injection.
 $usersFrom = 'users';
 $usersOrderBy = 'created_at DESC';
 

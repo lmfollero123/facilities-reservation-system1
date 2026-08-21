@@ -16,8 +16,10 @@ if (!function_exists('frs_mobile_jwt_secret')) {
             $secret = (string) (getenv('MOBILE_JWT_SECRET') ?: '');
         }
         if ($secret === '') {
-            // Dev fallback — set MOBILE_JWT_SECRET in production.
-            $secret = 'culiat-mobile-dev-secret-change-me';
+            // No hardcoded fallback: a mobile API bearer token signed with a
+            // secret that's committed in the repo is a full auth bypass for
+            // anyone who reads the source. Fail loudly instead.
+            throw new RuntimeException('MOBILE_JWT_SECRET is not configured. Set it in the environment before using the mobile API.');
         }
         return $secret;
     }
