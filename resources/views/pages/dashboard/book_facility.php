@@ -88,6 +88,7 @@ if ($canBookOnBehalf && $pdo && $selectedBookForUserId > 0) {
             $selectedBookForUserId = 0;
         }
     } catch (Throwable $e) {
+        error_log('book_facility.php: walk-in resident lookup failed: ' . $e->getMessage());
         $walkInSelectedResident = null;
         $selectedBookForUserId = 0;
     }

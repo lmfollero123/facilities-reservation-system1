@@ -524,6 +524,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $messageType = 'success';
         } catch (Throwable $e) {
+            error_log('facility_management.php: facility save failed: ' . $e->getMessage());
             $message = 'Unable to save facility. Please try again.';
             $messageType = 'error';
         }

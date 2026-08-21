@@ -649,7 +649,7 @@ if (!empty($modalSearch)) {
     $modalParams['modal_search_facility'] = '%' . $modalSearch . '%';
 }
 
-if (!empty($modalStatus) && in_array($modalStatus, ['approved', 'denied', 'cancelled', 'pending', 'postponed'], true)) {
+if (!empty($modalStatus) && in_array($modalStatus, ['approved', 'denied', 'cancelled', 'pending', 'postponed', 'pending_payment', 'on_hold', 'completed'], true)) {
     $modalWhere[] = 'r.status = :modal_status';
     $modalParams['modal_status'] = $modalStatus;
 }
@@ -2022,6 +2022,9 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
                         <option value="cancelled" <?= $modalStatus === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                         <option value="pending" <?= $modalStatus === 'pending' ? 'selected' : ''; ?>>Pending</option>
                         <option value="postponed" <?= $modalStatus === 'postponed' ? 'selected' : ''; ?>>Postponed</option>
+                        <option value="pending_payment" <?= $modalStatus === 'pending_payment' ? 'selected' : ''; ?>>Pending Payment</option>
+                        <option value="on_hold" <?= $modalStatus === 'on_hold' ? 'selected' : ''; ?>>On Hold</option>
+                        <option value="completed" <?= $modalStatus === 'completed' ? 'selected' : ''; ?>>Completed</option>
                     </select>
                 </div>
             </div>
