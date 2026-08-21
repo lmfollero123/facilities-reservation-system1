@@ -125,6 +125,7 @@ try {
     $facilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
     $upcomingCimmByFacility = frs_facilities_upcoming_cimm_maintenance_map($pdo);
 } catch (Throwable $e) {
+    error_log('book_facility.php: failed to load facilities: ' . $e->getMessage());
     $facilities = [];
     $upcomingCimmByFacility = [];
     $error = 'Unable to load facilities right now.';
@@ -158,6 +159,7 @@ try {
     }
 } catch (Throwable $e) {
     // Keep defaults empty; logic below safely falls back.
+    error_log('book_facility.php: reservation/history schema introspection failed: ' . $e->getMessage());
 }
 
 $supportsPendingPayment = in_array('pending_payment', $reservationStatusValues, true);
