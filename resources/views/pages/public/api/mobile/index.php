@@ -505,7 +505,7 @@ if ($route === 'auth/register' && $method === 'POST') {
     $name = trim((string) ($body['name'] ?? ''));
     $email = strtolower(trim((string) ($body['email'] ?? '')));
     $password = (string) ($body['password'] ?? '');
-    $mobile = trim((string) ($body['mobile'] ?? ''));
+    $mobileRaw = trim((string) ($body['mobile'] ?? ''));
     // Any address within Quezon City — no longer restricted to Barangay
     // Culiat streets; a referral from a Culiat resident is required at
     // booking time instead.
@@ -516,6 +516,14 @@ if ($route === 'auth/register' && $method === 'POST') {
     }
     if (strlen($address) < 5) {
         mobile_error('Please enter your complete address.', 422, 'validation');
+    }
+    $mobile = '';
+    if ($mobileRaw !== '') {
+        require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
+        $mobile = normalizePhilippineMobileNumber($mobileRaw);
+        if ($mobile === null) {
+            mobile_error('Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966).', 422, 'validation');
+        }
     }
     $exists = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
     $exists->execute([$email]);

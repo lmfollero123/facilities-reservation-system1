@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/secure_documents.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
+require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
 require_once __DIR__ . '/../../../../config/geocoding.php';
 
@@ -44,7 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $address = sanitizeInput($_POST['address'] ?? '');
 
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
-        $mobile = sanitizeInput($_POST['mobile'] ?? '');
+        $mobileRaw = sanitizeInput($_POST['mobile'] ?? '');
+        $mobile = $mobileRaw !== '' ? normalizePhilippineMobileNumber($mobileRaw) : '';
         $password = $_POST['password'] ?? '';
         $acceptTerms = isset($_POST['accept_terms']) && $_POST['accept_terms'] === 'on';
         if ($email !== '' && !checkRateLimit('register_form_email', strtolower($email), 2, 3600)) {
@@ -73,6 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } elseif (empty($address) || strlen($address) < 5) {
             $message = 'Please enter your complete address.';
+            $messageType = 'error';
+        } elseif ($mobileRaw !== '' && $mobile === null) {
+            $message = 'Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966).';
             $messageType = 'error';
         } elseif (!$acceptTerms) {
             $message = 'You must read and accept the Terms and Conditions and Data Privacy Policy to register.';
@@ -976,11 +981,12 @@ document.addEventListener('DOMContentLoaded', function() {
         mobile: {
             validate: (value) => {
                 if (!value) return null; // Optional field
-                // Remove spaces and special characters for validation
-                const cleaned = value.replace(/[\s\-()]/g, '');
-                // Philippine mobile number: +63 followed by 10 digits OR 09/08 followed by 9 digits
-                if (!/^(\+639\d{9}|09\d{9}|08\d{9})$/.test(cleaned)) {
-                    return 'Please enter a valid Philippine mobile number (e.g., +63 900 000 0000 or 0900 000 0000)';
+                // Strip everything but digits so +63 956 5121 966, 09565121966,
+                // 639565121966, and 9565121966 all normalize the same way.
+                const digits = value.replace(/\D/g, '');
+                // 63 + 10 digits, OR 0 + 10 digits, OR bare 9 + 9 digits
+                if (!/^(63\d{10}|0\d{10}|9\d{9})$/.test(digits)) {
+                    return 'Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966)';
                 }
                 return null;
             }
