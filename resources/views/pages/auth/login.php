@@ -120,11 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $otp = frs_issue_login_otp_code($pdo, (int) $user['id'], getClientIP());
 
                                         require_once __DIR__ . '/../../../../config/email_templates.php';
-                                        $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
+                                        $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
                                         sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
                                         if (!empty($user['mobile'])) {
                                             require_once __DIR__ . '/../../../../config/sms_helper.php';
-                                            sendLoginOtpSms((string)$user['mobile'], (string)$otp, 1);
+                                            sendLoginOtpSms((string)$user['mobile'], (string)$otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
                                         }
                                         $_SESSION['login_otp_email_sent'] = true;
                                     } else {

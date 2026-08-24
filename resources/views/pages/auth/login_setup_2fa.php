@@ -71,11 +71,11 @@ try {
             $error = 'Please wait a moment before requesting another code.';
         } else {
             $otp = frs_issue_login_otp_code($pdo, $userId, getClientIP());
-            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
+            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             sendEmail($user['email'], $user['name'], 'Set Up Login Verification Code', $otpBody);
             if (!empty($user['mobile'])) {
                 require_once __DIR__ . '/../../../../config/sms_helper.php';
-                sendLoginOtpSms((string) $user['mobile'], (string) $otp, 1);
+                sendLoginOtpSms((string) $user['mobile'], (string) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             }
             $_SESSION['pending_2fa_setup_email_sent'] = true;
             $view = 'email';

@@ -140,11 +140,11 @@ try {
         } elseif (empty($error)) {
             $otp = frs_issue_login_otp_code($pdo, $userId);
             require_once __DIR__ . '/../../../../config/email_templates.php';
-            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
+            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             sendEmail($user['email'], $user['name'], 'Login Recovery Code', $otpBody);
             if (!empty($user['mobile'])) {
                 require_once __DIR__ . '/../../../../config/sms_helper.php';
-                sendLoginOtpSms((string) $user['mobile'], (string) $otp, 1);
+                sendLoginOtpSms((string) $user['mobile'], (string) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             }
             $_SESSION['login_otp_recovery_mode'] = true;
             $_SESSION['login_otp_email_sent'] = true;
@@ -168,11 +168,11 @@ try {
             $otp = frs_issue_login_otp_code($pdo, $userId);
 
             require_once __DIR__ . '/../../../../config/email_templates.php';
-            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, 1);
+            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
             if (!empty($user['mobile'])) {
                 require_once __DIR__ . '/../../../../config/sms_helper.php';
-                sendLoginOtpSms((string) $user['mobile'], (string) $otp, 1);
+                sendLoginOtpSms((string) $user['mobile'], (string) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             }
             $success = frs_login_otp_recovery_mode_active() && !frs_user_email_otp_enabled($user)
                 ? 'A new recovery code was sent to your email.'

@@ -253,7 +253,7 @@ if ($route === 'auth/login' && $method === 'POST') {
                 }
                 if ($plainOtp && !empty($user['mobile'])) {
                     require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
-                    sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, 1);
+                    sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
                 }
             } catch (Throwable $e) {
                 error_log('Mobile OTP issue: ' . $e->getMessage());

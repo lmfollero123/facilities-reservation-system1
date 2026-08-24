@@ -35,7 +35,7 @@ $__frsTimer = function (string $key, int $default) use ($__frsSecurityTimers): i
 
 define('EMAIL_VERIFICATION_CODE_TTL_SECONDS', $__frsTimer('email_verification_ttl_seconds', 900)); // first-time registration email verification
 define('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60); // Min wait before manual resend
-define('LOGIN_OTP_CODE_TTL_SECONDS', $__frsTimer('login_otp_ttl_seconds', 60)); // Login email OTP lifetime
+define('LOGIN_OTP_CODE_TTL_SECONDS', $__frsTimer('login_otp_ttl_seconds', 300)); // Login OTP lifetime (email+SMS; SMS delivery latency needs headroom)
 define('LOGIN_OTP_RESEND_COOLDOWN_SECONDS', $__frsTimer('login_otp_resend_cooldown_seconds', 60)); // Min wait before login OTP resend
 /** Hours to retain registrations that never completed email verification (industry norm: 24–72h). */
 define('UNVERIFIED_ACCOUNT_RETENTION_HOURS', 24);
