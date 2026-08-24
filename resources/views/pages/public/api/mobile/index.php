@@ -251,6 +251,10 @@ if ($route === 'auth/login' && $method === 'POST') {
                         );
                     }
                 }
+                if ($plainOtp && !empty($user['mobile'])) {
+                    require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
+                    sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, 1);
+                }
             } catch (Throwable $e) {
                 error_log('Mobile OTP issue: ' . $e->getMessage());
             }
@@ -390,6 +394,10 @@ if ($route === 'auth/resend-otp' && $method === 'POST') {
                         '<p>Your new verification code is <strong>' . htmlspecialchars($plainOtp) . '</strong>.</p><p>It expires shortly.</p>'
                     );
                 }
+            }
+            if ($plainOtp && !empty($user['mobile'])) {
+                require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
+                sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, 1);
             }
         } catch (Throwable $e) {
             error_log('Mobile OTP resend: ' . $e->getMessage());
