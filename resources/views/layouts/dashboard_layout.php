@@ -840,6 +840,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Call real chatbot API
         const formData = new URLSearchParams();
         formData.append('message', message);
+        formData.append(window.CSRF_TOKEN_NAME, window.CSRF_TOKEN || '');
 
         fetch('<?= base_path(); ?>/dashboard/ai-chatbot', {
             method: 'POST',
