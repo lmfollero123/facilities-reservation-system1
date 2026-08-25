@@ -134,6 +134,24 @@ if ($searchFilter !== '') {
         return str_contains($haystack, $needle);
     });
 }
+
+// Vicinity-only categories (roads/street lights/drainage) never affect the facility
+// itself - see cimmCategoryAffectsFacility() - so they're noise in this table by
+// default. Hidden unless staff explicitly ask to see them.
+$showVicinity = ($_GET['show_vicinity'] ?? '') === '1';
+$vicinityHiddenCount = 0;
+foreach ($upcomingFiltered as $s) {
+    if (!cimmCategoryAffectsFacility((string)($s['category'] ?? ''), (string)($s['maintenance_type'] ?? ''))) {
+        $vicinityHiddenCount++;
+    }
+}
+if (!$showVicinity) {
+    $upcomingFiltered = array_filter(
+        $upcomingFiltered,
+        fn($s) => cimmCategoryAffectsFacility((string)($s['category'] ?? ''), (string)($s['maintenance_type'] ?? ''))
+    );
+}
+
 $totalFiltered = count($upcomingFiltered);
 $perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
@@ -322,6 +340,13 @@ ob_start();
                 <option value="medium" <?= $priorityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
                 <option value="low" <?= $priorityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
             </select>
+            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:#4b5563; white-space:nowrap;">
+                <input type="checkbox" name="show_vicinity" value="1" <?= $showVicinity ? 'checked' : ''; ?>>
+                Show roads/street lights/drainage
+                <?php if (!$showVicinity && $vicinityHiddenCount > 0): ?>
+                    <span style="color:#8b95b5;">(<?= $vicinityHiddenCount; ?> hidden)</span>
+                <?php endif; ?>
+            </label>
             <button type="submit" class="btn-outline" style="padding:0.5rem 0.85rem; font-size:0.85rem;">Filter</button>
         </form>
 
@@ -396,6 +421,7 @@ ob_start();
                 'status' => $statusFilter !== 'all' ? $statusFilter : null,
                 'priority' => $priorityFilter !== 'all' ? $priorityFilter : null,
                 'q' => $searchFilter !== '' ? $searchFilter : null,
+                'show_vicinity' => $showVicinity ? '1' : null,
             ]);
             $prevQuery = $page > 1 ? http_build_query($linkParams + ['page' => $page - 1]) : '';
             $nextQuery = $page < $totalPages ? http_build_query($linkParams + ['page' => $page + 1]) : '';
