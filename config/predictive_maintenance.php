@@ -118,6 +118,7 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
             $growthPressure = min(25, max(0, ($usage30 - (int)round($usage90 / 3))) * 2);
             $statusPressure = ($status === 'maintenance') ? 15 : 0;
             $riskScore = min(100, $usagePressure + $growthPressure + $statusPressure);
+            $recentPace = (int)round($usage90 / 3);
 
             if ($riskScore >= 75) {
                 $riskBand = 'High';
@@ -162,6 +163,10 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
                 'risk_band' => $riskBand,
                 'risk_color' => $riskColor,
                 'risk_bg' => $riskBg,
+                'usage_pressure' => $usagePressure,
+                'growth_pressure' => $growthPressure,
+                'status_pressure' => $statusPressure,
+                'recent_pace_30d' => $recentPace,
                 'priority' => $priority,
                 'recommended_date' => $recommendedDate,
                 'recommended_window_label' => $recommendedDate
@@ -227,12 +232,20 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
     $priority = strtolower(trim((string)($payload['priority'] ?? 'medium')));
     $facilityName = trim((string)($payload['facility_name'] ?? ''));
     $location = trim((string)($payload['location'] ?? ''));
+    $isManual = strtolower(trim((string)($payload['request_source'] ?? ''))) === 'manual';
 
     if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $requestedDate)) {
         return ['success' => false, 'error' => 'Invalid facility or requested date.'];
     }
+    if ($isManual && $notes === '') {
+        return ['success' => false, 'error' => 'Please describe the issue before submitting a manual request.'];
+    }
     if (!in_array($priority, ['low', 'medium', 'high'], true)) {
         $priority = 'medium';
+    }
+    if ($isManual) {
+        $riskBand = 'Manual';
+        $riskScore = 0;
     }
 
     if ($facilityName === '') {
@@ -281,18 +294,20 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
 
     require_once dirname(__DIR__) . '/services/cimm_api.php';
 
-    $taskNotes = $notes !== '' ? $notes : 'CPRF predictive insight — elevated usage pressure detected.';
+    $taskNotes = $notes !== ''
+        ? $notes
+        : ($isManual ? 'CPRF manual report — see facility for details.' : 'CPRF predictive insight — elevated usage pressure detected.');
     $cimmPayload = [
         'facility_id' => $facilityId,
         'facility_name' => $facilityName,
         'location' => $location,
-        'task' => 'Preventive maintenance (CPRF request)',
-        'category' => 'Preventive / Predictive',
+        'task' => $isManual ? 'Manual maintenance report (CPRF request)' : 'Preventive maintenance (CPRF request)',
+        'category' => $isManual ? 'Manual / Emergency Report' : 'Preventive / Predictive',
         'priority' => $priority,
         'starting_date' => $requestedDate,
         'estimated_completion_date' => $requestedDate,
         'status' => 'Request Pending',
-        'source' => 'cprf_predictive',
+        'source' => $isManual ? 'cprf_manual' : 'cprf_predictive',
         'risk_score' => $riskScore,
         'risk_band' => $riskBand,
         'notes' => $taskNotes,
