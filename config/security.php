@@ -991,11 +991,18 @@ function secureSession(): void
         session_start();
     }
 
-    // Regenerate session ID periodically to prevent fixation
+    // Regenerate session ID periodically to prevent fixation.
+    // Deliberately regenerate_id(false) -- NOT (true) -- so the old session's
+    // data isn't destroyed immediately. Dashboard pages fire concurrent AJAX
+    // (session-keepalive pings, chart/calendar fetches) that can straddle this
+    // 5-minute boundary; if two requests are in flight on the old cookie when
+    // one triggers regeneration, immediate deletion made the other 401 out of
+    // nowhere (its session simply no longer existed). PHP's normal session GC
+    // still cleans up the old session file after gc_maxlifetime.
     if (!isset($_SESSION['created'])) {
         $_SESSION['created'] = time();
     } else if (time() - $_SESSION['created'] > 300) { // 5 minutes
-        session_regenerate_id(true);
+        session_regenerate_id(false);
         $_SESSION['created'] = time();
     }
 
