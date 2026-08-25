@@ -56,15 +56,18 @@ if ($context === null) {
     exit;
 }
 
-$explanation = geminiExplainMaintenancePressure($context);
-$source = 'ai';
-if ($explanation === null) {
-    $explanation = frs_fallback_maintenance_pressure_explanation($context);
-    $source = 'fallback';
+$aiResult = frs_ai_explain_maintenance_pressure($context);
+if ($aiResult !== null) {
+    echo json_encode([
+        'success' => true,
+        'explanation' => $aiResult['explanation'],
+        'source' => $aiResult['source'],
+    ]);
+    exit;
 }
 
 echo json_encode([
     'success' => true,
-    'explanation' => $explanation,
-    'source' => $source,
+    'explanation' => frs_fallback_maintenance_pressure_explanation($context),
+    'source' => 'fallback',
 ]);

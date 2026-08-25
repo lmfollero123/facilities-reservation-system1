@@ -37,6 +37,65 @@ PROMPT;
 }
 
 /**
+ * Same explanation, backed by Groq's free tier instead - used as a fallback
+ * when Gemini is unavailable (quota/rate limit/network). Mirrors the
+ * Gemini -> Groq -> null pattern already used by frs_check_purpose_gate().
+ *
+ * @param array<string, mixed> $context
+ */
+function groqExplainMaintenancePressure(array $context): ?string
+{
+    if (frs_groq_api_key() === '') {
+        return null;
+    }
+
+    $facts = frs_maintenance_pressure_facts($context);
+
+    $systemPrompt = <<<'PROMPT'
+You help barangay facility staff (non-technical) understand a facility maintenance pressure score.
+Respond with ONLY raw JSON, no markdown fences, no extra commentary: {"explanation": "..."}
+
+Rules:
+- Plain English, 1-3 short sentences, no jargon.
+- Explain WHY the score is what it is, using only the numbers given (usage pressure, growth pressure, status pressure, booking counts).
+- If risk is Medium or High, end with a brief practical suggestion (e.g. what to inspect, or that a request should be sent).
+- If risk is Low, reassure briefly - no fabricated urgency.
+- Do NOT invent facts not given. Do NOT mention "CIMM", "CPRF", "Groq", or internal system names.
+PROMPT;
+
+    $json = frs_groq_chat_json([
+        ['role' => 'system', 'content' => $systemPrompt],
+        ['role' => 'user', 'content' => "Explain this facility's maintenance pressure using these facts:\n\n" . $facts],
+    ], 250);
+
+    $explanation = trim((string)($json['explanation'] ?? ''));
+    return $explanation !== '' ? $explanation : null;
+}
+
+/**
+ * Orchestrates the full explanation fallback chain: Gemini -> Groq -> null
+ * (caller falls back further to frs_fallback_maintenance_pressure_explanation()).
+ * Each stage only runs if the previous one was unavailable (returned null).
+ *
+ * @param array<string, mixed> $context
+ * @return array{explanation: string, source: string}|null
+ */
+function frs_ai_explain_maintenance_pressure(array $context): ?array
+{
+    $explanation = geminiExplainMaintenancePressure($context);
+    if ($explanation !== null) {
+        return ['explanation' => $explanation, 'source' => 'gemini'];
+    }
+
+    $explanation = groqExplainMaintenancePressure($context);
+    if ($explanation !== null) {
+        return ['explanation' => $explanation, 'source' => 'groq'];
+    }
+
+    return null;
+}
+
+/**
  * @param array<string, mixed> $context
  */
 function frs_maintenance_pressure_facts(array $context): string
