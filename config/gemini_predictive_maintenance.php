@@ -72,7 +72,11 @@ function frs_gemini_text_maintenance_explanation_request(string $systemPrompt, s
         return null;
     }
 
-    $models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash'];
+    // Two candidates, not four: this is a synchronous, user-facing button click
+    // (unlike the announcement generator, which runs in a background cron sync)
+    // - if the network path to Gemini is down, every model fails the same way,
+    // so more candidates just means a longer wait before the fallback kicks in.
+    $models = ['gemini-flash-latest', 'gemini-2.0-flash'];
     $apiKey = GEMINI_API_KEY;
     $payloadBase = [
         'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
@@ -106,8 +110,8 @@ function frs_gemini_text_maintenance_explanation_request(string $systemPrompt, s
                 'x-goog-api-key: ' . $apiKey,
             ],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT => 6,
         ]);
         $raw = curl_exec($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
