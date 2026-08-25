@@ -70,6 +70,8 @@ if (!function_exists('frs_mobile_user_public')) {
             'avatar_url' => $avatarUrl,
             'is_verified' => (bool) ($user['is_verified'] ?? false),
             'is_culiat_resident' => (bool) ($user['is_culiat_resident'] ?? false),
+            'enable_otp' => (bool) ($user['enable_otp'] ?? true),
+            'sms_otp_enabled' => (bool) ($user['sms_otp_enabled'] ?? false),
         ];
     }
 }

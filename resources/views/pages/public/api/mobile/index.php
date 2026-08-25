@@ -236,11 +236,19 @@ if ($route === 'auth/login' && $method === 'POST') {
 
     $needsOtp = function_exists('frs_login_requires_second_factor') && frs_login_requires_second_factor($user);
     if ($needsOtp) {
+        $emailOtpEnabled = frs_user_email_otp_enabled($user);
+        $smsOtpEnabled = frs_user_sms_otp_enabled($user);
+        $availableChannels = array_values(array_filter([
+            $emailOtpEnabled ? 'email' : null,
+            $smsOtpEnabled ? 'sms' : null,
+        ]));
+        $sentVia = null;
         $plainOtp = null;
         if (function_exists('frs_issue_login_otp_code')) {
             try {
                 $plainOtp = frs_issue_login_otp_code($pdo, (int) $user['id']);
-                if ($plainOtp && file_exists(dirname(__DIR__, 6) . '/config/mail_helper.php')) {
+                $ttlMinutes = (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60);
+                if ($plainOtp && $emailOtpEnabled && file_exists(dirname(__DIR__, 6) . '/config/mail_helper.php')) {
                     require_once dirname(__DIR__, 6) . '/config/mail_helper.php';
                     if (function_exists('sendEmail')) {
                         @sendEmail(
@@ -250,10 +258,11 @@ if ($route === 'auth/login' && $method === 'POST') {
                             '<p>Your verification code is <strong>' . htmlspecialchars($plainOtp) . '</strong>.</p><p>It expires shortly.</p>'
                         );
                     }
-                }
-                if ($plainOtp && !empty($user['mobile'])) {
+                    $sentVia = 'email';
+                } elseif ($plainOtp && $smsOtpEnabled) {
                     require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
-                    sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
+                    sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, $ttlMinutes);
+                    $sentVia = 'sms';
                 }
             } catch (Throwable $e) {
                 error_log('Mobile OTP issue: ' . $e->getMessage());
@@ -264,7 +273,11 @@ if ($route === 'auth/login' && $method === 'POST') {
             'ok' => true,
             'otp_required' => true,
             'challenge_id' => $challengeId,
-            'message' => 'A verification code was sent to your email.',
+            'available_channels' => $availableChannels,
+            'sent_via' => $sentVia,
+            'message' => $sentVia === 'sms'
+                ? 'A verification code was sent to your phone.'
+                : 'A verification code was sent to your email.',
             'masked_email' => function_exists('frs_mask_email_for_display')
                 ? frs_mask_email_for_display((string) $user['email'])
                 : (string) $user['email'],
@@ -339,6 +352,7 @@ if ($route === 'auth/resend-otp' && $method === 'POST') {
     $email = strtolower(trim((string) ($body['email'] ?? '')));
     $password = (string) ($body['password'] ?? '');
     $priorChallenge = trim((string) ($body['challenge_id'] ?? ''));
+    $requestedChannel = strtolower(trim((string) ($body['channel'] ?? '')));
 
     $user = null;
     if ($email !== '' && $password !== '') {
@@ -380,11 +394,37 @@ if ($route === 'auth/resend-otp' && $method === 'POST') {
         )->execute([(int) $user['id']]);
     }
 
+    $emailOtpEnabled = frs_user_email_otp_enabled($user);
+    $smsOtpEnabled = frs_user_sms_otp_enabled($user);
+    $availableChannels = array_values(array_filter([
+        $emailOtpEnabled ? 'email' : null,
+        $smsOtpEnabled ? 'sms' : null,
+    ]));
+
+    // Pick the channel: explicit request if valid & enabled, else default to email, else sms.
+    if ($requestedChannel === 'sms' && $smsOtpEnabled) {
+        $channel = 'sms';
+    } elseif ($requestedChannel === 'email' && $emailOtpEnabled) {
+        $channel = 'email';
+    } elseif ($emailOtpEnabled) {
+        $channel = 'email';
+    } elseif ($smsOtpEnabled) {
+        $channel = 'sms';
+    } else {
+        mobile_error('No OTP delivery channel is enabled for this account.', 400, 'no_channel_enabled');
+    }
+
+    if (!frs_can_resend_login_otp($pdo, (int) $user['id'])) {
+        mobile_error('Please wait a moment before requesting another code.', 429, 'cooldown');
+    }
+
     $plainOtp = null;
+    $sentVia = null;
     if (function_exists('frs_issue_login_otp_code')) {
         try {
             $plainOtp = frs_issue_login_otp_code($pdo, (int) $user['id']);
-            if ($plainOtp && file_exists(dirname(__DIR__, 6) . '/config/mail_helper.php')) {
+            $ttlMinutes = (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60);
+            if ($plainOtp && $channel === 'email' && file_exists(dirname(__DIR__, 6) . '/config/mail_helper.php')) {
                 require_once dirname(__DIR__, 6) . '/config/mail_helper.php';
                 if (function_exists('sendEmail')) {
                     @sendEmail(
@@ -394,10 +434,11 @@ if ($route === 'auth/resend-otp' && $method === 'POST') {
                         '<p>Your new verification code is <strong>' . htmlspecialchars($plainOtp) . '</strong>.</p><p>It expires shortly.</p>'
                     );
                 }
-            }
-            if ($plainOtp && !empty($user['mobile'])) {
+                $sentVia = 'email';
+            } elseif ($plainOtp && $channel === 'sms') {
                 require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
-                sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, 1);
+                sendLoginOtpSms((string) $user['mobile'], (string) $plainOtp, $ttlMinutes);
+                $sentVia = 'sms';
             }
         } catch (Throwable $e) {
             error_log('Mobile OTP resend: ' . $e->getMessage());
@@ -409,7 +450,11 @@ if ($route === 'auth/resend-otp' && $method === 'POST') {
         'ok' => true,
         'otp_required' => true,
         'challenge_id' => $challengeId,
-        'message' => 'A new verification code was sent to your email.',
+        'available_channels' => $availableChannels,
+        'sent_via' => $sentVia,
+        'message' => $sentVia === 'sms'
+            ? 'A new verification code was sent to your phone.'
+            : 'A new verification code was sent to your email.',
         'masked_email' => function_exists('frs_mask_email_for_display')
             ? frs_mask_email_for_display((string) $user['email'])
             : (string) $user['email'],
@@ -724,7 +769,7 @@ if ($route === 'me' && in_array($method, ['PATCH', 'PUT'], true)) {
     $user = mobile_require_user($pdo);
     $body = mobile_body();
     $name = isset($body['name']) ? trim((string) $body['name']) : null;
-    $mobile = array_key_exists('mobile', $body) ? trim((string) $body['mobile']) : null;
+    $mobileRaw = array_key_exists('mobile', $body) ? trim((string) $body['mobile']) : null;
     $address = array_key_exists('address', $body) ? trim((string) $body['address']) : null;
     $sets = [];
     $params = [];
@@ -732,10 +777,18 @@ if ($route === 'me' && in_array($method, ['PATCH', 'PUT'], true)) {
         $sets[] = 'name = ?';
         $params[] = $name;
     }
-    if ($mobile !== null) {
+    $mobile = null;
+    if ($mobileRaw !== null) {
+        require_once dirname(__DIR__, 6) . '/config/sms_helper.php';
+        $mobile = $mobileRaw === '' ? '' : normalizePhilippineMobileNumber($mobileRaw);
+        if ($mobileRaw !== '' && $mobile === null) {
+            mobile_error('Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966).', 422, 'validation');
+        }
         $sets[] = 'mobile = ?';
-        $params[] = $mobile;
+        $params[] = $mobile === '' ? null : $mobile;
     }
+    // enable_otp / sms_otp_enabled are managed via PATCH /me/preferences
+    // (security block), which has the required-2FA guard logic.
     if ($address !== null) {
         $sets[] = 'address = ?';
         $params[] = $address;
@@ -784,7 +837,7 @@ if ($route === 'me/preferences' && $method === 'GET') {
     frs_ensure_notification_preferences_schema();
     $uid = (int) $user['id'];
     $stmt = $pdo->prepare(
-        'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret
+        'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, COALESCE(sms_otp_enabled, 0) AS sms_otp_enabled, mobile
          FROM users WHERE id = ? LIMIT 1'
     );
     $stmt->execute([$uid]);
@@ -795,6 +848,8 @@ if ($route === 'me/preferences' && $method === 'GET') {
             'notifications' => frs_get_notification_preferences($uid),
             'security' => [
                 'email_otp' => (bool) ((int) ($row['enable_otp'] ?? 1)),
+                'sms_otp' => (bool) ((int) ($row['sms_otp_enabled'] ?? 0)),
+                'sms_otp_available' => trim((string) ($row['mobile'] ?? '')) !== '',
                 'google_authenticator' => !empty($row['totp_enabled']) && !empty($row['totp_secret']),
                 'google_authenticator_setup_on_web' => true,
             ],
@@ -841,17 +896,18 @@ if ($route === 'me/preferences' && in_array($method, ['PATCH', 'PUT'], true)) {
             mobile_error('email_otp must be true or false.', 422, 'validation');
         }
         $stmt = $pdo->prepare(
-            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role
+            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role, COALESCE(sms_otp_enabled, 0) AS sms_otp_enabled, mobile
              FROM users WHERE id = ? LIMIT 1'
         );
         $stmt->execute([$uid]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
         $totpActive = !empty($row['totp_enabled']) && !empty($row['totp_secret']);
+        $smsOtpOn = !empty($row['sms_otp_enabled']) && trim((string) ($row['mobile'] ?? '')) !== '';
         if ($enableOtp === false && function_exists('frs_role_requires_two_factor')
             && frs_role_requires_two_factor((string) ($row['role'] ?? ''))
-            && !$totpActive) {
+            && !$totpActive && !$smsOtpOn) {
             mobile_error(
-                'Email OTP cannot be turned off while Google Authenticator is also off for this role.',
+                'Email OTP cannot be turned off while Google Authenticator and SMS OTP are also off for this role.',
                 422,
                 'otp_required'
             );
@@ -866,6 +922,40 @@ if ($route === 'me/preferences' && in_array($method, ['PATCH', 'PUT'], true)) {
         $messages[] = $enableOtp ? 'Email OTP enabled.' : 'Email OTP disabled.';
     }
 
+    if (array_key_exists('sms_otp', $body) || (isset($body['security']) && is_array($body['security']) && array_key_exists('sms_otp', $body['security']))) {
+        $smsOtp = array_key_exists('sms_otp', $body)
+            ? $body['sms_otp']
+            : $body['security']['sms_otp'];
+        $smsOtp = filter_var($smsOtp, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($smsOtp === null) {
+            mobile_error('sms_otp must be true or false.', 422, 'validation');
+        }
+        $stmt = $pdo->prepare(
+            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role, mobile
+             FROM users WHERE id = ? LIMIT 1'
+        );
+        $stmt->execute([$uid]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
+        if ($smsOtp === true && trim((string) ($row['mobile'] ?? '')) === '') {
+            mobile_error('Add a mobile number before enabling SMS OTP.', 422, 'validation');
+        }
+        $totpActive = !empty($row['totp_enabled']) && !empty($row['totp_secret']);
+        $emailOtpOn = (bool) ((int) ($row['enable_otp'] ?? 1));
+        if ($smsOtp === false && function_exists('frs_role_requires_two_factor')
+            && frs_role_requires_two_factor((string) ($row['role'] ?? ''))
+            && !$emailOtpOn && !$totpActive) {
+            mobile_error(
+                'Two-factor authentication is required. Enable email OTP or Google Authenticator before turning off SMS OTP.',
+                422,
+                'otp_required'
+            );
+        }
+        $pdo->prepare('UPDATE users SET sms_otp_enabled = ?, updated_at = NOW() WHERE id = ?')
+            ->execute([$smsOtp ? 1 : 0, $uid]);
+        $updated = true;
+        $messages[] = $smsOtp ? 'SMS OTP enabled.' : 'SMS OTP disabled.';
+    }
+
     // Disable Google Authenticator only (setup requires website QR flow).
     $disableTotp = false;
     if (array_key_exists('google_authenticator', $body)) {
@@ -875,7 +965,7 @@ if ($route === 'me/preferences' && in_array($method, ['PATCH', 'PUT'], true)) {
     }
     if ($disableTotp) {
         $stmt = $pdo->prepare(
-            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role
+            'SELECT COALESCE(enable_otp, 1) AS enable_otp, COALESCE(totp_enabled, 0) AS totp_enabled, totp_secret, role, COALESCE(sms_otp_enabled, 0) AS sms_otp_enabled, mobile
              FROM users WHERE id = ? LIMIT 1'
         );
         $stmt->execute([$uid]);
@@ -885,11 +975,12 @@ if ($route === 'me/preferences' && in_array($method, ['PATCH', 'PUT'], true)) {
             mobile_error('Google Authenticator is not enabled.', 422, 'validation');
         }
         $emailOtpOn = (bool) ((int) ($row['enable_otp'] ?? 1));
+        $smsOtpOn = !empty($row['sms_otp_enabled']) && trim((string) ($row['mobile'] ?? '')) !== '';
         if (function_exists('frs_role_requires_two_factor')
             && frs_role_requires_two_factor((string) ($row['role'] ?? ''))
-            && !$emailOtpOn) {
+            && !$emailOtpOn && !$smsOtpOn) {
             mobile_error(
-                'Enable Email OTP before turning off Google Authenticator.',
+                'Enable Email OTP or SMS OTP before turning off Google Authenticator.',
                 422,
                 'otp_required'
             );

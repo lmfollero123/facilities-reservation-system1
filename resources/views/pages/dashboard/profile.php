@@ -228,7 +228,7 @@ $exportHistory = getUserExportHistory($userId);
 // Check if deactivated_at column exists for backward compatibility
 $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
 $hasDeactivatedAt = $checkColumn->rowCount() > 0;
-$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled';
+$selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled, COALESCE(sms_otp_enabled, 0) as sms_otp_enabled';
 if ($hasDeactivatedAt) {
     $selectFields .= ', deactivated_at, deactivation_reason';
 }
@@ -299,8 +299,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
         } else {
         // This is an OTP preference-only update
         $enableOtp = (int)$_POST['enable_otp'];
-        if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user)) {
-            $otpJsonError = 'Two-factor authentication is required. Enable Google Authenticator before turning off email OTP.';
+        if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user) && !frs_user_sms_otp_enabled($user)) {
+            $otpJsonError = 'Two-factor authentication is required. Enable Google Authenticator or SMS OTP before turning off email OTP.';
         } elseif ($enableOtp === 0 && frs_user_totp_active($user)) {
             // Allowed: authenticator-only for Admin/Staff
             $otpJsonOk = null; // set below
@@ -325,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
             // Refresh user data with same select fields as loaded earlier
             $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
             $hasDeactivatedAt = $checkColumn->rowCount() > 0;
-            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled';
+            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled, COALESCE(sms_otp_enabled, 0) as sms_otp_enabled';
             if ($hasDeactivatedAt) {
                 $refreshFields .= ', deactivated_at, deactivation_reason';
             }
@@ -356,7 +356,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
         }
         }
     }
-    
+
+    // Handle SMS OTP preference update separately (mirrors enable_otp above)
+    if (isset($_POST['sms_otp_enabled']) && !isset($_POST['name']) && !isset($_POST['current_password'])) {
+        if (!frs_verify_post_csrf()) {
+            $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+        } else {
+        $smsOtpEnabledPost = (int) $_POST['sms_otp_enabled'];
+        $hasMobileOnFile = trim((string) ($user['mobile'] ?? '')) !== '';
+
+        if ($smsOtpEnabledPost === 1 && !$hasMobileOnFile) {
+            $smsOtpJsonError = 'Add a mobile number above before enabling SMS OTP.';
+        } elseif ($smsOtpEnabledPost === 0
+            && frs_role_requires_two_factor((string) ($user['role'] ?? ''))
+            && !frs_user_email_otp_enabled($user)
+            && !frs_user_totp_active($user)
+        ) {
+            $smsOtpJsonError = 'Two-factor authentication is required. Enable email OTP or Google Authenticator before turning off SMS OTP.';
+        } else {
+            $smsOtpJsonOk = null;
+        }
+
+        if (isset($smsOtpJsonError)) {
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => $smsOtpJsonError]);
+                exit;
+            }
+            $error = $smsOtpJsonError;
+        } else {
+        try {
+            $updateStmt = $pdo->prepare('UPDATE users SET sms_otp_enabled = :sms_otp_enabled, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $updateStmt->execute(['sms_otp_enabled' => $smsOtpEnabledPost, 'id' => $userId]);
+
+            $checkColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'deactivated_at'");
+            $hasDeactivatedAt = $checkColumn->rowCount() > 0;
+            $refreshFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled, COALESCE(sms_otp_enabled, 0) as sms_otp_enabled';
+            if ($hasDeactivatedAt) {
+                $refreshFields .= ', deactivated_at, deactivation_reason';
+            }
+            $stmt = $pdo->prepare("SELECT $refreshFields FROM users WHERE id = :id LIMIT 1");
+            $stmt->execute(['id' => $userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $success = $smsOtpEnabledPost
+                ? 'SMS OTP has been enabled. You can now receive login codes by text message.'
+                : 'SMS OTP has been disabled.';
+
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => true, 'message' => $success, 'sms_otp_enabled' => (bool) $smsOtpEnabledPost]);
+                exit;
+            }
+        } catch (Exception $e) {
+            $msg = 'Unable to update SMS OTP preference. Please try again.';
+            if (!empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => $msg]);
+                exit;
+            }
+            $error = $msg;
+        }
+        }
+        }
+    }
+
     // Check if this is a password-only update (password form) or profile update
     $hasPasswordFields = !empty($_POST['current_password']) || !empty($_POST['new_password']) || !empty($_POST['confirm_password']);
     $hasProfileFields = isset($_POST['name']) && isset($_POST['email']);
@@ -489,8 +553,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     
                     // Only update fields that were actually changed
                     $enableOtp = isset($_POST['enable_otp']) ? (int)$_POST['enable_otp'] : ($user['enable_otp'] ?? 1);
-                    if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user)) {
-                        throw new Exception('Two-factor authentication is required. Enable Google Authenticator before turning off email OTP.');
+                    if ($enableOtp === 0 && frs_role_requires_two_factor((string)($user['role'] ?? '')) && !frs_user_totp_active($user) && !frs_user_sms_otp_enabled($user)) {
+                        throw new Exception('Two-factor authentication is required. Enable Google Authenticator or SMS OTP before turning off email OTP.');
                     }
                     $updateStmt = $pdo->prepare(
                         'UPDATE users 
@@ -511,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
                     ]);
 
                     // Refresh user data
-                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled FROM users WHERE id = :id LIMIT 1');
+                    $stmt = $pdo->prepare('SELECT id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled, COALESCE(sms_otp_enabled, 0) as sms_otp_enabled FROM users WHERE id = :id LIMIT 1');
                     $stmt->execute(['id' => $userId]);
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     
@@ -1426,7 +1490,43 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                                 </label>
                             </div>
                         </div>
-                        
+
+                        <!-- SMS OTP Preference Toggle -->
+                        <?php $hasMobileOnFile = trim((string) ($user['mobile'] ?? '')) !== ''; ?>
+                        <div id="sms-otp-toggle-container" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
+                            <div style="display:flex; align-items:flex-start; gap:1rem;">
+                                <div style="flex:1;">
+                                    <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem; font-size:0.95rem;">
+                                        SMS Login Codes
+                                    </label>
+                                    <p id="sms-otp-status-text" style="color:#5b6888; font-size:0.85rem; margin:0; line-height:1.5;">
+                                        <?php if (!$hasMobileOnFile): ?>
+                                            Add a mobile number above to enable SMS as a login-code option.
+                                        <?php elseif ($user['sms_otp_enabled'] ?? false): ?>
+                                            SMS OTP is <strong>enabled</strong>. You can receive login codes by text message.
+                                        <?php else: ?>
+                                            SMS OTP is <strong>disabled</strong>.
+                                        <?php endif; ?>
+                                    </p>
+                                    <div id="sms-otp-status-message" style="margin-top:0.5rem; font-size:0.85rem; display:none;"></div>
+                                </div>
+                                <label style="position:relative; display:inline-block; width:48px; height:26px; cursor:<?= $hasMobileOnFile ? 'pointer' : 'not-allowed'; ?>; flex-shrink:0;">
+                                    <input
+                                        type="checkbox"
+                                        id="sms-otp-toggle-checkbox"
+                                        value="1"
+                                        <?= ($user['sms_otp_enabled'] ?? false) ? 'checked' : ''; ?>
+                                        <?= $hasMobileOnFile ? '' : 'disabled'; ?>
+                                        onchange="toggleSmsOtpPreference(this);"
+                                        style="opacity:0; width:0; height:0;"
+                                    >
+                                    <span id="sms-otp-toggle-switch" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:<?= ($user['sms_otp_enabled'] ?? false) ? '#2563eb' : '#ccc'; ?>; border-radius:26px; transition:background-color 0.3s; opacity:<?= $hasMobileOnFile ? '1' : '0.5'; ?>;">
+                                        <span id="sms-otp-toggle-knob" style="position:absolute; content:''; height:20px; width:20px; left:3px; bottom:3px; background-color:white; border-radius:50%; transition:transform 0.3s; transform:translateX(<?= ($user['sms_otp_enabled'] ?? false) ? '22px' : '0'; ?>); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
                         <?php if (in_array($user['role'] ?? '', ['Admin', 'Staff'], true)): ?>
                         <div class="totp-section" style="margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border-radius:8px; border:1px solid #e1e7f0;">
                             <label style="display:block; font-weight:600; color:#1b1b1f; margin-bottom:0.25rem;">Google Authenticator</label>
@@ -1809,6 +1909,84 @@ function toggleOTPPreference(checkbox) {
         statusMessage.style.backgroundColor = '#fdecee';
         statusMessage.style.borderRadius = '4px';
         statusMessage.textContent = '✗ Failed to update OTP preference. Please try again.';
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
+    });
+}
+
+function smsOtpStatusText(enabled, hasMobile) {
+    if (!hasMobile) {
+        return 'Add a mobile number above to enable SMS as a login-code option.';
+    }
+    return enabled
+        ? 'SMS OTP is <strong>enabled</strong>. You can receive login codes by text message.'
+        : 'SMS OTP is <strong>disabled</strong>.';
+}
+
+// SMS OTP Toggle Handler - AJAX update without page refresh (mirrors toggleOTPPreference)
+function toggleSmsOtpPreference(checkbox) {
+    const isEnabled = checkbox.checked;
+    const toggleSwitch = document.getElementById('sms-otp-toggle-switch');
+    const toggleKnob = document.getElementById('sms-otp-toggle-knob');
+    const statusText = document.getElementById('sms-otp-status-text');
+    const statusMessage = document.getElementById('sms-otp-status-message');
+    const previousChecked = !isEnabled;
+
+    toggleSwitch.style.backgroundColor = isEnabled ? '#2563eb' : '#ccc';
+    toggleKnob.style.transform = isEnabled ? 'translateX(22px)' : 'translateX(0)';
+    statusText.innerHTML = smsOtpStatusText(isEnabled, true);
+
+    checkbox.disabled = true;
+    statusMessage.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('sms_otp_enabled', isEnabled ? '1' : '0');
+    formData.append('ajax', '1');
+    formData.append('<?= CSRF_TOKEN_NAME; ?>', '<?= csrf_token(); ?>');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        checkbox.disabled = false;
+        if (!data.ok) {
+            checkbox.checked = previousChecked;
+            toggleSwitch.style.backgroundColor = previousChecked ? '#2563eb' : '#ccc';
+            toggleKnob.style.transform = previousChecked ? 'translateX(22px)' : 'translateX(0)';
+            statusText.innerHTML = smsOtpStatusText(previousChecked, true);
+            statusMessage.style.display = 'block';
+            statusMessage.style.color = '#b23030';
+            statusMessage.style.padding = '0.5rem';
+            statusMessage.style.backgroundColor = '#fdecee';
+            statusMessage.style.borderRadius = '4px';
+            statusMessage.textContent = data.message || 'Failed to update SMS OTP preference.';
+            setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
+            return;
+        }
+
+        statusText.innerHTML = smsOtpStatusText(!!data.sms_otp_enabled, true);
+        statusMessage.style.display = 'block';
+        statusMessage.style.color = '#0d7a43';
+        statusMessage.style.padding = '0.5rem';
+        statusMessage.style.backgroundColor = '#e3f8ef';
+        statusMessage.style.borderRadius = '4px';
+        statusMessage.textContent = '✓ ' + (data.message || 'SMS OTP preference updated.');
+        setTimeout(() => { statusMessage.style.display = 'none'; }, 3000);
+    })
+    .catch(() => {
+        checkbox.checked = previousChecked;
+        toggleSwitch.style.backgroundColor = previousChecked ? '#2563eb' : '#ccc';
+        toggleKnob.style.transform = previousChecked ? 'translateX(22px)' : 'translateX(0)';
+        statusText.innerHTML = smsOtpStatusText(previousChecked, true);
+        checkbox.disabled = false;
+        statusMessage.style.display = 'block';
+        statusMessage.style.color = '#b23030';
+        statusMessage.style.padding = '0.5rem';
+        statusMessage.style.backgroundColor = '#fdecee';
+        statusMessage.style.borderRadius = '4px';
+        statusMessage.textContent = '✗ Failed to update SMS OTP preference. Please try again.';
         setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
     });
 }

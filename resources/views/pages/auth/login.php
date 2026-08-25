@@ -115,20 +115,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 } elseif (frs_login_requires_second_factor($user)) {
                                     unset($_SESSION['login_otp_recovery_mode']);
                                     $_SESSION['login_otp_email_sent'] = false;
+                                    $_SESSION['login_otp_sms_sent'] = false;
+                                    $smsOtpEnabled = frs_user_sms_otp_enabled($user);
 
-                                    if ($enableOtp) {
+                                    if (($enableOtp || $smsOtpEnabled) && !$totpActive) {
+                                        // TOTP (when active) is entered directly with no send needed;
+                                        // the OTP page offers "send via X" buttons for other channels.
                                         $otp = frs_issue_login_otp_code($pdo, (int) $user['id'], getClientIP());
-
-                                        require_once __DIR__ . '/../../../../config/email_templates.php';
-                                        $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
-                                        sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
-                                        if (!empty($user['mobile'])) {
+                                        $ttlMinutes = (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60);
+                                        if ($enableOtp) {
+                                            require_once __DIR__ . '/../../../../config/email_templates.php';
+                                            $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, $ttlMinutes);
+                                            sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
+                                            $_SESSION['login_otp_email_sent'] = true;
+                                        } elseif ($smsOtpEnabled) {
                                             require_once __DIR__ . '/../../../../config/sms_helper.php';
-                                            sendLoginOtpSms((string)$user['mobile'], (string)$otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
+                                            sendLoginOtpSms((string) $user['mobile'], (string) $otp, $ttlMinutes);
+                                            $_SESSION['login_otp_sms_sent'] = true;
                                         }
-                                        $_SESSION['login_otp_email_sent'] = true;
                                     } else {
-                                        // Authenticator-only: never send or keep email OTP codes
+                                        // TOTP is active (with or without email/SMS also enabled as
+                                        // fallback buttons on the OTP page) -- no code sent yet, so
+                                        // clear any stale one from a previous attempt.
                                         $pdo->prepare('UPDATE users SET otp_code_hash = NULL, otp_expires_at = NULL, otp_attempts = 0 WHERE id = ?')
                                             ->execute([(int) $user['id']]);
                                     }

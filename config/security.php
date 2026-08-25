@@ -601,6 +601,14 @@ function frs_user_totp_active(array $user): bool
 }
 
 /**
+ * Whether SMS OTP is enabled AND actually usable (mobile number on file).
+ */
+function frs_user_sms_otp_enabled(array $user): bool
+{
+    return !empty($user['sms_otp_enabled']) && trim((string) ($user['mobile'] ?? '')) !== '';
+}
+
+/**
  * Login OTP page: user chose "lost authenticator" and may use a one-time email code.
  */
 function frs_login_otp_recovery_mode_active(): bool
@@ -617,6 +625,15 @@ function frs_login_can_request_totp_recovery(array $user): bool
 }
 
 /**
+ * Whether this account may request SMS OTP recovery at login (TOTP on, SMS OTP not
+ * already the normal channel, mobile on file). Mirrors frs_login_can_request_totp_recovery.
+ */
+function frs_login_can_request_sms_totp_recovery(array $user): bool
+{
+    return frs_user_totp_active($user) && !frs_user_sms_otp_enabled($user) && trim((string) ($user['mobile'] ?? '')) !== '';
+}
+
+/**
  * Whether email OTP may be used to finish login (profile enabled or active recovery session).
  */
 function frs_login_may_verify_email_otp(array $user): bool
@@ -626,6 +643,22 @@ function frs_login_may_verify_email_otp(array $user): bool
     }
 
     return frs_login_otp_recovery_mode_active() && frs_login_can_request_totp_recovery($user);
+}
+
+/**
+ * Whether ANY channel (email or SMS, normal or in-progress recovery) may currently
+ * verify the pending login OTP code. Code verification itself is channel-agnostic
+ * (same otp_code_hash regardless of how it was delivered) -- this only gates
+ * whether entering a non-TOTP code is a legitimate path for this account right now.
+ */
+function frs_login_may_verify_otp_code(array $user): bool
+{
+    if (frs_user_email_otp_enabled($user) || frs_user_sms_otp_enabled($user)) {
+        return true;
+    }
+
+    return frs_login_otp_recovery_mode_active()
+        && (frs_login_can_request_totp_recovery($user) || frs_login_can_request_sms_totp_recovery($user));
 }
 
 /**
@@ -650,7 +683,7 @@ function frs_mask_email_for_display(string $email): string
  */
 function frs_login_requires_second_factor(array $user): bool
 {
-    return frs_user_email_otp_enabled($user) || frs_user_totp_active($user);
+    return frs_user_email_otp_enabled($user) || frs_user_sms_otp_enabled($user) || frs_user_totp_active($user);
 }
 
 /**
@@ -662,7 +695,7 @@ function frs_user_has_required_second_factor(array $user): bool
         return true;
     }
 
-    return frs_user_email_otp_enabled($user) || frs_user_totp_active($user);
+    return frs_user_email_otp_enabled($user) || frs_user_sms_otp_enabled($user) || frs_user_totp_active($user);
 }
 
 /**
