@@ -427,7 +427,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $user) {
     $hasProfilePicture = !empty($_FILES['profile_picture']['name']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK;
     $hasValidIdUpload = !empty($_FILES['doc_valid_id']['name']) && $_FILES['doc_valid_id']['error'] === UPLOAD_ERR_OK;
     $updateOtpPreference = isset($_POST['enable_otp']); // Check if OTP preference is being updated
-    
+
+    // The name/email/password/profile-picture/valid-ID form had no CSRF check
+    // at all (unlike the enable_otp/sms_otp_enabled AJAX toggles above).
+    if (($hasProfileFields || $hasPasswordFields || $hasProfilePicture || $hasValidIdUpload) && $error === '') {
+        if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
+            $error = 'Invalid security token. Please refresh the page and try again.';
+        }
+    }
+
     // Get form values, use existing user data as fallback
     $name = trim($_POST['name'] ?? $user['name']);
     $email = trim($_POST['email'] ?? $user['email']);
@@ -1196,11 +1204,12 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                                 <?= htmlspecialchars($initials ?: 'LG'); ?>
                             <?php endif; ?>
                         </div>
-                        <form method="POST" enctype="multipart/form-data" style="position:absolute; bottom:0; right:0; margin:0; padding:0;">
-                            <label for="profile-picture-input" style="width:36px; height:36px; border-radius:50%; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); transition:all 0.2s; border:3px solid #fff; z-index:10; margin:0; padding:0;" title="Change profile picture" onmouseover="this.style.background='#1d4ed8'; this.style.transform='scale(1.1)';" onmouseout="this.style.background='#2563eb'; this.style.transform='scale(1)';">
-                                <span style="font-size:1.1rem;">📷</span>
-                                <input type="file" id="profile-picture-input" name="profile_picture" accept="image/*" style="display:none;" onchange="this.form.submit();">
-                            </label>
+                        <form method="POST" enctype="multipart/form-data" id="profilePictureForm" style="position:absolute; bottom:0; right:0; margin:0; padding:0;">
+                            <?= csrf_field(); ?>
+                            <button type="button" id="profile-picture-trigger" style="width:36px; height:36px; border-radius:50%; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); transition:all 0.2s; border:3px solid #fff; z-index:10; margin:0; padding:0;" title="Change profile picture" onmouseover="this.style.background='#1d4ed8'; this.style.transform='scale(1.1)';" onmouseout="this.style.background='#2563eb'; this.style.transform='scale(1)';" onclick="document.getElementById('profile-picture-input').click();">
+                                <span style="font-size:1.1rem; pointer-events:none;">📷</span>
+                            </button>
+                            <input type="file" id="profile-picture-input" name="profile_picture" accept="image/*" style="display:none;" onchange="this.form.submit();">
                         </form>
                     </div>
                     <div style="flex:1;">
@@ -1226,6 +1235,7 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
         <section class="booking-card">
             <h2>Profile Information</h2>
             <form method="POST" class="booking-form" enctype="multipart/form-data" id="profile-form">
+                <?= csrf_field(); ?>
                 <label class="profile-form-label">
                     <span class="profile-label-text">Full Name</span>
                     <div class="input-wrapper">
@@ -1346,6 +1356,7 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                         📄 Optional: Upload Valid ID (for record keeping)
                     </summary>
                     <form method="POST" class="booking-form" enctype="multipart/form-data" style="margin-top:1rem; padding:1rem; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px;">
+                        <?= csrf_field(); ?>
                         <label>
                             <span style="display:block; font-weight:600; margin-bottom:0.5rem; color:#1b1b1f;">Upload Valid ID</span>
                             <input type="file" name="doc_valid_id" accept=".pdf,image/*" style="padding:0.75rem; border:1px solid #ddd; border-radius:6px; width:100%; margin-bottom:0.5rem;">
@@ -1612,6 +1623,7 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                             Update your password regularly to help keep your account secure. Use a strong password with at least 8 characters.
                         </p>
                         <form method="POST" class="booking-form" id="passwordForm">
+                            <?= csrf_field(); ?>
                             <label class="profile-form-label">
                                 <span class="profile-label-text">Current Password</span>
                                 <div class="input-wrapper">
