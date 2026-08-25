@@ -41,6 +41,21 @@
                 url.searchParams.set(key, value);
             }
         });
+        // An unchecked checkbox/radio has no FormData entry at all (unlike a
+        // <select>, which always contributes its current value) - so it can
+        // never overwrite a stale value already in the URL above. Clear it
+        // explicitly, or unchecking a previously-checked box would do nothing.
+        // Guard by name (not just this element) so an unchecked radio doesn't
+        // wipe out the value its checked sibling in the same group just set.
+        const checkedNames = new Set();
+        form.querySelectorAll('input[type="checkbox"]:checked, input[type="radio"]:checked').forEach(function (el) {
+            if (el.name) checkedNames.add(el.name);
+        });
+        form.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function (el) {
+            if (el.name && !el.checked && !checkedNames.has(el.name) && !fallbackOnly.has(el.name)) {
+                url.searchParams.delete(el.name);
+            }
+        });
         return url.toString();
     }
 
@@ -411,9 +426,9 @@
     });
 
     document.addEventListener('change', function (e) {
-        const select = e.target.closest('select');
-        if (!select) return;
-        const form = select.closest('form[data-frs-partial][data-frs-partial-auto]');
+        const control = e.target.closest('select, input[type="checkbox"], input[type="radio"]');
+        if (!control) return;
+        const form = control.closest('form[data-frs-partial][data-frs-partial-auto]');
         if (!form) return;
         const partialId = form.getAttribute('data-frs-partial');
         if (!partialId) return;
