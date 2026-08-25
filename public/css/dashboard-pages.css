@@ -1191,6 +1191,31 @@
     }
 }
 
+/* Compact tables — tighter rows/badges/buttons so more data fits without scrolling. */
+.integrations-modern .table th,
+.integrations-modern .table td {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+.integrations-modern .table th {
+    padding: 0.5rem 0.55rem;
+    font-size: 0.72rem;
+}
+.integrations-modern .table td small,
+.integrations-modern .table td span[style*="color"] {
+    font-size: 0.75rem;
+}
+.integrations-modern .table span[class*="rounded-full"] {
+    padding: 0.15rem 0.55rem !important;
+    font-size: 0.72rem !important;
+}
+.integrations-modern .table button[class*="btn"],
+.integrations-modern .table .btn-outline {
+    padding: 0.3rem 0.55rem !important;
+    font-size: 0.78rem !important;
+}
+
 /* Blocked-date picker popover (frs-blocked-datepicker.js) */
 .frs-bdp-popover {
     position: fixed;

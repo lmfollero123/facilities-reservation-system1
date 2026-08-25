@@ -460,6 +460,13 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         </div>
     </div>
 </div>
+
+<div class="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 mb-6 gap-1" role="tablist" aria-label="Equipment sections">
+    <button type="button" class="uman-subtab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white shadow-sm text-slate-900 font-semibold" data-subtab-target="request" aria-selected="true">Request</button>
+    <button type="button" class="uman-subtab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-500 hover:text-slate-700" data-subtab-target="catalog" aria-selected="false">Catalog &amp; Stock</button>
+</div>
+
+<div class="uman-subtab-panel" data-subtab="request">
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="request-form-wrapper">
     <section class="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
         <h2 class="text-base font-semibold text-slate-900 mb-1">Request Asset from UMAN</h2>
@@ -595,8 +602,10 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         </form>
     </aside>
 </div>
+</div>
 
-<section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 mt-6">
+<div class="uman-subtab-panel" data-subtab="catalog" style="display:none;">
+<section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
     <h2 class="text-base font-semibold text-slate-900 mb-3">UMAN Asset Catalog <?= $catalogLive ? '' : '<span class="text-xs font-normal text-slate-400">(catalog offline — requests still work)</span>'; ?></h2>
     <?php if (empty($umanAssets)): ?>
         <p class="text-sm text-slate-500 text-center py-8">
@@ -672,6 +681,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         </div>
     <?php endif; ?>
 </section>
+</div>
 <?php endif; ?>
 
 <?php if ($tab === 'readings'): ?>
@@ -967,6 +977,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
 <?php endif; ?>
 
 <?php if ($tab === 'equipment'): ?>
+<div class="uman-subtab-panel" data-subtab="request">
 <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 mt-6">
     <h2 class="text-base font-semibold text-slate-900 mb-3">Asset Requests</h2>
     <?php
@@ -1028,6 +1039,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         </div>
     <?php endif; ?>
 </section>
+</div>
 
 <script>
 (function () {
@@ -1102,8 +1114,28 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
         }
         if (fQty) fQty.value = 1;
         if (fExact) fExact.checked = false;
+        showUmanSubtab('request');
         document.getElementById('request-form-wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+
+    // Sub-tabs within the Equipment & Requests tab: Request vs Catalog & Stock.
+    function showUmanSubtab(name) {
+        document.querySelectorAll('.uman-subtab-panel').forEach(function (panel) {
+            panel.style.display = panel.dataset.subtab === name ? '' : 'none';
+        });
+        document.querySelectorAll('.uman-subtab-btn').forEach(function (btn) {
+            const active = btn.dataset.subtabTarget === name;
+            btn.classList.toggle('bg-white', active);
+            btn.classList.toggle('shadow-sm', active);
+            btn.classList.toggle('text-slate-900', active);
+            btn.classList.toggle('font-semibold', active);
+            btn.classList.toggle('text-slate-500', !active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+    }
+    document.querySelectorAll('.uman-subtab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { showUmanSubtab(btn.dataset.subtabTarget); });
+    });
 
     function clearPin() {
         fTypeId.value = '';

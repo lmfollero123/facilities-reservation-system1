@@ -159,7 +159,7 @@ function mapCIMMToCPRF(array $rawSchedules): array {
             'category' => $row['category'] ?? 'General Maintenance',
             'assigned_team' => $row['assigned_team'] ?? '',
             'estimated_duration' => $duration,
-            'affected_reservations' => 0, // Will be calculated separately
+            'affected_reservations' => 0, // Filled in by syncFacilitiesFromCIMM() once the facility is resolved
             'created_at' => $row['created_at'] ?? date('Y-m-d H:i:s'),
             // Additional fields for calendar compatibility
             'task' => $row['task'] ?? '',
@@ -669,8 +669,10 @@ function frs_cimm_run_sync(PDO $pdo): array
     }
 
     $mappedSchedules = mapCIMMToCPRF($rawSchedules);
-    frs_cimm_save_schedules_cache($mappedSchedules);
     $syncSummary = syncFacilitiesFromCIMM($pdo, $mappedSchedules);
+    // Save after sync, not before: syncFacilitiesFromCIMM() resolves each
+    // schedule's facility_id and affected_reservations count by reference.
+    frs_cimm_save_schedules_cache($mappedSchedules);
 
     $announcementSummary = ['created' => 0, 'skipped' => 0, 'errors' => [], 'created_titles' => []];
     $announcementHelper = dirname(__DIR__) . '/config/cimm_maintenance_announcements.php';
@@ -726,6 +728,25 @@ function cimmScheduleDateRange(array $schedule): array
 }
 
 /**
+ * Count active reservations at a facility that overlap a CIMM schedule's date window.
+ */
+function cimmCountAffectedReservations(PDO $pdo, int $facilityId, array $schedule): int
+{
+    $dates = cimmScheduleDateRange($schedule);
+    if (empty($dates)) {
+        return 0;
+    }
+    $placeholders = implode(',', array_fill(0, count($dates), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT COUNT(*) FROM reservations
+         WHERE facility_id = ? AND reservation_date IN ($placeholders)
+         AND status IN ('approved', 'pending', 'pending_payment')"
+    );
+    $stmt->execute(array_merge([$facilityId], $dates));
+    return (int)$stmt->fetchColumn();
+}
+
+/**
  * Sync facility maintenance status and blackout dates from mapped CIMM schedules.
  *
  * Rules:
@@ -734,8 +755,12 @@ function cimmScheduleDateRange(array $schedule): array
  *   itself (cimmCategoryAffectsFacility()) - vicinity-only infra (roads, street lights, drainage)
  *   never flips the status, even if a location-text match pulled it in. Until then the facility
  *   stays `available`.
- * - All upcoming/active CIMM windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix)
- *   so residents cannot book those dates in advance (e.g. Pael scheduled Jul 22 is blocked from Jul 12).
+ * - Vicinity-only categories are excluded from `facility_blackout_dates` and from
+ *   affected_reservations counts too, for the same reason: work happening near a facility
+ *   (a road, a street light) doesn't make the facility itself unbookable.
+ * - All other upcoming/active CIMM windows sync into `facility_blackout_dates` (`CIMM Sync:`
+ *   prefix) so residents cannot book those dates in advance (e.g. Pael scheduled Jul 22 is
+ *   blocked from Jul 12).
  * - Facility returns to `available` only if CIMM sync previously set it to maintenance
  *   (storage/cimm_managed_maintenance.json) and CIMM has no active window now.
  * - Future maintenance windows sync into `facility_blackout_dates` (`CIMM Sync:` prefix).
@@ -745,7 +770,7 @@ function cimmScheduleDateRange(array $schedule): array
  * @param array<int,array<string,mixed>> $mappedSchedules
  * @return array<string,mixed>
  */
-function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
+function syncFacilitiesFromCIMM(PDO $pdo, array &$mappedSchedules): array
 {
     require_once dirname(__DIR__) . '/config/maintenance_helper.php';
 
@@ -786,7 +811,7 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
     $schedulePins = frs_cimm_load_schedule_pins();
     $pinsChanged = false;
 
-    foreach ($mappedSchedules as $schedule) {
+    foreach ($mappedSchedules as $idx => $schedule) {
         $scheduleId = trim((string)($schedule['id'] ?? ''));
         $hasOwnFacilityId = (int)($schedule['cprf_facility_id'] ?? 0) > 0;
 
@@ -803,16 +828,25 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
 
         if (!$facilityId) {
             $summary['unmatched_schedule_count']++;
+            $mappedSchedules[$idx]['affected_reservations'] = 0;
             continue;
         }
 
         $summary['matched_schedule_count']++;
-        $matchedSchedulesForBlackout[] = ['facility_id' => $facilityId, 'schedule' => $schedule];
+        $affectsFacility = cimmCategoryAffectsFacility((string)($schedule['category'] ?? ''), (string)($schedule['maintenance_type'] ?? ''));
+        $matchedSchedulesForBlackout[] = ['facility_id' => $facilityId, 'schedule' => $schedule, 'affects_facility' => $affectsFacility];
 
-        if (cimmIsActiveMaintenanceSchedule($schedule, $now)
-            && cimmCategoryAffectsFacility((string)($schedule['category'] ?? ''), (string)($schedule['maintenance_type'] ?? ''))) {
+        if (cimmIsActiveMaintenanceSchedule($schedule, $now) && $affectsFacility) {
             $activeMaintenanceFacilityIds[$facilityId] = true;
         }
+
+        // Vicinity-only categories (roads/street lights/drainage) never affect the
+        // facility itself, so they never count toward its affected-reservation total.
+        $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
+        $mappedSchedules[$idx]['cprf_facility_id'] = $facilityId;
+        $mappedSchedules[$idx]['affected_reservations'] = ($affectsFacility && !in_array($status, ['completed', 'cancelled'], true))
+            ? cimmCountAffectedReservations($pdo, $facilityId, $schedule)
+            : 0;
     }
 
     if ($pinsChanged) {
@@ -852,6 +886,9 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
 
         // Build desired CIMM blackout dates from active (non-completed) schedules.
         foreach ($matchedSchedulesForBlackout as $row) {
+            if (empty($row['affects_facility'])) {
+                continue;
+            }
             $facilityId = (int)$row['facility_id'];
             $schedule = $row['schedule'];
             $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
@@ -893,6 +930,9 @@ function syncFacilitiesFromCIMM(PDO $pdo, array $mappedSchedules): array
         );
 
         foreach ($matchedSchedulesForBlackout as $row) {
+            if (empty($row['affects_facility'])) {
+                continue;
+            }
             $facilityId = (int)$row['facility_id'];
             $schedule = $row['schedule'];
             $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
