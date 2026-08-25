@@ -11,6 +11,7 @@ require_once __DIR__ . '/../config/notifications.php';
 require_once __DIR__ . '/../config/notification_preferences.php';
 require_once __DIR__ . '/../config/mail_helper.php';
 require_once __DIR__ . '/../config/sms_helper.php';
+require_once __DIR__ . '/../config/email_templates.php';
 
 $options = getopt('', ['dry-run', 'verbose', 'date:']);
 $dryRun = isset($options['dry-run']);
@@ -22,7 +23,12 @@ $targetDate = isset($options['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (st
 frs_ensure_notification_preferences_schema();
 
 $pdo = db();
-$basePath = function_exists('base_path') ? base_path() : '';
+// Hardcoded relative path: base_path() derives from $_SERVER['SCRIPT_NAME'],
+// which is meaningless in a CLI/cron invocation (it reflects the script's own
+// path, e.g. "scripts/send_booking_reminders.php" -> base_path() returning
+// the bogus fragment "scripts" instead of ""). This site is installed at the
+// domain root, so the effective value everywhere else is always "".
+$reservationsPath = '/dashboard/book-facility?module=mine';
 
 echo "=== Booking Reminders (24h) ===\n";
 echo 'Started: ' . date('Y-m-d H:i:s') . "\n";
@@ -92,7 +98,7 @@ foreach ($rows as $row) {
     $facility = (string)$row['facility_name'];
     $dateLabel = date('F j, Y', strtotime((string)$row['reservation_date']));
     $slot = (string)$row['time_slot'];
-    $link = $basePath . '/dashboard/book-facility?module=mine';
+    $link = $reservationsPath;
 
     echo "Reservation #{$resId} — {$facility} — {$row['requester_name']}\n";
 
@@ -112,12 +118,12 @@ foreach ($rows as $row) {
     }
 
     if (frs_user_wants_notification($userId, 'reminder', 'email') && !empty($row['requester_email'])) {
-        $html = '<p>Hello ' . htmlspecialchars((string)$row['requester_name']) . ',</p>'
-            . '<p>This is a reminder that your facility reservation is <strong>tomorrow</strong>:</p>'
-            . '<ul><li><strong>Facility:</strong> ' . htmlspecialchars($facility) . '</li>'
-            . '<li><strong>Date:</strong> ' . htmlspecialchars($dateLabel) . '</li>'
-            . '<li><strong>Time:</strong> ' . htmlspecialchars($slot) . '</li></ul>'
-            . '<p><a href="' . htmlspecialchars(function_exists('base_url') ? base_url() . $link : $link) . '">View My Reservations</a></p>';
+        $html = getBookingReminderEmailTemplate(
+            (string)$row['requester_name'],
+            $facility,
+            (string)$row['reservation_date'],
+            $slot
+        );
         sendEmail(
             (string)$row['requester_email'],
             (string)$row['requester_name'],

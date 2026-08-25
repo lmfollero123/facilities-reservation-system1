@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/mail_helper.php';
+require_once __DIR__ . '/../config/email_templates.php';
 
 $options = getopt('', ['dry-run', 'verbose']);
 $dryRun = isset($options['dry-run']);
@@ -20,7 +21,6 @@ if (function_exists('env_value') && env_value('STAFF_PENDING_DIGEST_ENABLED', 't
 }
 
 $pdo = db();
-$basePath = function_exists('base_path') ? base_path() : '';
 
 echo "=== Staff Pending Approval Digest ===\n";
 echo 'Started: ' . date('Y-m-d H:i:s') . "\n";
@@ -43,14 +43,16 @@ if ($staff === []) {
     exit(0);
 }
 
-$manageUrl = (function_exists('env_value') ? rtrim((string)env_value('APP_URL', ''), '/') : '')
-    . $basePath . '/dashboard/reservations-manage?view=pending';
+// Hardcoded relative path: base_path() derives from $_SERVER['SCRIPT_NAME'],
+// which is meaningless in a CLI/cron invocation (it reflects this script's
+// own path instead of "", the effective value everywhere else since this
+// site is installed at the domain root) and produced broken links like
+// https://cprf.infragovservices.comscripts/... in past digest runs.
+$manageUrl = base_url() . '/dashboard/reservations-manage?view=pending';
 
 $subject = "[CPRF] {$count} pending reservation(s) need review";
-$body = '<p>Good morning,</p>'
-    . '<p>There are <strong>' . $count . '</strong> reservation request(s) waiting for staff approval in CPRF.</p>'
-    . '<p><a href="' . htmlspecialchars($manageUrl) . '">Open Reservation Approvals</a></p>'
-    . '<p style="color:#64748b;font-size:12px;">This is an automated digest from Barangay Culiat CPRF.</p>';
+$body = getStaffPendingDigestEmailTemplate($count, $manageUrl);
+$textBody = strip_tags(str_replace(['<br>', '</p>', '</li>'], ["\n", "\n", "\n"], $body));
 
 $sent = 0;
 foreach ($staff as $row) {
@@ -65,7 +67,8 @@ foreach ($staff as $row) {
         $sent++;
         continue;
     }
-    if (function_exists('sendMail') && sendMail($email, $subject, $body)) {
+    $staffName = trim((string)($row['name'] ?? '')) ?: 'Staff';
+    if (sendEmail($email, $staffName, $subject, $body, $textBody)) {
         $sent++;
         echo "Sent: {$email}\n";
     } else {

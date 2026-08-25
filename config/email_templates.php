@@ -363,6 +363,49 @@ function getReservationApprovedEmailTemplate($userName, $facilityName, $date, $t
 }
 
 /**
+ * Booking Reminder Email Template (24h before an approved/pending-payment reservation)
+ */
+function getBookingReminderEmailTemplate($userName, $facilityName, $date, $timeSlot) {
+    $header = getEmailHeader('Reservation Reminder');
+    $footer = getEmailFooter();
+    $dashboardUrl = base_url() . '/dashboard/book-facility?module=mine';
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">⏰ Reservation Reminder</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            This is a reminder that your facility reservation is <strong>tomorrow</strong>.
+        </p>
+
+        ' . getEmailInfoBox('
+            <h3 style="margin: 0 0 12px; color: #1e3a5f; font-size: 16px;">📅 Reservation Details</h3>
+            <table cellpadding="0" cellspacing="0" style="width: 100%;">
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 120px;"><strong>Facility:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($facilityName) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Date:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars(date('F j, Y', strtotime($date))) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Time:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($timeSlot) . '</td>
+                </tr>
+            </table>
+        ', '#fff4e5', '#b45309') . '
+
+        ' . getEmailButton('View My Reservations', $dashboardUrl, '#6384d2') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            Please arrive on time and bring any required documents.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Reservation Postponed Email Template
  */
 function getReservationPostponedEmailTemplate($userName, $facilityName, $oldDate, $oldTimeSlot, $newDate, $newTimeSlot, $reason) {
@@ -748,6 +791,30 @@ function getStaffPriorityRescheduleEmailTemplate(
 
         <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
             Thank you for your patience. If you need a different time, please contact facility staff or update your booking from My Reservations.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
+ * Staff Pending-Approvals Digest Email Template
+ */
+function getStaffPendingDigestEmailTemplate(int $pendingCount, string $manageUrl) {
+    $header = getEmailHeader('Pending Approvals');
+    $footer = getEmailFooter();
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">📋 Pending Reservation Approvals</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Good morning,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            There ' . ($pendingCount === 1 ? 'is <strong>1</strong> reservation request' : 'are <strong>' . $pendingCount . '</strong> reservation requests') . ' waiting for staff approval in CPRF.
+        </p>
+
+        ' . getEmailButton('Open Reservation Approvals', $manageUrl, '#6384d2') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            This is an automated daily digest from Barangay Culiat CPRF.
         </p>
     ';
 

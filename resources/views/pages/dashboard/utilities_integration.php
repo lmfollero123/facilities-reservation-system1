@@ -261,7 +261,11 @@ foreach ($umanAssets as $asset) {
     if ($typeName === '') {
         continue;
     }
-    $availableCountByType[$typeName] = ($availableCountByType[$typeName] ?? 0) + 1;
+    // Each utility_assets row carries its own `quantity` (a single record
+    // can represent multiple physical units) -- sum it instead of counting
+    // rows, or bundled units show as "1 available" instead of the real total.
+    $unitQty = max(1, (int)($asset['quantity'] ?? 1));
+    $availableCountByType[$typeName] = ($availableCountByType[$typeName] ?? 0) + $unitQty;
 }
 
 $equipmentTypes = [];

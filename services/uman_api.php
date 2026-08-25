@@ -200,7 +200,10 @@ function frs_uman_available_stock_for_type(string $assetType): ?int
             continue;
         }
         if ((string)($asset['custody_status'] ?? 'WAREHOUSED') === 'WAREHOUSED') {
-            $count++;
+            // Each utility_assets row carries its own `quantity` (a single
+            // record can represent multiple physical units) -- sum it
+            // instead of counting rows, or bundled units get undercounted.
+            $count += max(1, (int)($asset['quantity'] ?? 1));
         }
     }
     return $count;

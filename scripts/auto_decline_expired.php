@@ -114,7 +114,10 @@ try {
                     CONCAT('Your reservation for ', ?, ' on ', ?), 
                     ?, NOW())"
         );
-        $link = base_path() . '/dashboard/my-reservations';
+        // Hardcoded relative path: base_path() derives from
+        // $_SERVER['SCRIPT_NAME'], meaningless in this cron invocation (see
+        // send_booking_reminders.php for the exact bug this caused there).
+        $link = '/dashboard/my-reservations';
         $notifStmt->execute([
             $reservation['user_id'],
             $reservation['facility_name'],
