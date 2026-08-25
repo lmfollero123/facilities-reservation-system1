@@ -487,7 +487,7 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
                         <option value="">— Select type —</option>
                         <?php foreach ($equipmentTypes as $t):
                             $countStr = $typesConnected && $t['asset_count'] > 0
-                                ? " ({$t['available_count']} available of {$t['asset_count']})"
+                                ? " ({$t['available_count']} available)"
                                 : '';
                             $title = $t['description'] !== '' ? ' title="' . htmlspecialchars($t['description']) . '"' : '';
                             $dataId = $t['id'] > 0 ? " data-id=\"{$t['id']}\"" : '';
@@ -607,6 +607,21 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
             <i class="bi bi-lightbulb text-slate-400"></i>
             <span><strong class="text-slate-600">Tip:</strong> click any row to prefill the request form with that specific asset.</span>
         </div>
+        <?php if (!empty($equipmentTypes)): ?>
+        <div class="mb-4">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Stock Availability</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                <?php foreach ($equipmentTypes as $t):
+                    $avail = (int)$t['available_count'];
+                ?>
+                    <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <span class="text-xs font-medium text-slate-600 truncate pr-2" title="<?= htmlspecialchars($t['name']); ?>"><?= htmlspecialchars($t['name']); ?></span>
+                        <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold <?= $avail > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'; ?>"><?= $avail; ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="table-responsive">
             <table class="table" id="asset-catalog-table">
                 <thead>
