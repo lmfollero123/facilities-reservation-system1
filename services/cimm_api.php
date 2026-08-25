@@ -898,8 +898,12 @@ function syncFacilitiesFromCIMM(PDO $pdo, array &$mappedSchedules): array
             if (!isset($desiredBlackouts[$facilityId])) {
                 $desiredBlackouts[$facilityId] = [];
             }
+            $reason = 'CIMM Sync: ' . ((string)($schedule['maintenance_type'] ?? 'Maintenance'));
             foreach (cimmScheduleDateRange($schedule) as $dateStr) {
-                $desiredBlackouts[$facilityId][$dateStr] = true;
+                // Last matching schedule wins when more than one covers the same day -
+                // keeps the stored reason from going stale once an earlier schedule
+                // (e.g. one that used to be vicinity-only) stops covering that date.
+                $desiredBlackouts[$facilityId][$dateStr] = $reason;
             }
         }
 
@@ -923,39 +927,36 @@ function syncFacilitiesFromCIMM(PDO $pdo, array &$mappedSchedules): array
         }
 
         $existsStmt = $pdo->prepare(
-            'SELECT id FROM facility_blackout_dates WHERE facility_id = :facility_id AND blackout_date = :blackout_date LIMIT 1'
+            'SELECT id, reason FROM facility_blackout_dates WHERE facility_id = :facility_id AND blackout_date = :blackout_date LIMIT 1'
         );
         $insertStmt = $pdo->prepare(
             'INSERT INTO facility_blackout_dates (facility_id, blackout_date, reason, created_at) VALUES (:facility_id, :blackout_date, :reason, NOW())'
         );
+        $updateReasonStmt = $pdo->prepare(
+            'UPDATE facility_blackout_dates SET reason = :reason WHERE id = :id'
+        );
 
-        foreach ($matchedSchedulesForBlackout as $row) {
-            if (empty($row['affects_facility'])) {
-                continue;
-            }
-            $facilityId = (int)$row['facility_id'];
-            $schedule = $row['schedule'];
-            $status = strtolower((string)($schedule['status'] ?? 'scheduled'));
-            if (in_array($status, ['completed', 'cancelled'], true)) {
-                continue;
-            }
-
-            $reason = 'CIMM Sync: ' . ((string)($schedule['maintenance_type'] ?? 'Maintenance'));
-
-            foreach (cimmScheduleDateRange($schedule) as $dateStr) {
+        foreach ($desiredBlackouts as $facilityId => $dates) {
+            foreach ($dates as $dateStr => $reason) {
                 $existsStmt->execute([
                     'facility_id' => $facilityId,
                     'blackout_date' => $dateStr,
                 ]);
-                if ($existsStmt->fetch(PDO::FETCH_ASSOC)) {
-                    continue;
+                $existing = $existsStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$existing) {
+                    $insertStmt->execute([
+                        'facility_id' => $facilityId,
+                        'blackout_date' => $dateStr,
+                        'reason' => $reason,
+                    ]);
+                    $summary['blackouts_added']++;
+                } elseif (str_starts_with((string)$existing['reason'], 'CIMM Sync:') && $existing['reason'] !== $reason) {
+                    // Keep the stored reason in sync with whichever schedule is
+                    // covering the date now - a category swap (e.g. the last
+                    // covering schedule used to be vicinity-only) shouldn't leave
+                    // a stale label behind.
+                    $updateReasonStmt->execute(['reason' => $reason, 'id' => $existing['id']]);
                 }
-                $insertStmt->execute([
-                    'facility_id' => $facilityId,
-                    'blackout_date' => $dateStr,
-                    'reason' => $reason,
-                ]);
-                $summary['blackouts_added']++;
             }
         }
 
