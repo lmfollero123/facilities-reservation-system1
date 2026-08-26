@@ -153,6 +153,14 @@ $hubMineDetailUrl = static function (int $reservationId) use ($__mineCalPath, $_
     background: #e2e8f0;
     color: #475569;
 }
+[data-theme="dark"] .my-reservations-res-card.is-past {
+    border-color: var(--border-color) !important;
+    background: var(--bg-tertiary);
+}
+[data-theme="dark"] .my-reservations-res-card.is-past .res-past-badge {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
 .my-reservations-legend {
     display:flex;
     flex-wrap:wrap;

@@ -898,6 +898,34 @@ ob_start();
 @media (max-width: 720px) {
     .fm-qr-body { grid-template-columns: 1fr; }
 }
+[data-theme="dark"] .fm-qr-panel {
+    background: var(--bg-secondary);
+    box-shadow: 0 24px 48px var(--shadow-strong);
+}
+[data-theme="dark"] .fm-qr-header {
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .fm-qr-header h3 {
+    color: var(--text-primary);
+}
+[data-theme="dark"] .fm-qr-sub,
+[data-theme="dark"] .fm-qr-lead,
+[data-theme="dark"] .fm-qr-url-label,
+[data-theme="dark"] .fm-qr-close {
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .fm-qr-preview {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .fm-qr-url-label input {
+    background: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .fm-qr-note {
+    color: var(--text-tertiary);
+}
 </style>
 <!-- Facility Modal -->
 <div id="facilityModal" class="facility-modal">
