@@ -331,6 +331,10 @@ ob_start();
 
         <!-- Calendar View -->
         <div id="calendarView">
+            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:#4b5563; margin-bottom:0.65rem; cursor:pointer;">
+                <input type="checkbox" id="calendarShowVicinity">
+                Show roads/street lights/drainage
+            </label>
             <div class="calendar-header">
                 <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
                 <span id="monthLabel" title="Click to jump date"></span>
@@ -664,6 +668,11 @@ document.getElementById('maintenanceModal').addEventListener('click', function(e
 })();
 
 // =============== SCHEDULE DATA FOR CALENDAR ===============
+// Same vicinity-only concept as the table view (roads/street lights/drainage
+// never affect facility booking - see cimmCategoryAffectsFacility()) - sent
+// as a per-event flag so the calendar's own toggle can filter instantly on
+// the client, no reload (the table's checkbox originally needed a Filter
+// click before it applied and that was a real reported bug - not repeating it).
 window.scheduleData = <?= json_encode(array_map(function($schedule) {
     return [
         'id' => $schedule['id'] ?? '',
@@ -679,6 +688,7 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         'assigned_team' => $schedule['assigned_team'] ?? '',
         'starting_date' => $schedule['scheduled_start'] ?? '',
         'estimated_completion_date' => $schedule['scheduled_end'] ?? '',
+        'affects_facility' => cimmCategoryAffectsFacility((string)($schedule['category'] ?? ''), (string)($schedule['maintenance_type'] ?? '')),
         'schedule_date' => date('Y-m-d', strtotime($schedule['scheduled_start'] ?? 'now'))
     ];
 }, $maintenanceSchedules), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -696,10 +706,38 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
     const monthLabel = document.getElementById('monthLabel');
     const prevMonthBtn = document.getElementById('prevMonth');
     const nextMonthBtn = document.getElementById('nextMonth');
+    const showVicinityCheckbox = document.getElementById('calendarShowVicinity');
 
     if (!calendarGrid || !calendarDetails) return;
 
     let currentDate = new Date();
+
+    function visibleSchedules() {
+        const all = Array.isArray(window.scheduleData) ? window.scheduleData : [];
+        return showVicinityCheckbox && showVicinityCheckbox.checked
+            ? all
+            : all.filter(e => e.affects_facility !== false);
+    }
+
+    // Same category + same facility on the same day is almost always
+    // separate CIMM work-order records for the same ongoing job (e.g. five
+    // "Roads" entries at one facility), not five different things - one
+    // chip with a count reads far clearer than a wall of identical labels.
+    function groupEvents(events) {
+        const groups = [];
+        const seen = new Map();
+        events.forEach(e => {
+            const key = (e.category || 'General Maintenance') + '|' + (e.location || '');
+            if (seen.has(key)) {
+                seen.get(key).items.push(e);
+            } else {
+                const group = { items: [e] };
+                seen.set(key, group);
+                groups.push(group);
+            }
+        });
+        return groups;
+    }
 
     function getStatusKey(statusLabel) {
         const s = (statusLabel || '').toLowerCase();
@@ -729,51 +767,67 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
             calendarGrid.appendChild(emptyDiv);
         }
         
+        const visible = visibleSchedules();
+
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const events = Array.isArray(window.scheduleData) && window.scheduleData.length
-                ? window.scheduleData.filter(e => e.schedule_date === dateStr)
-                : [];
-            
+            const events = visible.filter(e => e.schedule_date === dateStr);
+            const groups = groupEvents(events);
+
             const dayDiv = document.createElement('div');
             dayDiv.className = 'calendar-day' + (events.length ? ' has-event' : '');
             dayDiv.setAttribute('data-date', dateStr);
-            
+
             const dayNumDiv = document.createElement('div');
             dayNumDiv.textContent = d;
             dayDiv.appendChild(dayNumDiv);
-            
-            if (events.length) {
+
+            if (groups.length) {
                 const tasksDiv = document.createElement('div');
                 tasksDiv.className = 'day-tasks';
-                
-                if (events.length === 1) {
-                    const e = events[0];
+
+                const groupLabel = function(group) {
+                    const e = group.items[0];
+                    const base = e.category || e.task || 'Maintenance';
+                    return group.items.length > 1 ? `${base} (×${group.items.length})` : base;
+                };
+                const groupClick = function(group) {
+                    return function(ev) {
+                        ev.stopPropagation();
+                        if (group.items.length === 1) {
+                            const e = group.items[0];
+                            viewMaintenanceDetails(e.id || (e.sched_id ? ('CIMM-S-' + e.sched_id) : ''), dateStr);
+                        } else {
+                            openTaskChooser(dateStr, group.items.map(e => ({
+                                id: e.id, sched_id: e.sched_id, rep_id: e.rep_id, task: e.task,
+                                location: e.location, category: e.category, priority: e.priority,
+                                status_label: e.status_label, assigned_team: e.assigned_team, schedule_date: dateStr
+                            })));
+                        }
+                    };
+                };
+
+                if (groups.length === 1) {
+                    const group = groups[0];
                     const btn = document.createElement('button');
                     btn.className = 'task-btn';
-                    btn.textContent = isMobileView() ? '1' : (e.task || 'Maintenance');
-                    btn.title = `${e.task || 'Maintenance'} (${e.status_label || ''})`;
-                    const key = getStatusKey(e.status_label);
+                    btn.textContent = isMobileView() ? String(group.items.length) : groupLabel(group);
+                    btn.title = `${groupLabel(group)} – ${group.items[0].location || ''}`;
+                    const key = getStatusKey(group.items[0].status_label);
                     if (key) btn.classList.add('status-' + key + '-bg');
-                    btn.onclick = function(ev) {
-                        ev.stopPropagation();
-                        viewMaintenanceDetails(e.id || (e.sched_id ? ('CIMM-S-' + e.sched_id) : ''), dateStr);
-                    };
+                    btn.onclick = groupClick(group);
                     tasksDiv.appendChild(btn);
-                } else if (events.length > 1) {
-                    const first = events[0];
+                } else {
+                    const first = groups[0];
                     const firstBtn = document.createElement('button');
                     firstBtn.className = 'task-btn';
-                    firstBtn.textContent = isMobileView() ? '1' : (first.task || 'Maintenance');
-                    firstBtn.title = `${first.task || 'Maintenance'} (${first.status_label || ''})`;
-                    const firstKey = getStatusKey(first.status_label);
+                    firstBtn.textContent = isMobileView() ? String(events.length) : groupLabel(first);
+                    firstBtn.title = `${groupLabel(first)} – ${first.items[0].location || ''}`;
+                    const firstKey = getStatusKey(first.items[0].status_label);
                     if (firstKey) firstBtn.classList.add('status-' + firstKey + '-bg');
-                    firstBtn.onclick = function(ev) {
-                        ev.stopPropagation();
-                        viewMaintenanceDetails(first.id || (first.sched_id ? ('CIMM-S-' + first.sched_id) : ''), dateStr);
-                    };
+                    firstBtn.onclick = groupClick(first);
                     tasksDiv.appendChild(firstBtn);
-                    
+
                     const moreWrap = document.createElement('div');
                     moreWrap.className = 'more-tasks-wrap';
                     const arrowBtn = document.createElement('button');
@@ -781,42 +835,39 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
                     arrowBtn.innerHTML = '▾';
                     arrowBtn.onclick = function(ev) {
                         ev.stopPropagation();
-                        const tasks = events.map(e => ({
-                            id: e.id,
-                            sched_id: e.sched_id,
-                            rep_id: e.rep_id,
-                            task: e.task,
-                            location: e.location,
-                            category: e.category,
-                            priority: e.priority,
-                            status_label: e.status_label,
-                            assigned_team: e.assigned_team,
-                            schedule_date: dateStr
-                        }));
-                        openTaskChooser(dateStr, tasks);
+                        openTaskChooser(dateStr, events.map(e => ({
+                            id: e.id, sched_id: e.sched_id, rep_id: e.rep_id, task: e.task,
+                            location: e.location, category: e.category, priority: e.priority,
+                            status_label: e.status_label, assigned_team: e.assigned_team, schedule_date: dateStr
+                        })));
                     };
                     moreWrap.appendChild(arrowBtn);
                     if (!isMobileView()) {
                         const counter = document.createElement('span');
                         counter.className = 'task-counter';
-                        counter.textContent = `+${events.length - 1}`;
+                        counter.textContent = `+${groups.length - 1}`;
                         moreWrap.appendChild(counter);
                     }
                     tasksDiv.appendChild(moreWrap);
                 }
                 dayDiv.appendChild(tasksDiv);
             }
-            
+
             dayDiv.addEventListener('click', function() {
-                if (events.length) {
+                if (groups.length) {
                     let detailsHtml = `<strong>${dateStr}</strong><br>`;
-                    detailsHtml += events.map(e => `• ${e.task || 'Maintenance'} – ${e.location || ''}`).join('<br>');
+                    detailsHtml += groups.map(g => {
+                        const e = g.items[0];
+                        const label = e.category || e.task || 'Maintenance';
+                        const suffix = g.items.length > 1 ? ` (×${g.items.length})` : '';
+                        return `• ${label}${suffix} – ${e.location || ''}`;
+                    }).join('<br>');
                     calendarDetails.innerHTML = detailsHtml;
                 } else {
                     calendarDetails.innerHTML = `<strong>${dateStr}</strong><br>No scheduled maintenance.`;
                 }
             });
-            
+
             calendarGrid.appendChild(dayDiv);
         }
     }
@@ -852,6 +903,7 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
     };
+    if (showVicinityCheckbox) showVicinityCheckbox.addEventListener('change', renderCalendar);
 
     renderCalendar();
 
