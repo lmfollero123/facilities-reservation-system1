@@ -196,6 +196,9 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                             <?php if (!empty($req['cimm_reference'])): ?>
                                 <br><small class="pm-muted">Ref: <?= htmlspecialchars((string)$req['cimm_reference']); ?></small>
                             <?php endif; ?>
+                            <?php if (!empty($req['assigned_staff_name'])): ?>
+                                <br><small class="pm-muted">Assigned: <?= htmlspecialchars((string)$req['assigned_staff_name']); ?></small>
+                            <?php endif; ?>
                             <span class="pm-status <?= htmlspecialchars($st); ?>"><?= htmlspecialchars($st); ?></span>
                         </li>
                     <?php endforeach; ?>

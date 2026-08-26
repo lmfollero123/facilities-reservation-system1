@@ -190,6 +190,55 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
 }
 
 /**
+ * Adds columns introduced after the original table was created. Safe to call
+ * every time - each ADD COLUMN is wrapped individually so an existing
+ * column (already-migrated database) just no-ops instead of failing.
+ */
+function frs_ensure_maintenance_requests_schema_v2(PDO $pdo): void
+{
+    $addCol = function (string $definition) use ($pdo): void {
+        try {
+            $pdo->exec("ALTER TABLE cprf_maintenance_requests ADD COLUMN $definition");
+        } catch (Throwable $e) {
+            // column already exists: noop
+        }
+    };
+    $addCol("`assigned_staff_id` INT UNSIGNED NULL AFTER `requested_by`");
+    $addCol("`assigned_staff_name` VARCHAR(255) NULL AFTER `assigned_staff_id`");
+}
+
+/**
+ * Assigns a new maintenance request to whichever Staff user currently has
+ * the fewest open (pending/sent/acknowledged) assignments - a greedy
+ * least-loaded assignment so work doesn't pile up on one person. Falls back
+ * to Admin users if no Staff accounts exist, and returns null (unassigned)
+ * if the barangay has no staff/admin accounts at all.
+ *
+ * @return array{id: int, name: string}|null
+ */
+function frs_assign_least_loaded_staff(PDO $pdo): ?array
+{
+    foreach (['Staff', 'Admin'] as $role) {
+        $stmt = $pdo->prepare(
+            "SELECT u.id, u.name,
+                    (SELECT COUNT(*) FROM cprf_maintenance_requests r
+                     WHERE r.assigned_staff_id = u.id
+                       AND r.status IN ('pending', 'sent', 'acknowledged')) AS open_count
+             FROM users u
+             WHERE u.role = :role AND u.status = 'active'
+             ORDER BY open_count ASC, u.id ASC
+             LIMIT 1"
+        );
+        $stmt->execute(['role' => $role]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            return ['id' => (int)$row['id'], 'name' => (string)$row['name']];
+        }
+    }
+    return null;
+}
+
+/**
  * @return array<int, array<string, mixed>>
  */
 function frs_fetch_recent_maintenance_requests(PDO $pdo, int $limit = 12): array
@@ -223,6 +272,7 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
     if (!frs_ensure_cprf_maintenance_requests_table($pdo)) {
         return ['success' => false, 'error' => 'Maintenance request storage is not available.'];
     }
+    frs_ensure_maintenance_requests_schema_v2($pdo);
 
     $facilityId = (int)($payload['facility_id'] ?? 0);
     $requestedDate = trim((string)($payload['requested_date'] ?? ''));
@@ -272,11 +322,13 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         return ['success' => false, 'error' => 'A maintenance request for this facility and date is already pending with CIMM.'];
     }
 
+    $assignedStaff = frs_assign_least_loaded_staff($pdo);
+
     $insert = $pdo->prepare(
         'INSERT INTO cprf_maintenance_requests
-            (facility_id, facility_name, requested_date, suggested_end_date, priority, risk_score, risk_band, notes, status, requested_by)
+            (facility_id, facility_name, requested_date, suggested_end_date, priority, risk_score, risk_band, notes, status, requested_by, assigned_staff_id, assigned_staff_name)
          VALUES
-            (:facility_id, :facility_name, :requested_date, :suggested_end_date, :priority, :risk_score, :risk_band, :notes, :status, :requested_by)'
+            (:facility_id, :facility_name, :requested_date, :suggested_end_date, :priority, :risk_score, :risk_band, :notes, :status, :requested_by, :assigned_staff_id, :assigned_staff_name)'
     );
     $insert->execute([
         'facility_id' => $facilityId,
@@ -286,6 +338,8 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         'priority' => $priority,
         'risk_score' => max(0, min(100, $riskScore)),
         'risk_band' => $riskBand,
+        'assigned_staff_id' => $assignedStaff['id'] ?? null,
+        'assigned_staff_name' => $assignedStaff['name'] ?? null,
         'notes' => $notes !== '' ? $notes : null,
         'status' => 'pending',
         'requested_by' => $userId > 0 ? $userId : null,
