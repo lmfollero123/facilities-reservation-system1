@@ -218,6 +218,8 @@ function frs_ensure_maintenance_requests_schema_v2(PDO $pdo): void
  */
 function frs_assign_least_loaded_staff(PDO $pdo): ?array
 {
+    frs_ensure_maintenance_requests_schema_v2($pdo);
+
     foreach (['Staff', 'Admin'] as $role) {
         $stmt = $pdo->prepare(
             "SELECT u.id, u.name,
