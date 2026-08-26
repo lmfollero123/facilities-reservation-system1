@@ -787,8 +787,14 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
                 tasksDiv.className = 'day-tasks';
 
                 const groupLabel = function(group) {
-                    const e = group.items[0];
-                    const base = e.category || e.task || 'Maintenance';
+                    // Prefer the specific task name (e.g. "Roads") when every item in
+                    // the group agrees on it - more recognizable than the broader
+                    // category CIMM files it under (e.g. "Infrastructure Report").
+                    // Falls back to the category only when the group's tasks differ.
+                    const tasks = new Set(group.items.map(e => e.task).filter(Boolean));
+                    const base = tasks.size === 1
+                        ? [...tasks][0]
+                        : (group.items[0].category || group.items[0].task || 'Maintenance');
                     return group.items.length > 1 ? `${base} (×${group.items.length})` : base;
                 };
                 const groupClick = function(group) {
@@ -857,10 +863,10 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
                 if (groups.length) {
                     let detailsHtml = `<strong>${dateStr}</strong><br>`;
                     detailsHtml += groups.map(g => {
-                        const e = g.items[0];
-                        const label = e.category || e.task || 'Maintenance';
+                        const tasks = new Set(g.items.map(e => e.task).filter(Boolean));
+                        const label = tasks.size === 1 ? [...tasks][0] : (g.items[0].category || g.items[0].task || 'Maintenance');
                         const suffix = g.items.length > 1 ? ` (×${g.items.length})` : '';
-                        return `• ${label}${suffix} – ${e.location || ''}`;
+                        return `• ${label}${suffix} – ${g.items[0].location || ''}`;
                     }).join('<br>');
                     calendarDetails.innerHTML = detailsHtml;
                 } else {
