@@ -362,9 +362,10 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
          FROM facilities f
          LEFT JOIN reservations r ON f.id = r.facility_id
              AND r.reservation_date >= :start2
-             AND r.reservation_date <= :end2';
+             AND r.reservation_date <= :end2
+         WHERE f.status != "deleted"';
     if ($utilPeriod['facility']) {
-        $facilityUtilSql .= ' WHERE f.id = :facility_id';
+        $facilityUtilSql .= ' AND f.id = :facility_id';
         $utilParams['facility_id'] = $utilPeriod['facility'];
     }
     $facilityUtilSql .= ' GROUP BY f.id, f.name ORDER BY approved_count DESC';
@@ -377,9 +378,10 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
                  WHERE r2.facility_id = f.id
                  AND r2.status = "approved") as approved_count
          FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id';
+         LEFT JOIN reservations r ON f.id = r.facility_id
+         WHERE f.status != "deleted"';
     if ($utilPeriod['facility']) {
-        $facilityUtilSql .= ' WHERE f.id = :facility_id';
+        $facilityUtilSql .= ' AND f.id = :facility_id';
         $utilParams['facility_id'] = $utilPeriod['facility'];
     }
     $facilityUtilSql .= ' GROUP BY f.id, f.name ORDER BY approved_count DESC';
@@ -578,9 +580,10 @@ if ($topfacPeriod['start'] && $topfacPeriod['end']) {
          LEFT JOIN reservations r ON f.id = r.facility_id
              AND r.status = "approved"
              AND r.reservation_date >= :start
-             AND r.reservation_date <= :end';
+             AND r.reservation_date <= :end
+         WHERE f.status != "deleted"';
     if ($topfacPeriod['facility']) {
-        $facilitySql .= ' AND r.facility_id = :facility_id';
+        $facilitySql .= ' AND f.id = :facility_id';
         $topfacParams['facility_id'] = $topfacPeriod['facility'];
     }
     $facilitySql .= ' GROUP BY f.id, f.name ORDER BY booking_count DESC LIMIT 5';
@@ -590,9 +593,10 @@ if ($topfacPeriod['start'] && $topfacPeriod['end']) {
     $topfacParams = [];
     $facilitySql = 'SELECT f.name, COUNT(r.id) as booking_count
          FROM facilities f
-         LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"';
+         LEFT JOIN reservations r ON f.id = r.facility_id AND r.status = "approved"
+         WHERE f.status != "deleted"';
     if ($topfacPeriod['facility']) {
-        $facilitySql .= ' AND r.facility_id = :facility_id';
+        $facilitySql .= ' AND f.id = :facility_id';
         $topfacParams['facility_id'] = $topfacPeriod['facility'];
     }
     $facilitySql .= ' GROUP BY f.id, f.name ORDER BY booking_count DESC LIMIT 5';
