@@ -387,8 +387,6 @@
 
     // ---- Shared "click a pin to filter" facility map (Reports + Dashboard) ----
     const frsFacilityMapConfigs = {};
-    const frsFacilityMapInstances = {};
-    const frsFacilityMapUserMarkers = {};
 
     function frsEscapeHtml(str) {
         return String(str == null ? '' : str).replace(/[&<>"']/g, function (ch) {
@@ -431,8 +429,6 @@
         // has coordinates yet, so the card still renders instead of erroring).
         const defaultCenter = [14.6710, 121.0550];
         const map = L.map(mapId).setView(defaultCenter, 15);
-        frsFacilityMapInstances[mapId] = map;
-        delete frsFacilityMapUserMarkers[mapId]; // stale reference from before this re-init
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -459,68 +455,7 @@
         setTimeout(function () { map.invalidateSize(); }, 150);
     }
 
-    function frsFacilityMapShowMyLocation(mapId, btn) {
-        const map = frsFacilityMapInstances[mapId];
-        if (!map) return;
-        if (!navigator.geolocation) {
-            alert('Your browser does not support location.');
-            return;
-        }
-        const originalLabel = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Locating…';
-        navigator.geolocation.getCurrentPosition(
-            function (position) {
-                btn.disabled = false;
-                btn.textContent = originalLabel;
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const accuracy = position.coords.accuracy || 0;
-
-                const existing = frsFacilityMapUserMarkers[mapId];
-                if (existing) {
-                    existing.marker.remove();
-                    existing.circle.remove();
-                }
-                const marker = L.circleMarker([lat, lng], {
-                    radius: 8,
-                    color: '#ffffff',
-                    weight: 2,
-                    fillColor: '#2563eb',
-                    fillOpacity: 1,
-                }).addTo(map).bindPopup('You are here');
-                const circle = L.circle([lat, lng], {
-                    radius: accuracy,
-                    color: '#2563eb',
-                    weight: 1,
-                    fillColor: '#2563eb',
-                    fillOpacity: 0.1,
-                }).addTo(map);
-                frsFacilityMapUserMarkers[mapId] = { marker: marker, circle: circle };
-
-                map.setView([lat, lng], Math.max(map.getZoom(), 16));
-                marker.openPopup();
-            },
-            function (err) {
-                btn.disabled = false;
-                btn.textContent = originalLabel;
-                const messages = {
-                    1: 'Location access was denied. Enable it in your browser settings to use this.',
-                    2: 'Your location is unavailable right now.',
-                    3: 'Getting your location timed out. Please try again.',
-                };
-                alert(messages[err.code] || 'Unable to get your location.');
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-        );
-    }
-
     document.addEventListener('click', function (e) {
-        const locateBtn = e.target.closest('[data-facility-map-locate]');
-        if (locateBtn) {
-            frsFacilityMapShowMyLocation(locateBtn.getAttribute('data-facility-map-locate'), locateBtn);
-            return;
-        }
         const resetBtn = e.target.closest('[data-facility-map-reset]');
         if (!resetBtn) return;
         const mapId = resetBtn.getAttribute('data-facility-map-reset');

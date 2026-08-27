@@ -11189,14 +11189,7 @@ html[data-theme="dark"] .chart-filter-preset {
     color: var(--text-secondary, #5b6888);
 }
 
-.facility-map-card__actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
-}
-
-.facility-map-card__reset,
-.facility-map-card__locate {
+.facility-map-card__reset {
     flex-shrink: 0;
 }
 
