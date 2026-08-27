@@ -260,6 +260,13 @@ ob_start();
 .pm-risk-bar > span { display:block; height:100%; border-radius:999px; }
 .pm-risk-bar-label { display:flex; justify-content:space-between; font-size:0.68rem; color:#64748b; font-weight:600; }
 .pm-risk-breakdown { font-size:0.65rem; color:#94a3b8; margin-top:0.25rem; }
+.pm-pressure-description { margin:0 0 0.5rem; padding-left:0.5rem; border-left:3px solid #64748b; font-size:0.78rem; line-height:1.4; color:#334155; }
+.pm-risk-bar-wrap summary { cursor:pointer; font-size:0.68rem; color:#64748b; font-weight:600; margin-bottom:0.3rem; list-style:none; }
+.pm-risk-bar-wrap summary::-webkit-details-marker { display:none; }
+.pm-risk-bar-wrap summary::before { content:'▸ '; }
+.pm-risk-bar-wrap[open] summary::before { content:'▾ '; }
+[data-theme="dark"] .pm-pressure-description { color: var(--text-primary); }
+[data-theme="dark"] .pm-risk-bar-wrap summary { color: var(--text-tertiary); }
 .pm-metrics { display:grid; grid-template-columns:1fr 1fr; gap:0.35rem; margin:0.5rem 0; }
 .pm-metric { background:#f8fafc; border-radius:8px; padding:0.35rem 0.5rem; font-size:0.7rem; color:#64748b; }
 .pm-metric strong { display:block; color:#0f172a; font-size:0.85rem; margin-top:0.05rem; }

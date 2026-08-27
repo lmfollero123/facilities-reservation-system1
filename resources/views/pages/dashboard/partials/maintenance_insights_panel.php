@@ -128,7 +128,11 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                                         · <?= htmlspecialchars((string)$row['location']); ?>
                                     <?php endif; ?>
                                 </p>
-                                <div class="pm-risk-bar-wrap">
+                                <p class="pm-pressure-description" style="border-left-color:<?= htmlspecialchars($riskColor); ?>;">
+                                    <?= htmlspecialchars((string)($row['pressure_description'] ?? '')); ?>
+                                </p>
+                                <details class="pm-risk-bar-wrap">
+                                    <summary>Show the numbers</summary>
                                     <div class="pm-risk-bar-label">
                                         <span>Maintenance pressure</span>
                                         <span><?= $riskScore; ?>/100</span>
@@ -139,7 +143,7 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                                     <div class="pm-risk-breakdown">
                                         Usage <?= $usageP; ?>/60 · Growth <?= $growthP; ?>/25<?php if ($statusP > 0): ?> · Status <?= $statusP; ?>/15<?php endif; ?><?php if ($seasonalP !== 0): ?> · Seasonal <?= $seasonalP > 0 ? '+' : ''; ?><?= $seasonalP; ?><?php endif; ?><?php if ($outcomeP > 0): ?> · Learned +<?= $outcomeP; ?><?php endif; ?>
                                     </div>
-                                </div>
+                                </details>
                                 <div class="pm-metrics">
                                     <div class="pm-metric">90-day bookings<strong><?= (int)$row['usage_90d']; ?></strong></div>
                                     <div class="pm-metric">30-day bookings<strong><?= (int)$row['usage_30d']; ?></strong></div>

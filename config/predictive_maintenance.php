@@ -113,6 +113,44 @@ function frs_get_facility_risk_adjustments(PDO $pdo): array
 }
 
 /**
+ * Plain-language summary of a facility's maintenance pressure - panelist
+ * feedback was that a raw "35/100" number is hard to act on. This is now
+ * the primary thing shown on each card; the numeric breakdown stays
+ * available underneath for anyone who wants the specifics.
+ */
+function frs_describe_maintenance_pressure(
+    string $riskBand,
+    int $growthPressure,
+    int $seasonalPressure,
+    int $outcomeAdjustment,
+    int $statusPressure
+): string {
+    $base = match ($riskBand) {
+        'High' => 'Heavily used — real wear risk, due for a check',
+        'Medium' => 'Moderately used — worth a routine check soon',
+        default => 'Lightly used — low wear risk right now',
+    };
+
+    $qualifiers = [];
+    if ($statusPressure > 0) {
+        $qualifiers[] = 'currently flagged under maintenance';
+    }
+    if ($growthPressure >= 10) {
+        $qualifiers[] = 'bookings have picked up recently';
+    }
+    if ($seasonalPressure >= 5) {
+        $qualifiers[] = 'this is typically a busier month';
+    } elseif ($seasonalPressure <= -5) {
+        $qualifiers[] = 'this is typically a quieter month';
+    }
+    if ($outcomeAdjustment > 0) {
+        $qualifiers[] = "it's had real issues before that usage alone didn't predict";
+    }
+
+    return $qualifiers === [] ? "{$base}." : "{$base} — " . implode('; ', $qualifiers) . '.';
+}
+
+/**
  * Rule-based facility maintenance risk rows from booking pressure.
  *
  * @return array<int, array<string, mixed>>
@@ -262,6 +300,7 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
                 'seasonal_index' => round($seasonalIndex, 2),
                 'current_month_name' => $currentMonthName,
                 'outcome_adjustment' => $outcomeAdjustment,
+                'pressure_description' => frs_describe_maintenance_pressure($riskBand, $growthPressure, $seasonalPressure, $outcomeAdjustment, $statusPressure),
                 'recent_pace_30d' => $recentPace,
                 'priority' => $priority,
                 'recommended_date' => $recommendedDate,
