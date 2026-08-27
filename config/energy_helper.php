@@ -668,6 +668,30 @@ function frs_energy_pending_count(PDO $pdo): int
 }
 
 /**
+ * Compose one status message covering both partner pushes for the
+ * add/correct-reading UI, so a resident-facing action clearly reports
+ * both destinations instead of only the last one checked.
+ *
+ * @param array{success: bool, error: ?string} $umanPush
+ * @param array{success: bool, error: ?string} $energyPush
+ */
+function frs_format_dual_push_message(string $verb, array $umanPush, array $energyPush): string
+{
+    if (!empty($umanPush['success']) && !empty($energyPush['success'])) {
+        return "Reading {$verb} and sent to UMAN and Energy.";
+    }
+
+    $parts = ["Reading {$verb}."];
+    $parts[] = !empty($umanPush['success'])
+        ? 'Sent to UMAN.'
+        : 'Send to UMAN pending: ' . (string)($umanPush['error'] ?? 'Unknown error') . '.';
+    $parts[] = !empty($energyPush['success'])
+        ? 'Sent to Energy.'
+        : 'Send to Energy pending: ' . (string)($energyPush['error'] ?? 'Unknown error') . '.';
+    return implode(' ', $parts);
+}
+
+/**
  * Push one local reading to the Energy system and record the outcome.
  *
  * @return array{success: bool, error: ?string}

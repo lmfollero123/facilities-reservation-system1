@@ -171,10 +171,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'notes' => trim((string)($_POST['notes'] ?? '')),
                 'recorded_by' => (int)($_SESSION['user_id'] ?? 0) ?: null,
             ]);
-            $push = frs_uman_push_utility_reading($pdo, $readingId);
-            $message = $push['success']
-                ? 'Reading saved and sent to UMAN.'
-                : 'Reading saved locally. Send to UMAN pending: ' . (string)$push['error'];
+            $umanPush = frs_uman_push_utility_reading($pdo, $readingId);
+            // Energy only ever receives the electric-side figures
+            // (frs_energy_build_reading_payload() never includes water) -
+            // this is the direct CPRF -> Energy push, independent of UMAN.
+            $energyPush = frs_energy_push_reading($pdo, $readingId);
+            $message = frs_format_dual_push_message('saved', $umanPush, $energyPush);
             $messageType = 'success';
         } catch (InvalidArgumentException $e) {
             $message = $e->getMessage();
@@ -196,10 +198,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'reading_date' => (string)($_POST['reading_date'] ?? date('Y-m-d')),
                 'notes' => trim((string)($_POST['notes'] ?? '')),
             ]);
-            $push = frs_uman_push_utility_reading($pdo, $readingId);
-            $message = $push['success']
-                ? 'Reading corrected and re-sent to UMAN.'
-                : 'Reading corrected. Send to UMAN pending: ' . (string)$push['error'];
+            $umanPush = frs_uman_push_utility_reading($pdo, $readingId);
+            $energyPush = frs_energy_push_reading($pdo, $readingId);
+            $message = frs_format_dual_push_message('corrected', $umanPush, $energyPush);
             $messageType = 'success';
         } catch (InvalidArgumentException $e) {
             $message = $e->getMessage();
