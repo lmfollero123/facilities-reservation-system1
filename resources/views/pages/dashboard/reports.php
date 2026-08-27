@@ -364,7 +364,7 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
              AND r.reservation_date >= :start2
              AND r.reservation_date <= :end2';
     if ($utilPeriod['facility']) {
-        $facilityUtilSql .= ' AND f.id = :facility_id';
+        $facilityUtilSql .= ' WHERE f.id = :facility_id';
         $utilParams['facility_id'] = $utilPeriod['facility'];
     }
     $facilityUtilSql .= ' GROUP BY f.id, f.name ORDER BY approved_count DESC';
