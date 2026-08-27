@@ -1153,6 +1153,31 @@ $frsJsonForInlineScript = static function ($data) use ($frsScriptJsonFlags): str
     return ($j !== false) ? $j : '{}';
 };
 
+// Sticky form values: repopulate on a rejected submission instead of
+// silently wiping everything the resident just typed (file inputs can't be
+// restored this way - browsers block setting a file input's value for
+// security - so the two upload fields necessarily stay empty on redisplay).
+$stickyFacilityId = '';
+$stickyDate = '';
+$stickyStartTime = '';
+$stickyEndTime = '';
+$stickyPurpose = '';
+$stickyAttendees = '';
+$stickyNotes = '';
+$stickyReferralName = '';
+$stickyReferralRelationship = '';
+if ($error !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $stickyFacilityId = (string)($_POST['facility_id'] ?? '');
+    $stickyDate = (string)($_POST['reservation_date'] ?? '');
+    $stickyStartTime = (string)($_POST['start_time'] ?? '');
+    $stickyEndTime = (string)($_POST['end_time'] ?? '');
+    $stickyPurpose = (string)($_POST['purpose'] ?? '');
+    $stickyAttendees = (string)($_POST['expected_attendees'] ?? '');
+    $stickyNotes = (string)($_POST['booking_notes'] ?? '');
+    $stickyReferralName = (string)($_POST['referral_name'] ?? '');
+    $stickyReferralRelationship = (string)($_POST['referral_relationship'] ?? '');
+}
+
 ob_start();
 
 $bookCalQuery = static function (array $extra): string {
@@ -2403,6 +2428,7 @@ ul.bcf-scroll-select-menu {
                             $upcomingLabel = $upcomingCimm ? frs_format_cimm_maintenance_window($upcomingCimm) : '';
                         ?>
                             <option value="<?= $facility['id']; ?>"
+                                    <?= $stickyFacilityId !== '' && $stickyFacilityId === (string)$facility['id'] ? 'selected' : ''; ?>
                                     data-status="<?= htmlspecialchars($facility['status']); ?>"
                                     data-operating-hours="<?= htmlspecialchars($facility['operating_hours'] ?? ''); ?>"
                                     data-upcoming-cimm="<?= htmlspecialchars($upcomingLabel, ENT_QUOTES, 'UTF-8'); ?>"
@@ -2420,10 +2446,10 @@ ul.bcf-scroll-select-menu {
 
             <label>
                 <span class="bcf-label-row">Reservation Date <span class="frs-required-mark" aria-hidden="true">*</span> <?= frs_field_tip('Chosen from the month grid on the booking page (not editable here).'); ?></span>
-                <input type="hidden" name="reservation_date" id="reservation-date" value="">
+                <input type="hidden" name="reservation_date" id="reservation-date" value="<?= htmlspecialchars($stickyDate, ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="input-wrapper bcf-res-date-wrapper">
                     <i class="bi bi-calendar input-icon"></i>
-                    <div id="bcf-reservation-date-display" class="bcf-res-date-readonly bcf-res-date-readonly-empty" role="status" aria-live="polite">Select a date on the calendar.</div>
+                    <div id="bcf-reservation-date-display" class="bcf-res-date-readonly<?= $stickyDate === '' ? ' bcf-res-date-readonly-empty' : ''; ?>" role="status" aria-live="polite"><?= $stickyDate !== '' && strtotime($stickyDate) !== false ? htmlspecialchars(date('l, F j, Y', strtotime($stickyDate))) : 'Select a date on the calendar.'; ?></div>
                 </div>
             </label>
 
@@ -2444,7 +2470,8 @@ ul.bcf-scroll-select-menu {
                                 if ($hour == 21 && $minute > 0) break; // Stop at 9:00 PM
                                 $timeValue = sprintf('%02d:%02d', $hour, $minute);
                                 $timeDisplay = date('g:i A', strtotime($timeValue));
-                                echo '<option value="' . $timeValue . '">' . $timeDisplay . '</option>';
+                                $timeSelected = $stickyStartTime === $timeValue ? ' selected' : '';
+                                echo '<option value="' . $timeValue . '"' . $timeSelected . '>' . $timeDisplay . '</option>';
                             }
                         }
                         ?>
@@ -2469,7 +2496,8 @@ ul.bcf-scroll-select-menu {
                                 if ($hour == 21 && $minute > 0) break; // Stop at 9:00 PM
                                 $timeValue = sprintf('%02d:%02d', $hour, $minute);
                                 $timeDisplay = date('g:i A', strtotime($timeValue));
-                                echo '<option value="' . $timeValue . '">' . $timeDisplay . '</option>';
+                                $timeSelected = $stickyEndTime === $timeValue ? ' selected' : '';
+                                echo '<option value="' . $timeValue . '"' . $timeSelected . '>' . $timeDisplay . '</option>';
                             }
                         }
                         ?>
@@ -2508,7 +2536,7 @@ ul.bcf-scroll-select-menu {
 
             <label>
                 <span>Purpose of Use <span class="frs-required-mark" aria-hidden="true">*</span></span>
-                <textarea name="purpose" id="purpose-input" rows="3" maxlength="<?= (int)FRS_BOOKING_PURPOSE_MAX; ?>" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required></textarea>
+                <textarea name="purpose" id="purpose-input" rows="3" maxlength="<?= (int)FRS_BOOKING_PURPOSE_MAX; ?>" placeholder="e.g., Zumba class, Barangay General Assembly, Sports tournament" required><?= htmlspecialchars($stickyPurpose, ENT_QUOTES, 'UTF-8'); ?></textarea>
                 <p class="bcf-char-count" id="purpose-char-count" aria-live="polite">0 / <?= (int)FRS_BOOKING_PURPOSE_MAX; ?></p>
             </label>
 
@@ -2516,14 +2544,14 @@ ul.bcf-scroll-select-menu {
                 <span>Expected Number of Attendees <span class="frs-required-mark" aria-hidden="true">*</span></span>
                 <div class="input-wrapper">
                     <i class="bi bi-people input-icon"></i>
-                    <input type="number" name="expected_attendees" id="expected-attendees" min="1" required inputmode="numeric" placeholder="e.g., 50">
+                    <input type="number" name="expected_attendees" id="expected-attendees" min="1" required inputmode="numeric" placeholder="e.g., 50" value="<?= htmlspecialchars($stickyAttendees, ENT_QUOTES, 'UTF-8'); ?>">
                 </div>
                 <p id="bcf-capacity-msg" style="display:none; color:#b23030; margin:0.35rem 0 0; font-size:0.85rem;"></p>
             </label>
 
             <label>
                 Notes for staff (optional, appended to purpose on save)
-                <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="<?= (int)FRS_BOOKING_NOTES_MAX; ?>" placeholder="Parking, setup time, accessibility, etc."></textarea>
+                <textarea name="booking_notes" id="booking-notes" rows="2" maxlength="<?= (int)FRS_BOOKING_NOTES_MAX; ?>" placeholder="Parking, setup time, accessibility, etc."><?= htmlspecialchars($stickyNotes, ENT_QUOTES, 'UTF-8'); ?></textarea>
                 <p class="bcf-char-count" id="booking-notes-char-count" aria-live="polite">0 / <?= (int)FRS_BOOKING_NOTES_MAX; ?></p>
             </label>
 
@@ -2576,11 +2604,11 @@ ul.bcf-scroll-select-menu {
                 </h4>
                 <label>
                     Referral's full name
-                    <input type="text" name="referral_name" required maxlength="150" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                    <input type="text" name="referral_name" required maxlength="150" value="<?= htmlspecialchars($stickyReferralName, ENT_QUOTES, 'UTF-8'); ?>" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
                 </label>
                 <label style="display:block; margin-top:0.75rem;">
                     Your relationship to the referral
-                    <input type="text" name="referral_relationship" required maxlength="100" placeholder="e.g. friend, relative, neighbor" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
+                    <input type="text" name="referral_relationship" required maxlength="100" placeholder="e.g. friend, relative, neighbor" value="<?= htmlspecialchars($stickyReferralRelationship, ENT_QUOTES, 'UTF-8'); ?>" style="margin-top:0.35rem; padding:0.6rem; border:1px solid #ddd; border-radius:6px; width:100%;">
                 </label>
                 <label style="display:block; margin-top:0.75rem;">
                     Referral's valid ID (PDF or image, max 8MB)
@@ -2843,6 +2871,7 @@ function bcfGetBookingValidationRules() {
     const purposeMax = <?= (int)FRS_BOOKING_PURPOSE_MAX; ?>;
     const notesMax = <?= (int)FRS_BOOKING_NOTES_MAX; ?>;
     const docValidId = document.querySelector('input[name="doc_valid_id"]');
+    const referralIdDocument = document.querySelector('input[name="referral_id_document"]');
     const modalFocusDelay = 380;
 
     return [
@@ -2937,7 +2966,32 @@ function bcfGetBookingValidationRules() {
         message: 'Please upload a valid ID document.',
         beforeFocus: bcfEnsureBookingModalOpen,
         focusDelay: modalFocusDelay,
-    }] : []);
+    }] : []).concat(referralIdDocument ? [
+        {
+            selector: 'input[name="referral_name"]',
+            focusSelector: 'input[name="referral_name"]',
+            test: function (el) { return !!(el && String(el.value || '').trim().length > 0); },
+            message: "Please enter your Barangay Culiat referral's name.",
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: 'input[name="referral_relationship"]',
+            focusSelector: 'input[name="referral_relationship"]',
+            test: function (el) { return !!(el && String(el.value || '').trim().length > 0); },
+            message: 'Please enter your relationship to your referral.',
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+        {
+            selector: 'input[name="referral_id_document"]',
+            focusSelector: 'input[name="referral_id_document"]',
+            test: function (el) { return !!(el && el.files && el.files.length > 0); },
+            message: "Please upload a valid ID of your Barangay Culiat referral.",
+            beforeFocus: bcfEnsureBookingModalOpen,
+            focusDelay: modalFocusDelay,
+        },
+    ] : []);
 }
 
 function openBookingConfirmModal() {

@@ -23,8 +23,11 @@ $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 $defaultYear = (int)date('Y');
 $defaultMonth = (int)date('m');
 
-$facilitiesStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
+$facilitiesStmt = $pdo->query("SELECT id, name, latitude, longitude FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
 $allFacilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
+$reportsMapFacilities = array_map(static function (array $fac): array {
+    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude']];
+}, $allFacilities);
 
 // Legacy global query params → overview (kpi) filters
 if (!isset($_GET['kpi_month']) && (isset($_GET['month']) || isset($_GET['year']) || isset($_GET['facility']))) {
@@ -350,7 +353,7 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
         'start2' => $utilPeriod['start'],
         'end2' => $utilPeriod['end'],
     ];
-    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
+    $facilityUtilSql = 'SELECT f.id, f.name, COUNT(r.id) as booking_count,
                 (SELECT COUNT(*) FROM reservations r2
                  WHERE r2.facility_id = f.id
                  AND r2.reservation_date >= :start
@@ -369,7 +372,7 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
     $facilityUtilStmt->execute($utilParams);
 } else {
     $utilParams = [];
-    $facilityUtilSql = 'SELECT f.name, COUNT(r.id) as booking_count,
+    $facilityUtilSql = 'SELECT f.id, f.name, COUNT(r.id) as booking_count,
                 (SELECT COUNT(*) FROM reservations r2
                  WHERE r2.facility_id = f.id
                  AND r2.status = "approved") as approved_count
@@ -384,12 +387,6 @@ if ($utilPeriod['start'] && $utilPeriod['end']) {
     $facilityUtilStmt->execute($utilParams);
 }
 $facilityData = $facilityUtilStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Calculate max bookings for percentage (find highest count)
-$maxBookings = 0;
-foreach ($facilityData as $fac) {
-    $maxBookings = max($maxBookings, (int)$fac['approved_count']);
-}
 
 // Reservation outcomes (outcomes chart filters)
 $outcomesSql = 'SELECT status, COUNT(*) as count FROM reservations';
@@ -916,6 +913,11 @@ ob_start();
     </div>
 </div>
 
+<div class="booking-card">
+    <?= frs_heading_with_tip('Facility Map', 'Click a facility pin to filter every chart on this page to that facility. Combine with each chart\'s own date range for a deeper look.'); ?>
+    <?= frs_facility_filter_map('reports-facility-map', $reportsMapFacilities, ['trend', 'status', 'topfac', 'forecast', 'util', 'outcomes', 'kpi'], 'reports-content'); ?>
+</div>
+
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly count of reservations for the selected facility and period.'); ?>
@@ -1065,25 +1067,25 @@ ob_start();
         </div>
 
         <div class="reports-subsection">
-            <?= frs_heading_with_tip('Facility Utilization', 'Approved bookings per facility vs. the busiest facility in the selected period (horizontal bars).', 'h3'); ?>
+            <?= frs_heading_with_tip('Facility Utilization', 'Approved bookings per facility in the selected period. The facility selected on the map above (if any) is highlighted.', 'h3'); ?>
             <?= frs_reports_period_filter_form('rpt-util', 'util', $allFacilities, $utilPeriod, []); ?>
             <?php if (empty($facilityData)): ?>
                 <p class="reports-empty-note">No facility data available for this period.</p>
             <?php else: ?>
-                <?php foreach ($facilityData as $facility): ?>
-                    <?php
-                    $bookings = (int)$facility['approved_count'];
-                    $percentage = $maxBookings > 0 ? round(($bookings / $maxBookings) * 100) : 0;
-                    ?>
-                    <div class="bar-row">
-                        <span><?= htmlspecialchars($facility['name']); ?>
-                            <small class="reports-muted-small">(<?= $bookings; ?> approved)</small>
-                        </span>
-                        <div class="bar-track">
-                            <div class="bar-fill" style="width: <?= $percentage; ?>%;"></div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+                <div style="position: relative; height: <?= max(220, count($facilityData) * 34); ?>px;">
+                    <canvas id="utilizationChart"></canvas>
+                </div>
+                <script>
+                if (window.initUtilizationChart) {
+                    window.initUtilizationChart({
+                        canvasId: 'utilizationChart',
+                        facilityLabels: <?= json_encode(array_map(static fn($f) => $f['name'], $facilityData)); ?>,
+                        facilityCounts: <?= json_encode(array_map(static fn($f) => (int)$f['approved_count'], $facilityData)); ?>,
+                        facilityIds: <?= json_encode(array_map(static fn($f) => (int)$f['id'], $facilityData)); ?>,
+                        selectedFacilityId: <?= json_encode($utilPeriod['facility']); ?>
+                    });
+                }
+                </script>
             <?php endif; ?>
         </div>
     </div>

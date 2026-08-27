@@ -11170,6 +11170,36 @@ html[data-theme="dark"] .chart-filter-preset {
     color: #94a3b8;
 }
 
+/* Shared "click a pin to filter" facility map (Reports + Dashboard) */
+.facility-map-card {
+    margin-bottom: 1.5rem;
+}
+
+.facility-map-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+}
+
+.facility-map-card__label {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #5b6888);
+}
+
+.facility-map-card__reset {
+    flex-shrink: 0;
+}
+
+.facility-map-canvas {
+    height: 380px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, #e0e6ed);
+    overflow: hidden;
+}
+
 /* Field help: compact “i” tooltip (hover, focus, tap) */
 .bcf-label-row,
 .frs-label-with-tip {

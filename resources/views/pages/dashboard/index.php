@@ -122,8 +122,11 @@ try {
 }
 
 // Facility options for filter
-$facilityOptionsStmt = $pdo->query('SELECT id, name FROM facilities ORDER BY name ASC');
+$facilityOptionsStmt = $pdo->query("SELECT id, name, latitude, longitude FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
 $facilityOptions = $facilityOptionsStmt->fetchAll(PDO::FETCH_ASSOC);
+$dashboardMapFacilities = array_map(static function (array $fac): array {
+    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude']];
+}, $facilityOptions);
 
 // Get upcoming/reservations (filtered, with pagination)
 // For Admin/Staff: show all upcoming reservations; For Residents: show only their own
@@ -1011,6 +1014,10 @@ ob_start();
     'rotateFacilityLabels' => true,
     'showValueLabels' => true,
 ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
+<div class="booking-card">
+    <?= frs_heading_with_tip('Facility Map', 'Click a facility pin to filter the charts below to that facility.'); ?>
+    <?= frs_facility_filter_map('dash-facility-map', $dashboardMapFacilities, ['trend', 'status', 'topfac'], 'dash-charts'); ?>
+</div>
 <div class="reports-grid" style="margin-top: 1rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly reservation counts. Use the filter to change status, facility, date range, or 6 vs 12 months.'); ?>

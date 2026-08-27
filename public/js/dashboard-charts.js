@@ -316,5 +316,155 @@
         }
     }
 
+    function initUtilizationChart(cfg) {
+        if (!window.Chart || !cfg) return;
+        const canvas = document.getElementById(cfg.canvasId || 'utilizationChart');
+        if (!canvas) return;
+
+        const baseColor = themeColor('--primary-color', '#0047ab');
+        const highlightColor = themeColor('--warning-text', '#f59e0b');
+        const labels = cfg.facilityLabels || [];
+        const data = cfg.facilityCounts || [];
+        const selectedId = cfg.selectedFacilityId || null;
+        const facilityIds = cfg.facilityIds || [];
+
+        const backgroundColor = labels.map(function (_, i) {
+            const isSelected = selectedId && facilityIds[i] === selectedId;
+            return isSelected ? withAlpha(highlightColor, 0.9) : withAlpha(baseColor, 0.75);
+        });
+        const borderColor = labels.map(function (_, i) {
+            const isSelected = selectedId && facilityIds[i] === selectedId;
+            return isSelected ? highlightColor : baseColor;
+        });
+
+        new Chart(canvas, {
+            type: 'bar',
+            plugins: [alwaysValueLabelsPlugin],
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Approved Bookings',
+                    data: data,
+                    backgroundColor: backgroundColor,
+                    borderColor: borderColor,
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    alwaysValueLabels: { fontSize: 12, fontWeight: '700', color: themeColor('--text-primary', '#1e293b') },
+                    tooltip: {
+                        backgroundColor: themeColor('--bg-secondary', '#ffffff'),
+                        titleColor: themeColor('--text-primary', '#1e293b'),
+                        bodyColor: themeColor('--text-secondary', '#475569'),
+                        borderColor: themeColor('--border-color', '#e2e8f0'),
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                        displayColors: false,
+                    },
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grace: '10%',
+                        ticks: { color: themeColor('--text-secondary', '#475569') },
+                        grid: { color: gridColor() },
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: themeColor('--text-secondary', '#475569') },
+                    }
+                }
+            }
+        });
+    }
+
+    // ---- Shared "click a pin to filter" facility map (Reports + Dashboard) ----
+    const frsFacilityMapConfigs = {};
+
+    function frsEscapeHtml(str) {
+        return String(str == null ? '' : str).replace(/[&<>"']/g, function (ch) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+        });
+    }
+
+    function frsFacilityMapNavigate(config, facilityId) {
+        const url = new URL(window.location.href);
+        (config.prefixes || []).forEach(function (prefix) {
+            if (facilityId === null) {
+                url.searchParams.delete(prefix + '_facility');
+            } else {
+                url.searchParams.set(prefix + '_facility', String(facilityId));
+            }
+        });
+        if (window.frsPartialLoad) {
+            window.frsPartialLoad(url.toString(), config.partialId);
+        } else {
+            window.location.href = url.toString();
+        }
+    }
+
+    function initFrsFacilityFilterMap(mapId) {
+        if (typeof L === 'undefined') return;
+        const configEl = document.getElementById(mapId + '-config');
+        const container = document.getElementById(mapId);
+        if (!configEl || !container) return;
+
+        let config;
+        try {
+            config = JSON.parse(configEl.textContent || '{}');
+        } catch (err) {
+            console.error('initFrsFacilityFilterMap: bad config', err);
+            return;
+        }
+        frsFacilityMapConfigs[mapId] = config;
+
+        // Barangay Culiat, Quezon City fallback center (used when no facility
+        // has coordinates yet, so the card still renders instead of erroring).
+        const defaultCenter = [14.6710, 121.0550];
+        const map = L.map(mapId).setView(defaultCenter, 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+        }).addTo(map);
+
+        const points = config.points || [];
+        points.forEach(function (p) {
+            const marker = L.marker([p.lat, p.lng]).addTo(map);
+            marker.bindPopup('<strong>' + frsEscapeHtml(p.name) + '</strong>');
+            marker.on('click', function () {
+                frsFacilityMapNavigate(config, p.id);
+            });
+        });
+
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points.map(function (p) { return [p.lat, p.lng]; }));
+            map.fitBounds(bounds, { padding: [24, 24], maxZoom: 16 });
+        }
+
+        // Leaflet mis-sizes its tiles when initialized inside a container
+        // that was still settling layout (e.g. right after an AJAX partial
+        // swap) - nudge it once the surrounding layout has painted.
+        setTimeout(function () { map.invalidateSize(); }, 150);
+    }
+
+    document.addEventListener('click', function (e) {
+        const resetBtn = e.target.closest('[data-facility-map-reset]');
+        if (!resetBtn) return;
+        const mapId = resetBtn.getAttribute('data-facility-map-reset');
+        const config = frsFacilityMapConfigs[mapId];
+        if (!config) return;
+        frsFacilityMapNavigate(config, null);
+    });
+
     window.frsInitReservationCharts = initReservationCharts;
+    window.initUtilizationChart = initUtilizationChart;
+    window.initFrsFacilityFilterMap = initFrsFacilityFilterMap;
 })(window);

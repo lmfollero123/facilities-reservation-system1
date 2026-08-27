@@ -604,3 +604,54 @@ if (!function_exists('frs_reports_export_href')) {
         return '?' . http_build_query($query);
     }
 }
+
+if (!function_exists('frs_facility_filter_map')) {
+    /**
+     * Shared "click a pin to filter" facility map, reused by the Reports page
+     * (7 chart prefixes) and the main Dashboard (3 chart prefixes) - one map
+     * implementation, driven entirely by data-frs-partial (no new endpoint).
+     *
+     * @param list<array{id:int|string,name:string,lat:float|string|null,lng:float|string|null}> $facilities
+     * @param list<string> $prefixes GET-param prefixes to set on click, e.g. ['trend','status','topfac']
+     */
+    function frs_facility_filter_map(string $mapId, array $facilities, array $prefixes, string $partialId): string
+    {
+        $points = [];
+        foreach ($facilities as $fac) {
+            if ($fac['lat'] === null || $fac['lng'] === null || $fac['lat'] === '' || $fac['lng'] === '') {
+                continue;
+            }
+            $points[] = [
+                'id' => (int)$fac['id'],
+                'name' => (string)$fac['name'],
+                'lat' => (float)$fac['lat'],
+                'lng' => (float)$fac['lng'],
+            ];
+        }
+
+        $config = [
+            'mapId' => $mapId,
+            'points' => $points,
+            'prefixes' => array_values($prefixes),
+            'partialId' => $partialId,
+        ];
+
+        ob_start();
+        ?>
+        <div class="facility-map-card">
+            <div class="facility-map-card__head">
+                <span class="facility-map-card__label">Click a facility pin to filter <?= count($prefixes) > 1 ? 'every chart' : 'the chart'; ?> below</span>
+                <button type="button" class="chart-filter-preset facility-map-card__reset" data-facility-map-reset="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>">All Facilities</button>
+            </div>
+            <div id="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>" class="facility-map-canvas"></div>
+        </div>
+        <script type="application/json" id="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>-config"><?= json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?></script>
+        <script>
+        if (window.initFrsFacilityFilterMap) {
+            window.initFrsFacilityFilterMap('<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>');
+        }
+        </script>
+        <?php
+        return (string)ob_get_clean();
+    }
+}
