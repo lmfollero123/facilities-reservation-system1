@@ -54,6 +54,34 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
         </div>
     </div>
 
+    <?php if ($canSubmit): ?>
+    <form method="post" class="pm-auto-schedule-bar">
+        <?= csrf_field(); ?>
+        <input type="hidden" name="auto_schedule_toggle" value="<?= $autoScheduleEnabled ? '0' : '1'; ?>">
+        <label class="pm-auto-schedule-label">
+            <span class="pm-auto-schedule-switch <?= $autoScheduleEnabled ? 'on' : ''; ?>"></span>
+            ⚡ Auto-schedule High-risk requests
+        </label>
+        <button type="submit" class="btn-outline" style="padding:0.3rem 0.7rem; font-size:0.78rem;">
+            <?= $autoScheduleEnabled ? 'Turn off' : 'Turn on'; ?>
+        </button>
+        <?php if ($autoScheduleEnabled): ?>
+            <span class="pm-muted" style="font-size:0.75rem;">On — new High-risk facilities auto-submit to CIMM on page load, no click needed.</span>
+        <?php else: ?>
+            <span class="pm-muted" style="font-size:0.75rem;">Off — High-risk facilities still need a manual "Request Maintenance" click.</span>
+        <?php endif; ?>
+    </form>
+    <?php if (!empty($autoScheduledThisLoad)): ?>
+        <div class="pm-auto-schedule-summary">
+            <?php foreach ($autoScheduledThisLoad as $s): ?>
+                <?php if ($s['success']): ?>
+                    <div>⚡ Auto-scheduled: <strong><?= htmlspecialchars($s['facility_name']); ?></strong></div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <form method="get" class="pm-search-bar" data-frs-partial="mi-insights-grid" data-frs-partial-auto>
         <input type="hidden" name="tab" value="insights">
         <input type="hidden" name="band" value="<?= htmlspecialchars($filterBand); ?>">

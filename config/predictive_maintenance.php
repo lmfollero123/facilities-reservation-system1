@@ -5,6 +5,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/app_settings.php';
 
 /**
  * Ensure local table for outbound maintenance requests exists.
@@ -285,6 +286,63 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
 }
 
 /**
+ * Opt-in, defaults OFF - staff must explicitly turn this on (Maintenance
+ * Insights toolbar). Nothing auto-submits to CIMM unless enabled.
+ */
+function frs_auto_schedule_enabled(PDO $pdo): bool
+{
+    return (frs_get_app_settings_map($pdo)['predictive_maintenance_auto_schedule'] ?? '0') === '1';
+}
+
+function frs_set_auto_schedule_enabled(PDO $pdo, bool $enabled, ?int $userId = null): void
+{
+    frs_set_app_setting($pdo, 'predictive_maintenance_auto_schedule', $enabled ? '1' : '0', $userId);
+}
+
+/**
+ * Auto-submits a maintenance request for every High-risk, actionable
+ * facility that doesn't already have one pending - only runs when
+ * frs_auto_schedule_enabled() is true. Bounded to High risk (not Medium/Low)
+ * so this can't quietly flood CIMM; the existing per-facility/date duplicate
+ * guard in frs_submit_maintenance_request() means calling this repeatedly
+ * (e.g. once per Insights page load) is safe and won't double-submit.
+ *
+ * @param array<int, array<string, mixed>> $rows from frs_compute_predictive_maintenance_rows()
+ * @return array<int, array{facility_name: string, success: bool, error?: string}>
+ */
+function frs_auto_schedule_high_risk_requests(PDO $pdo, array $rows): array
+{
+    $scheduled = [];
+    foreach ($rows as $row) {
+        if (($row['risk_band'] ?? '') !== 'High'
+            || empty($row['show_request_action'])
+            || !empty($row['has_pending_request'])
+            || empty($row['recommended_date'])
+        ) {
+            continue;
+        }
+
+        $result = frs_submit_maintenance_request($pdo, [
+            'facility_id' => $row['facility_id'],
+            'facility_name' => $row['facility_name'],
+            'location' => $row['location'] ?? '',
+            'requested_date' => $row['recommended_date'],
+            'priority' => $row['priority'] ?? 'high',
+            'risk_score' => $row['risk_score'],
+            'risk_band' => $row['risk_band'],
+            'request_source' => 'auto',
+        ], 0);
+
+        $scheduled[] = [
+            'facility_name' => (string)$row['facility_name'],
+            'success' => !empty($result['success']),
+            'error' => $result['error'] ?? null,
+        ];
+    }
+    return $scheduled;
+}
+
+/**
  * Adds columns introduced after the original table was created. Safe to call
  * every time - each ADD COLUMN is wrapped individually so an existing
  * column (already-migrated database) just no-ops instead of failing.
@@ -428,7 +486,9 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
     $priority = strtolower(trim((string)($payload['priority'] ?? 'medium')));
     $facilityName = trim((string)($payload['facility_name'] ?? ''));
     $location = trim((string)($payload['location'] ?? ''));
-    $isManual = strtolower(trim((string)($payload['request_source'] ?? ''))) === 'manual';
+    $requestSource = strtolower(trim((string)($payload['request_source'] ?? '')));
+    $isManual = $requestSource === 'manual';
+    $isAutoScheduled = $requestSource === 'auto';
 
     if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $requestedDate)) {
         return ['success' => false, 'error' => 'Invalid facility or requested date.'];
@@ -443,6 +503,9 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         $riskBand = 'Manual';
         $riskScore = 0;
     }
+    // Auto-scheduled keeps the real computed risk_score/risk_band (unlike
+    // manual, which has none) - that's the whole point of showing it was
+    // scheduled automatically because the score crossed the High threshold.
 
     if ($facilityName === '') {
         $nameStmt = $pdo->prepare('SELECT name, location FROM facilities WHERE id = :id LIMIT 1');
@@ -512,18 +575,26 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
 
     $taskNotes = $notes !== ''
         ? $notes
-        : ($isManual ? 'CPRF manual report — see facility for details.' : 'CPRF predictive insight — elevated usage pressure detected.');
+        : ($isManual
+            ? 'CPRF manual report — see facility for details.'
+            : ($isAutoScheduled
+                ? "CPRF auto-scheduled — pressure score {$riskScore}/100 (High risk) crossed the auto-schedule threshold."
+                : 'CPRF predictive insight — elevated usage pressure detected.'));
     $cimmPayload = [
         'facility_id' => $facilityId,
         'facility_name' => $facilityName,
         'location' => $location,
-        'task' => $isManual ? 'Manual maintenance report (CPRF request)' : 'Preventive maintenance (CPRF request)',
-        'category' => $isManual ? 'Manual / Emergency Report' : 'Preventive / Predictive',
+        'task' => $isManual
+            ? 'Manual maintenance report (CPRF request)'
+            : ($isAutoScheduled ? 'Auto-scheduled preventive maintenance (CPRF)' : 'Preventive maintenance (CPRF request)'),
+        'category' => $isManual
+            ? 'Manual / Emergency Report'
+            : ($isAutoScheduled ? 'Automatic Scheduling' : 'Preventive / Predictive'),
         'priority' => $priority,
         'starting_date' => $requestedDate,
         'estimated_completion_date' => $requestedDate,
         'status' => 'Request Pending',
-        'source' => $isManual ? 'cprf_manual' : 'cprf_predictive',
+        'source' => $isManual ? 'cprf_manual' : ($isAutoScheduled ? 'cprf_auto' : 'cprf_predictive'),
         'risk_score' => $riskScore,
         'risk_band' => $riskBand,
         'notes' => $taskNotes,

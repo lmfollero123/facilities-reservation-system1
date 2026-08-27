@@ -34,7 +34,30 @@ if (!in_array($filterBand, ['all', 'high', 'medium', 'low'], true)) {
     $filterBand = 'all';
 }
 
+// Handled before computing rows below so a toggle change takes effect on
+// this same page load, not just the next one.
+$autoScheduleToggleMessage = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auto_schedule_toggle']) && frs_csrf_ok()) {
+    if ($canSubmit) {
+        frs_set_auto_schedule_enabled($pdo, $_POST['auto_schedule_toggle'] === '1', (int)($_SESSION['user_id'] ?? 0));
+        $autoScheduleToggleMessage = $_POST['auto_schedule_toggle'] === '1'
+            ? 'Automatic scheduling enabled for High-risk facilities.'
+            : 'Automatic scheduling disabled.';
+    }
+}
+
 $predictiveRows = frs_compute_predictive_maintenance_rows($pdo);
+$autoScheduleEnabled = frs_auto_schedule_enabled($pdo);
+$autoScheduledThisLoad = [];
+if ($activeTab === 'insights' && $autoScheduleEnabled) {
+    // Safe to call on every Insights page load: frs_submit_maintenance_request()'s
+    // own per-facility/date duplicate guard means a facility that already got
+    // auto-scheduled just gets skipped (has_pending_request), never re-submitted.
+    $autoScheduledThisLoad = frs_auto_schedule_high_risk_requests($pdo, $predictiveRows);
+    if (!empty(array_filter($autoScheduledThisLoad, fn($s) => $s['success']))) {
+        $predictiveRows = frs_compute_predictive_maintenance_rows($pdo);
+    }
+}
 $recentRequests = frs_fetch_recent_maintenance_requests($pdo, 10);
 $highCount = count(array_filter($predictiveRows, static fn($r) => ($r['risk_band'] ?? '') === 'High'));
 $mediumCount = count(array_filter($predictiveRows, static fn($r) => ($r['risk_band'] ?? '') === 'Medium'));
@@ -72,7 +95,7 @@ $insightsOffset = ($insightsPage - 1) * $insightsPerPage;
 $displayRowsPaged = array_slice($displayRows, $insightsOffset, $insightsPerPage);
 
 // Action feedback
-$success = '';
+$success = $autoScheduleToggleMessage;
 $error = '';
 $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'FRSAjaxForm';
 
@@ -205,6 +228,23 @@ ob_start();
 .pm-export-btn { padding:0.35rem 0.75rem; font-size:0.78rem; font-weight:700; border-radius:8px; }
 .pm-manual-btn { border-color:#fca5a5; color:#b91c1c; background:#fef2f2; }
 .pm-manual-btn:hover { background:#fee2e2; }
+.pm-auto-schedule-bar { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.5rem; padding:0.5rem 0.75rem; background:#f8fafc; border:1px solid #e8ecf4; border-radius:10px; }
+.pm-auto-schedule-label { display:flex; align-items:center; gap:0.5rem; font-size:0.82rem; font-weight:700; color:#334155; cursor:default; }
+.pm-auto-schedule-switch { display:inline-block; width:32px; height:18px; border-radius:999px; background:#cbd5e1; position:relative; transition:background 0.15s; flex-shrink:0; }
+.pm-auto-schedule-switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left 0.15s; }
+.pm-auto-schedule-switch.on { background:#16a34a; }
+.pm-auto-schedule-switch.on::after { left:16px; }
+.pm-auto-schedule-summary { margin-bottom:0.75rem; padding:0.5rem 0.75rem; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; font-size:0.8rem; color:#166534; }
+[data-theme="dark"] .pm-auto-schedule-bar {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-auto-schedule-label { color: var(--text-secondary); }
+[data-theme="dark"] .pm-auto-schedule-summary {
+    background: rgba(34,197,94,0.12);
+    border-color: rgba(74,222,128,0.3);
+    color: #86efac;
+}
 .pm-search-bar { display:flex; gap:0.5rem; margin-bottom:0.75rem; }
 .pm-search-bar input[type="text"] { flex:1; min-width:180px; padding:0.45rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.82rem; }
 .pm-layout { display:grid; grid-template-columns:1fr 280px; gap:0.85rem; align-items:start; }
