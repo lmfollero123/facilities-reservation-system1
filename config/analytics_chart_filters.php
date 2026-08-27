@@ -641,7 +641,10 @@ if (!function_exists('frs_facility_filter_map')) {
         <div class="facility-map-card">
             <div class="facility-map-card__head">
                 <span class="facility-map-card__label">Click a facility pin to filter <?= count($prefixes) > 1 ? 'every chart' : 'the chart'; ?> below</span>
-                <button type="button" class="chart-filter-preset facility-map-card__reset" data-facility-map-reset="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>">All Facilities</button>
+                <div class="facility-map-card__actions">
+                    <button type="button" class="chart-filter-preset facility-map-card__locate" data-facility-map-locate="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>">📍 My Location</button>
+                    <button type="button" class="chart-filter-preset facility-map-card__reset" data-facility-map-reset="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>">All Facilities</button>
+                </div>
             </div>
             <div id="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>" class="facility-map-canvas"></div>
         </div>
