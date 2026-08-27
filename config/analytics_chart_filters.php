@@ -81,38 +81,76 @@ if (!function_exists('frs_parse_reports_period')) {
     function frs_parse_reports_period(string $prefix, ?int $defaultYear, ?int $defaultMonth, ?int $defaultFacility): array
     {
         $facKey = $prefix . '_facility';
+        $startKey = $prefix . '_start';
+        $endKey = $prefix . '_end';
         $monthKey = $prefix . '_month';
         $yearKey = $prefix . '_year';
 
         $facilityRaw = $_GET[$facKey] ?? ($defaultFacility ? (string)$defaultFacility : 'all');
         $facility = ($facilityRaw !== '' && $facilityRaw !== 'all') ? (int)$facilityRaw : null;
 
-        $monthRaw = $_GET[$monthKey] ?? ($defaultMonth === null ? 'all' : (string)$defaultMonth);
-        $yearRaw = $_GET[$yearKey] ?? ($defaultYear === null ? 'all' : (string)$defaultYear);
+        $isValidDate = static function (string $value): bool {
+            if ($value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+                return false;
+            }
+            return strtotime($value) !== false;
+        };
 
-        $year = ($yearRaw === 'all' || $yearRaw === '') ? null : (int)$yearRaw;
-        $month = ($monthRaw === 'all' || $monthRaw === '') ? null : (int)$monthRaw;
+        $startRaw = isset($_GET[$startKey]) ? trim((string)$_GET[$startKey]) : '';
+        $endRaw = isset($_GET[$endKey]) ? trim((string)$_GET[$endKey]) : '';
 
-        if ($monthRaw === 'all' && $yearRaw !== 'all' && $yearRaw !== '') {
-            $month = null;
-        }
-        if ($yearRaw === 'all' && $monthRaw !== 'all' && $monthRaw !== '') {
-            $year = null;
+        $year = null;
+        $month = null;
+        $start = null;
+        $end = null;
+        $label = 'All Time';
+
+        if (isset($_GET[$startKey]) || isset($_GET[$endKey])) {
+            // The Date From/To form was explicitly submitted (possibly with one
+            // or both fields cleared for "All Time") - it wins outright over
+            // any month/year params, and does NOT fall back to the default
+            // current-month view the way a bare fresh page load does below.
+            if ($isValidDate($startRaw) && $isValidDate($endRaw)) {
+                $start = $startRaw;
+                $end = $endRaw;
+                if (strtotime($start) > strtotime($end)) {
+                    [$start, $end] = [$end, $start];
+                }
+                $startLabel = date('M j, Y', strtotime($start));
+                $endLabel = date('M j, Y', strtotime($end));
+                $label = $startLabel === $endLabel ? $startLabel : "{$startLabel} – {$endLabel}";
+            }
+        } elseif (isset($_GET[$monthKey]) || isset($_GET[$yearKey])) {
+            // Back-compat for old bookmarked/shared URLs still using month+year.
+            $monthRaw = $_GET[$monthKey] ?? ($defaultMonth === null ? 'all' : (string)$defaultMonth);
+            $yearRaw = $_GET[$yearKey] ?? ($defaultYear === null ? 'all' : (string)$defaultYear);
+            $year = ($yearRaw === 'all' || $yearRaw === '') ? null : (int)$yearRaw;
+            $month = ($monthRaw === 'all' || $monthRaw === '') ? null : (int)$monthRaw;
+            if ($monthRaw === 'all' && $yearRaw !== 'all' && $yearRaw !== '') {
+                $month = null;
+            }
+            if ($yearRaw === 'all' && $monthRaw !== 'all' && $monthRaw !== '') {
+                $year = null;
+            }
+            if ($year !== null && $month !== null) {
+                $start = date('Y-m-01', mktime(0, 0, 0, $month, 1, $year));
+                $end = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
+                $label = date('F Y', mktime(0, 0, 0, $month, 1, $year));
+            }
+        } elseif ($defaultYear !== null && $defaultMonth !== null) {
+            // Fresh page load, no filter params yet: default to the current month.
+            $year = $defaultYear;
+            $month = $defaultMonth;
+            $start = date('Y-m-01', mktime(0, 0, 0, $month, 1, $year));
+            $end = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
+            $label = date('F Y', mktime(0, 0, 0, $month, 1, $year));
         }
 
         $clause = '';
         $params = [];
-        $start = null;
-        $end = null;
-
-        if ($year !== null && $month !== null) {
-            $start = date('Y-m-01', mktime(0, 0, 0, $month, 1, $year));
-            $end = date('Y-m-t', mktime(0, 0, 0, $month, 1, $year));
-            $label = date('F Y', mktime(0, 0, 0, $month, 1, $year));
+        if ($start !== null && $end !== null) {
             $clause = 'WHERE reservation_date >= :start AND reservation_date <= :end';
             $params = ['start' => $start, 'end' => $end];
-        } else {
-            $label = 'All Time';
         }
 
         if ($facility) {
@@ -137,6 +175,119 @@ if (!function_exists('frs_parse_reports_period')) {
     }
 }
 
+if (!function_exists('frs_reports_bucket_series')) {
+    /**
+     * Adaptively bucket a resolved report period into a label/count series for
+     * trend-style charts, instead of assuming the period is a whole month.
+     *
+     * @return array{labels: list<string>, data: list<int>}
+     */
+    function frs_reports_bucket_series(PDO $pdo, ?string $start, ?string $end, ?int $facility, int $targetPoints = 6): array
+    {
+        if ($start === null || $end === null) {
+            // All Time: fall back to a trailing 12-month view so there's still
+            // a meaningful trend/forecast basis.
+            $end = date('Y-m-d');
+            $start = date('Y-m-01', strtotime('-11 months'));
+        }
+
+        $startTs = strtotime($start);
+        $endTs = strtotime($end);
+        $days = max(1, (int)round(($endTs - $startTs) / 86400) + 1);
+
+        if ($days <= 31) {
+            $unit = 'day';
+            $stepDays = 1;
+        } elseif ($days <= 180) {
+            $unit = 'week';
+            $stepDays = 7;
+        } else {
+            $unit = 'month';
+            $stepDays = 30;
+        }
+
+        $labels = [];
+        $data = [];
+
+        if ($unit === 'month') {
+            $cursor = strtotime(date('Y-m-01', $startTs));
+            $endMonth = strtotime(date('Y-m-01', $endTs));
+            while ($cursor <= $endMonth) {
+                $bucketStart = date('Y-m-01', $cursor);
+                $bucketEnd = date('Y-m-t', $cursor);
+                $labels[] = date('M Y', $cursor);
+                $data[] = frs_reports_count_in_range($pdo, max($bucketStart, $start), min($bucketEnd, $end), $facility);
+                $cursor = strtotime('+1 month', $cursor);
+            }
+        } else {
+            $cursor = $startTs;
+            while ($cursor <= $endTs) {
+                $bucketEndTs = min($endTs, strtotime("+" . ($stepDays - 1) . " days", $cursor));
+                $bucketStart = date('Y-m-d', $cursor);
+                $bucketEnd = date('Y-m-d', $bucketEndTs);
+                $labels[] = $unit === 'day'
+                    ? date('M j', $cursor)
+                    : (date('M j', $cursor) . '–' . date('j', $bucketEndTs));
+                $data[] = frs_reports_count_in_range($pdo, $bucketStart, $bucketEnd, $facility);
+                $cursor = strtotime("+{$stepDays} days", $cursor);
+            }
+        }
+
+        // Guard against a pathologically fine-grained range producing an
+        // unreadable number of points (shouldn't happen given the thresholds
+        // above, but keeps the chart sane if called with unusual inputs).
+        if (count($labels) > 60) {
+            $labels = array_slice($labels, -60);
+            $data = array_slice($data, -60);
+        }
+
+        return ['labels' => $labels, 'data' => $data, 'unit' => $unit, 'end' => $end];
+    }
+}
+
+if (!function_exists('frs_reports_forecast_labels')) {
+    /**
+     * Labels for the N periods after a bucketed series, in the same unit
+     * (day/week/month) so a short custom range doesn't get "3 months ahead"
+     * forecast labels for a 3-point daily series.
+     *
+     * @return list<string>
+     */
+    function frs_reports_forecast_labels(string $lastBucketEnd, string $unit, int $periods = 3): array
+    {
+        $labels = [];
+        $cursor = strtotime($lastBucketEnd);
+        for ($i = 1; $i <= $periods; $i++) {
+            if ($unit === 'day') {
+                $cursor = strtotime('+1 day', $cursor);
+                $labels[] = date('M j', $cursor);
+            } elseif ($unit === 'week') {
+                $cursor = strtotime('+7 days', $cursor);
+                $labels[] = date('M j', $cursor);
+            } else {
+                $cursor = strtotime('+1 month', $cursor);
+                $labels[] = date('M Y', $cursor);
+            }
+        }
+        return $labels;
+    }
+}
+
+if (!function_exists('frs_reports_count_in_range')) {
+    function frs_reports_count_in_range(PDO $pdo, string $start, string $end, ?int $facility): int
+    {
+        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
+        $params = ['start' => $start, 'end' => $end];
+        if ($facility) {
+            $sql .= ' AND facility_id = :facility_id';
+            $params['facility_id'] = $facility;
+        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+}
+
 if (!function_exists('frs_reports_period_filter_form')) {
     /**
      * @param list<array{id:string,label:string}> $facilities
@@ -148,18 +299,28 @@ if (!function_exists('frs_reports_period_filter_form')) {
         array $period,
         array $skipPrefixes = []
     ): string {
-        $month = $period['month'];
-        $year = $period['year'];
         $facility = $period['facility'];
+        $start = $period['start'];
+        $end = $period['end'];
+        $safePrefix = htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8');
+
+        $presets = [
+            'today' => 'Today',
+            '7d' => 'Last 7 Days',
+            'month' => 'This Month',
+            '30d' => 'Last 30 Days',
+            'year' => 'This Year',
+            'all' => 'All Time',
+        ];
 
         ob_start();
         ?>
-        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>" data-frs-partial="reports-content">
+        <form method="get" class="chart-filter-bar" id="filter-<?= htmlspecialchars($chartId, ENT_QUOTES, 'UTF-8'); ?>" data-frs-partial="reports-content" data-frs-partial-auto>
             <?= frs_chart_hidden_preserve(array_merge($skipPrefixes, [$prefix])); ?>
             <div class="chart-filter-fields">
                 <label class="chart-filter-item">
                     <span>Facility</span>
-                    <select name="<?= htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8'); ?>_facility" class="booking-form-control chart-filter-control">
+                    <select name="<?= $safePrefix; ?>_facility" class="booking-form-control chart-filter-control">
                         <option value="all"<?= $facility === null ? ' selected' : ''; ?>>All Facilities</option>
                         <?php foreach ($facilities as $fac): ?>
                             <option value="<?= (int)$fac['id']; ?>"<?= $facility === (int)$fac['id'] ? ' selected' : ''; ?>>
@@ -169,24 +330,19 @@ if (!function_exists('frs_reports_period_filter_form')) {
                     </select>
                 </label>
                 <label class="chart-filter-item">
-                    <span>Month</span>
-                    <select name="<?= htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8'); ?>_month" class="booking-form-control chart-filter-control chart-filter-month" data-chart-prefix="<?= htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8'); ?>">
-                        <option value="all"<?= $month === null ? ' selected' : ''; ?>>All Time</option>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <option value="<?= $m; ?>"<?= $month === $m ? ' selected' : ''; ?>><?= date('F', mktime(0, 0, 0, $m, 1)); ?></option>
-                        <?php endfor; ?>
-                    </select>
+                    <span>Date From</span>
+                    <input type="date" name="<?= $safePrefix; ?>_start" class="booking-form-control chart-filter-control" value="<?= htmlspecialchars((string)$start, ENT_QUOTES, 'UTF-8'); ?>" data-chart-range-start="<?= $safePrefix; ?>">
                 </label>
                 <label class="chart-filter-item">
-                    <span>Year</span>
-                    <select name="<?= htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8'); ?>_year" class="booking-form-control chart-filter-control chart-filter-year" data-chart-prefix="<?= htmlspecialchars($prefix, ENT_QUOTES, 'UTF-8'); ?>">
-                        <option value="all"<?= $year === null ? ' selected' : ''; ?>>All Years</option>
-                        <?php for ($y = (int)date('Y'); $y >= (int)date('Y') - 2; $y--): ?>
-                            <option value="<?= $y; ?>"<?= $year === $y ? ' selected' : ''; ?>><?= $y; ?></option>
-                        <?php endfor; ?>
-                    </select>
+                    <span>Date To</span>
+                    <input type="date" name="<?= $safePrefix; ?>_end" class="booking-form-control chart-filter-control" value="<?= htmlspecialchars((string)$end, ENT_QUOTES, 'UTF-8'); ?>" data-chart-range-end="<?= $safePrefix; ?>">
                 </label>
-                <button type="submit" class="btn-primary chart-filter-apply">Apply</button>
+                <noscript><button type="submit" class="btn-primary chart-filter-apply">Apply</button></noscript>
+            </div>
+            <div class="chart-filter-presets" data-chart-presets="<?= $safePrefix; ?>">
+                <?php foreach ($presets as $key => $presetLabel): ?>
+                    <button type="button" class="chart-filter-preset" data-preset="<?= $key; ?>"><?= htmlspecialchars($presetLabel); ?></button>
+                <?php endforeach; ?>
             </div>
             <small class="chart-filter-active">Showing: <?= htmlspecialchars($period['label']); ?></small>
         </form>
@@ -371,7 +527,7 @@ if (!function_exists('frs_reports_occ_filter_form')) {
     {
         ob_start();
         ?>
-        <form method="get" class="chart-filter-bar" id="filter-occ">
+        <form method="get" class="chart-filter-bar" id="filter-occ" data-frs-partial="reports-content" data-frs-partial-auto>
             <?= frs_chart_hidden_preserve(array_merge($skipPrefixes, ['occ'])); ?>
             <div class="chart-filter-fields">
                 <label class="chart-filter-item">
@@ -385,7 +541,7 @@ if (!function_exists('frs_reports_occ_filter_form')) {
                         <?php endforeach; ?>
                     </select>
                 </label>
-                <button type="submit" class="btn-primary chart-filter-apply">Apply</button>
+                <noscript><button type="submit" class="btn-primary chart-filter-apply">Apply</button></noscript>
             </div>
             <small class="chart-filter-active">
                 Showing: <?= $facilityId ? 'Selected facility' : 'All facilities'; ?> (live snapshot)

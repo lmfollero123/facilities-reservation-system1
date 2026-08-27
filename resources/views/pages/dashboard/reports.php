@@ -319,8 +319,8 @@ $approvalRate = $totalReservations > 0 ? round(($approvedCount / $totalReservati
 // Utilization (simplified: approved reservations / total days in period * average slots per day)
 // Assuming 4 time slots per day as average
 if ($startDate && $endDate) {
-    $daysInMonth = (int)date('t', mktime(0, 0, 0, $reportMonth, 1, $reportYear));
-    $totalPossibleSlots = $daysInMonth * 4; // Rough estimate
+    $daysInPeriod = max(1, (int)round((strtotime($endDate) - strtotime($startDate)) / 86400) + 1);
+    $totalPossibleSlots = $daysInPeriod * 4; // Rough estimate
 } else {
     // For all time, use a rough estimate based on total days since first reservation
     $firstResStmt = $pdo->query('SELECT MIN(reservation_date) as first_date FROM reservations');
@@ -424,79 +424,13 @@ foreach ($outcomesMap as $status => $count) {
 }
 
 // Charts data - Reservation Trends (trend chart filters)
-$monthlyLabels = [];
-$monthlyData = [];
-
-if ($trendPeriod['year'] === null || $trendPeriod['month'] === null) {
-    for ($i = 5; $i >= 0; $i--) {
-        $monthStart = date('Y-m-01', strtotime("-$i months"));
-        $monthEnd = date('Y-m-t', strtotime("-$i months"));
-        $monthlyLabels[] = date('M Y', strtotime("-$i months"));
-        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
-        $params = ['start' => $monthStart, 'end' => $monthEnd];
-        if ($trendPeriod['facility']) {
-            $sql .= ' AND facility_id = :facility_id';
-            $params['facility_id'] = $trendPeriod['facility'];
-        }
-        $monthStmt = $pdo->prepare($sql);
-        $monthStmt->execute($params);
-        $monthlyData[] = (int)$monthStmt->fetchColumn();
-    }
-} else {
-    $selectedDate = mktime(0, 0, 0, (int)$trendPeriod['month'], 1, (int)$trendPeriod['year']);
-    for ($i = 2; $i >= -3; $i--) {
-        $monthTimestamp = strtotime("$i months", $selectedDate);
-        $monthStart = date('Y-m-01', $monthTimestamp);
-        $monthEnd = date('Y-m-t', $monthTimestamp);
-        $monthlyLabels[] = date('M Y', $monthTimestamp);
-        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
-        $params = ['start' => $monthStart, 'end' => $monthEnd];
-        if ($trendPeriod['facility']) {
-            $sql .= ' AND facility_id = :facility_id';
-            $params['facility_id'] = $trendPeriod['facility'];
-        }
-        $monthStmt = $pdo->prepare($sql);
-        $monthStmt->execute($params);
-        $monthlyData[] = (int)$monthStmt->fetchColumn();
-    }
-}
+$trendSeries = frs_reports_bucket_series($pdo, $trendPeriod['start'], $trendPeriod['end'], $trendPeriod['facility']);
+$monthlyLabels = $trendSeries['labels'];
+$monthlyData = $trendSeries['data'];
 
 // Forecast series (forecast chart filters)
-$forecastMonthlyLabels = [];
-$forecastMonthlyData = [];
-if ($forecastPeriod['year'] === null || $forecastPeriod['month'] === null) {
-    for ($i = 5; $i >= 0; $i--) {
-        $monthStart = date('Y-m-01', strtotime("-$i months"));
-        $monthEnd = date('Y-m-t', strtotime("-$i months"));
-        $forecastMonthlyLabels[] = date('M Y', strtotime("-$i months"));
-        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
-        $params = ['start' => $monthStart, 'end' => $monthEnd];
-        if ($forecastPeriod['facility']) {
-            $sql .= ' AND facility_id = :facility_id';
-            $params['facility_id'] = $forecastPeriod['facility'];
-        }
-        $monthStmt = $pdo->prepare($sql);
-        $monthStmt->execute($params);
-        $forecastMonthlyData[] = (int)$monthStmt->fetchColumn();
-    }
-} else {
-    $selectedDate = mktime(0, 0, 0, (int)$forecastPeriod['month'], 1, (int)$forecastPeriod['year']);
-    for ($i = 2; $i >= -3; $i--) {
-        $monthTimestamp = strtotime("$i months", $selectedDate);
-        $monthStart = date('Y-m-01', $monthTimestamp);
-        $monthEnd = date('Y-m-t', $monthTimestamp);
-        $forecastMonthlyLabels[] = date('M Y', $monthTimestamp);
-        $sql = 'SELECT COUNT(*) FROM reservations WHERE reservation_date >= :start AND reservation_date <= :end';
-        $params = ['start' => $monthStart, 'end' => $monthEnd];
-        if ($forecastPeriod['facility']) {
-            $sql .= ' AND facility_id = :facility_id';
-            $params['facility_id'] = $forecastPeriod['facility'];
-        }
-        $monthStmt = $pdo->prepare($sql);
-        $monthStmt->execute($params);
-        $forecastMonthlyData[] = (int)$monthStmt->fetchColumn();
-    }
-}
+$forecastSeries = frs_reports_bucket_series($pdo, $forecastPeriod['start'], $forecastPeriod['end'], $forecastPeriod['facility']);
+$forecastMonthlyData = $forecastSeries['data'];
 
 /**
  * Very lightweight linear-trend forecast (next N periods).
@@ -541,15 +475,7 @@ function buildSimpleForecast(array $series, int $periods = 3): array
 }
 
 $forecastValues = buildSimpleForecast($forecastMonthlyData, 3);
-$forecastLabels = [];
-if ($forecastPeriod['year'] !== null && $forecastPeriod['month'] !== null) {
-    $baseTs = mktime(0, 0, 0, (int)$forecastPeriod['month'], 1, (int)$forecastPeriod['year']);
-} else {
-    $baseTs = strtotime(date('Y-m-01'));
-}
-for ($i = 1; $i <= 3; $i++) {
-    $forecastLabels[] = date('M Y', strtotime('+' . $i . ' month', $baseTs));
-}
+$forecastLabels = frs_reports_forecast_labels($forecastSeries['end'], $forecastSeries['unit'], 3);
 
 // Operational occupancy (bookings + check-in/out + staff overrides).
 $occupancyNow = [
@@ -972,61 +898,22 @@ ob_start();
     <div class="breadcrumb">
         <span>Analytics</span><span class="sep">/</span><span>Reports</span>
     </div>
-    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
+    <div class="reports-header-row">
         <div>
-            <?= frs_page_title('Reports & Analytics', 'Each chart has its own filter. Use the global filter below to apply settings to all charts at once.'); ?>
+            <?= frs_page_title('Reports & Analytics', 'Each chart has its own instant filter — pick a date range or facility and it updates right away.'); ?>
         </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <a href="<?= htmlspecialchars(frs_reports_export_href('csv'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;" title="Uses Overview KPIs month/year/facility filter">
+        <div class="reports-header-actions">
+        <a href="<?= htmlspecialchars(frs_reports_export_href('csv'), ENT_QUOTES, 'UTF-8'); ?>" class="btn-outline" title="Uses Overview KPIs date range/facility filter">
             Export CSV
         </a>
-        <button type="button" onclick="printSummary()" class="btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
+        <button type="button" onclick="printSummary()" class="btn-primary">
             Print Summary
         </button>
-        <button type="button" onclick="openAiSummaryModal()" class="btn-outline" style="padding: 0.5rem 1rem; white-space: nowrap;">
+        <button type="button" onclick="openAiSummaryModal()" class="btn-outline">
             Generate AI Summary
         </button>
         </div>
     </div>
-</div>
-
-<!-- Global Filter for All Charts -->
-<div class="booking-card" style="margin-bottom: 1.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: var(--gov-blue-dark);">Global Filter (Apply to All Charts)</h3>
-        <button type="button" onclick="applyGlobalFilter()" class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">Apply to All</button>
-    </div>
-    <form id="global-filter-form" class="chart-filter-bar">
-        <div class="chart-filter-fields">
-            <label class="chart-filter-item">
-                <span>Facility</span>
-                <select id="global-facility" class="booking-form-control chart-filter-control">
-                    <option value="all">All Facilities</option>
-                    <?php foreach ($allFacilities as $fac): ?>
-                        <option value="<?= (int)$fac['id']; ?>"<?= ($kpiPeriod['facility'] === (int)$fac['id']) ? ' selected' : ''; ?>><?= htmlspecialchars($fac['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <label class="chart-filter-item">
-                <span>Month</span>
-                <select id="global-month" class="booking-form-control chart-filter-control">
-                    <option value="all"<?= ($kpiPeriod['month'] === null) ? ' selected' : ''; ?>>All Time</option>
-                    <?php for ($m = 1; $m <= 12; $m++): ?>
-                        <option value="<?= $m; ?>"<?= ($kpiPeriod['month'] === $m) ? ' selected' : ''; ?>><?= date('F', mktime(0, 0, 0, $m, 1)); ?></option>
-                    <?php endfor; ?>
-                </select>
-            </label>
-            <label class="chart-filter-item">
-                <span>Year</span>
-                <select id="global-year" class="booking-form-control chart-filter-control">
-                    <option value="all"<?= ($kpiPeriod['year'] === null) ? ' selected' : ''; ?>>All Years</option>
-                    <?php for ($y = (int)date('Y'); $y >= (int)date('Y') - 2; $y--): ?>
-                        <option value="<?= $y; ?>"<?= ($kpiPeriod['year'] === $y) ? ' selected' : ''; ?>><?= $y; ?></option>
-                    <?php endfor; ?>
-                </select>
-            </label>
-        </div>
-    </form>
 </div>
 
 <div class="reports-grid" style="margin-bottom: 1.5rem;">
@@ -1062,14 +949,12 @@ ob_start();
     <section class="booking-card">
         <?= frs_heading_with_tip('Predictive Analytics Forecast', 'Simple linear trend projection for the next 3 months based on historical monthly counts in the selected period.'); ?>
         <?= frs_reports_period_filter_form('rpt-forecast', 'forecast', $allFacilities, $forecastPeriod, []); ?>
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
+        <div class="stat-tile-grid">
             <?php foreach ($forecastLabels as $idx => $label): ?>
-                <div style="padding:0.85rem; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb;">
-                    <div style="font-size:0.82rem; color:#6b7280;"><?= htmlspecialchars($label); ?></div>
-                    <div style="font-size:1.45rem; font-weight:800; color:#1d4ed8; margin-top:0.2rem;">
-                        <?= (int)($forecastValues[$idx] ?? 0); ?>
-                    </div>
-                    <div style="font-size:0.78rem; color:#64748b;">forecasted reservations</div>
+                <div class="stat-tile stat-tile--neutral stat-tile--bordered">
+                    <div class="stat-tile-label"><?= htmlspecialchars($label); ?></div>
+                    <div class="stat-tile-value stat-tile-value--info"><?= (int)($forecastValues[$idx] ?? 0); ?></div>
+                    <div class="stat-tile-caption">forecasted reservations</div>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -1080,30 +965,30 @@ ob_start();
             ($occupancyNow['disclaimer'] ?: 'Estimated from today’s bookings, check-in/out, and staff overrides.') . ' Open Live Occupancy Board for real-time updates.'
         ); ?>
         <?= frs_reports_occ_filter_form($allFacilities, $occFacilityFilter, []); ?>
-        <p style="margin:0 0 0.85rem;"><a href="<?= base_path(); ?>/dashboard/occupancy-monitor">Open live occupancy board →</a></p>
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:0.7rem; margin-bottom:0.85rem;">
-            <div style="padding:0.75rem; background:#f8fafc; border-radius:8px;">
-                <div style="font-size:0.75rem; color:#6b7280;">Total Facilities</div>
-                <div id="occ-total" style="font-size:1.25rem; font-weight:800; color:#0f172a;"><?= (int)$occupancyNow['total_facilities']; ?></div>
+        <p class="reports-inline-link"><a href="<?= base_path(); ?>/dashboard/occupancy-monitor">Open live occupancy board →</a></p>
+        <div class="stat-tile-grid stat-tile-grid--compact">
+            <div class="stat-tile stat-tile--neutral">
+                <div class="stat-tile-label">Total Facilities</div>
+                <div id="occ-total" class="stat-tile-value"><?= (int)$occupancyNow['total_facilities']; ?></div>
             </div>
-            <div style="padding:0.75rem; background:#ecfdf5; border-radius:8px;">
-                <div style="font-size:0.75rem; color:#047857;">Occupied / busy</div>
-                <div id="occ-occupied" style="font-size:1.25rem; font-weight:800; color:#047857;"><?= (int)$occupancyNow['occupied_facilities']; ?></div>
+            <div class="stat-tile stat-tile--success">
+                <div class="stat-tile-label">Occupied / busy</div>
+                <div id="occ-occupied" class="stat-tile-value"><?= (int)$occupancyNow['occupied_facilities']; ?></div>
             </div>
-            <div style="padding:0.75rem; background:#dcfce7; border-radius:8px;">
-                <div style="font-size:0.75rem; color:#14532d;">On-site</div>
-                <div id="occ-checkedin" style="font-size:1.25rem; font-weight:800; color:#14532d;"><?= (int)($occupancyNow['checked_in'] ?? 0); ?></div>
+            <div class="stat-tile stat-tile--success-alt">
+                <div class="stat-tile-label">On-site</div>
+                <div id="occ-checkedin" class="stat-tile-value"><?= (int)($occupancyNow['checked_in'] ?? 0); ?></div>
             </div>
-            <div style="padding:0.75rem; background:#fef3c7; border-radius:8px;">
-                <div style="font-size:0.75rem; color:#92400e;">No-show risk</div>
-                <div id="occ-noshow" style="font-size:1.25rem; font-weight:800; color:#92400e;"><?= (int)($occupancyNow['no_show_risk'] ?? 0); ?></div>
+            <div class="stat-tile stat-tile--warning">
+                <div class="stat-tile-label">No-show risk</div>
+                <div id="occ-noshow" class="stat-tile-value"><?= (int)($occupancyNow['no_show_risk'] ?? 0); ?></div>
             </div>
-            <div style="padding:0.75rem; background:#eff6ff; border-radius:8px;">
-                <div style="font-size:0.75rem; color:#1d4ed8;">Occupancy Rate</div>
-                <div id="occ-rate" style="font-size:1.25rem; font-weight:800; color:#1d4ed8;"><?= htmlspecialchars((string)$occupancyNow['occupancy_rate']); ?>%</div>
+            <div class="stat-tile stat-tile--info">
+                <div class="stat-tile-label">Occupancy Rate</div>
+                <div id="occ-rate" class="stat-tile-value"><?= htmlspecialchars((string)$occupancyNow['occupancy_rate']); ?>%</div>
             </div>
         </div>
-        <small id="occ-asof" style="color:#6b7280;">
+        <small id="occ-asof" class="reports-muted-small">
             As of <?= htmlspecialchars((string)$occupancyNow['as_of']); ?>
         </small>
     </section>
@@ -1131,59 +1016,59 @@ ob_start();
             </div>
         </div>
         
-        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Global System Statistics</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total Users</div>
-                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalUsers); ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= number_format($activeUsers); ?> active in period</div>
+        <div class="reports-subsection">
+            <h3 class="reports-section-heading">Global System Statistics</h3>
+            <div class="stat-tile-grid stat-tile-grid--wide">
+                <div class="stat-tile stat-tile--neutral">
+                    <div class="stat-tile-label">Total Users</div>
+                    <div class="stat-tile-value stat-tile-value--brand"><?= number_format($totalUsers); ?></div>
+                    <div class="stat-tile-caption"><?= number_format($activeUsers); ?> active in period</div>
                 </div>
-                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Available Facilities</div>
-                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalFacilities); ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">Facilities in system</div>
+                <div class="stat-tile stat-tile--neutral">
+                    <div class="stat-tile-label">Available Facilities</div>
+                    <div class="stat-tile-value stat-tile-value--brand"><?= number_format($totalFacilities); ?></div>
+                    <div class="stat-tile-caption">Facilities in system</div>
                 </div>
-                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Total All-Time</div>
-                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= number_format($totalAllTime); ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;">All reservations ever</div>
+                <div class="stat-tile stat-tile--neutral">
+                    <div class="stat-tile-label">Total All-Time</div>
+                    <div class="stat-tile-value stat-tile-value--brand"><?= number_format($totalAllTime); ?></div>
+                    <div class="stat-tile-caption">All reservations ever</div>
                 </div>
-                <div style="padding: 1rem; background: #f9fafc; border-radius: 8px;">
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-bottom: 0.25rem;">Avg per User</div>
-                    <div style="font-size: 1.75rem; font-weight: 700; color: var(--gov-blue-dark);"><?= $avgReservationsPerUser; ?></div>
-                    <div style="font-size: 0.8rem; color: #8b95b5; margin-top: 0.25rem;"><?= htmlspecialchars($filterLabel); ?></div>
-                </div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
-            <h3 style="margin: 0 0 1rem; font-size: 1.1rem; color: var(--gov-blue-dark);">Status Breakdown (<?= htmlspecialchars($filterLabel); ?>)</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
-                <div style="padding: 0.75rem; background: #e8f5e9; border-radius: 6px; text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #388e3c;"><?= number_format($approvedCount); ?></div>
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Approved</div>
-                </div>
-                <div style="padding: 0.75rem; background: #fff3e0; border-radius: 6px; text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #f57c00;"><?= number_format($pendingCount); ?></div>
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Pending</div>
-                </div>
-                <div style="padding: 0.75rem; background: #ffebee; border-radius: 6px; text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #d32f2f;"><?= number_format($deniedCount); ?></div>
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Denied</div>
-                </div>
-                <div style="padding: 0.75rem; background: #f5f5f5; border-radius: 6px; text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #616161;"><?= number_format($cancelledCount); ?></div>
-                    <div style="font-size: 0.85rem; color: #5b6888; margin-top: 0.25rem;">Cancelled</div>
+                <div class="stat-tile stat-tile--neutral">
+                    <div class="stat-tile-label">Avg per User</div>
+                    <div class="stat-tile-value stat-tile-value--brand"><?= $avgReservationsPerUser; ?></div>
+                    <div class="stat-tile-caption"><?= htmlspecialchars($filterLabel); ?></div>
                 </div>
             </div>
         </div>
-        
-        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e8ecf4;">
+
+        <div class="reports-subsection">
+            <h3 class="reports-section-heading">Status Breakdown (<?= htmlspecialchars($filterLabel); ?>)</h3>
+            <div class="stat-tile-grid">
+                <div class="stat-tile stat-tile--success stat-tile--center">
+                    <div class="stat-tile-value stat-tile-value--lg"><?= number_format($approvedCount); ?></div>
+                    <div class="stat-tile-caption">Approved</div>
+                </div>
+                <div class="stat-tile stat-tile--warning stat-tile--center">
+                    <div class="stat-tile-value stat-tile-value--lg"><?= number_format($pendingCount); ?></div>
+                    <div class="stat-tile-caption">Pending</div>
+                </div>
+                <div class="stat-tile stat-tile--error stat-tile--center">
+                    <div class="stat-tile-value stat-tile-value--lg"><?= number_format($deniedCount); ?></div>
+                    <div class="stat-tile-caption">Denied</div>
+                </div>
+                <div class="stat-tile stat-tile--neutral stat-tile--center">
+                    <div class="stat-tile-value stat-tile-value--lg"><?= number_format($cancelledCount); ?></div>
+                    <div class="stat-tile-caption">Cancelled</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="reports-subsection">
             <?= frs_heading_with_tip('Facility Utilization', 'Approved bookings per facility vs. the busiest facility in the selected period (horizontal bars).', 'h3'); ?>
             <?= frs_reports_period_filter_form('rpt-util', 'util', $allFacilities, $utilPeriod, []); ?>
             <?php if (empty($facilityData)): ?>
-                <p style="color: #8b95b5; padding: 1rem 0;">No facility data available for this period.</p>
+                <p class="reports-empty-note">No facility data available for this period.</p>
             <?php else: ?>
                 <?php foreach ($facilityData as $facility): ?>
                     <?php
@@ -1191,8 +1076,8 @@ ob_start();
                     $percentage = $maxBookings > 0 ? round(($bookings / $maxBookings) * 100) : 0;
                     ?>
                     <div class="bar-row">
-                        <span><?= htmlspecialchars($facility['name']); ?> 
-                            <small style="color: #8b95b5; font-size: 0.85rem;">(<?= $bookings; ?> approved)</small>
+                        <span><?= htmlspecialchars($facility['name']); ?>
+                            <small class="reports-muted-small">(<?= $bookings; ?> approved)</small>
                         </span>
                         <div class="bar-track">
                             <div class="bar-fill" style="width: <?= $percentage; ?>%;"></div>
@@ -1379,32 +1264,6 @@ function openAiSummaryModal() {
         });
 }
 
-function applyGlobalFilter() {
-    const facility = document.getElementById('global-facility').value;
-    const month = document.getElementById('global-month').value;
-    const year = document.getElementById('global-year').value;
-
-    // Build URL with the new filter values
-    const url = new URL(window.location.href);
-    url.searchParams.set('kpi_facility', facility);
-    url.searchParams.set('kpi_month', month);
-    url.searchParams.set('kpi_year', year);
-
-    // Also set for all chart prefixes
-    const prefixes = ['trend', 'status', 'topfac', 'forecast', 'util', 'outcomes'];
-    prefixes.forEach(prefix => {
-        url.searchParams.set(prefix + '_facility', facility);
-        url.searchParams.set(prefix + '_month', month);
-        url.searchParams.set(prefix + '_year', year);
-    });
-
-    // Apply filters in place without a full page reload.
-    if (window.frsPartialLoad) {
-        window.frsPartialLoad(url.toString(), 'reports-content');
-    } else {
-        window.location.href = url.toString();
-    }
-}
 
 function printAiSummary() {
     const contentEl = document.getElementById('aiSummaryContent');
@@ -1565,76 +1424,6 @@ html[data-theme="dark"] .frs-modal-panel-body {
 
 html[data-theme="dark"] .frs-modal-panel-body p {
     color: var(--text-primary, #f1f5f9);
-}
-
-/* Reports & Analytics inline-styled stat tiles */
-html[data-theme="dark"] [style*="background:#f8fafc"],
-html[data-theme="dark"] [style*="background: #f8fafc"],
-html[data-theme="dark"] [style*="background:#f9fafc"],
-html[data-theme="dark"] [style*="background: #f9fafc"] {
-    background: #1e293b !important;
-}
-html[data-theme="dark"] [style*="background:#ecfdf5"],
-html[data-theme="dark"] [style*="background: #ecfdf5"],
-html[data-theme="dark"] [style*="background:#dcfce7"],
-html[data-theme="dark"] [style*="background: #dcfce7"],
-html[data-theme="dark"] [style*="background:#e8f5e9"],
-html[data-theme="dark"] [style*="background: #e8f5e9"] {
-    background: #14532d !important;
-}
-html[data-theme="dark"] [style*="background:#fef3c7"],
-html[data-theme="dark"] [style*="background: #fef3c7"],
-html[data-theme="dark"] [style*="background:#fff3e0"],
-html[data-theme="dark"] [style*="background: #fff3e0"] {
-    background: #451a03 !important;
-}
-html[data-theme="dark"] [style*="background:#eff6ff"],
-html[data-theme="dark"] [style*="background: #eff6ff"] {
-    background: #1e3a5f !important;
-}
-html[data-theme="dark"] [style*="background:#ffebee"],
-html[data-theme="dark"] [style*="background: #ffebee"] {
-    background: #450a0a !important;
-}
-html[data-theme="dark"] [style*="background:#f5f5f5"],
-html[data-theme="dark"] [style*="background: #f5f5f5"] {
-    background: #334155 !important;
-}
-html[data-theme="dark"] [style*="color:#0f172a"],
-html[data-theme="dark"] [style*="color: #0f172a"],
-html[data-theme="dark"] [style*="color:#6b7280"],
-html[data-theme="dark"] [style*="color: #6b7280"],
-html[data-theme="dark"] [style*="color:#5b6888"],
-html[data-theme="dark"] [style*="color: #5b6888"],
-html[data-theme="dark"] [style*="color:#8b95b5"],
-html[data-theme="dark"] [style*="color: #8b95b5"] {
-    color: #cbd5e1 !important;
-}
-html[data-theme="dark"] [style*="color:#047857"],
-html[data-theme="dark"] [style*="color: #047857"],
-html[data-theme="dark"] [style*="color:#14532d"],
-html[data-theme="dark"] [style*="color: #14532d"],
-html[data-theme="dark"] [style*="color:#388e3c"],
-html[data-theme="dark"] [style*="color: #388e3c"] {
-    color: #86efac !important;
-}
-html[data-theme="dark"] [style*="color:#92400e"],
-html[data-theme="dark"] [style*="color: #92400e"],
-html[data-theme="dark"] [style*="color:#f57c00"],
-html[data-theme="dark"] [style*="color: #f57c00"] {
-    color: #fcd34d !important;
-}
-html[data-theme="dark"] [style*="color:#1d4ed8"],
-html[data-theme="dark"] [style*="color: #1d4ed8"] {
-    color: #93c5fd !important;
-}
-html[data-theme="dark"] [style*="color:#d32f2f"],
-html[data-theme="dark"] [style*="color: #d32f2f"] {
-    color: #fca5a5 !important;
-}
-html[data-theme="dark"] [style*="color:#616161"],
-html[data-theme="dark"] [style*="color: #616161"] {
-    color: #cbd5e1 !important;
 }
 
 html[data-theme="dark"] .frs-modal-panel-body ul {

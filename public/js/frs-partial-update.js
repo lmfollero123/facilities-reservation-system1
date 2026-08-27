@@ -426,13 +426,73 @@
     });
 
     document.addEventListener('change', function (e) {
-        const control = e.target.closest('select, input[type="checkbox"], input[type="radio"]');
+        const control = e.target.closest('select, input[type="checkbox"], input[type="radio"], input[type="date"]');
         if (!control) return;
         const form = control.closest('form[data-frs-partial][data-frs-partial-auto]');
         if (!form) return;
         const partialId = form.getAttribute('data-frs-partial');
         if (!partialId) return;
         loadPartial(buildUrlFromForm(form), partialId);
+    });
+
+    // ---- Date-range preset buttons (Today / Last 7 Days / This Month / ...) ----
+    // Fills the paired Date From/To inputs and fires the same change-triggered
+    // auto-submit above - no separate AJAX path needed.
+    function fmtLocalDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function presetRange(preset) {
+        const today = new Date();
+        switch (preset) {
+            case 'today':
+                return [fmtLocalDate(today), fmtLocalDate(today)];
+            case '7d': {
+                const s = new Date(today);
+                s.setDate(s.getDate() - 6);
+                return [fmtLocalDate(s), fmtLocalDate(today)];
+            }
+            case '30d': {
+                const s = new Date(today);
+                s.setDate(s.getDate() - 29);
+                return [fmtLocalDate(s), fmtLocalDate(today)];
+            }
+            case 'month': {
+                const s = new Date(today.getFullYear(), today.getMonth(), 1);
+                const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                return [fmtLocalDate(s), fmtLocalDate(e)];
+            }
+            case 'year': {
+                const s = new Date(today.getFullYear(), 0, 1);
+                const e = new Date(today.getFullYear(), 11, 31);
+                return [fmtLocalDate(s), fmtLocalDate(e)];
+            }
+            case 'all':
+            default:
+                return ['', ''];
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.chart-filter-preset');
+        if (!btn) return;
+        const wrap = btn.closest('[data-chart-presets]');
+        const form = btn.closest('form');
+        if (!wrap || !form) return;
+        const prefix = wrap.getAttribute('data-chart-presets');
+        const startEl = form.querySelector('[data-chart-range-start="' + prefix + '"]');
+        const endEl = form.querySelector('[data-chart-range-end="' + prefix + '"]');
+        if (!startEl || !endEl) return;
+        const [start, end] = presetRange(btn.getAttribute('data-preset'));
+        startEl.value = start;
+        endEl.value = end;
+        form.querySelectorAll('.chart-filter-preset').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+        });
+        endEl.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
     window.addEventListener('popstate', function (e) {

@@ -104,6 +104,17 @@
             : 'rgba(0, 0, 0, 0.05)';
     }
 
+    function themeColor(varName, fallback) {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        return value || fallback;
+    }
+
+    function withAlpha(hex, alpha) {
+        const rgb = parseColorToRgb(hex);
+        if (!rgb) return hex;
+        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+    }
+
     function initReservationCharts(cfg) {
         if (!window.Chart || !cfg) return;
 
@@ -119,6 +130,7 @@
 
         const monthlyCtx = document.getElementById('monthlyChart');
         if (monthlyCtx) {
+            const trendColor = themeColor('--primary-color', '#0047ab');
             new Chart(monthlyCtx, {
                 type: 'line',
                 plugins: plugins.slice(),
@@ -127,12 +139,12 @@
                     datasets: [{
                         label: 'Reservations',
                         data: cfg.monthlyData || [],
-                        borderColor: '#0047ab',
-                        backgroundColor: 'rgba(0, 71, 171, 0.1)',
-                        tension: 0.4,
+                        borderColor: trendColor,
+                        backgroundColor: withAlpha(trendColor, 0.12),
+                        tension: 0.35,
                         fill: true,
-                        borderWidth: 2,
-                        pointBackgroundColor: '#0047ab',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: trendColor,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
                         pointRadius: 4,
@@ -142,7 +154,20 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: Object.assign({ legend: { display: false } }, valueLabelOpts),
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: Object.assign({
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: themeColor('--bg-secondary', '#ffffff'),
+                            titleColor: themeColor('--text-primary', '#1e293b'),
+                            bodyColor: themeColor('--text-secondary', '#475569'),
+                            borderColor: themeColor('--border-color', '#e2e8f0'),
+                            borderWidth: 1,
+                            padding: 10,
+                            cornerRadius: 8,
+                            displayColors: false,
+                        },
+                    }, valueLabelOpts),
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -163,8 +188,21 @@
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { padding: 15, font: { size: 12 } }
-                    }
+                        labels: {
+                            padding: 15,
+                            font: { size: 12 },
+                            color: themeColor('--text-secondary', '#475569'),
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: themeColor('--bg-secondary', '#ffffff'),
+                        titleColor: themeColor('--text-primary', '#1e293b'),
+                        bodyColor: themeColor('--text-secondary', '#475569'),
+                        borderColor: themeColor('--border-color', '#e2e8f0'),
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                    },
                 }
             };
             if (cfg.showValueLabels) {
@@ -174,6 +212,7 @@
                     labels: {
                         padding: 12,
                         font: { size: 12, weight: '600' },
+                        color: themeColor('--text-secondary', '#475569'),
                         generateLabels(chart) {
                             const dataset = chart.data.datasets[0];
                             return chart.data.labels.map((label, i) => {
@@ -213,19 +252,20 @@
 
         const facilityCtx = document.getElementById('facilityChart');
         if (facilityCtx) {
+            const facilityColor = themeColor('--primary-color', '#0047ab');
             const facilityDataset = cfg.showValueLabels
                 ? {
                     label: 'Approved Bookings',
                     data: cfg.facilityCounts || [],
-                    backgroundColor: 'rgba(0, 71, 171, 0.85)',
-                    borderColor: '#0047ab',
+                    backgroundColor: withAlpha(facilityColor, 0.85),
+                    borderColor: facilityColor,
                     borderWidth: 1.5,
                     borderRadius: 6
                 }
                 : {
                     label: 'Bookings',
                     data: cfg.facilityCounts || [],
-                    backgroundColor: '#0047ab',
+                    backgroundColor: facilityColor,
                     borderRadius: 6,
                     borderSkipped: false
                 };
@@ -233,7 +273,19 @@
             const facilityOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: Object.assign({ legend: { display: false } }, valueLabelOpts),
+                plugins: Object.assign({
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: themeColor('--bg-secondary', '#ffffff'),
+                        titleColor: themeColor('--text-primary', '#1e293b'),
+                        bodyColor: themeColor('--text-secondary', '#475569'),
+                        borderColor: themeColor('--border-color', '#e2e8f0'),
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                        displayColors: false,
+                    },
+                }, valueLabelOpts),
                 scales: {
                     y: {
                         beginAtZero: true,

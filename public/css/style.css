@@ -10986,6 +10986,190 @@ html[data-theme="dark"] .chart-filter-active {
     color: #94a3b8;
 }
 
+.chart-filter-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.chart-filter-preset {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #e0e6ed);
+    background: var(--bg-primary, #fff);
+    color: var(--text-secondary, #5b6888);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chart-filter-preset:hover {
+    border-color: var(--primary-color, #0047ab);
+    color: var(--primary-color, #0047ab);
+}
+
+.chart-filter-preset.active {
+    background: var(--primary-color, #0047ab);
+    border-color: var(--primary-color, #0047ab);
+    color: #fff;
+}
+
+/* Reusable KPI/stat tile system - replaces one-off inline-styled stat boxes
+   so dark mode works via the same CSS variables everywhere, instead of the
+   fragile [style*="..."] attribute-selector overrides that used to shadow
+   each hardcoded inline color by hand. */
+.stat-tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.stat-tile-grid--wide {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.stat-tile-grid--compact {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 0.85rem;
+}
+
+.stat-tile {
+    padding: 0.85rem;
+    border-radius: 10px;
+    background: var(--bg-tertiary, #f9fafc);
+}
+
+.stat-tile--bordered {
+    border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.stat-tile--center {
+    text-align: center;
+}
+
+.stat-tile-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #5b6888);
+    margin-bottom: 0.2rem;
+}
+
+.stat-tile-value {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary, #0f172a);
+}
+
+.stat-tile-value--lg {
+    font-size: 1.5rem;
+}
+
+.stat-tile-value--brand {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--gov-blue-dark, #285ccd);
+}
+
+.stat-tile-value--info {
+    font-size: 1.45rem;
+    color: var(--info-text, #1d4ed8);
+}
+
+.stat-tile-caption {
+    font-size: 0.78rem;
+    color: var(--text-tertiary, #8b95b5);
+    margin-top: 0.2rem;
+}
+
+.stat-tile--success {
+    background: var(--success-bg, #e8f5e9);
+}
+.stat-tile--success .stat-tile-value {
+    color: var(--success-text, #2e7d32);
+}
+
+.stat-tile--success-alt {
+    background: var(--success-bg, #dcfce7);
+}
+.stat-tile--success-alt .stat-tile-value {
+    color: var(--success-text, #14532d);
+}
+
+.stat-tile--warning {
+    background: var(--warning-bg, #fff3e0);
+}
+.stat-tile--warning .stat-tile-value {
+    color: var(--warning-text, #92400e);
+}
+
+.stat-tile--error {
+    background: var(--error-bg, #ffebee);
+}
+.stat-tile--error .stat-tile-value {
+    color: var(--error-text, #d32f2f);
+}
+
+.stat-tile--info {
+    background: var(--info-bg, #eff6ff);
+}
+.stat-tile--info .stat-tile-value {
+    color: var(--info-text, #1d4ed8);
+}
+
+.stat-tile--neutral .stat-tile-value {
+    color: var(--text-primary, #0f172a);
+}
+
+.reports-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.reports-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.reports-subsection {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color, #e8ecf4);
+}
+
+.reports-section-heading {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: var(--gov-blue-dark, #285ccd);
+}
+
+.reports-inline-link {
+    margin: 0 0 0.85rem;
+}
+
+.reports-muted-small {
+    color: var(--text-tertiary, #8b95b5);
+    font-size: 0.85rem;
+}
+
+.reports-empty-note {
+    color: var(--text-tertiary, #8b95b5);
+    padding: 1rem 0;
+}
+
+html[data-theme="dark"] .chart-filter-preset {
+    background: var(--bg-tertiary, #2d3142);
+    border-color: var(--border-color, #475569);
+    color: #94a3b8;
+}
+
 /* Field help: compact “i” tooltip (hover, focus, tap) */
 .bcf-label-row,
 .frs-label-with-tip {
