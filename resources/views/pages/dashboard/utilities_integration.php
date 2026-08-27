@@ -1070,9 +1070,17 @@ $umanStatColor = match ($integrationStatus['sync_status']) {
             if (fTypeHint) fTypeHint.textContent = '';
             return;
         }
-        fQty.max = String(available);
-        if (available > 0 && Number(fQty.value) > available) {
-            fQty.value = String(available);
+        // Cap only when there's real stock to cap against - a max of "0"
+        // with the field's static min="1" would make Quantity permanently
+        // unsatisfiable for HTML5 validation, silently blocking the exact
+        // zero-stock restock requests this form exists to let through.
+        if (available > 0) {
+            fQty.max = String(available);
+            if (Number(fQty.value) > available) {
+                fQty.value = String(available);
+            }
+        } else {
+            fQty.removeAttribute('max');
         }
         if (fTypeHint) {
             fTypeHint.textContent = available > 0

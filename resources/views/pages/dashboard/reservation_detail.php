@@ -21,6 +21,7 @@ require_once __DIR__ . '/../../../../config/violations.php';
 require_once __DIR__ . '/../../../../config/reservation_documents.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/paymongo_helper.php';
+require_once __DIR__ . '/../../../../config/extension_helpers.php';
 $pdo = db();
 $pageTitle = 'Reservation Details | LGU Facilities Reservation';
 $paymentsCfg = file_exists(__DIR__ . '/../../../../config/payments.php') ? (require __DIR__ . '/../../../../config/payments.php') : [];
@@ -132,10 +133,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     if (in_array($action, $allowed, true)) {
         try {
             // Get reservation details for audit log (including facility status)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email, u.mobile AS requester_mobile
-                                      FROM reservations r 
-                                      JOIN facilities f ON r.facility_id = f.id 
-                                      JOIN users u ON r.user_id = u.id 
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.facility_id, f.name AS facility_name, f.status AS facility_status, f.operating_hours, u.id AS requester_id, u.name AS requester_name, u.email AS requester_email, u.mobile AS requester_mobile
+                                      FROM reservations r
+                                      JOIN facilities f ON r.facility_id = f.id
+                                      JOIN users u ON r.user_id = u.id
                                       WHERE r.id = :id');
             $resStmt->execute(['id' => $reservationId]);
             $reservationInfo = $resStmt->fetch(PDO::FETCH_ASSOC);
@@ -172,7 +173,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 
                 // Format time slot as "HH:MM - HH:MM" for storage
                 $newTimeSlot = $startTime . ' - ' . $endTime;
-                
+
+                // Validate against the facility's actual operating hours (the
+                // form's min/max="08:00"/"21:00" is only a generic hint - it
+                // doesn't reflect this specific facility's real hours, so it
+                // must be enforced server-side too, same as Extend already does).
+                $operatingHours = parseOperatingHours((string)($reservationInfo['operating_hours'] ?? ''));
+                if ($operatingHours) {
+                    $openDateTime = DateTime::createFromFormat('H:i', $operatingHours['start']);
+                    $closeDateTime = DateTime::createFromFormat('H:i', $operatingHours['end']);
+                    if ($startTimeObj < $openDateTime || $endTimeObj > $closeDateTime) {
+                        throw new Exception('New time is outside facility operating hours (' . formatTime($operatingHours['start']) . ' - ' . formatTime($operatingHours['end']) . ').');
+                    }
+                }
+
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
                 $today = new DateTime('today');
@@ -276,7 +290,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 
                 // Format time slot as "HH:MM - HH:MM" for storage
                 $newTimeSlot = $startTime . ' - ' . $endTime;
-                
+
+                // Validate against the facility's actual operating hours (the
+                // form's min/max="08:00"/"21:00" is only a generic hint - it
+                // doesn't reflect this specific facility's real hours, so it
+                // must be enforced server-side too, same as Extend already does).
+                $operatingHours = parseOperatingHours((string)($reservationInfo['operating_hours'] ?? ''));
+                if ($operatingHours) {
+                    $openDateTime = DateTime::createFromFormat('H:i', $operatingHours['start']);
+                    $closeDateTime = DateTime::createFromFormat('H:i', $operatingHours['end']);
+                    if ($startTimeObj < $openDateTime || $endTimeObj > $closeDateTime) {
+                        throw new Exception('New time is outside facility operating hours (' . formatTime($operatingHours['start']) . ' - ' . formatTime($operatingHours['end']) . ').');
+                    }
+                }
+
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
                 $today = new DateTime('today');
@@ -439,7 +466,7 @@ $stmt = $pdo->prepare(
     'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
             f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate, f.extension_fee_per_hour AS facility_extension_fee_per_hour,
-            f.requires_document AS facility_requires_document, f.document_requirement_note AS facility_document_requirement_note
+            f.requires_document AS facility_requires_document, f.document_requirement_note AS facility_document_requirement_note, f.operating_hours AS facility_operating_hours
      FROM reservations r
      JOIN users u ON r.user_id = u.id
      JOIN facilities f ON r.facility_id = f.id
@@ -881,6 +908,14 @@ ob_start();
     <?php endif; ?>
 </div>
 
+<?php
+// Modify/Postpone time fields must reflect THIS facility's real operating
+// hours, not a generic guess - falls back to 08:00-21:00 only when the
+// facility has no parseable operating_hours value set.
+$modifyHours = parseOperatingHours((string)($reservation['facility_operating_hours'] ?? '')) ?: ['start' => '08:00', 'end' => '21:00'];
+$modifyHoursLabel = formatTime($modifyHours['start']) . ' - ' . formatTime($modifyHours['end']);
+?>
+
 <!-- Modify Modal -->
 <div id="modifyModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div class="modal-dialog" style="background: white; border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
@@ -907,13 +942,13 @@ ob_start();
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Start Time <span style="color: #dc3545;">*</span>
             </label>
-            <input type="time" name="start_time" id="modify_start_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
-            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Facility operating hours: 8:00 AM - 9:00 PM</small>
+            <input type="time" name="start_time" id="modify_start_time" required min="<?= htmlspecialchars($modifyHours['start'], ENT_QUOTES, 'UTF-8'); ?>" max="<?= htmlspecialchars($modifyHours['end'], ENT_QUOTES, 'UTF-8'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <small style="color: #8b95b5; font-size: 0.85rem; display: block; margin-top: -0.75rem; margin-bottom: 1rem;">Facility operating hours: <?= htmlspecialchars($modifyHoursLabel, ENT_QUOTES, 'UTF-8'); ?></small>
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 End Time <span style="color: #dc3545;">*</span>
             </label>
-            <input type="time" name="end_time" id="modify_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <input type="time" name="end_time" id="modify_end_time" required min="<?= htmlspecialchars($modifyHours['start'], ENT_QUOTES, 'UTF-8'); ?>" max="<?= htmlspecialchars($modifyHours['end'], ENT_QUOTES, 'UTF-8'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Purpose / Event Description</label>
             <textarea name="purpose" id="modify_purpose" placeholder="Purpose or event description" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem; min-height: 80px; font-family: inherit; resize: vertical;"></textarea>
@@ -981,7 +1016,7 @@ ob_start();
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 End Time <span style="color: #dc3545;">*</span>
             </label>
-            <input type="time" name="end_time" id="postpone_end_time" required min="08:00" max="21:00" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
+            <input type="time" name="end_time" id="postpone_end_time" required min="<?= htmlspecialchars($modifyHours['start'], ENT_QUOTES, 'UTF-8'); ?>" max="<?= htmlspecialchars($modifyHours['end'], ENT_QUOTES, 'UTF-8'); ?>" style="width: 100%; padding: 0.5rem; border: 1px solid #e0e6ed; border-radius: 6px; margin-bottom: 1rem;">
             
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
                 Reason for Postponement <span style="color: #dc3545;">*</span>

@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../../../config/notifications.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../config/sms_helper.php';
+require_once __DIR__ . '/../../../../config/extension_helpers.php';
 require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
         } else {
         try {
             // Get reservation details for audit log (including facility status and is_free)
-            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, f.is_free, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email, u.mobile AS requester_mobile
+            $resStmt = $pdo->prepare('SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.postponed_priority, r.facility_id, f.name AS facility_name, f.status AS facility_status, f.is_free, f.operating_hours, u.name AS requester_name, u.id AS requester_id, u.email AS requester_email, u.mobile AS requester_mobile
                                       FROM reservations r
                                       JOIN facilities f ON r.facility_id = f.id
                                       JOIN users u ON r.user_id = u.id
@@ -116,14 +117,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 
                 // Format time slot as "HH:MM - HH:MM" for storage
                 $newTimeSlot = $startTime . ' - ' . $endTime;
-                
+
+                // Validate against the facility's actual operating hours (the
+                // form's min/max="08:00"/"21:00" is only a generic hint - it
+                // doesn't reflect this specific facility's real hours, so it
+                // must be enforced server-side too, same as Extend already does).
+                $operatingHours = parseOperatingHours((string)($reservation['operating_hours'] ?? ''));
+                if ($operatingHours) {
+                    $openDateTime = DateTime::createFromFormat('H:i', $operatingHours['start']);
+                    $closeDateTime = DateTime::createFromFormat('H:i', $operatingHours['end']);
+                    if ($startTimeObj < $openDateTime || $endTimeObj > $closeDateTime) {
+                        throw new Exception('New time is outside facility operating hours (' . formatTime($operatingHours['start']) . ' - ' . formatTime($operatingHours['end']) . ').');
+                    }
+                }
+
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
                 $today = new DateTime('today');
                 if ($newDateObj < $today) {
                     throw new Exception('New reservation date cannot be in the past. Please select today or a future date.');
                 }
-                
+
                 if (empty($reason)) {
                     throw new Exception('Reason is required for modifying an approved reservation.');
                 }
@@ -223,14 +237,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 
                 // Format time slot as "HH:MM - HH:MM" for storage
                 $newTimeSlot = $startTime . ' - ' . $endTime;
-                
+
+                // Validate against the facility's actual operating hours (the
+                // form's min/max="08:00"/"21:00" is only a generic hint - it
+                // doesn't reflect this specific facility's real hours, so it
+                // must be enforced server-side too, same as Extend already does).
+                $operatingHours = parseOperatingHours((string)($reservation['operating_hours'] ?? ''));
+                if ($operatingHours) {
+                    $openDateTime = DateTime::createFromFormat('H:i', $operatingHours['start']);
+                    $closeDateTime = DateTime::createFromFormat('H:i', $operatingHours['end']);
+                    if ($startTimeObj < $openDateTime || $endTimeObj > $closeDateTime) {
+                        throw new Exception('New time is outside facility operating hours (' . formatTime($operatingHours['start']) . ' - ' . formatTime($operatingHours['end']) . ').');
+                    }
+                }
+
                 // Validate new date is not in the past
                 $newDateObj = new DateTime($newDate);
                 $today = new DateTime('today');
                 if ($newDateObj < $today) {
                     throw new Exception('New reservation date cannot be in the past. Please select today or a future date.');
                 }
-                
+
                 if (empty($reason)) {
                     throw new Exception('Reason is required for postponing an approved reservation.');
                 }
@@ -311,6 +338,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
                 }
 
                 $newTimeSlot = $startTime . ' - ' . $endTime;
+
+                $operatingHours = parseOperatingHours((string)($reservation['operating_hours'] ?? ''));
+                if ($operatingHours) {
+                    $openDateTime = DateTime::createFromFormat('H:i', $operatingHours['start']);
+                    $closeDateTime = DateTime::createFromFormat('H:i', $operatingHours['end']);
+                    if ($startTimeObj < $openDateTime || $endTimeObj > $closeDateTime) {
+                        throw new Exception('New time is outside facility operating hours (' . formatTime($operatingHours['start']) . ' - ' . formatTime($operatingHours['end']) . ').');
+                    }
+                }
+
                 $result = frs_staff_reschedule_postponed_priority(
                     $pdo,
                     $reservationId,
