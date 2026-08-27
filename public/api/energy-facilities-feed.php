@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../../config/ui_helpers.php';
 
 // --- Auth: shared bearer token (ENERGY_API_TOKEN) ---
 $expected = trim((string)(function_exists('env_value') ? env_value('ENERGY_API_TOKEN', '') : (getenv('ENERGY_API_TOKEN') ?: '')));
@@ -83,12 +84,16 @@ try {
     $data = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $imagePath = trim((string)($row['image_path'] ?? ''));
-        $imageUrl = null;
-        if ($imagePath !== '') {
-            $imageUrl = preg_match('#^https?://#i', $imagePath)
-                ? $imagePath
-                : rtrim(base_url(), '/') . '/' . ltrim($imagePath, '/');
+        if ($imagePath === '') {
+            // No photo uploaded for this facility - send CPRF's own category
+            // placeholder instead of null, so partner systems display a
+            // real, CPRF-branded image instead of falling back to their own
+            // generic placeholder.
+            $imagePath = frs_facility_placeholder_image((string)$row['name'], $row['description'] ?? null);
         }
+        $imageUrl = preg_match('#^https?://#i', $imagePath)
+            ? $imagePath
+            : rtrim(base_url(), '/') . '/' . ltrim($imagePath, '/');
 
         $data[] = [
             'id' => (int)$row['id'],
