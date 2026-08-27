@@ -662,8 +662,20 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
     // system, no access to modify it) - a plain URL in the notes text is
     // the only way to hand their staff a viewable photo without needing
     // any coordination on their end. Still a real, clickable link.
+    // CIMM's remote notes column truncates somewhere between 140-160 chars
+    // (confirmed by probing their API directly) - stay safely under that,
+    // trimming the free-text description first since the link matters more.
     if ($photoUrl !== '') {
-        $taskNotes .= "\nPhoto: {$photoUrl}";
+        $maxCimmNotesLen = 140;
+        $photoLine = "\nPhoto: {$photoUrl}";
+        $budget = $maxCimmNotesLen - strlen($photoLine);
+        if ($budget > 0 && strlen($taskNotes) > $budget) {
+            $taskNotes = rtrim(substr($taskNotes, 0, max(0, $budget - 1))) . '…';
+        }
+        $taskNotes .= $photoLine;
+        if (strlen($taskNotes) > $maxCimmNotesLen) {
+            $taskNotes = substr($taskNotes, 0, $maxCimmNotesLen);
+        }
     }
     $cimmPayload = [
         'facility_id' => $facilityId,
