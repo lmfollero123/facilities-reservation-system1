@@ -94,6 +94,30 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
         $dowNames = [1 => 'Sunday', 2 => 'Monday', 3 => 'Tuesday', 4 => 'Wednesday', 5 => 'Thursday', 6 => 'Friday', 7 => 'Saturday'];
         $leastBusyName = $dowNames[$leastBusyDow] ?? 'Sunday';
 
+        // Seasonal trend: is the current calendar month historically busier or
+        // quieter than an average month, across all years of booking history?
+        // System-wide (not per-facility - most facilities don't have enough
+        // individual history yet for a per-facility month-over-month signal).
+        $monthlyStmt = $pdo->query(
+            "SELECT MONTH(reservation_date) AS m, COUNT(*) AS cnt
+             FROM reservations
+             WHERE status IN ('approved','pending','pending_payment')
+             GROUP BY MONTH(reservation_date)"
+        );
+        $monthlyTotals = $monthlyStmt ? $monthlyStmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+        $seasonalIndex = 1.0;
+        $monthNames = [1=>'January',2=>'February',3=>'March',4=>'April',5=>'May',6=>'June',7=>'July',8=>'August',9=>'September',10=>'October',11=>'November',12=>'December'];
+        $currentMonthName = $monthNames[(int)date('n')] ?? '';
+        if (count($monthlyTotals) >= 3) {
+            $overallAvg = array_sum($monthlyTotals) / count($monthlyTotals);
+            $currentMonthTotal = (int)($monthlyTotals[(int)date('n')] ?? 0);
+            if ($overallAvg > 0) {
+                $seasonalIndex = $currentMonthTotal / $overallAvg;
+            }
+        }
+        // Small nudge, not a dominant factor - capped at +/-10 points either way.
+        $seasonalPressure = (int)round(min(10, max(-10, ($seasonalIndex - 1) * 20)));
+
         $pendingRequestKeys = [];
         if (frs_ensure_cprf_maintenance_requests_table($pdo)) {
             $pendingStmt = $pdo->query(
@@ -117,7 +141,7 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
             $usagePressure = min(60, (int)round($usage90 * 1.2));
             $growthPressure = min(25, max(0, ($usage30 - (int)round($usage90 / 3))) * 2);
             $statusPressure = ($status === 'maintenance') ? 15 : 0;
-            $riskScore = min(100, $usagePressure + $growthPressure + $statusPressure);
+            $riskScore = max(0, min(100, $usagePressure + $growthPressure + $statusPressure + $seasonalPressure));
             $recentPace = (int)round($usage90 / 3);
 
             if ($riskScore >= 75) {
@@ -166,6 +190,9 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
                 'usage_pressure' => $usagePressure,
                 'growth_pressure' => $growthPressure,
                 'status_pressure' => $statusPressure,
+                'seasonal_pressure' => $seasonalPressure,
+                'seasonal_index' => round($seasonalIndex, 2),
+                'current_month_name' => $currentMonthName,
                 'recent_pace_30d' => $recentPace,
                 'priority' => $priority,
                 'recommended_date' => $recommendedDate,

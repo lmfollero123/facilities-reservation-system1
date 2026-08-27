@@ -108,9 +108,18 @@ function frs_maintenance_pressure_facts(array $context): string
     $usagePressure = (int)($context['usage_pressure'] ?? 0);
     $growthPressure = (int)($context['growth_pressure'] ?? 0);
     $statusPressure = (int)($context['status_pressure'] ?? 0);
+    $seasonalPressure = (int)($context['seasonal_pressure'] ?? 0);
+    $seasonalIndex = (float)($context['seasonal_index'] ?? 1.0);
+    $currentMonthName = trim((string)($context['current_month_name'] ?? ''));
     $status = trim((string)($context['status'] ?? 'Available'));
 
-    return <<<FACTS
+    $seasonalLine = '';
+    if ($currentMonthName !== '' && abs($seasonalPressure) >= 1) {
+        $trend = $seasonalPressure > 0 ? 'busier' : 'quieter';
+        $seasonalLine = "Seasonal trend component: {$seasonalPressure} points ({$currentMonthName} is historically {$trend} than an average month system-wide, index {$seasonalIndex})\n";
+    }
+
+    $facts = <<<FACTS
 Facility: {$facilityName}
 Current status: {$status}
 Overall pressure score: {$riskScore}/100 ({$riskBand} risk)
@@ -120,6 +129,8 @@ Usage pressure component: {$usagePressure}/60 (based on 90-day booking volume)
 Growth pressure component: {$growthPressure}/25 (based on whether the last 30 days are busier than the 90-day average pace)
 Status pressure component: {$statusPressure}/15 (added only if the facility is currently under maintenance)
 FACTS;
+
+    return $seasonalLine !== '' ? $facts . "\n" . $seasonalLine : $facts;
 }
 
 /**
@@ -225,6 +236,8 @@ function frs_fallback_maintenance_pressure_explanation(array $context): string
     $usagePressure = (int)($context['usage_pressure'] ?? 0);
     $growthPressure = (int)($context['growth_pressure'] ?? 0);
     $statusPressure = (int)($context['status_pressure'] ?? 0);
+    $seasonalPressure = (int)($context['seasonal_pressure'] ?? 0);
+    $currentMonthName = trim((string)($context['current_month_name'] ?? ''));
 
     $parts = [];
     $parts[] = "{$facilityName} had {$usage90} booking(s) in the last 90 days, contributing {$usagePressure} of 60 possible usage-pressure points.";
@@ -235,6 +248,11 @@ function frs_fallback_maintenance_pressure_explanation(array $context): string
     }
     if ($statusPressure > 0) {
         $parts[] = "It is currently flagged under maintenance, adding {$statusPressure} points.";
+    }
+    if ($seasonalPressure > 0 && $currentMonthName !== '') {
+        $parts[] = "{$currentMonthName} is historically a busier month for bookings system-wide, adding {$seasonalPressure} seasonal points.";
+    } elseif ($seasonalPressure < 0 && $currentMonthName !== '') {
+        $parts[] = "{$currentMonthName} is historically a quieter month system-wide, so {$seasonalPressure} points were subtracted.";
     }
 
     if ($riskBand === 'High') {

@@ -83,6 +83,7 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                         $usageP = (int)($row['usage_pressure'] ?? 0);
                         $growthP = (int)($row['growth_pressure'] ?? 0);
                         $statusP = (int)($row['status_pressure'] ?? 0);
+                        $seasonalP = (int)($row['seasonal_pressure'] ?? 0);
                     ?>
                         <article class="pm-card">
                             <div class="pm-card-media" style="background-image:url('<?= htmlspecialchars($imgUrl, ENT_QUOTES, 'UTF-8'); ?>');">
@@ -107,7 +108,7 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                                         <span style="width:<?= $riskScore; ?>%;background:<?= htmlspecialchars($riskColor); ?>;"></span>
                                     </div>
                                     <div class="pm-risk-breakdown">
-                                        Usage <?= $usageP; ?>/60 · Growth <?= $growthP; ?>/25<?php if ($statusP > 0): ?> · Status <?= $statusP; ?>/15<?php endif; ?>
+                                        Usage <?= $usageP; ?>/60 · Growth <?= $growthP; ?>/25<?php if ($statusP > 0): ?> · Status <?= $statusP; ?>/15<?php endif; ?><?php if ($seasonalP !== 0): ?> · Seasonal <?= $seasonalP > 0 ? '+' : ''; ?><?= $seasonalP; ?><?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="pm-metrics">
@@ -256,11 +257,12 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
 <div class="pm-modal-backdrop" id="pm-how-modal" aria-hidden="true">
     <div class="pm-modal" role="dialog" aria-labelledby="pm-how-modal-title">
         <h3 id="pm-how-modal-title">How maintenance pressure is calculated</h3>
-        <p>Each facility's score (0–100) adds up three parts, based on its own booking history:</p>
+        <p>Each facility's score (0–100) adds up these parts, based on its own booking history:</p>
         <ul class="pm-how-list">
             <li><strong>Usage pressure (up to 60 pts)</strong> — more reservations in the last 90 days means more wear, so this rises with the 90-day booking count.</li>
             <li><strong>Growth pressure (up to 25 pts)</strong> — if the last 30 days are busier than the facility's usual 90-day pace, pressure rises faster than usage alone would suggest.</li>
             <li><strong>Status pressure (15 pts)</strong> — added automatically only while the facility is already flagged "under maintenance".</li>
+            <li><strong>Seasonal trend (±10 pts)</strong> — compares this calendar month's total bookings (system-wide, across all years of history) against an average month. Busier-than-usual months (e.g. a summer peak) push the score up a little; quieter months pull it down.</li>
         </ul>
         <p><strong>Low</strong> is under 45, <strong>Medium</strong> is 45–74, <strong>High</strong> is 75+. Tap "✨ Explain this score" on any facility card for a plain-English breakdown of its specific number.</p>
         <div class="pm-modal-actions">
