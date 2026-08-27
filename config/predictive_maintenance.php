@@ -48,6 +48,70 @@ function frs_ensure_cprf_maintenance_requests_table(PDO $pdo): bool
 }
 
 /**
+ * Continuous-learning feedback table: honest version, not a retrained ML
+ * model. Every time a MANUAL/emergency report lands on a facility - an
+ * incident the usage-based score didn't anticipate - that's a real signal
+ * the model under-weighted this specific facility. Each occurrence nudges
+ * its future score up slightly (capped), so the system adapts to actual
+ * maintenance outcomes over time instead of using a fixed formula forever.
+ */
+function frs_ensure_facility_risk_adjustments_table(PDO $pdo): bool
+{
+    static $ready = null;
+    if ($ready === true) {
+        return true;
+    }
+    try {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS facility_risk_adjustments (
+                facility_id INT UNSIGNED NOT NULL PRIMARY KEY,
+                adjustment_points TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                manual_report_count INT UNSIGNED NOT NULL DEFAULT 0,
+                last_adjusted_at DATETIME NULL,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+        $ready = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('facility_risk_adjustments table ensure failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Records a real-world outcome (a manual report the model didn't predict)
+ * and bumps that facility's learned adjustment. Capped at +15 so a single
+ * facility's history can't dominate the score the way usage pressure does.
+ */
+function frs_record_manual_report_outcome(PDO $pdo, int $facilityId): void
+{
+    if (!frs_ensure_facility_risk_adjustments_table($pdo) || $facilityId <= 0) {
+        return;
+    }
+    $pdo->prepare(
+        'INSERT INTO facility_risk_adjustments (facility_id, adjustment_points, manual_report_count, last_adjusted_at)
+         VALUES (:facility_id, 5, 1, NOW())
+         ON DUPLICATE KEY UPDATE
+            manual_report_count = manual_report_count + 1,
+            adjustment_points = LEAST(15, adjustment_points + 5),
+            last_adjusted_at = NOW()'
+    )->execute(['facility_id' => $facilityId]);
+}
+
+/**
+ * @return array<int, int> facility_id => adjustment_points
+ */
+function frs_get_facility_risk_adjustments(PDO $pdo): array
+{
+    if (!frs_ensure_facility_risk_adjustments_table($pdo)) {
+        return [];
+    }
+    $rows = $pdo->query('SELECT facility_id, adjustment_points FROM facility_risk_adjustments')->fetchAll(PDO::FETCH_KEY_PAIR);
+    return array_map('intval', $rows);
+}
+
+/**
  * Rule-based facility maintenance risk rows from booking pressure.
  *
  * @return array<int, array<string, mixed>>
@@ -118,6 +182,8 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
         // Small nudge, not a dominant factor - capped at +/-10 points either way.
         $seasonalPressure = (int)round(min(10, max(-10, ($seasonalIndex - 1) * 20)));
 
+        $outcomeAdjustments = frs_get_facility_risk_adjustments($pdo);
+
         $pendingRequestKeys = [];
         if (frs_ensure_cprf_maintenance_requests_table($pdo)) {
             $pendingStmt = $pdo->query(
@@ -141,7 +207,8 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
             $usagePressure = min(60, (int)round($usage90 * 1.2));
             $growthPressure = min(25, max(0, ($usage30 - (int)round($usage90 / 3))) * 2);
             $statusPressure = ($status === 'maintenance') ? 15 : 0;
-            $riskScore = max(0, min(100, $usagePressure + $growthPressure + $statusPressure + $seasonalPressure));
+            $outcomeAdjustment = $outcomeAdjustments[$facilityId] ?? 0;
+            $riskScore = max(0, min(100, $usagePressure + $growthPressure + $statusPressure + $seasonalPressure + $outcomeAdjustment));
             $recentPace = (int)round($usage90 / 3);
 
             if ($riskScore >= 75) {
@@ -193,6 +260,7 @@ function frs_compute_predictive_maintenance_rows(PDO $pdo): array
                 'seasonal_pressure' => $seasonalPressure,
                 'seasonal_index' => round($seasonalIndex, 2),
                 'current_month_name' => $currentMonthName,
+                'outcome_adjustment' => $outcomeAdjustment,
                 'recent_pace_30d' => $recentPace,
                 'priority' => $priority,
                 'recommended_date' => $recommendedDate,
@@ -423,6 +491,10 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         'requested_by' => $userId > 0 ? $userId : null,
     ]);
     $requestId = (int)$pdo->lastInsertId();
+
+    if ($isManual) {
+        frs_record_manual_report_outcome($pdo, $facilityId);
+    }
 
     if (!empty($assignedStaff['id'])) {
         frs_notify_staff_maintenance_assigned($pdo, (int)$assignedStaff['id'], [

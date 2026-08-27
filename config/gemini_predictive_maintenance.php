@@ -111,12 +111,16 @@ function frs_maintenance_pressure_facts(array $context): string
     $seasonalPressure = (int)($context['seasonal_pressure'] ?? 0);
     $seasonalIndex = (float)($context['seasonal_index'] ?? 1.0);
     $currentMonthName = trim((string)($context['current_month_name'] ?? ''));
+    $outcomeAdjustment = (int)($context['outcome_adjustment'] ?? 0);
     $status = trim((string)($context['status'] ?? 'Available'));
 
-    $seasonalLine = '';
+    $extraLines = '';
     if ($currentMonthName !== '' && abs($seasonalPressure) >= 1) {
         $trend = $seasonalPressure > 0 ? 'busier' : 'quieter';
-        $seasonalLine = "Seasonal trend component: {$seasonalPressure} points ({$currentMonthName} is historically {$trend} than an average month system-wide, index {$seasonalIndex})\n";
+        $extraLines .= "Seasonal trend component: {$seasonalPressure} points ({$currentMonthName} is historically {$trend} than an average month system-wide, index {$seasonalIndex})\n";
+    }
+    if ($outcomeAdjustment > 0) {
+        $extraLines .= "Learned adjustment component: +{$outcomeAdjustment} points (this facility has had real manual/emergency reports the usage-based score didn't predict, so the system has learned to weight it slightly higher)\n";
     }
 
     $facts = <<<FACTS
@@ -130,7 +134,7 @@ Growth pressure component: {$growthPressure}/25 (based on whether the last 30 da
 Status pressure component: {$statusPressure}/15 (added only if the facility is currently under maintenance)
 FACTS;
 
-    return $seasonalLine !== '' ? $facts . "\n" . $seasonalLine : $facts;
+    return $extraLines !== '' ? $facts . "\n" . $extraLines : $facts;
 }
 
 /**
@@ -238,6 +242,7 @@ function frs_fallback_maintenance_pressure_explanation(array $context): string
     $statusPressure = (int)($context['status_pressure'] ?? 0);
     $seasonalPressure = (int)($context['seasonal_pressure'] ?? 0);
     $currentMonthName = trim((string)($context['current_month_name'] ?? ''));
+    $outcomeAdjustment = (int)($context['outcome_adjustment'] ?? 0);
 
     $parts = [];
     $parts[] = "{$facilityName} had {$usage90} booking(s) in the last 90 days, contributing {$usagePressure} of 60 possible usage-pressure points.";
@@ -253,6 +258,9 @@ function frs_fallback_maintenance_pressure_explanation(array $context): string
         $parts[] = "{$currentMonthName} is historically a busier month for bookings system-wide, adding {$seasonalPressure} seasonal points.";
     } elseif ($seasonalPressure < 0 && $currentMonthName !== '') {
         $parts[] = "{$currentMonthName} is historically a quieter month system-wide, so {$seasonalPressure} points were subtracted.";
+    }
+    if ($outcomeAdjustment > 0) {
+        $parts[] = "It's had real manual/emergency reports before that the formula alone didn't predict, so the system has learned to add {$outcomeAdjustment} points here.";
     }
 
     if ($riskBand === 'High') {

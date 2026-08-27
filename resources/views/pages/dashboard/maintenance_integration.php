@@ -253,6 +253,104 @@ ob_start();
 .pm-modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem; }
 .pm-modal-actions button:not(.primary) { background:#fff; border:1px solid #dbe2ef; border-radius:8px; padding:0.45rem 0.85rem; font-weight:700; cursor:pointer; color:#475569; }
 .pm-modal-actions .primary { background:#0284c7; color:#fff; border:none; border-radius:8px; padding:0.45rem 0.85rem; font-weight:700; cursor:pointer; }
+
+/* Dark mode - the whole Maintenance Insights panel (.pm-*) was built with
+   light-only hardcoded colors and never got a dark pass; fixing all of it
+   here rather than leaving future .pm-* additions to repeat the gap. */
+[data-theme="dark"] .pm-panel .pm-intro,
+[data-theme="dark"] .pm-filter-btn,
+[data-theme="dark"] .pm-card-meta,
+[data-theme="dark"] .pm-risk-bar-label,
+[data-theme="dark"] .pm-metric,
+[data-theme="dark"] .pm-stat-label,
+[data-theme="dark"] .pm-modal label {
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .pm-stat {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-stat-value { color: var(--text-primary); }
+[data-theme="dark"] .pm-filter-btn {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-filter-btn.active,
+[data-theme="dark"] .pm-filter-btn:hover {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+    color: #fff;
+}
+[data-theme="dark"] .pm-search-bar input[type="text"] {
+    background: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-card {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-card-title { color: var(--text-primary); }
+[data-theme="dark"] .pm-risk-bar { background: var(--bg-tertiary); }
+[data-theme="dark"] .pm-risk-breakdown { color: var(--text-tertiary); }
+[data-theme="dark"] .pm-metric { background: var(--bg-tertiary); }
+[data-theme="dark"] .pm-metric strong { color: var(--text-primary); }
+[data-theme="dark"] .pm-window {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-ai-btn {
+    border-color: #4c1d95;
+    color: #c4b5fd;
+}
+[data-theme="dark"] .pm-ai-btn:hover { background: rgba(139,92,246,0.15); }
+[data-theme="dark"] .pm-ai-text {
+    background: rgba(139,92,246,0.12);
+    color: #ddd6fe;
+}
+[data-theme="dark"] .pm-how-list { color: var(--text-secondary); }
+[data-theme="dark"] .pm-btn-request.is-sent {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+[data-theme="dark"] .pm-side-panel {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-side-panel h3 { color: var(--text-primary); }
+[data-theme="dark"] .pm-request-item {
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-empty {
+    color: var(--text-tertiary);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .pm-muted { color: var(--text-tertiary); }
+[data-theme="dark"] .pm-modal {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-modal h3 { color: var(--text-primary); }
+[data-theme="dark"] .pm-modal textarea,
+[data-theme="dark"] .pm-modal select,
+[data-theme="dark"] .pm-modal input[type="date"] {
+    background: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-modal-actions button:not(.primary) {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .pm-manual-btn {
+    background: rgba(239,68,68,0.12);
+    border-color: rgba(248,113,113,0.5);
+    color: #fca5a5;
+}
+[data-theme="dark"] .pm-manual-btn:hover { background: rgba(239,68,68,0.2); }
 .mi-sync-bar {
     display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;
     background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:0.75rem 1rem; margin-bottom:1.25rem;
@@ -260,6 +358,11 @@ ob_start();
 }
 .mi-sync-bar .mi-sync-meta { margin:0; }
 .mi-sync-bar .mi-sync-warn { color:#b45309; font-weight:600; }
+[data-theme="dark"] .mi-sync-bar {
+    background: rgba(14,165,233,0.12);
+    border-color: rgba(14,165,233,0.3);
+    color: var(--text-primary);
+}
 .mi-schedule-layout { grid-template-columns: 1fr !important; }
 .mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; gap:0.5rem; }
 .mi-view-toggle-btn { padding:0.4rem 0.85rem; font-size:0.85rem; }
