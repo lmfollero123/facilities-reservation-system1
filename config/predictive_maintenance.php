@@ -397,6 +397,43 @@ function frs_ensure_maintenance_requests_schema_v2(PDO $pdo): void
     };
     $addCol("`assigned_staff_id` INT UNSIGNED NULL AFTER `requested_by`");
     $addCol("`assigned_staff_name` VARCHAR(255) NULL AFTER `assigned_staff_id`");
+    $addCol("`photo_path` VARCHAR(255) NULL AFTER `notes`");
+}
+
+/**
+ * Saves one uploaded photo (single-file $_FILES entry, e.g. $_FILES['photo'])
+ * for a manual maintenance report. Returns the public-facing URL on success,
+ * or null if no file was submitted. Throws on a genuinely invalid upload
+ * (wrong type, too large) so the caller can surface that to the user.
+ */
+function frs_save_maintenance_report_photo(array $file): ?string
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+
+    require_once __DIR__ . '/upload_helper.php';
+    $errors = validateFileUpload($file, ['image/jpeg', 'image/png', 'image/webp'], 5 * 1024 * 1024);
+    if (!empty($errors)) {
+        throw new InvalidArgumentException(implode(' ', $errors));
+    }
+
+    $uploadDir = dirname(__DIR__) . '/public/uploads/maintenance_reports';
+    if (!is_dir($uploadDir)) {
+        @mkdir($uploadDir, 0755, true);
+    }
+
+    $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION)) ?: 'jpg';
+    $fileName = 'maint-' . bin2hex(random_bytes(8)) . '.' . $ext;
+    $targetPath = $uploadDir . '/' . $fileName;
+
+    [$ok] = saveOptimizedImage($file['tmp_name'], $targetPath, 1600, 82);
+    if (!$ok && !move_uploaded_file($file['tmp_name'], $targetPath)) {
+        throw new InvalidArgumentException('Failed to save the uploaded photo. Please try again.');
+    }
+    @chmod($targetPath, 0644);
+
+    return base_url() . '/public/uploads/maintenance_reports/' . $fileName;
 }
 
 /**
@@ -528,6 +565,7 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
     $requestSource = strtolower(trim((string)($payload['request_source'] ?? '')));
     $isManual = $requestSource === 'manual';
     $isAutoScheduled = $requestSource === 'auto';
+    $photoUrl = trim((string)($payload['photo_url'] ?? ''));
 
     if ($facilityId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $requestedDate)) {
         return ['success' => false, 'error' => 'Invalid facility or requested date.'];
@@ -574,9 +612,9 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
 
     $insert = $pdo->prepare(
         'INSERT INTO cprf_maintenance_requests
-            (facility_id, facility_name, requested_date, suggested_end_date, priority, risk_score, risk_band, notes, status, requested_by, assigned_staff_id, assigned_staff_name)
+            (facility_id, facility_name, requested_date, suggested_end_date, priority, risk_score, risk_band, notes, photo_path, status, requested_by, assigned_staff_id, assigned_staff_name)
          VALUES
-            (:facility_id, :facility_name, :requested_date, :suggested_end_date, :priority, :risk_score, :risk_band, :notes, :status, :requested_by, :assigned_staff_id, :assigned_staff_name)'
+            (:facility_id, :facility_name, :requested_date, :suggested_end_date, :priority, :risk_score, :risk_band, :notes, :photo_path, :status, :requested_by, :assigned_staff_id, :assigned_staff_name)'
     );
     $insert->execute([
         'facility_id' => $facilityId,
@@ -589,6 +627,7 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         'assigned_staff_id' => $assignedStaff['id'] ?? null,
         'assigned_staff_name' => $assignedStaff['name'] ?? null,
         'notes' => $notes !== '' ? $notes : null,
+        'photo_path' => $photoUrl !== '' ? $photoUrl : null,
         'status' => 'pending',
         'requested_by' => $userId > 0 ? $userId : null,
     ]);
@@ -619,6 +658,13 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
             : ($isAutoScheduled
                 ? "CPRF auto-scheduled — pressure score {$riskScore}/100 (High risk) crossed the auto-schedule threshold."
                 : 'CPRF predictive insight — elevated usage pressure detected.'));
+    // CIMM's own schema has no attachment field we can write to (separate
+    // system, no access to modify it) - a plain URL in the notes text is
+    // the only way to hand their staff a viewable photo without needing
+    // any coordination on their end. Still a real, clickable link.
+    if ($photoUrl !== '') {
+        $taskNotes .= "\nPhoto: {$photoUrl}";
+    }
     $cimmPayload = [
         'facility_id' => $facilityId,
         'facility_name' => $facilityName,

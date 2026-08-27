@@ -233,6 +233,9 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                             <?php if (!empty($req['assigned_staff_name'])): ?>
                                 <br><small class="pm-muted">Assigned: <?= htmlspecialchars((string)$req['assigned_staff_name']); ?></small>
                             <?php endif; ?>
+                            <?php if (!empty($req['photo_path'])): ?>
+                                <br><small><a href="<?= htmlspecialchars((string)$req['photo_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">📷 View photo</a></small>
+                            <?php endif; ?>
                             <span class="pm-status <?= htmlspecialchars($st); ?>"><?= htmlspecialchars($st); ?></span>
                         </li>
                     <?php endforeach; ?>
@@ -280,6 +283,8 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
         </select>
         <label for="pm-manual-notes">Describe the issue (required)</label>
         <textarea id="pm-manual-notes" placeholder="e.g. Broken glass panel near the entrance after last night's storm"></textarea>
+        <label for="pm-manual-photo">Photo (optional)</label>
+        <input type="file" id="pm-manual-photo" accept="image/jpeg,image/png,image/webp">
         <div class="pm-modal-actions">
             <button type="button" id="pm-manual-cancel">Cancel</button>
             <button type="button" class="primary" id="pm-manual-submit">Send to CIMM</button>
@@ -440,11 +445,13 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
         const dateEl = document.getElementById('pm-manual-date');
         const priorityEl = document.getElementById('pm-manual-priority');
         const notesEl = document.getElementById('pm-manual-notes');
+        const photoEl = document.getElementById('pm-manual-photo');
 
         function openManualModal() {
             facilitySel.value = '';
             priorityEl.value = 'high';
             notesEl.value = '';
+            if (photoEl) photoEl.value = '';
             const today = new Date();
             dateEl.value = today.toISOString().slice(0, 10);
             dateEl.min = today.toISOString().slice(0, 10);
@@ -470,7 +477,7 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
             const submitBtn = this;
             submitBtn.disabled = true;
             submitBtn.textContent = 'Sending…';
-            const body = new URLSearchParams();
+            const body = new FormData();
             body.set(csrfName, csrfToken);
             body.set('facility_id', facilityId);
             body.set('facility_name', opt?.dataset.name || '');
@@ -479,6 +486,9 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
             body.set('priority', priorityEl.value);
             body.set('notes', notes);
             body.set('request_source', 'manual');
+            if (photoEl && photoEl.files && photoEl.files[0]) {
+                body.set('photo', photoEl.files[0]);
+            }
             try {
                 const resp = await fetch(basePath + '/dashboard/cimm-maintenance-request-api', {
                     method: 'POST',

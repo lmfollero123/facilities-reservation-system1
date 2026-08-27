@@ -33,7 +33,21 @@ frs_reject_invalid_csrf_json();
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $pdo = db();
 
-$result = frs_submit_maintenance_request($pdo, $_POST, $userId);
+$payload = $_POST;
+if (!empty($_FILES['photo'])) {
+    try {
+        $photoUrl = frs_save_maintenance_report_photo($_FILES['photo']);
+        if ($photoUrl !== null) {
+            $payload['photo_url'] = $photoUrl;
+        }
+    } catch (InvalidArgumentException $e) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
+$result = frs_submit_maintenance_request($pdo, $payload, $userId);
 
 if (!empty($result['success'])) {
     echo json_encode([
