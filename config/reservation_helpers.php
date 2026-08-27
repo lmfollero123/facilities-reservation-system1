@@ -1608,7 +1608,11 @@ function frs_ensure_reservation_facilitator_assigned(PDO $pdo, int $reservationI
 {
     frs_ensure_reservation_facilitator_schema($pdo);
 
-    $stmt = $pdo->prepare('SELECT status, assigned_staff_id FROM reservations WHERE id = :id LIMIT 1');
+    $stmt = $pdo->prepare(
+        'SELECT r.status, r.assigned_staff_id, r.reservation_date, r.time_slot, f.name AS facility_name
+         FROM reservations r JOIN facilities f ON f.id = r.facility_id
+         WHERE r.id = :id LIMIT 1'
+    );
     $stmt->execute(['id' => $reservationId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row || $row['status'] !== 'approved' || $row['assigned_staff_id'] !== null) {
@@ -1633,6 +1637,15 @@ function frs_ensure_reservation_facilitator_assigned(PDO $pdo, int $reservationI
         if ($staffId) {
             $update = $pdo->prepare('UPDATE reservations SET assigned_staff_id = :staff_id WHERE id = :id');
             $update->execute(['staff_id' => (int)$staffId, 'id' => $reservationId]);
+
+            $dateLabel = date('M j, Y', strtotime((string)$row['reservation_date']));
+            createNotification(
+                (int)$staffId,
+                'system',
+                'You are the facilitator for a booking',
+                "{$row['facility_name']} — {$dateLabel} ({$row['time_slot']}).",
+                base_path() . '/dashboard/reservation-detail?id=' . $reservationId
+            );
             return;
         }
     }

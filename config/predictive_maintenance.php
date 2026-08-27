@@ -266,6 +266,55 @@ function frs_fetch_recent_maintenance_requests(PDO $pdo, int $limit = 12): array
 }
 
 /**
+ * In-app + email notification to the staff/admin a maintenance request was
+ * just auto-assigned to, so it doesn't just sit invisibly in a list until
+ * someone happens to open the Maintenance Insights tab.
+ *
+ * @param array<string, mixed> $context
+ */
+function frs_notify_staff_maintenance_assigned(PDO $pdo, int $staffId, array $context): void
+{
+    $staffStmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id LIMIT 1');
+    $staffStmt->execute(['id' => $staffId]);
+    $staff = $staffStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$staff) {
+        return;
+    }
+
+    $facilityName = (string)($context['facility_name'] ?? 'a facility');
+    $requestedDate = (string)($context['requested_date'] ?? '');
+    $priority = ucfirst((string)($context['priority'] ?? 'medium'));
+    $isManual = !empty($context['is_manual']);
+    $notes = trim((string)($context['notes'] ?? ''));
+    $manageUrl = base_url() . '/dashboard/maintenance-integration?tab=insights';
+
+    $title = $isManual ? 'Maintenance Issue Assigned to You' : 'Maintenance Request Assigned to You';
+    $dateLabel = $requestedDate !== '' ? date('M j, Y', strtotime($requestedDate)) : 'soon';
+    $message = "{$facilityName} — {$priority} priority, needed {$dateLabel}.";
+    if ($notes !== '') {
+        $message .= ' ' . mb_substr($notes, 0, 150);
+    }
+
+    require_once __DIR__ . '/notifications.php';
+    createNotification((int)$staffId, 'system', $title, $message, base_path() . '/dashboard/maintenance-integration?tab=insights');
+
+    if (empty($staff['email'])) {
+        return;
+    }
+    require_once __DIR__ . '/mail_helper.php';
+    require_once __DIR__ . '/email_templates.php';
+    $htmlBody = getMaintenanceAssignedEmailTemplate(
+        (string)$staff['name'],
+        $facilityName,
+        $dateLabel,
+        $priority,
+        $notes,
+        $manageUrl
+    );
+    sendEmail((string)$staff['email'], (string)$staff['name'], $title . ' — ' . $facilityName, $htmlBody);
+}
+
+/**
  * @param array<string, mixed> $payload
  * @return array{success: bool, request_id?: int, cimm_reference?: ?string, error?: string}
  */
@@ -347,6 +396,18 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
         'requested_by' => $userId > 0 ? $userId : null,
     ]);
     $requestId = (int)$pdo->lastInsertId();
+
+    if (!empty($assignedStaff['id'])) {
+        frs_notify_staff_maintenance_assigned($pdo, (int)$assignedStaff['id'], [
+            'facility_name' => $facilityName,
+            'requested_date' => $requestedDate,
+            'priority' => $priority,
+            'risk_band' => $riskBand,
+            'notes' => $notes,
+            'is_manual' => $isManual,
+            'request_id' => $requestId,
+        ]);
+    }
 
     require_once dirname(__DIR__) . '/services/cimm_api.php';
 

@@ -406,6 +406,50 @@ function getBookingReminderEmailTemplate($userName, $facilityName, $date, $timeS
 }
 
 /**
+ * Maintenance Request Assigned Email Template
+ */
+function getMaintenanceAssignedEmailTemplate($staffName, $facilityName, $dateLabel, $priority, $notes, $manageUrl) {
+    $header = getEmailHeader('Maintenance Request Assigned');
+    $footer = getEmailFooter();
+
+    $priorityColor = strtolower($priority) === 'high' ? '#b91c1c' : (strtolower($priority) === 'low' ? '#166534' : '#b45309');
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">🛠️ Maintenance Request Assigned to You</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($staffName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            A maintenance request has been auto-assigned to you.
+        </p>
+
+        ' . getEmailInfoBox('
+            <h3 style="margin: 0 0 12px; color: #1e3a5f; font-size: 16px;">🏢 Request Details</h3>
+            <table cellpadding="0" cellspacing="0" style="width: 100%;">
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 120px;"><strong>Facility:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($facilityName) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Needed by:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($dateLabel) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Priority:</strong></td>
+                    <td style="padding: 6px 0; color: ' . $priorityColor . '; font-size: 14px; font-weight: 600;">' . htmlspecialchars($priority) . '</td>
+                </tr>
+                ' . ($notes !== '' ? '<tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;"><strong>Notes:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($notes) . '</td>
+                </tr>' : '') . '
+            </table>
+        ', '#fff4e5', '#b45309') . '
+
+        ' . getEmailButton('Open Maintenance Insights', $manageUrl, '#6384d2') . '
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Reservation Postponed Email Template
  */
 function getReservationPostponedEmailTemplate($userName, $facilityName, $oldDate, $oldTimeSlot, $newDate, $newTimeSlot, $reason) {
