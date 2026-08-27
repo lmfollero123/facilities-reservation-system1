@@ -1576,3 +1576,64 @@ function frs_staff_reschedule_postponed_priority(
             : 'Reservation rescheduled and auto-approved. The requester has been emailed.',
     ];
 }
+
+/**
+ * Adds the on-site facilitator assignment column. Safe to call every time -
+ * ADD COLUMN is wrapped so an already-migrated database just no-ops.
+ */
+function frs_ensure_reservation_facilitator_schema(PDO $pdo): void
+{
+    try {
+        $pdo->exec('ALTER TABLE reservations ADD COLUMN assigned_staff_id INT UNSIGNED NULL AFTER status');
+    } catch (Throwable $e) {
+        // column already exists: noop
+    }
+}
+
+/**
+ * Assigns an on-site facilitator (least-loaded active Staff, falling back to
+ * Admin) to an approved reservation that doesn't have one yet. Deliberately
+ * lazy/idempotent rather than hooked into every place a reservation can
+ * become "approved" (manual staff decision, PayMongo payment confirmation,
+ * and instant auto-approval at booking time all set that status
+ * independently) - calling this once here, when the reservation is actually
+ * viewed, guarantees every approved reservation eventually gets a
+ * facilitator without touching those three separate write paths.
+ *
+ * A facilitator's "load" is their count of other upcoming approved
+ * reservations already assigned to them - separate from the maintenance
+ * assignment load in frs_assign_least_loaded_staff().
+ */
+function frs_ensure_reservation_facilitator_assigned(PDO $pdo, int $reservationId): void
+{
+    frs_ensure_reservation_facilitator_schema($pdo);
+
+    $stmt = $pdo->prepare('SELECT status, assigned_staff_id FROM reservations WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $reservationId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || $row['status'] !== 'approved' || $row['assigned_staff_id'] !== null) {
+        return;
+    }
+
+    foreach (['Staff', 'Admin'] as $role) {
+        $pick = $pdo->prepare(
+            "SELECT u.id
+             FROM users u
+             WHERE u.role = :role AND u.status = 'active'
+             ORDER BY (
+                 SELECT COUNT(*) FROM reservations r
+                 WHERE r.assigned_staff_id = u.id
+                   AND r.status = 'approved'
+                   AND r.reservation_date >= CURDATE()
+             ) ASC, u.id ASC
+             LIMIT 1"
+        );
+        $pick->execute(['role' => $role]);
+        $staffId = $pick->fetchColumn();
+        if ($staffId) {
+            $update = $pdo->prepare('UPDATE reservations SET assigned_staff_id = :staff_id WHERE id = :id');
+            $update->execute(['staff_id' => (int)$staffId, 'id' => $reservationId]);
+            return;
+        }
+    }
+}

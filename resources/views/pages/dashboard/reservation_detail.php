@@ -453,6 +453,17 @@ if (!$reservation) {
     exit;
 }
 
+frs_ensure_reservation_facilitator_assigned($pdo, $reservationId);
+$facilitatorStmt = $pdo->prepare(
+    'SELECT r.assigned_staff_id, u.name AS assigned_staff_name
+     FROM reservations r LEFT JOIN users u ON u.id = r.assigned_staff_id
+     WHERE r.id = :id LIMIT 1'
+);
+$facilitatorStmt->execute(['id' => $reservationId]);
+$facilitatorRow = $facilitatorStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$reservation['assigned_staff_id'] = $facilitatorRow['assigned_staff_id'] ?? null;
+$reservation['assigned_staff_name'] = $facilitatorRow['assigned_staff_name'] ?? null;
+
 if (($reservation['status'] ?? '') === 'pending_payment' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     try {
         $autoSync = frs_try_sync_reservation_payment($pdo, $reservationId, (int)($_SESSION['user_id'] ?? 0));
@@ -781,6 +792,11 @@ ob_start();
     if (!$isPast): ?>
     <div class="booking-card" style="margin-top:0.85rem;">
         <h2>Manage Approved Reservation</h2>
+        <?php if (!empty($reservation['assigned_staff_name'])): ?>
+        <p style="margin:0 0 0.75rem; font-size:0.9rem;">
+            <strong>On-site facilitator:</strong> <?= htmlspecialchars((string)$reservation['assigned_staff_name']); ?>
+        </p>
+        <?php endif; ?>
         <p style="color: #8b95b5; margin-bottom: 1rem; font-size: 0.9rem;">
             In case of emergencies or schedule conflicts, you can modify, postpone, extend, or cancel this approved reservation.
         </p>
@@ -794,6 +810,11 @@ ob_start();
     <?php else: ?>
     <div class="booking-card" style="margin-top:1.5rem; background:#f8f9fa; border:1px solid #e0e6ed;">
         <h2>Reservation Status</h2>
+        <?php if (!empty($reservation['assigned_staff_name'])): ?>
+        <p style="margin:0 0 0.5rem; font-size:0.9rem;">
+            <strong>On-site facilitator:</strong> <?= htmlspecialchars((string)$reservation['assigned_staff_name']); ?>
+        </p>
+        <?php endif; ?>
         <p style="color: #8b95b5; margin: 0; font-size: 0.9rem;">
             This reservation has already passed. Modification, postponement, or cancellation is no longer available for past reservations.
         </p>
