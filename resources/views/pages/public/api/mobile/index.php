@@ -141,6 +141,8 @@ function mobile_serialize_reservation(array $r): array
         'reschedule_count' => isset($r['reschedule_count']) ? (int) $r['reschedule_count'] : null,
         'created_at' => $r['created_at'] ?? null,
         'updated_at' => $r['updated_at'] ?? null,
+        'checked_in_at' => $r['time_in_at'] ?? null,
+        'checked_out_at' => $r['time_out_at'] ?? null,
     ];
 }
 
@@ -150,9 +152,10 @@ function mobile_serialize_reservation(array $r): array
 function mobile_load_reservation(PDO $pdo, int $id, int $userId): ?array
 {
     $stmt = $pdo->prepare(
-        'SELECT r.*, f.name AS facility_name, f.is_free, f.base_rate, f.capacity, f.status AS facility_status
+        'SELECT r.*, f.name AS facility_name, f.is_free, f.base_rate, f.capacity, f.status AS facility_status, ra.time_in_at, ra.time_out_at
          FROM reservations r
          JOIN facilities f ON f.id = r.facility_id
+         LEFT JOIN reservation_attendance ra ON ra.reservation_id = r.id
          WHERE r.id = ? AND r.user_id = ?
          LIMIT 1'
     );
@@ -1192,9 +1195,10 @@ if (preg_match('#^facilities/(\d+)/calendar$#', $route, $m) && $method === 'GET'
 if ($route === 'reservations' && $method === 'GET') {
     $user = mobile_require_user($pdo);
     $status = trim((string) ($_GET['status'] ?? ''));
-    $sql = 'SELECT r.*, f.name AS facility_name, f.is_free, f.base_rate
+    $sql = 'SELECT r.*, f.name AS facility_name, f.is_free, f.base_rate, ra.time_in_at, ra.time_out_at
             FROM reservations r
             JOIN facilities f ON f.id = r.facility_id
+            LEFT JOIN reservation_attendance ra ON ra.reservation_id = r.id
             WHERE r.user_id = ?';
     $params = [(int) $user['id']];
     if ($status !== '') {

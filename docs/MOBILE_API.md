@@ -64,7 +64,7 @@ Header for protected routes: `Authorization: Bearer {access_token}`
 | GET | `/facilities/{id}/availability?date=YYYY-MM-DD` |
 | GET | `/facilities/{id}/calendar?year=&month=` | Day tones: green / yellow / red / blackout |
 | GET | `/reservations?status=` |
-| GET | `/reservations/{id}` | Includes `amount`, `is_free`, `payment_due_at`, `payment_status` |
+| GET | `/reservations/{id}` | Includes `amount`, `is_free`, `payment_due_at`, `payment_status`, `checked_in_at`, `checked_out_at` |
 | POST | `/reservations/referral-id` | Multipart form field `referral_id` (PDF/JPG/PNG, max 8MB). Non-Culiat residents only. Returns `file_path` to pass as `referral_id_document_path` below. |
 | POST | `/reservations/event-document` | Multipart form field `event_document` (PDF/JPG/PNG, max 8MB). Only when the target facility's `requires_document` is true. Returns `file_path`/`file_name`/`file_size` to pass as `event_document_path`/`event_document_name`/`event_document_size` below. |
 | POST | `/reservations` | Body: `facility_id`, `reservation_date`, `time_slot`, `purpose`, **`expected_attendees` (≥1)**, optional `notes`. Non-Culiat residents must also send `referral_name`, `referral_relationship`, `referral_id_document_path` (from the upload above). If the facility has `requires_document` set, must also send `event_document_path` (+ optional `event_document_name`/`event_document_size`) from the event-document upload above. Same resident rules as the website (ID/identity, advance window, quotas, blackouts, conflicts, duration 30m–12h, capacity). May land in `pending_payment` when PayMongo hybrid mode is on. |
