@@ -96,6 +96,8 @@ function mobile_serialize_facility(array $f): array
         'base_rate' => isset($f['base_rate'])
             ? (float) preg_replace('/[^\d]/', '', (string) $f['base_rate'])
             : null,
+        'requires_document' => !empty($f['requires_document']),
+        'document_requirement_note' => $f['document_requirement_note'] ?? null,
     ];
 }
 
@@ -1074,7 +1076,7 @@ if ($route === 'facilities' && $method === 'GET') {
     mobile_require_user($pdo);
     $q = trim((string) ($_GET['q'] ?? ''));
     $status = trim((string) ($_GET['status'] ?? ''));
-    $sql = 'SELECT id, name, description, location, capacity, amenities, rules, status, operating_hours, image_path, is_free, base_rate
+    $sql = 'SELECT id, name, description, location, capacity, amenities, rules, status, operating_hours, image_path, is_free, base_rate, requires_document, document_requirement_note
             FROM facilities WHERE status != "deleted"';
     $params = [];
     if ($status !== '' && in_array($status, ['available', 'maintenance', 'offline'], true)) {
@@ -1102,7 +1104,7 @@ if (preg_match('#^facilities/(\d+)$#', $route, $m) && $method === 'GET') {
     mobile_require_user($pdo);
     $id = (int) $m[1];
     $stmt = $pdo->prepare(
-        'SELECT id, name, description, location, capacity, amenities, rules, status, operating_hours, image_path, is_free, base_rate
+        'SELECT id, name, description, location, capacity, amenities, rules, status, operating_hours, image_path, is_free, base_rate, requires_document, document_requirement_note
          FROM facilities WHERE id = ? AND status != "deleted" LIMIT 1'
     );
     $stmt->execute([$id]);
@@ -1233,6 +1235,32 @@ if ($route === 'reservations/referral-id' && $method === 'POST') {
     mobile_json(['ok' => true, 'file_path' => $result['file_path']]);
 }
 
+// A facility's own "requires supporting document" toggle (facilities.requires_document
+// / document_requirement_note) - separate from the referral flow above. Same two-phase
+// upload-then-attach shape since a JSON body can't carry a file: the returned path is
+// attached to the reservation as a reservation_documents row once it's created.
+if ($route === 'reservations/event-document' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $uid = (int) $user['id'];
+
+    if (empty($_FILES['event_document']['name']) || ($_FILES['event_document']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        mobile_error('A supporting document file is required (PDF, JPG, or PNG, max 8MB).', 422, 'validation');
+    }
+
+    require_once dirname(__DIR__, 6) . '/config/secure_documents.php';
+    $result = saveDocumentToSecureStorage($_FILES['event_document'], $uid, 'event_supporting_doc');
+    if (!$result['success']) {
+        mobile_error($result['error'] ?: 'Failed to upload document.', 422, 'upload_failed');
+    }
+
+    mobile_json([
+        'ok' => true,
+        'file_path' => $result['file_path'],
+        'file_name' => basename((string) $_FILES['event_document']['name']),
+        'file_size' => (int) ($_FILES['event_document']['size'] ?? 0),
+    ]);
+}
+
 if ($route === 'reservations' && $method === 'POST') {
     $user = mobile_require_user($pdo);
     $body = mobile_body();
@@ -1247,6 +1275,9 @@ if ($route === 'reservations' && $method === 'POST') {
     $referralName = trim((string) ($body['referral_name'] ?? ''));
     $referralRelationship = trim((string) ($body['referral_relationship'] ?? ''));
     $referralIdDocumentPath = trim((string) ($body['referral_id_document_path'] ?? ''));
+    $eventDocumentPath = trim((string) ($body['event_document_path'] ?? ''));
+    $eventDocumentName = trim((string) ($body['event_document_name'] ?? ''));
+    $eventDocumentSize = (int) ($body['event_document_size'] ?? 0);
 
     require_once dirname(__DIR__, 6) . '/config/ai_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
@@ -1270,6 +1301,20 @@ if ($route === 'reservations' && $method === 'POST') {
         if ($referralIdDocumentPath === '') {
             mobile_error('Please upload a valid ID of your Barangay Culiat referral first (POST /reservations/referral-id).', 422, 'validation');
         }
+    }
+
+    $facDocStmt = $pdo->prepare('SELECT requires_document, document_requirement_note FROM facilities WHERE id = ? LIMIT 1');
+    $facDocStmt->execute([$facilityId]);
+    $facDocRow = $facDocStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $facilityRequiresDocument = !empty($facDocRow['requires_document']);
+    if ($facilityRequiresDocument && $eventDocumentPath === '') {
+        $note = trim((string) ($facDocRow['document_requirement_note'] ?? ''));
+        mobile_error(
+            'This facility requires a supporting document to book' . ($note !== '' ? ': ' . $note : '.')
+                . ' Upload it first (POST /reservations/event-document).',
+            422,
+            'validation'
+        );
     }
 
     $check = frs_validate_resident_booking_request($pdo, $uid, [
@@ -1387,6 +1432,18 @@ if ($route === 'reservations' && $method === 'POST') {
         );
         $stmt->execute($values);
         $newId = (int) $pdo->lastInsertId();
+
+        if ($facilityRequiresDocument && $eventDocumentPath !== '') {
+            require_once dirname(__DIR__, 6) . '/config/reservation_documents.php';
+            frs_attach_reservation_document(
+                $newId,
+                'event_permit',
+                dirname(__DIR__, 6) . '/' . ltrim($eventDocumentPath, '/'),
+                $eventDocumentName !== '' ? $eventDocumentName : basename($eventDocumentPath),
+                $eventDocumentSize,
+                $uid
+            );
+        }
 
         if ($initialStatus === 'pending_payment') {
             $histNote = 'Auto-approved by rules via Companion app. Awaiting payment.';

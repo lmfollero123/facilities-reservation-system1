@@ -90,6 +90,57 @@ function frs_store_reservation_document(int $reservationId, array $file, int $up
     }
 }
 
+/**
+ * Attaches an already-saved file (e.g. from the mobile app's two-phase
+ * upload-then-create flow, via saveDocumentToSecureStorage()) to a
+ * reservation, without re-moving it - frs_store_reservation_document()
+ * expects a fresh $_FILES upload it can move_uploaded_file() itself, which
+ * only works within the same request the file arrived in. A JSON-body
+ * POST /reservations can't carry a file at all, so the mobile app uploads
+ * the document first (getting back a path) and this attaches that path
+ * once the reservation row exists.
+ *
+ * @return array{ok: bool, error?: string, id?: int}
+ */
+function frs_attach_reservation_document(
+    int $reservationId,
+    string $documentType,
+    string $absoluteFilePath,
+    string $fileName,
+    int $fileSize,
+    int $uploadedBy
+): array {
+    frs_ensure_reservation_documents_schema();
+    if ($reservationId <= 0 || $absoluteFilePath === '' || !is_file($absoluteFilePath)) {
+        return ['ok' => false, 'error' => 'Invalid document.'];
+    }
+    $allowedTypes = ['event_permit', 'barangay_resolution', 'letter_request', 'other'];
+    if (!in_array($documentType, $allowedTypes, true)) {
+        $documentType = 'event_permit';
+    }
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare(
+            'INSERT INTO reservation_documents (reservation_id, document_type, file_path, file_name, file_size, uploaded_by)
+             VALUES (:rid, :type, :path, :name, :size, :uid)'
+        );
+        $stmt->execute([
+            'rid' => $reservationId,
+            'type' => $documentType,
+            'path' => $absoluteFilePath,
+            'name' => $fileName !== '' ? $fileName : basename($absoluteFilePath),
+            'size' => $fileSize > 0 ? $fileSize : (int)@filesize($absoluteFilePath),
+            'uid' => $uploadedBy > 0 ? $uploadedBy : null,
+        ]);
+        $docId = (int)$pdo->lastInsertId();
+        logAudit('Uploaded reservation document', 'Reservations', 'RES-' . $reservationId . ' doc #' . $docId, $uploadedBy);
+        return ['ok' => true, 'id' => $docId];
+    } catch (Throwable $e) {
+        error_log('frs_attach_reservation_document: ' . $e->getMessage());
+        return ['ok' => false, 'error' => 'Database error saving document.'];
+    }
+}
+
 function frs_reservation_document_type_label(string $type): string
 {
     $labels = [
