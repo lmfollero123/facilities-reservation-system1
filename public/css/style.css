@@ -11200,6 +11200,67 @@ html[data-theme="dark"] .chart-filter-preset {
     overflow: hidden;
 }
 
+.facility-map-card__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary, #5b6888);
+}
+
+.facility-map-card__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.facility-map-pin-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.facility-map-pin-dot--available { background: #059669; }
+.facility-map-pin-dot--maintenance { background: #d97706; }
+.facility-map-pin-dot--offline { background: #dc2626; }
+
+/* Colored teardrop pin used on Leaflet facility-filter maps (status-coded) */
+.frs-facility-pin span {
+    display: block;
+    width: 20px;
+    height: 20px;
+    margin: 0 auto;
+    border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+}
+
+/* Live Facility Status + Facility Map paired side by side on the dashboard */
+.dash-status-map-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: stretch;
+    margin-top: 1rem;
+}
+
+.dash-status-map-grid .occ-dash-strip {
+    margin-top: 0;
+}
+
+.dash-status-map-grid .occ-dash-hero {
+    height: 380px;
+}
+
+@media (max-width: 900px) {
+    .dash-status-map-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Field help: compact “i” tooltip (hover, focus, tap) */
 .bcf-label-row,
 .frs-label-with-tip {

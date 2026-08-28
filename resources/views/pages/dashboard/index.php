@@ -122,10 +122,10 @@ try {
 }
 
 // Facility options for filter
-$facilityOptionsStmt = $pdo->query("SELECT id, name, latitude, longitude FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
+$facilityOptionsStmt = $pdo->query("SELECT id, name, latitude, longitude, status FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
 $facilityOptions = $facilityOptionsStmt->fetchAll(PDO::FETCH_ASSOC);
 $dashboardMapFacilities = array_map(static function (array $fac): array {
-    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude']];
+    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude'], 'status' => $fac['status']];
 }, $facilityOptions);
 
 // Get upcoming/reservations (filtered, with pagination)
@@ -963,7 +963,13 @@ ob_start();
 </div>
 </div>
 
-<?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
+<div class="dash-status-map-grid">
+    <?php include __DIR__ . '/../../components/occupancy_dashboard_strip.php'; ?>
+    <div class="booking-card">
+        <?= frs_heading_with_tip('Facility Map', 'Click a facility pin to filter the charts below to that facility.'); ?>
+        <?= frs_facility_filter_map('dash-facility-map', $dashboardMapFacilities, ['trend', 'status', 'topfac'], 'dash-charts'); ?>
+    </div>
+</div>
 
 <!-- Global Filter for All Charts -->
 <div class="booking-card dash-global-chart-filter" style="margin-top: 1rem;">
@@ -1014,10 +1020,6 @@ ob_start();
     'rotateFacilityLabels' => true,
     'showValueLabels' => true,
 ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?></script>
-<div class="booking-card">
-    <?= frs_heading_with_tip('Facility Map', 'Click a facility pin to filter the charts below to that facility.'); ?>
-    <?= frs_facility_filter_map('dash-facility-map', $dashboardMapFacilities, ['trend', 'status', 'topfac'], 'dash-charts'); ?>
-</div>
 <div class="reports-grid" style="margin-top: 1rem;">
     <section class="booking-card">
         <?= frs_heading_with_tip('Reservation Trends', 'Monthly reservation counts. Use the filter to change status, facility, date range, or 6 vs 12 months.'); ?>

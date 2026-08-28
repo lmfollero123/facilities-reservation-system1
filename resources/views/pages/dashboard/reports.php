@@ -23,10 +23,10 @@ $pageTitle = 'Reports & Analytics | LGU Facilities Reservation';
 $defaultYear = (int)date('Y');
 $defaultMonth = (int)date('m');
 
-$facilitiesStmt = $pdo->query("SELECT id, name, latitude, longitude FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
+$facilitiesStmt = $pdo->query("SELECT id, name, latitude, longitude, status FROM facilities WHERE status != 'deleted' ORDER BY name ASC");
 $allFacilities = $facilitiesStmt->fetchAll(PDO::FETCH_ASSOC);
 $reportsMapFacilities = array_map(static function (array $fac): array {
-    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude']];
+    return ['id' => $fac['id'], 'name' => $fac['name'], 'lat' => $fac['latitude'], 'lng' => $fac['longitude'], 'status' => $fac['status']];
 }, $allFacilities);
 
 // Legacy global query params → overview (kpi) filters

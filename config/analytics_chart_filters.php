@@ -626,6 +626,7 @@ if (!function_exists('frs_facility_filter_map')) {
                 'name' => (string)$fac['name'],
                 'lat' => (float)$fac['lat'],
                 'lng' => (float)$fac['lng'],
+                'status' => (string)($fac['status'] ?? 'available'),
             ];
         }
 
@@ -641,6 +642,11 @@ if (!function_exists('frs_facility_filter_map')) {
         <div class="facility-map-card">
             <div class="facility-map-card__head">
                 <span class="facility-map-card__label">Click a facility pin to filter <?= count($prefixes) > 1 ? 'every chart' : 'the chart'; ?> below</span>
+                <span class="facility-map-card__legend">
+                    <span class="facility-map-card__legend-item"><i class="facility-map-pin-dot facility-map-pin-dot--available"></i>Available</span>
+                    <span class="facility-map-card__legend-item"><i class="facility-map-pin-dot facility-map-pin-dot--maintenance"></i>Maintenance</span>
+                    <span class="facility-map-card__legend-item"><i class="facility-map-pin-dot facility-map-pin-dot--offline"></i>Offline</span>
+                </span>
                 <button type="button" class="chart-filter-preset facility-map-card__reset" data-facility-map-reset="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>">All Facilities</button>
             </div>
             <div id="<?= htmlspecialchars($mapId, ENT_QUOTES, 'UTF-8'); ?>" class="facility-map-canvas"></div>

@@ -410,6 +410,19 @@
         }
     }
 
+    const FRS_FACILITY_PIN_COLORS = { available: '#059669', maintenance: '#d97706', offline: '#dc2626' };
+
+    function frsFacilityStatusIcon(statusKey) {
+        const color = FRS_FACILITY_PIN_COLORS[statusKey] || FRS_FACILITY_PIN_COLORS.available;
+        return L.divIcon({
+            className: 'frs-facility-pin',
+            html: '<span style="background:' + color + '"></span>',
+            iconSize: [22, 30],
+            iconAnchor: [11, 30],
+            popupAnchor: [0, -28],
+        });
+    }
+
     function initFrsFacilityFilterMap(mapId) {
         if (typeof L === 'undefined') return;
         const configEl = document.getElementById(mapId + '-config');
@@ -435,10 +448,12 @@
             maxZoom: 19,
         }).addTo(map);
 
+        const STATUS_LABELS = { available: 'Available', maintenance: 'Under maintenance', offline: 'Offline' };
         const points = config.points || [];
         points.forEach(function (p) {
-            const marker = L.marker([p.lat, p.lng]).addTo(map);
-            marker.bindPopup('<strong>' + frsEscapeHtml(p.name) + '</strong>');
+            const statusKey = STATUS_LABELS[p.status] ? p.status : 'available';
+            const marker = L.marker([p.lat, p.lng], { icon: frsFacilityStatusIcon(statusKey) }).addTo(map);
+            marker.bindPopup('<strong>' + frsEscapeHtml(p.name) + '</strong><br>' + STATUS_LABELS[statusKey]);
             marker.on('click', function () {
                 frsFacilityMapNavigate(config, p.id);
             });

@@ -694,6 +694,26 @@ ob_start();
 </div>
 
 <script>
+// The sidebar nav sits outside the AJAX-swapped #ss-main region (data-frs-partial-id),
+// so its server-rendered "is-active" class freezes on whatever category loaded the
+// page first (Integrations) and never updates on partial navigation. Toggle it here
+// on click instead of waiting on a full reload.
+document.addEventListener('click', function (e) {
+    const link = e.target.closest('.ss-cat-nav .ss-cat-link');
+    if (!link) return;
+    document.querySelectorAll('.ss-cat-nav .ss-cat-link').forEach(function (a) {
+        a.classList.remove('is-active');
+        const arrow = a.querySelector('.ss-cat-arrow');
+        if (arrow) arrow.remove();
+    });
+    link.classList.add('is-active');
+    if (!link.querySelector('.ss-cat-arrow')) {
+        const arrow = document.createElement('i');
+        arrow.className = 'bi bi-chevron-right ss-cat-arrow';
+        link.appendChild(arrow);
+    }
+});
+
 function openAddModal() {
     const modal = document.getElementById('add-modal');
     if (!modal) return;
