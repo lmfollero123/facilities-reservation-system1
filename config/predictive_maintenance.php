@@ -712,6 +712,16 @@ function frs_submit_maintenance_request(PDO $pdo, array $payload, int $userId): 
             'error_message' => null,
             'id' => $requestId,
         ]);
+        // Otherwise the new task only shows up in the Maintenance Schedules
+        // tab after someone clicks "Sync Now" (or the cron runs) - confusing
+        // right after a submit that just told CIMM about it. Best-effort:
+        // a stale cache is a minor inconvenience, not worth failing the
+        // submission the user is waiting on.
+        try {
+            frs_cimm_run_sync($pdo);
+        } catch (Throwable $e) {
+            error_log('Post-submit CIMM sync error: ' . $e->getMessage());
+        }
         return [
             'success' => true,
             'request_id' => $requestId,

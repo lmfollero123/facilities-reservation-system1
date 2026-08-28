@@ -286,6 +286,8 @@ ob_start();
 .pm-side-panel h3 { margin:0 0 0.65rem; font-size:0.95rem; }
 .pm-request-list { list-style:none; margin:0; padding:0; display:grid; gap:0.55rem; }
 .pm-request-item { border:1px solid #eef2f7; border-radius:10px; padding:0.55rem 0.65rem; font-size:0.78rem; }
+.pm-request-photo-link { display:inline-block; margin-top:0.4rem; }
+.pm-request-photo-thumb { display:block; width:100%; max-width:180px; height:90px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; }
 .pm-status { display:inline-block; margin-top:0.25rem; padding:0.12rem 0.4rem; border-radius:999px; font-size:0.65rem; font-weight:800; text-transform:uppercase; }
 .pm-status.sent { background:#dbeafe; color:#1d4ed8; } .pm-status.pending { background:#fef3c7; color:#b45309; }
 .pm-status.failed { background:#fee2e2; color:#b91c1c; } .pm-status.acknowledged { background:#dcfce7; color:#166534; }
@@ -732,28 +734,48 @@ function viewMaintenanceDetails(maintenanceId, date = null) {
     }
     
     modalTitle.textContent = `Maintenance: ${schedule.task || 'Maintenance'}`;
-    
+
     const startDate = schedule.starting_date ? new Date(schedule.starting_date).toLocaleString() : 'N/A';
     const endDate = schedule.estimated_completion_date ? new Date(schedule.estimated_completion_date).toLocaleString() : 'N/A';
-    
+
+    // CPRF's manual-report photo travels to CIMM as a plain URL embedded in
+    // free text (CIMM's schema has no attachment field) - CIMM's own API
+    // just echoes that text back verbatim, so pull the URL back out here and
+    // render it as a real thumbnail instead of leaving raw link text in the
+    // Type line. Restricted to our own upload path since this string
+    // round-trips through CIMM's system before we display it.
+    let taskText = schedule.task || 'N/A';
+    let photoUrl = null;
+    const photoMatch = taskText.match(/https?:\/\/\S+\/uploads\/maintenance_reports\/\S+\.(?:jpg|jpeg|png|webp)/i);
+    if (photoMatch) {
+        photoUrl = photoMatch[0];
+        taskText = taskText.replace(photoMatch[0], '').replace(/Photo:\s*$/i, '').trim();
+    }
+
     modalContent.innerHTML = `
         <div style="margin-bottom: 1rem;">
             <strong>Facility:</strong> ${schedule.location || 'N/A'}<br>
-            <strong>Type:</strong> ${schedule.task || 'N/A'}<br>
+            <strong>Type:</strong> ${taskText || 'N/A'}<br>
             <strong>Scheduled:</strong> ${startDate} - ${endDate}<br>
             <strong>Priority:</strong> ${schedule.priority || 'N/A'}<br>
             <strong>Status:</strong> ${schedule.status_label || schedule.status || 'N/A'}<br>
             <strong>Team:</strong> ${schedule.assigned_team || 'N/A'}<br>
             <strong>Category:</strong> ${schedule.category || 'General Maintenance'}
         </div>
+        ${photoUrl ? `
+        <div style="margin-bottom: 1rem;">
+            <a href="${photoUrl}" target="_blank" rel="noopener">
+                <img src="${photoUrl}" alt="Reported issue photo" style="max-width:100%; max-height:280px; width:auto; display:block; margin:0 auto; border-radius:10px; object-fit:cover; border:1px solid var(--border-color, #e0e6ed);">
+            </a>
+        </div>` : ''}
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color, #e0e6ed);">
             <small>
-                <strong>Note:</strong> This facility will be automatically set to 'maintenance' status during this period. 
+                <strong>Note:</strong> This facility will be automatically set to 'maintenance' status during this period.
                 Affected reservations will be notified.
             </small>
         </div>
     `;
-    
+
     modal.style.display = 'flex';
 }
 

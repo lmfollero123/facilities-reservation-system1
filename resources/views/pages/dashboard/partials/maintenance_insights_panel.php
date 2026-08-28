@@ -234,7 +234,10 @@ $miTabQs = static function (array $extra = []) use ($filterBand, $insightsSearch
                                 <br><small class="pm-muted">Assigned: <?= htmlspecialchars((string)$req['assigned_staff_name']); ?></small>
                             <?php endif; ?>
                             <?php if (!empty($req['photo_path'])): ?>
-                                <br><small><a href="<?= htmlspecialchars((string)$req['photo_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">📷 View photo</a></small>
+                                <br>
+                                <a href="<?= htmlspecialchars((string)$req['photo_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="pm-request-photo-link">
+                                    <img src="<?= htmlspecialchars((string)$req['photo_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="Reported issue photo" class="pm-request-photo-thumb" loading="lazy">
+                                </a>
                             <?php endif; ?>
                             <span class="pm-status <?= htmlspecialchars($st); ?>"><?= htmlspecialchars($st); ?></span>
                         </li>
