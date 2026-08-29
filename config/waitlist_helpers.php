@@ -123,6 +123,41 @@ function frs_waitlist_offer_next_if_any(PDO $pdo, int $facilityId, string $date,
                 $link
             );
 
+            // This offer has a hard deadline, so also reach the resident by
+            // email/SMS (respecting their notification preferences, same as
+            // every other reservation-status message) - an in-app-only
+            // notification is too easy to miss within the claim window.
+            $userStmt = $pdo->prepare('SELECT name, email, mobile FROM users WHERE id = ? LIMIT 1');
+            $userStmt->execute([(int)$entry['user_id']]);
+            $userRow = $userStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            require_once __DIR__ . '/notification_preferences.php';
+            frs_ensure_notification_preferences_schema();
+
+            if (!empty($userRow['email']) && !empty($userRow['name'])
+                && frs_user_wants_notification((int)$entry['user_id'], 'booking', 'email')) {
+                require_once __DIR__ . '/mail_helper.php';
+                require_once __DIR__ . '/email_templates.php';
+                $emailBody = getWaitlistOfferEmailTemplate(
+                    $userRow['name'],
+                    $facilityName,
+                    $date,
+                    (string)$entry['time_slot'],
+                    $offerExpires
+                );
+                sendEmail($userRow['email'], $userRow['name'], 'A Slot Opened Up! - ' . $facilityName, $emailBody);
+            }
+
+            require_once __DIR__ . '/sms_helper.php';
+            sendReservationStatusSms([
+                'user_id' => (int)$entry['user_id'],
+                'facility_name' => $facilityName,
+                'reservation_date' => $date,
+                'time_slot' => $entry['time_slot'],
+                'offer_expires_at' => $offerExpires,
+                'requester_mobile' => $userRow['mobile'] ?? null,
+            ], 'waitlist_offered');
+
             logAudit('Offered waitlist slot', 'Waitlist', "Entry #{$entry['id']} - Facility #{$facilityId} - {$date} ({$timeSlot})");
 
             // Only the oldest matching entry gets the offer at a time.

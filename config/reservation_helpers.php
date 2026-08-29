@@ -1103,7 +1103,7 @@ function frs_deny_competing_pending_reservations(
     require_once __DIR__ . '/waitlist_helpers.php';
 
     $stmt = $pdo->prepare(
-        "SELECT r.id, r.user_id, r.time_slot, u.name AS requester_name, u.email AS requester_email
+        "SELECT r.id, r.user_id, r.time_slot, u.name AS requester_name, u.email AS requester_email, u.mobile AS requester_mobile
          FROM reservations r
          JOIN users u ON u.id = r.user_id
          WHERE r.facility_id = ? AND r.reservation_date = ? AND r.status IN ('pending', 'postponed') AND r.id != ?"
@@ -1156,6 +1156,15 @@ function frs_deny_competing_pending_reservations(
             );
             sendEmail($row['requester_email'], $row['requester_name'], 'Reservation Denied - Slot Taken', $emailBody);
         }
+
+        require_once __DIR__ . '/sms_helper.php';
+        sendReservationStatusSms([
+            'user_id' => (int)$row['user_id'],
+            'facility_name' => $facilityName,
+            'reservation_date' => $date,
+            'time_slot' => $row['time_slot'],
+            'requester_mobile' => $row['requester_mobile'] ?? null,
+        ], 'denied');
     }
 
     return $denied;

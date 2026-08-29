@@ -545,6 +545,7 @@ function sendReservationStatusSms(array $reservation, string $status): bool
         'postponed' => 'LGU Culiat: Your reservation for %s has been POSTPONED. Check the app for the new schedule.',
         'modified' => 'LGU Culiat: Your reservation for %s on %s (%s) was UPDATED. Please review in the app.',
         'reminder' => 'LGU Culiat: Reminder — %s tomorrow %s (%s). See My Reservations in the app.',
+        'waitlist_offered' => 'LGU Culiat: A slot opened up for %s on %s (%s)! Book it in the app before %s or it goes to the next person on the waitlist.',
     ];
 
     $statusKey = strtolower(trim($status));
@@ -556,6 +557,11 @@ function sendReservationStatusSms(array $reservation, string $status): bool
         $message = sprintf($templates[$statusKey], $facility);
     } elseif (in_array($statusKey, ['postponed'], true)) {
         $message = sprintf($templates[$statusKey], $facility);
+    } elseif ($statusKey === 'waitlist_offered') {
+        $expiresAt = !empty($reservation['offer_expires_at'])
+            ? date('M j, g:i A', strtotime((string)$reservation['offer_expires_at']))
+            : 'soon';
+        $message = sprintf($templates[$statusKey], $facility, $date, $slot, $expiresAt);
     } else {
         $message = sprintf($templates[$statusKey], $facility, $date, $slot);
     }

@@ -661,6 +661,58 @@ function getReservationDeniedEmailTemplate($userName, $facilityName, $date, $tim
 }
 
 /**
+ * Waitlist Slot Offered Email Template
+ * @param string $userName
+ * @param string $facilityName
+ * @param string $date Reservation date (Y-m-d)
+ * @param string $timeSlot
+ * @param string $expiresAt Offer expiry (Y-m-d H:i:s) - the claim window
+ */
+function getWaitlistOfferEmailTemplate($userName, $facilityName, $date, $timeSlot, $expiresAt) {
+    $header = getEmailHeader('A Slot Opened Up!');
+    $footer = getEmailFooter();
+    $bookUrl = base_url() . '/dashboard/book-facility';
+
+    $content = '
+        <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">🎉 A Slot Opened Up!</h2>
+        <p style="margin: 0 0 15px; color: #4a5568; font-size: 16px;">Hi <strong>' . htmlspecialchars($userName) . '</strong>,</p>
+        <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
+            Good news — a slot you were waitlisted for is now available. It is being held for you until the deadline below; after that it moves on to the next person on the waitlist.
+        </p>
+
+        ' . getEmailInfoBox('
+            <h3 style="margin: 0 0 12px; color: #166534; font-size: 16px;">📅 Slot Details</h3>
+            <table cellpadding="0" cellspacing="0" style="width: 100%;">
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 120px;"><strong>Facility:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($facilityName) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Date:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars(date('F j, Y', strtotime($date))) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Time:</strong></td>
+                    <td style="padding: 6px 0; color: #1e3a5f; font-size: 14px;">' . htmlspecialchars($timeSlot) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #b45309; font-size: 14px;"><strong>Claim by:</strong></td>
+                    <td style="padding: 6px 0; color: #b45309; font-size: 14px; font-weight: 600;">' . htmlspecialchars(date('F j, Y g:i A', strtotime($expiresAt))) . '</td>
+                </tr>
+            </table>
+        ', '#ecfdf5', '#16a34a') . '
+
+        ' . getEmailButton('Book This Slot Now', $bookUrl, '#16a34a') . '
+
+        <p style="margin: 20px 0 0; color: #6b7280; font-size: 14px;">
+            Booking still goes through the normal reservation form — this offer just guarantees the slot stays open for you until the deadline above.
+        </p>
+    ';
+
+    return $header . $content . $footer;
+}
+
+/**
  * Reservation Cancelled Email Template
  * @param string $buttonText Optional. Default "Book Another Facility".
  * @param string|null $buttonUrl Optional. Default link to book-facility.
