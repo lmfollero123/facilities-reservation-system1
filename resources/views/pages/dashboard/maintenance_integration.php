@@ -512,6 +512,10 @@ ob_start();
 .mi-history-toolbar input[type="text"], .mi-history-toolbar select { padding:0.5rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.85rem; max-width:220px; }
 .mi-history-toolbar input[type="text"] { flex:1; min-width:180px; max-width:none; }
 select { max-width: 260px; }
+/* Free-text task descriptions (CIMM manual reports, QA data) can run to
+   hundreds of chars with no spaces - without a cap a single row can force
+   the whole table (and page) wider than the viewport. */
+.table td[data-label="Type"] { max-width:320px; white-space:normal; word-break:break-word; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
