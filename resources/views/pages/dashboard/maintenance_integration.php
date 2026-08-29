@@ -402,11 +402,13 @@ ob_start();
 [data-theme="dark"] .pm-manual-btn:hover { background: rgba(239,68,68,0.2); }
 /* Visual chrome (bg/border/radius/padding) now comes from the shared
    ops card look (rounded-2xl border-slate-200 bg-white) applied inline
-   on the element - this rule only carries the leftover text styling. */
+   on the element - that card stays white in both themes (same as the
+   stat-strip and UMAN Integration's own cards), so the text color must
+   stay fixed too. var(--text-primary) is meant for the app's dark
+   *background* surfaces and renders near-invisible on a white card. */
 .mi-sync-bar { font-size:0.85rem; color:#334155; }
 .mi-sync-bar .mi-sync-meta { margin:0; }
 .mi-sync-bar .mi-sync-warn { color:#b45309; font-weight:600; }
-[data-theme="dark"] .mi-sync-bar { color: var(--text-primary); }
 .mi-schedule-layout { grid-template-columns: 1fr !important; }
 .mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; gap:0.5rem; }
 .mi-view-toggle-btn { padding:0.4rem 0.85rem; font-size:0.85rem; }
