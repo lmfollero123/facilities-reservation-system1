@@ -13,6 +13,14 @@
     RewriteCond %{HTTP:Authorization} .
     RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # Canonical host: www.cprf.infragovservices.com -> cprf.infragovservices.com.
+    # The session cookie has no explicit Domain set (config/security.php), so
+    # PHP scopes it to whichever exact host issued it - without this redirect,
+    # a login on one host variant doesn't carry over to a tab/link on the
+    # other, forcing a second login for no reason.
+    RewriteCond %{HTTP_HOST} ^www\.cprf\.infragovservices\.com$ [NC]
+    RewriteRule ^(.*)$ https://cprf.infragovservices.com/$1 [L,R=301]
+
     # Dotenv and env backups — highest priority
     RewriteRule (^|/)\.env(\.|$) - [F,L]
     RewriteRule (^|/)env\.(local|production|backup|example)$ - [F,L,NC]
