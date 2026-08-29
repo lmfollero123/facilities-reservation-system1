@@ -276,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
         $params = $isAdminOrStaff ? ['id' => $reservationId] : ['id' => $reservationId, 'user_id' => $userId];
 
         $resStmt = $pdo->prepare(
-            'SELECT r.id, r.reservation_date, r.time_slot, r.status, r.user_id,
+            'SELECT r.id, r.facility_id, r.reservation_date, r.time_slot, r.status, r.user_id,
                     f.name AS facility_name, f.is_free
              FROM reservations r
              JOIN facilities f ON r.facility_id = f.id
@@ -299,7 +299,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $frsMineCsrfOk && isset($_POST['act
         
         $stmt = $pdo->prepare('UPDATE reservations SET status = :status, postponed_priority = FALSE, postponed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
         $stmt->execute(['status' => 'cancelled', 'id' => $reservationId]);
-        
+
+        // This is the most common path that actually frees an approved slot
+        // (a resident cancelling their own booking, or staff cancelling from
+        // the Reservations Management approved list) - offer it to the
+        // waitlist just like the dedicated staff cancel flow on
+        // reservation_detail.php already does.
+        if ($reservation['status'] === 'approved') {
+            require_once __DIR__ . '/../../../../../config/waitlist_helpers.php';
+            frs_waitlist_offer_next_if_any(
+                $pdo,
+                (int)$reservation['facility_id'],
+                (string)$reservation['reservation_date'],
+                (string)$reservation['time_slot']
+            );
+        }
+
         $facilityIsFree = !empty($reservation['is_free']);
         $refunded = false;
         $refundWarning = '';

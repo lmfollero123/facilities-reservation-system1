@@ -147,6 +147,24 @@ function mobile_serialize_reservation(array $r): array
 }
 
 /**
+ * @param array<string, mixed> $w Row from frs_waitlist_list_for_user() (config/waitlist_helpers.php)
+ * @return array<string, mixed>
+ */
+function mobile_serialize_waitlist_entry(array $w): array
+{
+    return [
+        'id' => (int) $w['id'],
+        'facility_id' => (int) ($w['facility_id'] ?? 0),
+        'facility_name' => (string) ($w['facility_name'] ?? ''),
+        'reservation_date' => (string) ($w['reservation_date'] ?? ''),
+        'time_slot' => (string) ($w['time_slot'] ?? ''),
+        'status' => (string) ($w['status'] ?? ''),
+        'offer_expires_at' => $w['offer_expires_at'] ?? null,
+        'created_at' => $w['created_at'] ?? null,
+    ];
+}
+
+/**
  * @return array<string, mixed>
  */
 function mobile_load_reservation(PDO $pdo, int $id, int $userId): ?array
@@ -1391,7 +1409,8 @@ if ($route === 'reservations' && $method === 'POST') {
                 mobile_error(
                     (string) ($conflict['message'] ?? 'Time slot conflicts with an existing reservation.'),
                     409,
-                    'conflict'
+                    'conflict',
+                    ['facility_id' => $facilityId, 'reservation_date' => $date, 'time_slot' => $timeSlot]
                 );
             }
         }
@@ -1518,6 +1537,49 @@ if (preg_match('#^reservations/(\d+)$#', $route, $m) && $method === 'GET') {
     mobile_json(['ok' => true, 'reservation' => mobile_serialize_reservation($row)]);
 }
 
+// Waitlist - join a full facility/date/time slot (typically called right
+// after a 409 'conflict' response from POST /reservations, using the
+// facility_id/reservation_date/time_slot echoed back in that error's extra
+// payload), list the resident's own entries, or leave one.
+if ($route === 'waitlist' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $body = mobile_body();
+    $facilityId = (int) ($body['facility_id'] ?? 0);
+    $date = trim((string) ($body['reservation_date'] ?? ''));
+    $timeSlot = trim((string) ($body['time_slot'] ?? ''));
+    $purpose = trim((string) ($body['purpose'] ?? ''));
+
+    if ($facilityId <= 0 || $date === '' || $timeSlot === '') {
+        mobile_error('facility_id, reservation_date, and time_slot are required.', 422, 'validation');
+    }
+
+    require_once dirname(__DIR__, 6) . '/config/waitlist_helpers.php';
+    $entryId = frs_waitlist_add_entry($pdo, $facilityId, (int) $user['id'], $date, $timeSlot, $purpose !== '' ? $purpose : null);
+    if ($entryId === false) {
+        mobile_error("You're already on the waitlist for this facility, date, and time.", 409, 'already_waitlisted');
+    }
+
+    mobile_json(['ok' => true, 'waitlist_entry_id' => $entryId], 201);
+}
+
+if ($route === 'waitlist' && $method === 'GET') {
+    $user = mobile_require_user($pdo);
+    require_once dirname(__DIR__, 6) . '/config/waitlist_helpers.php';
+    $rows = frs_waitlist_list_for_user($pdo, (int) $user['id']);
+    mobile_json(['ok' => true, 'waitlist' => array_map('mobile_serialize_waitlist_entry', $rows)]);
+}
+
+if (preg_match('#^waitlist/(\d+)/cancel$#', $route, $m) && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $id = (int) $m[1];
+    require_once dirname(__DIR__, 6) . '/config/waitlist_helpers.php';
+    $ok = frs_waitlist_cancel($pdo, $id, (int) $user['id']);
+    if (!$ok) {
+        mobile_error('Waitlist entry not found, not yours, or already resolved.', 404, 'not_found');
+    }
+    mobile_json(['ok' => true]);
+}
+
 if (preg_match('#^reservations/(\d+)/cancel$#', $route, $m) && $method === 'POST') {
     $user = mobile_require_user($pdo);
     $id = (int) $m[1];
@@ -1542,6 +1604,19 @@ if (preg_match('#^reservations/(\d+)/cancel$#', $route, $m) && $method === 'POST
     $pdo->prepare(
         'UPDATE reservations SET status = "cancelled", postponed_priority = FALSE, postponed_at = NULL, updated_at = NOW() WHERE id = ?'
     )->execute([$id]);
+
+    // Mirrors the same offer-trigger the web dashboard's cancel flows use -
+    // a resident cancelling their own approved booking via the app is one of
+    // the most common ways a slot actually frees up.
+    if ($reservation['status'] === 'approved') {
+        require_once dirname(__DIR__, 6) . '/config/waitlist_helpers.php';
+        frs_waitlist_offer_next_if_any(
+            $pdo,
+            (int) $reservation['facility_id'],
+            (string) $reservation['reservation_date'],
+            (string) $reservation['time_slot']
+        );
+    }
 
     $facilityIsFree = !empty($reservation['is_free']);
     $refunded = false;
