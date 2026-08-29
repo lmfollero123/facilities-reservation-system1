@@ -144,6 +144,7 @@ foreach ($maintenanceSchedules as $schedule) {
             'id' => $schedule['id'],
             'facility_name' => $schedule['facility_name'],
             'maintenance_type' => $schedule['maintenance_type'],
+            'category' => $schedule['category'] ?? 'General Maintenance',
             'completed_at' => $schedule['scheduled_end'],
             'status' => 'completed',
             'duration' => $schedule['estimated_duration'],
@@ -240,10 +241,10 @@ if ($historySearch !== '') {
     });
 }
 if ($historyTypeFilter !== 'all') {
-    $historyFiltered = array_filter($historyFiltered, fn($h) => strtolower((string)($h['maintenance_type'] ?? '')) === $historyTypeFilter);
+    $historyFiltered = array_filter($historyFiltered, fn($h) => strtolower((string)($h['category'] ?? '')) === $historyTypeFilter);
 }
 $historyFiltered = array_values($historyFiltered);
-$historyTypes = array_values(array_unique(array_filter(array_map(fn($h) => $h['maintenance_type'] ?? '', $mockMaintenanceHistory))));
+$historyTypes = array_values(array_unique(array_filter(array_map(fn($h) => $h['category'] ?? '', $mockMaintenanceHistory))));
 sort($historyTypes);
 
 $historyTotal = count($historyFiltered);
@@ -508,8 +509,9 @@ ob_start();
     .my-reservations-calendar-cell .status-chip::after { content: attr(data-chip-short); font-size:0.6rem; line-height:1.15; font-weight:700; }
 }
 .mi-history-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem; }
-.mi-history-toolbar input[type="text"], .mi-history-toolbar select { padding:0.5rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.85rem; }
-.mi-history-toolbar input[type="text"] { flex:1; min-width:180px; }
+.mi-history-toolbar input[type="text"], .mi-history-toolbar select { padding:0.5rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.85rem; max-width:220px; }
+.mi-history-toolbar input[type="text"] { flex:1; min-width:180px; max-width:none; }
+select { max-width: 260px; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
