@@ -541,6 +541,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $facilityTab = ($_GET['tab'] ?? 'active') === 'deleted' ? 'deleted' : 'active';
 $searchQuery = trim((string)($_GET['q'] ?? ''));
 
+// Only meaningful on the Active tab - the Deleted tab is already a single status.
+$allowedStatusFilters = array_column($facilityStatusOptions, 'slug');
+$statusFilter = trim((string)($_GET['status_filter'] ?? ''));
+if ($facilityTab !== 'active' || !in_array($statusFilter, $allowedStatusFilters, true)) {
+    $statusFilter = '';
+}
+
+$allowedSorts = ['updated_desc' => 'updated_at DESC', 'name_asc' => 'name ASC'];
+$sortKey = (string)($_GET['sort'] ?? 'updated_desc');
+if (!isset($allowedSorts[$sortKey])) {
+    $sortKey = 'updated_desc';
+}
+$sortSql = $allowedSorts[$sortKey];
+
 $perPage = 5;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
@@ -550,11 +564,17 @@ $activeFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE s
 $deletedFacilityCount = (int)$pdo->query("SELECT COUNT(*) FROM facilities WHERE status = 'deleted'")->fetchColumn();
 
 $statusClause = $facilityTab === 'deleted' ? "status = 'deleted'" : "status != 'deleted'";
+if ($statusFilter !== '') {
+    $statusClause .= ' AND status = :status_filter';
+}
 // Native (non-emulated) prepared statements don't allow the same named
 // placeholder to appear twice in one query, so name/location get separate ones.
 $searchClause = $searchQuery !== '' ? ' AND (name LIKE :q1 OR location LIKE :q2)' : '';
 
 $countStmt = $pdo->prepare("SELECT COUNT(*) FROM facilities WHERE {$statusClause}{$searchClause}");
+if ($statusFilter !== '') {
+    $countStmt->bindValue(':status_filter', $statusFilter);
+}
 if ($searchQuery !== '') {
     $countStmt->bindValue(':q1', '%' . $searchQuery . '%');
     $countStmt->bindValue(':q2', '%' . $searchQuery . '%');
@@ -566,8 +586,11 @@ $totalPages = max(1, (int)ceil($totalFacilities / $perPage));
 $facilitiesStmt = $pdo->prepare(
     "SELECT *, latitude, longitude, operating_hours FROM facilities
      WHERE {$statusClause}{$searchClause}
-     ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+     ORDER BY {$sortSql} LIMIT :limit OFFSET :offset"
 );
+if ($statusFilter !== '') {
+    $facilitiesStmt->bindValue(':status_filter', $statusFilter);
+}
 if ($searchQuery !== '') {
     $facilitiesStmt->bindValue(':q1', '%' . $searchQuery . '%');
     $facilitiesStmt->bindValue(':q2', '%' . $searchQuery . '%');
@@ -680,12 +703,30 @@ ob_start();
         <?php endif; ?>
     </div>
 
-    <form method="get" data-frs-partial="facility-list" class="fm-search-row">
+    <form method="get" data-frs-partial="facility-list" class="fm-search-row fm-toolbar">
         <input type="hidden" name="tab" value="<?= htmlspecialchars($facilityTab); ?>">
         <input type="hidden" name="page" value="1">
         <div class="input-wrapper fm-search-wrapper">
             <i class="bi bi-search input-icon"></i>
             <input type="text" name="q" value="<?= htmlspecialchars($searchQuery); ?>" placeholder="Search by name or location...">
+        </div>
+        <?php if ($facilityTab === 'active'): ?>
+        <select name="status_filter" class="fm-toolbar-select" onchange="this.form.requestSubmit()">
+            <option value="">All statuses</option>
+            <?php foreach ($facilityStatusOptions as $statusOpt): ?>
+                <option value="<?= htmlspecialchars((string)$statusOpt['slug']); ?>" <?= $statusFilter === $statusOpt['slug'] ? 'selected' : ''; ?>>
+                    <?= htmlspecialchars((string)$statusOpt['label']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <?php endif; ?>
+        <select name="sort" class="fm-toolbar-select" onchange="this.form.requestSubmit()">
+            <option value="updated_desc" <?= $sortKey === 'updated_desc' ? 'selected' : ''; ?>>Recently updated</option>
+            <option value="name_asc" <?= $sortKey === 'name_asc' ? 'selected' : ''; ?>>Name A-Z</option>
+        </select>
+        <div class="fm-view-toggle" role="group" aria-label="Layout">
+            <button type="button" class="fm-view-btn" data-fm-view="grid" title="Grid view" aria-label="Grid view"><i class="bi bi-grid-3x3-gap-fill"></i></button>
+            <button type="button" class="fm-view-btn" data-fm-view="list" title="List view" aria-label="List view"><i class="bi bi-list-ul"></i></button>
         </div>
     </form>
 
@@ -706,22 +747,50 @@ ob_start();
                     </p>
                 </article>
             <?php else: ?>
+                <div class="fm-cards" id="fm-cards">
                 <?php foreach ($facilities as $facility): ?>
-                    <article class="facility-card-admin">
-                        <div class="fm-row-main">
+                    <?php
+                        $fmImgUrl = frs_facility_display_image_url(
+                            $facility['image_path'] ?? null,
+                            (int)$facility['id'],
+                            (string)$facility['name'],
+                            $facility['description'] ?? null
+                        );
+                        $fmAmenities = array_filter(array_map('trim', explode(',', (string)($facility['amenities'] ?? ''))));
+                    ?>
+                    <article class="facility-card-admin fm-card">
+                        <div class="fm-card-media" style="background-image:url('<?= htmlspecialchars($fmImgUrl, ENT_QUOTES, 'UTF-8'); ?>');">
+                            <span class="fm-pill fm-pill-status status-badge <?= htmlspecialchars(frs_facility_status_badge_class($pdo, (string)$facility['status'])); ?>">
+                                <?= htmlspecialchars(frs_lookup_label($pdo, 'facility_status', (string)$facility['status'])); ?>
+                            </span>
+                            <span class="fm-pill fm-pill-rate">
+                                <?= ($facility['base_rate'] !== null && $facility['base_rate'] !== '') ? '₱' . number_format((int)$facility['base_rate']) : 'Free'; ?>
+                            </span>
+                        </div>
+                        <div class="fm-row-main fm-card-body">
                             <header>
                                 <div>
                                     <h3><?= htmlspecialchars($facility['name']); ?></h3>
-                                    <?php if ($facility['base_rate'] !== null && $facility['base_rate'] !== ''): ?>
-                                        <small>₱<?= number_format((int)$facility['base_rate']); ?></small>
+                                    <?php if (!empty($facility['location'])): ?>
+                                        <p class="fm-card-location"><i class="bi bi-geo-alt"></i> <?= htmlspecialchars((string)$facility['location']); ?></p>
                                     <?php endif; ?>
                                 </div>
-                                <span class="status-badge <?= htmlspecialchars(frs_facility_status_badge_class($pdo, (string)$facility['status'])); ?>">
-                                    <?= htmlspecialchars(frs_lookup_label($pdo, 'facility_status', (string)$facility['status'])); ?>
-                                </span>
                             </header>
                             <?php if ($facility['description']): ?>
-                                <p style="margin:0.35rem 0 0.5rem;color:#4c5b7c;"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
+                                <p class="fm-card-desc"><?= nl2br(htmlspecialchars($facility['description'])); ?></p>
+                            <?php endif; ?>
+                            <?php if (!empty($facility['capacity']) || !empty($fmAmenities)): ?>
+                                <div class="fm-card-facts">
+                                    <?php if (!empty($facility['capacity'])): ?>
+                                        <span class="fm-fact"><i class="bi bi-people"></i> <?= htmlspecialchars((string)$facility['capacity']); ?></span>
+                                    <?php endif; ?>
+                                    <?php foreach (array_slice($fmAmenities, 0, 3) as $amenity): ?>
+                                        <span class="fm-fact fm-fact-chip"><?= htmlspecialchars($amenity); ?></span>
+                                    <?php endforeach; ?>
+                                    <?php if (count($fmAmenities) > 3): ?>
+                                        <span class="fm-fact fm-fact-chip">+<?= count($fmAmenities) - 3; ?> more</span>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
                             <?php if ($hasUmanEquipment && !empty($equipmentByFacility[(int)$facility['id']])): ?>
                                 <p style="margin:0 0 0.5rem; font-size:0.85rem; color:#0066cc;">
@@ -779,9 +848,14 @@ ob_start();
                         </div>
                     </article>
                 <?php endforeach; ?>
+                </div>
 
                 <?php if ($totalPages > 1): ?>
-                    <?php $pgQuerySuffix = $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : ''; ?>
+                    <?php
+                        $pgQuerySuffix = $searchQuery !== '' ? '&q=' . urlencode($searchQuery) : '';
+                        $pgQuerySuffix .= $statusFilter !== '' ? '&status_filter=' . urlencode($statusFilter) : '';
+                        $pgQuerySuffix .= $sortKey !== 'updated_desc' ? '&sort=' . urlencode($sortKey) : '';
+                    ?>
                     <div class="pagination">
                         <?php if ($page > 1): ?>
                             <a href="?tab=<?= $facilityTab; ?>&page=<?= $page - 1; ?><?= $pgQuerySuffix; ?>" data-frs-partial="facility-list">&larr; Prev</a>
@@ -826,6 +900,101 @@ ob_start();
 .fm-search-row { margin-bottom: 0.85rem; }
 .fm-search-wrapper { max-width: 320px; }
 .fm-search-wrapper input { width: 100%; }
+.fm-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.fm-toolbar-select {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border-color, #d7deed);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #1b1b1f);
+}
+.fm-view-toggle { display: inline-flex; margin-left: auto; border: 1px solid var(--border-color, #d7deed); border-radius: 8px; overflow: hidden; }
+.fm-view-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border: 0; background: var(--bg-primary, #fff);
+    color: var(--text-secondary, #64748b); cursor: pointer; font-size: 1rem;
+}
+.fm-view-btn + .fm-view-btn { border-left: 1px solid var(--border-color, #d7deed); }
+.fm-view-btn.is-active { background: #2563eb; color: #fff; }
+
+/* Grid mode (default) */
+.fm-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+.fm-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+    overflow: hidden;
+    border-radius: 14px;
+}
+.fm-card-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background-size: cover;
+    background-position: center;
+    background-color: #eef2f7;
+    flex-shrink: 0;
+}
+.fm-pill {
+    position: absolute;
+    top: 0.5rem;
+    padding: 0.22rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.fm-pill-status { right: 0.5rem; }
+.fm-pill-rate { left: 0.5rem; background: rgba(15, 23, 42, 0.72); color: #fff; }
+.fm-card-body { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem 1rem; }
+.fm-card-body header { display: block; }
+.fm-card-body h3 { margin: 0; font-size: 1.02rem; }
+.fm-card-location { margin: 0.2rem 0 0; font-size: 0.8rem; color: #64748b; }
+.fm-card-desc {
+    margin: 0;
+    color: #4c5b7c;
+    font-size: 0.86rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.fm-card-facts { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.fm-fact { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.76rem; color: #475569; }
+.fm-fact-chip {
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #334155;
+}
+.fm-card .facility-card-actions {
+    padding: 0.65rem 1rem;
+    border-top: 1px solid #eef2f7;
+    margin: 0;
+}
+
+/* List mode (opt-in) */
+.fm-cards.is-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.fm-cards.is-list .fm-card { flex-direction: row; align-items: stretch; border-radius: 12px; }
+.fm-cards.is-list .fm-card-media { width: 160px; aspect-ratio: auto; }
+.fm-cards.is-list .facility-card-actions { border-top: 0; border-left: 1px solid #eef2f7; display: flex; align-items: center; }
+@media (max-width: 720px) {
+    .fm-cards.is-list .fm-card { flex-direction: column; }
+    .fm-cards.is-list .fm-card-media { width: 100%; aspect-ratio: 16 / 9; }
+    .fm-cards.is-list .facility-card-actions { border-left: 0; border-top: 1px solid #eef2f7; }
+}
+[data-theme="dark"] .fm-card-desc { color: var(--text-secondary); }
+[data-theme="dark"] .fm-card-location { color: var(--text-tertiary); }
+[data-theme="dark"] .fm-fact { color: var(--text-secondary); }
+[data-theme="dark"] .fm-fact-chip { background: var(--bg-tertiary); color: var(--text-primary); }
+[data-theme="dark"] .fm-card .facility-card-actions,
+[data-theme="dark"] .fm-cards.is-list .facility-card-actions { border-color: var(--border-color); }
+[data-theme="dark"] .fm-card-media { background-color: var(--bg-tertiary); }
 
 /* Facility list rows - name/details on the left, small icon action buttons
    on the right, in line (not stacked below). */
@@ -2547,6 +2716,39 @@ window.closeFacilityModal = closeFacilityModal;
 
     modal.querySelectorAll('.js-close-qr-modal').forEach(function(el) {
         el.addEventListener('click', closeQrModal);
+    });
+
+    // Grid/List view toggle — grid is the default; the choice is remembered
+    // per-browser (localStorage) and re-applied after every AJAX refresh of
+    // #fm-cards (search/filter/sort/pagination all reload that partial and
+    // the fresh markup always starts back in grid mode).
+    function frsApplyFmView(view) {
+        const cards = document.getElementById('fm-cards');
+        if (cards) {
+            cards.classList.toggle('is-list', view === 'list');
+        }
+        document.querySelectorAll('.fm-view-btn').forEach(function(btn) {
+            btn.classList.toggle('is-active', btn.getAttribute('data-fm-view') === view);
+        });
+    }
+    function frsCurrentFmView() {
+        try {
+            return localStorage.getItem('fm-view-mode') === 'list' ? 'list' : 'grid';
+        } catch (e) {
+            return 'grid';
+        }
+    }
+    frsApplyFmView(frsCurrentFmView());
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.fm-view-btn');
+        if (!btn) return;
+        const view = btn.getAttribute('data-fm-view') === 'list' ? 'list' : 'grid';
+        try { localStorage.setItem('fm-view-mode', view); } catch (e2) {}
+        frsApplyFmView(view);
+    });
+    document.addEventListener('frs:partial-loaded', function(e) {
+        if (e.detail.id !== 'facility-list') return;
+        frsApplyFmView(frsCurrentFmView());
     });
 
     if (copyBtn && urlEl) {
