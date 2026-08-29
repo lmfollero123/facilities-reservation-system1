@@ -927,16 +927,18 @@ ob_start();
 .fm-card {
     display: flex;
     flex-direction: column;
-    /* .facility-card-admin (kept for shared base styling) sets
-       align-items:flex-start, which in a column flex container collapses
-       any child with no intrinsic width (like the image-only media div)
-       to 0 width - override back to the flex default. */
-    align-items: stretch;
     padding: 0 !important;
     margin-bottom: 0 !important;
     overflow: hidden;
     border-radius: 14px;
 }
+/* .facility-card-admin (line ~1007, kept for shared base styling) sets
+   align-items:flex-start and comes AFTER this block in source order, so it
+   wins the cascade at equal specificity - the combined selector here has
+   higher specificity and restores the flex default the column card layout
+   needs (otherwise .fm-card-media, with no intrinsic width of its own,
+   collapses to 0 width). */
+.facility-card-admin.fm-card { align-items: stretch; }
 .fm-card-media {
     position: relative;
     aspect-ratio: 16 / 9;
