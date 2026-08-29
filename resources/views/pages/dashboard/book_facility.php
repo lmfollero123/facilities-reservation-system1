@@ -2179,7 +2179,7 @@ ul.bcf-scroll-select-menu {
 <?php if ($error): ?>
     <div class="message error booking-error" data-error-field="<?= htmlspecialchars($errorField); ?>" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($error); ?>
-        <?php if (str_contains($error, 'Conflict Detected') && !empty($facilityId) && !empty($date) && !empty($timeSlot)): ?>
+        <?php if (stripos($error, 'conflict') !== false && !empty($facilityId) && !empty($date) && !empty($timeSlot)): ?>
             <form method="post" style="margin-top:0.65rem;">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="join_waitlist" value="1">
