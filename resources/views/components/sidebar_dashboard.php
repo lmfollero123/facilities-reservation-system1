@@ -29,10 +29,6 @@ if (!$profilePicture && $userId) {
 
 $currentPath = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $current = $currentPath;
-echo '<!-- DEBUG_REQUEST_URI: ' . htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'NULL'), ENT_QUOTES, 'UTF-8') . ' | DEBUG_CURRENT: ' . htmlspecialchars($current, ENT_QUOTES, 'UTF-8')
-    . ' | DEBUG_STRCONTAINS: ' . var_export(str_contains((string)($_SERVER['REQUEST_URI'] ?? ''), 'checkin-waivers'), true)
-    . ' | DEBUG_TESTLINK: ' . var_export(isLinkActive(['label' => 'x', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'], $current), true)
-    . ' -->';
 
 // Icon SVG paths (shared)
 $iconPaths = [

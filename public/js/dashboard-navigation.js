@@ -132,6 +132,12 @@
                     const haveMine = currentSearch.indexOf('module=mine') !== -1;
                     const onBook = current === bookFacilityPath || current === '/dashboard/book-facility';
                     active = onBook && (wantMine ? haveMine : !haveMine);
+                } else if (linkPath.endsWith('/dashboard/occupancy-monitor')) {
+                    // Occupancy & Waivers covers 2 routes - mirrors isLinkActive() in sidebar_dashboard.php.
+                    active = current.endsWith('/dashboard/occupancy-monitor') || current.endsWith('/dashboard/checkin-waivers');
+                } else if (linkPath.endsWith('/dashboard/facility-management')) {
+                    // Facility Management covers 2 routes - mirrors isLinkActive() in sidebar_dashboard.php.
+                    active = current.endsWith('/dashboard/facility-management') || current.endsWith('/dashboard/blackout-dates');
                 } else if (linkPath === normalizedHome || linkPath === '/dashboard') {
                     active = current === normalizedHome || current === '/dashboard';
                 } else if (linkPath === current) {
