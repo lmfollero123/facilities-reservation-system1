@@ -1077,6 +1077,91 @@ function frs_validate_resident_booking_limits_excluding(
 }
 
 /**
+ * Auto-denies every other still-pending/postponed reservation for the same
+ * facility/date with an overlapping time slot once one of them is approved
+ * (or moved to pending_payment) - see the soft-conflict note in
+ * detectBookingConflict() for why more than one pending request can exist
+ * for the same slot in the first place. Each displaced requester is
+ * enrolled in the waitlist for their own originally-requested time and
+ * notified, rather than left to find out only when their request expires.
+ *
+ * @return int Number of competing reservations auto-denied.
+ */
+function frs_deny_competing_pending_reservations(
+    PDO $pdo,
+    int $winningReservationId,
+    int $facilityId,
+    string $date,
+    string $timeSlot,
+    string $facilityName,
+    ?int $decidedBy
+): int {
+    if ($facilityId <= 0 || $date === '' || $timeSlot === '') {
+        return 0;
+    }
+
+    require_once __DIR__ . '/waitlist_helpers.php';
+
+    $stmt = $pdo->prepare(
+        "SELECT r.id, r.user_id, r.time_slot, u.name AS requester_name, u.email AS requester_email
+         FROM reservations r
+         JOIN users u ON u.id = r.user_id
+         WHERE r.facility_id = ? AND r.reservation_date = ? AND r.status IN ('pending', 'postponed') AND r.id != ?"
+    );
+    $stmt->execute([$facilityId, $date, $winningReservationId]);
+    $candidates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $denied = 0;
+    foreach ($candidates as $row) {
+        if (!timeSlotsOverlap($timeSlot, (string)$row['time_slot'])) {
+            continue;
+        }
+
+        $upd = $pdo->prepare(
+            "UPDATE reservations SET status = 'denied', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('pending', 'postponed')"
+        );
+        $upd->execute([$row['id']]);
+        if ($upd->rowCount() === 0) {
+            continue;
+        }
+        $denied++;
+
+        $note = 'Automatically denied: another request for the same facility and an overlapping time (RES-' . $winningReservationId . ') was approved first.';
+        $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (?, ?, ?, ?)');
+        $hist->execute([$row['id'], 'denied', $note, $decidedBy]);
+
+        logAudit('Auto-denied competing reservation', 'Reservations', 'RES-' . $row['id'] . ' - ' . $note, $decidedBy);
+
+        frs_waitlist_add_entry($pdo, $facilityId, (int)$row['user_id'], $date, (string)$row['time_slot'], null);
+
+        createNotification(
+            (int)$row['user_id'],
+            'booking',
+            'Reservation Denied - Slot Taken',
+            'Your request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $row['time_slot'] . ') '
+                . 'could not be approved because another request for an overlapping time was approved first. '
+                . "We've added you to the waitlist for this slot - you'll be notified if it opens up.",
+            base_path() . '/dashboard/book-facility?module=mine'
+        );
+
+        if (!empty($row['requester_email']) && !empty($row['requester_name'])) {
+            require_once __DIR__ . '/mail_helper.php';
+            require_once __DIR__ . '/email_templates.php';
+            $emailBody = getReservationDeniedEmailTemplate(
+                $row['requester_name'],
+                $facilityName,
+                $date,
+                $row['time_slot'],
+                'Another request for an overlapping time was approved first. You have been added to the waitlist for this slot.'
+            );
+            sendEmail($row['requester_email'], $row['requester_name'], 'Reservation Denied - Slot Taken', $emailBody);
+        }
+    }
+
+    return $denied;
+}
+
+/**
  * Apply staff approve / deny / cancel (or pending_payment) for a reservation row.
  *
  * @param array<string, mixed> $reservation Row with facility_name, facility_status, status, reservation_date, time_slot, requester_id, requester_email, requester_name; optional postponed_priority
@@ -1205,6 +1290,25 @@ function frs_staff_apply_status_decision(
             );
         }
         throw $e;
+    }
+
+    // Two residents can both have a PENDING request for the same facility/date/
+    // overlapping time (only approved/pending_payment hard-blocks new
+    // submissions - see detectBookingConflict()'s soft-conflict handling in
+    // config/ai_helpers.php). Once one of them gets approved, every other
+    // still-pending competing request is auto-denied so nobody is left
+    // waiting on a slot that's already gone, and each displaced requester is
+    // quietly enrolled in the waitlist for the time they originally wanted.
+    if ($finalAction === 'approved' || $finalAction === 'pending_payment') {
+        frs_deny_competing_pending_reservations(
+            $pdo,
+            $reservationId,
+            (int)($reservation['facility_id'] ?? 0),
+            (string)($reservation['reservation_date'] ?? ''),
+            (string)($reservation['time_slot'] ?? ''),
+            (string)($reservation['facility_name'] ?? 'Unknown Facility'),
+            $_SESSION['user_id'] ?? null
+        );
     }
 
     // Handle refund for cancelled and denied reservations with payments
