@@ -100,6 +100,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $hasTabl
 $facilities = $pdo->query("SELECT id, name, status FROM facilities WHERE status != 'deleted' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $mapping = $hasTables ? frs_energy_get_mapping($pdo) : [];
 $syncState = $hasTables ? frs_energy_load_sync_state($pdo) : ['last_pull_at' => null, 'last_push_at' => null, 'last_summary' => null];
+$pendingRecoCount = $hasTables ? (int)$pdo->query(
+    "SELECT COUNT(*) FROM energy_recommendations_cache WHERE status = 'approved' AND implementation_status NOT IN ('implemented', 'verified')"
+)->fetchColumn() : 0;
 
 $latestReadings = [];
 $pendingCount = 0;
@@ -358,6 +361,36 @@ ob_start();
         <span>Operations</span><span class="sep">/</span><span>Energy Efficiency</span>
     </div>
     <?= frs_page_title('Energy Efficiency (LGU Energy)', 'Record monthly electricity meter readings per facility, push them to the LGU Energy system, and review engineer-approved energy-saving recommendations.'); ?>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-building text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Facilities tracked</p>
+            <p class="text-lg font-bold text-slate-900"><?= count($mapping); ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-lightbulb text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Recommendations pending</p>
+            <p class="text-lg font-bold text-slate-900"><?= (int)$pendingRecoCount; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-arrow-repeat text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Last pulled</p>
+            <p class="text-lg font-bold text-slate-900"><?= !empty($syncState['last_pull_at']) ? htmlspecialchars(date('M j, g:i A', strtotime($syncState['last_pull_at']))) : 'Never'; ?></p>
+        </div>
+    </div>
 </div>
 
 <style>

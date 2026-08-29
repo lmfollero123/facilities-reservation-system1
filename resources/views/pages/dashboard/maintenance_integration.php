@@ -400,18 +400,13 @@ ob_start();
     color: #fca5a5;
 }
 [data-theme="dark"] .pm-manual-btn:hover { background: rgba(239,68,68,0.2); }
-.mi-sync-bar {
-    display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;
-    background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:0.75rem 1rem; margin-bottom:1.25rem;
-    font-size:0.85rem; color:#0c4a6e;
-}
+/* Visual chrome (bg/border/radius/padding) now comes from the shared
+   ops card look (rounded-2xl border-slate-200 bg-white) applied inline
+   on the element - this rule only carries the leftover text styling. */
+.mi-sync-bar { font-size:0.85rem; color:#334155; }
 .mi-sync-bar .mi-sync-meta { margin:0; }
 .mi-sync-bar .mi-sync-warn { color:#b45309; font-weight:600; }
-[data-theme="dark"] .mi-sync-bar {
-    background: rgba(14,165,233,0.12);
-    border-color: rgba(14,165,233,0.3);
-    color: var(--text-primary);
-}
+[data-theme="dark"] .mi-sync-bar { color: var(--text-primary); }
 .mi-schedule-layout { grid-template-columns: 1fr !important; }
 .mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; gap:0.5rem; }
 .mi-view-toggle-btn { padding:0.4rem 0.85rem; font-size:0.85rem; }
@@ -430,9 +425,39 @@ ob_start();
     <?= frs_page_title('Maintenance', 'CIMM schedules, calendar, and predictive maintenance requests.'); ?>
 </div>
 
-<nav class="mi-tabs" aria-label="Maintenance sections">
-    <a class="mi-tab <?= $activeTab === 'schedules' ? 'active' : ''; ?>" href="?tab=schedules">Schedules &amp; Calendar</a>
-    <a class="mi-tab <?= $activeTab === 'insights' ? 'active' : ''; ?>" href="?tab=insights">Maintenance Insights</a>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-exclamation-triangle text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">High-risk facilities</p>
+            <p class="text-lg font-bold text-slate-900"><?= (int)$highCount; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-hourglass-split text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Pending with CIMM</p>
+            <p class="text-lg font-bold text-slate-900"><?= (int)$pendingSent; ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-arrow-repeat text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Last sync</p>
+            <p class="text-lg font-bold text-slate-900"><?= $schedulesCachedAt ? htmlspecialchars(date('M j, g:i A', strtotime($schedulesCachedAt))) : 'Never'; ?></p>
+        </div>
+    </div>
+</div>
+
+<nav class="booking-hub-tabs" aria-label="Maintenance sections">
+    <a class="booking-hub-tab <?= $activeTab === 'schedules' ? 'is-active' : ''; ?>" href="?tab=schedules">Schedules &amp; Calendar</a>
+    <a class="booking-hub-tab <?= $activeTab === 'insights' ? 'is-active' : ''; ?>" href="?tab=insights">Maintenance Insights</a>
 </nav>
 
 <?php if ($success): ?>
@@ -447,7 +472,7 @@ ob_start();
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
 
-<div class="mi-sync-bar">
+<div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 mb-5 mi-sync-bar" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <span class="mi-sync-meta">
         <?php if ($schedulesCachedAt): ?>
             Schedule data synced <?= htmlspecialchars(date('M j, Y g:i A', strtotime($schedulesCachedAt))); ?>
@@ -464,7 +489,7 @@ ob_start();
             <?= csrf_field(); ?>
             <input type="hidden" name="sync_now" value="1">
             <input type="hidden" name="tab" value="schedules">
-            <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">
+            <button type="submit" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700;">
                 🔄 Sync Now
             </button>
         </form>

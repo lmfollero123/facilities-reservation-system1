@@ -96,6 +96,36 @@ ob_start();
     <?= frs_page_title('Infrastructure Projects (IPMS)', 'Read-only pull integration: we poll IPMS for Culiat infrastructure projects and block booking on facilities under active work. We never write anything back to IPMS.'); ?>
 </div>
 
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-slash-circle text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Facilities blocked</p>
+            <p class="text-lg font-bold text-slate-900"><?= count($activeIpmsProjects); ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-calendar-event text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Upcoming projects</p>
+            <p class="text-lg font-bold text-slate-900"><?= count($upcomingProjects); ?></p>
+        </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-arrow-repeat text-lg"></i>
+        </div>
+        <div>
+            <p class="text-xs text-slate-500">Last sync</p>
+            <p class="text-lg font-bold text-slate-900"><?= $lastSyncAt ? htmlspecialchars(date('M j, g:i A', strtotime($lastSyncAt))) : 'Never'; ?></p>
+        </div>
+    </div>
+</div>
+
 <div class="booking-wrapper">
     <section class="booking-card" style="grid-column: 1 / -1;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
