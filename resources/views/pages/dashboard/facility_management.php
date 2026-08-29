@@ -149,7 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message .= " UMAN has allocated replacement asset #{$result['replacement_asset_id']}.";
                 }
                 if (empty($result['webhook_ok'])) {
-                    $message .= ' NOTE: UMAN system is offline; the request was saved locally and will sync when UMAN is reachable.';
+                    // Was always the same generic "offline" wording regardless of
+                    // the actual reason (auth rejection, validation error, asset
+                    // state conflict, etc.) - show the real error UMAN returned.
+                    $message .= ' NOTE: UMAN did not accept the request (' . ($result['error'] ?? 'unknown reason') . '). Saved locally; will sync when resolved.';
                 } elseif (!empty($result['pickup_instructions'])) {
                     $message .= ' Pickup: ' . $result['pickup_instructions'];
                 }
