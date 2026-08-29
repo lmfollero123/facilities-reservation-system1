@@ -29,6 +29,7 @@ if (!$profilePicture && $userId) {
 
 $currentPath = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $current = $currentPath;
+echo '<!-- DEBUG_REQUEST_URI: ' . htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'NULL'), ENT_QUOTES, 'UTF-8') . ' | DEBUG_CURRENT: ' . htmlspecialchars($current, ENT_QUOTES, 'UTF-8') . ' -->';
 
 // Icon SVG paths (shared)
 $iconPaths = [
