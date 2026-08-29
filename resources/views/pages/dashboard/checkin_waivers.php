@@ -44,8 +44,14 @@ ob_start();
 ?>
 <div class="dashboard-content dashboard-fade-in">
     <div class="page-header">
+        <div class="breadcrumb"><span>Reservations & Facilities</span><span class="sep">/</span><span>Occupancy & Waivers</span></div>
         <?= frs_page_title('Check-In Waiver Requests', 'Residents who forgot to check in can request a waiver. Approved waivers skip no-show violations.'); ?>
     </div>
+
+    <nav class="booking-hub-tabs fm-parent-tabs" aria-label="Occupancy & Waivers sections">
+        <a class="booking-hub-tab" href="<?= htmlspecialchars(base_path() . '/dashboard/occupancy-monitor'); ?>">Live Occupancy</a>
+        <a class="booking-hub-tab is-active" href="<?= htmlspecialchars(base_path() . '/dashboard/checkin-waivers'); ?>">Waiver Requests</a>
+    </nav>
 
     <?php if ($message): ?>
         <div class="message <?= $messageType === 'success' ? 'success' : 'error'; ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1rem;">

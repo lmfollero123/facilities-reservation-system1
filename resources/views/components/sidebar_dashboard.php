@@ -71,6 +71,14 @@ function isLinkActive($link, $current) {
         }
         return str_contains($requestUri, 'book-facility') && str_contains($requestUri, 'module=mine');
     }
+    // Occupancy & Waivers covers 2 routes (its own + the Waiver Requests tab).
+    if ($page === 'occupancy_monitor') {
+        return str_contains($requestUri, 'occupancy-monitor') || str_contains($requestUri, 'checkin-waivers');
+    }
+    // Facility Management covers 2 routes (its own + the Blackout Dates tab).
+    if ($page === 'facility_management') {
+        return str_contains($requestUri, 'facility-management') || str_contains($requestUri, 'blackout-dates');
+    }
 
     return ($current === $linkPath || $current === 'dashboard/' . $pageSlug) || str_contains($current, $link['page']);
 }
@@ -101,24 +109,19 @@ if (frs_can_read($role, 'reservations')) {
     $bookingGroup[] = ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'];
 }
 $bookingGroup[] = ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'];
-if (in_array($role, ['Admin', 'Staff'], true)) {
-    $bookingGroup[] = ['label' => 'Check-In Waivers', 'href' => $base . '/dashboard/checkin-waivers', 'icon' => 'clipboard-check', 'page' => 'checkin_waivers'];
-}
 
-$aiToolsGroup = [];
-
-// Check AI tools permissions
+// Smart Scheduler used to live in its own "AI Tools" group alongside AI Model
+// Lab - with AI Model Lab moved into Administration (dev-only tool, rarely
+// used), a one-item collapsible group wasn't worth keeping. Rendered as a
+// plain top-level link instead, alongside Dashboard.
+$mainExtraLinks = [];
 if (frs_can_read($role, 'ai_tools')) {
-    $aiToolsGroup[] = ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
-}
-if ($role === 'Admin' && frs_ai_dev_tools_visible()) {
-    $aiToolsGroup[] = ['label' => 'AI Model Lab', 'href' => $base . '/dashboard/ai-model-lab', 'icon' => 'robot', 'page' => 'ai_model_lab'];
+    $mainExtraLinks[] = ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
 }
 
 $reservationsFacilitiesGroup = [];
 $communicationsGroup = [];
 $integrationsGroup = [];
-$reportsGroup = [];
 $administrationGroup = [];
 
 if (in_array($role, ['Admin', 'Staff'], true)) {
@@ -128,10 +131,18 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         $reservationsFacilitiesGroup[] = ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'];
     }
     if (frs_can_read($role, 'facilities')) {
+        // Blackout Dates used to be a separate sidebar item; it's now a tab
+        // on this same page (both are facility-configuration tasks, same
+        // audience) - route/page still fully live, just reached via the tab
+        // bar instead of its own sidebar link.
         $reservationsFacilitiesGroup[] = ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'];
     }
-    if (frs_can_read($role, 'blackout_dates')) {
-        $reservationsFacilitiesGroup[] = ['label' => 'Blackout Dates', 'href' => $base . '/dashboard/blackout-dates', 'icon' => 'calendar-days', 'page' => 'blackout_dates'];
+    // Live Occupancy + Check-In Waivers merged into one "Occupancy & Waivers"
+    // entry (2 tabs) - both are real-time attendance oversight for Staff/Admin
+    // sharing config/occupancy_monitoring.php, so they belong together, and
+    // neither is really a "Booking" or "Report" action on its own.
+    if (frs_can_read($role, 'reports')) {
+        $reservationsFacilitiesGroup[] = ['label' => 'Occupancy & Waivers', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'];
     }
 
     // Communications - check permissions
@@ -158,11 +169,11 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
         $integrationsGroup[] = ['label' => 'Energy Efficiency', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
     }
 
-    // Reports - check permissions
-    $reportsGroup = [];
+    // Reports & Analytics is the only item left in this group now that Live
+    // Occupancy moved to Reservations & Facilities - a one-item collapsible
+    // group isn't worth it, so it's a plain top-level link (see $mainExtraLinks).
     if (frs_can_read($role, 'reports')) {
-        $reportsGroup[] = ['label' => 'Live Occupancy', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'];
-        $reportsGroup[] = ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'];
+        $mainExtraLinks[] = ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'];
     }
 }
 
@@ -180,6 +191,11 @@ if ($role === 'Admin') {
     }
     if (frs_can_read($role, 'audit_trail')) {
         $administrationGroup[] = ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
+    }
+    // Dev-only tool, previously its own "AI Tools" group alongside Smart
+    // Scheduler - moved here since it's Admin-only and rarely used.
+    if (frs_ai_dev_tools_visible()) {
+        $administrationGroup[] = ['label' => 'AI Model Lab', 'href' => $base . '/dashboard/ai-model-lab', 'icon' => 'robot', 'page' => 'ai_model_lab'];
     }
 } elseif ($role === 'Staff') {
     // Administration - check permissions
@@ -205,17 +221,17 @@ $sidebarAvatarInitial = function_exists('mb_substr')
         <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close sidebar">✕</button>
     </div>
     <nav aria-label="Dashboard navigation">
-        <!-- Main: Dashboard only -->
+        <!-- Main: Dashboard + ungrouped single-item links (Smart Scheduler, Reports & Analytics) -->
         <div class="sidebar-section">
             <div class="sidebar-section-title">Main</div>
             <?= renderNavLink(['label' => 'Dashboard', 'href' => $base . '/dashboard', 'icon' => 'dashboard', 'page' => 'index'], $current, $iconPaths); ?>
+            <?php foreach ($mainExtraLinks as $link): ?>
+                <?= renderNavLink($link, $current, $iconPaths); ?>
+            <?php endforeach; ?>
         </div>
 
         <!-- Booking Group -->
         <?= renderCollapsibleGroup('Booking', 'sidebar-booking', $bookingGroup, $current, $iconPaths, true); ?>
-
-        <!-- AI Tools Group -->
-        <?= renderCollapsibleGroup('AI Tools', 'sidebar-ai-tools', $aiToolsGroup, $current, $iconPaths, true); ?>
 
         <!-- Reservations & Facilities (Admin/Staff) -->
         <?= renderCollapsibleGroup('Reservations & Facilities', 'sidebar-reservations-facilities', $reservationsFacilitiesGroup, $current, $iconPaths, true); ?>
@@ -225,9 +241,6 @@ $sidebarAvatarInitial = function_exists('mb_substr')
 
         <!-- Operations (Admin/Staff) -->
         <?= renderCollapsibleGroup('Operations', 'sidebar-integrations', $integrationsGroup, $current, $iconPaths, false); ?>
-
-        <!-- Reports (Admin/Staff) -->
-        <?= renderCollapsibleGroup('Reports', 'sidebar-reports', $reportsGroup, $current, $iconPaths, true); ?>
 
         <!-- Administration (Admin; Staff: User Management) -->
         <?= renderCollapsibleGroup('Administration', 'sidebar-administration', $administrationGroup, $current, $iconPaths, false); ?>

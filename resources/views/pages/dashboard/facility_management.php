@@ -645,10 +645,15 @@ ob_start();
 ?>
 <div class="page-header">
     <div class="breadcrumb">
-        <span>Administration</span><span class="sep">/</span><span>Facility Management</span>
+        <span>Reservations & Facilities</span><span class="sep">/</span><span>Facility Management</span>
     </div>
     <?= frs_page_title('Facility Management', 'Add or edit venues, capacity, rates, and whether bookings can be auto-approved.'); ?>
 </div>
+
+<nav class="booking-hub-tabs fm-parent-tabs" aria-label="Facility Management sections">
+    <a class="booking-hub-tab is-active" href="<?= htmlspecialchars(base_path() . '/dashboard/facility-management'); ?>">Facilities</a>
+    <a class="booking-hub-tab" href="<?= htmlspecialchars(base_path() . '/dashboard/blackout-dates'); ?>">Blackout Dates</a>
+</nav>
 
 <?php if ($message): ?>
     <div class="message <?= $messageType; ?>" style="padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.25rem;background:<?= $messageType === 'success' ? '#e3f8ef' : '#fdecee'; ?>;color:<?= $messageType === 'success' ? '#0d7a43' : '#b23030'; ?>;">

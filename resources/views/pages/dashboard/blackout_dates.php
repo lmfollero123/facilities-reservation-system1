@@ -244,6 +244,18 @@ $filterBaseUrl = blackout_filter_url($filterYear, $calMonth, $filterFacility);
 
 ob_start();
 ?>
+<div class="page-header">
+    <div class="breadcrumb">
+        <span>Reservations & Facilities</span><span class="sep">/</span><span>Facility Management</span>
+    </div>
+    <?= frs_page_title('Blackout Dates', 'Block dates when a facility cannot be booked.'); ?>
+</div>
+
+<nav class="booking-hub-tabs fm-parent-tabs" aria-label="Facility Management sections">
+    <a class="booking-hub-tab" href="<?= htmlspecialchars($base . '/dashboard/facility-management'); ?>">Facilities</a>
+    <a class="booking-hub-tab is-active" href="<?= htmlspecialchars($base . '/dashboard/blackout-dates'); ?>">Blackout Dates</a>
+</nav>
+
 <div class="frs-blackout-page w-full pb-8">
     <!-- Header -->
     <header class="mb-3">

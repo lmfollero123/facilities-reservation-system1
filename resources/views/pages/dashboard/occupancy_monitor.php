@@ -49,9 +49,14 @@ ob_start();
 ?>
 <div class="dashboard-content dashboard-fade-in book-facility-compact">
     <div class="page-header" style="margin-bottom:1rem;">
-        <div class="breadcrumb"><span>Operations</span><span class="sep">/</span><span>Live Occupancy</span></div>
+        <div class="breadcrumb"><span>Reservations & Facilities</span><span class="sep">/</span><span>Occupancy & Waivers</span></div>
         <?= frs_page_title('Live Occupancy Board', 'Staff can override facility status (occupied/available). Counts reflect today’s bookings and check-in/out.'); ?>
     </div>
+
+    <nav class="booking-hub-tabs fm-parent-tabs" aria-label="Occupancy & Waivers sections">
+        <a class="booking-hub-tab is-active" href="<?= htmlspecialchars(base_path() . '/dashboard/occupancy-monitor'); ?>">Live Occupancy</a>
+        <a class="booking-hub-tab" href="<?= htmlspecialchars(base_path() . '/dashboard/checkin-waivers'); ?>">Waiver Requests</a>
+    </nav>
 
     <?php if ($flash): ?>
         <div class="message" style="padding:0.85rem 1rem;border-radius:12px;margin-bottom:1rem;border:1px solid <?= $flashType === 'error' ? '#fecaca' : '#bbf7d0'; ?>;<?= $flashType === 'error' ? 'background:#fef2f2;color:#b91c1c;' : 'background:#ecfdf5;color:#047857;'; ?>">
