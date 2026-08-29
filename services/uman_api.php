@@ -1215,13 +1215,22 @@ function frs_uman_request_return(
                 'error' => $error, 'pickup_instructions' => null, 'replacement_asset_id' => null];
     }
 
+    // UMAN's /api/facility-equipment.php request_return route reads
+    // `asset_id` and `actor_label` (per its own doc block + code, not
+    // `uman_asset_id`/`requested_by`) - every return/replace request was
+    // silently failing UMAN's `facility_id and asset_id required` (422)
+    // check because $assetId always resolved to 0 on their end. Sending
+    // both key names so this keeps working even if either side's contract
+    // drifts again.
     $webhookResult = uman_api_post('/api/facility-equipment.php', [
         'action'        => 'request_return',
         'facility_id'   => $facilityId,
+        'asset_id'      => $assetId,
         'uman_asset_id' => $assetId,
         'return_type'   => $returnType,
         'condition'     => $condition,
         'reason'        => $reason,
+        'actor_label'   => $byLabel,
         'requested_by'  => $byLabel,
         'cprf_event_ref'=> $eventRef,
     ]);
