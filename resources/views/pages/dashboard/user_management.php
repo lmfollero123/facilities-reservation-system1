@@ -125,6 +125,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
             }
         }
     }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_violation') {
+    if (!$isPageAdmin) {
+        $message = 'You do not have permission to remove violations.';
+        $messageType = 'error';
+    } else {
+        $violationId = (int)($_POST['violation_id'] ?? 0);
+        if ($violationId <= 0 || !deleteViolation($violationId)) {
+            $message = 'Unable to remove that violation. It may have already been removed.';
+            $messageType = 'error';
+        } else {
+            $message = 'Violation removed.';
+        }
+    }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_id'], $_POST['action'])) {
     $userId = (int)$_POST['user_id'];
     $action = $_POST['action'];
@@ -884,6 +897,14 @@ ob_start();
                                                                 <?php endif; ?>
                                                             <?php endif; ?>
                                                         </p>
+                                                        <?php if ($isPageAdmin): ?>
+                                                            <form method="post" class="um-violation-remove-form" onsubmit="return confirm('Remove this violation? This cannot be undone.');">
+                                                                <?= csrf_field(); ?>
+                                                                <input type="hidden" name="action" value="delete_violation">
+                                                                <input type="hidden" name="violation_id" value="<?= (int)$v['id']; ?>">
+                                                                <button type="submit" class="um-violation-remove-btn">Remove</button>
+                                                            </form>
+                                                        <?php endif; ?>
                                                     </li>
                                                 <?php endforeach; ?>
                                             </ul>
@@ -1277,6 +1298,9 @@ ob_start();
 .um-violation-sev-high .um-violation-severity, .um-violation-sev-critical .um-violation-severity { color: #b91c1c; }
 .um-violation-desc { margin: 0.3rem 0 0; font-size: 0.8rem; color: #334155; line-height: 1.4; }
 .um-violation-meta { margin: 0.25rem 0 0; font-size: 0.75rem; color: #94a3b8; }
+.um-violation-remove-form { margin: 0.4rem 0 0; }
+.um-violation-remove-btn { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.um-violation-remove-btn:hover { background: #fee2e2; }
 .um-role-form select { padding: 0.35rem 0.5rem; border-radius: 8px; border: 1px solid #d7deed; font-size: 0.85rem; }
 .um-docs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
 .um-doc-link { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; text-decoration: none; }
@@ -1361,6 +1385,8 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-violation-sev-critical .um-violation-severity { color: #fca5a5; }
 [data-theme="dark"] .um-violation-desc { color: #cbd5e1; }
 [data-theme="dark"] .um-violation-meta { color: #64748b; }
+[data-theme="dark"] .um-violation-remove-btn { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
+[data-theme="dark"] .um-violation-remove-btn:hover { background: #7f1d1d; }
 [data-theme="dark"] .um-doc-link { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 [data-theme="dark"] .um-empty { color: #94a3b8; background: #1e293b; }
 [data-theme="dark"] .um-field-hint { color: #64748b; }

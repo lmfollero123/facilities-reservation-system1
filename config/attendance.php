@@ -6,6 +6,7 @@
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/time_helpers.php';
 require_once __DIR__ . '/occupancy_monitoring.php';
+require_once __DIR__ . '/audit.php';
 
 /**
  * Build reservation start/end DateTime from date + slot string.
@@ -103,8 +104,9 @@ function frs_get_attendance(PDO $pdo, int $reservationId): ?array
 function frs_record_check_in(PDO $pdo, int $reservationId, int $userId, ?string $proofPath = null): array
 {
     $stmt = $pdo->prepare(
-        'SELECT r.id, r.user_id, r.reservation_date, r.time_slot, r.status
+        'SELECT r.id, r.user_id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
          FROM reservations r
+         LEFT JOIN facilities f ON f.id = r.facility_id
          WHERE r.id = ? AND r.user_id = ? LIMIT 1'
     );
     $stmt->execute([$reservationId, $userId]);
@@ -156,6 +158,13 @@ function frs_record_check_in(PDO $pdo, int $reservationId, int $userId, ?string 
         $ins->execute([$reservationId, $userId, $proofPath]);
     }
 
+    logAudit(
+        'Checked in',
+        'Attendance',
+        sprintf('Reservation #%d - %s - %s', $reservationId, $res['facility_name'] ?? 'Unknown facility', $res['reservation_date']),
+        $userId
+    );
+
     return ['ok' => true, 'message' => 'Check In recorded successfully.', 'action' => 'check_in'];
 }
 
@@ -165,8 +174,9 @@ function frs_record_check_in(PDO $pdo, int $reservationId, int $userId, ?string 
 function frs_record_check_out(PDO $pdo, int $reservationId, int $userId, ?string $proofPath = null): array
 {
     $stmt = $pdo->prepare(
-        'SELECT r.id, r.user_id, r.reservation_date, r.time_slot, r.status
+        'SELECT r.id, r.user_id, r.reservation_date, r.time_slot, r.status, f.name AS facility_name
          FROM reservations r
+         LEFT JOIN facilities f ON f.id = r.facility_id
          WHERE r.id = ? AND r.user_id = ? LIMIT 1'
     );
     $stmt->execute([$reservationId, $userId]);
@@ -207,6 +217,13 @@ function frs_record_check_out(PDO $pdo, int $reservationId, int $userId, ?string
         'UPDATE reservation_attendance SET time_out_at = NOW(), time_out_proof_path = ? WHERE reservation_id = ?'
     );
     $upd->execute([$proofPath, $reservationId]);
+
+    logAudit(
+        'Checked out',
+        'Attendance',
+        sprintf('Reservation #%d - %s - %s', $reservationId, $res['facility_name'] ?? 'Unknown facility', $res['reservation_date']),
+        $userId
+    );
 
     return ['ok' => true, 'message' => 'Check Out recorded successfully.', 'action' => 'check_out'];
 }

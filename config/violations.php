@@ -141,6 +141,57 @@ function getUserViolations(int $userId, ?int $daysBack = null, ?string $severity
 }
 
 /**
+ * Deletes a violation record (Admin correction - e.g. recorded in error).
+ * Logs the removed record's details to the audit trail before deleting,
+ * since the row itself won't be recoverable afterward.
+ *
+ * @param int $violationId
+ * @param int|null $deletedBy Admin user ID who removed it (defaults to session user)
+ * @return bool True on success, false if the violation wasn't found or delete failed
+ */
+function deleteViolation(int $violationId, ?int $deletedBy = null): bool {
+    $pdo = db();
+
+    if ($deletedBy === null && isset($_SESSION['user_id'])) {
+        $deletedBy = $_SESSION['user_id'];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT uv.*, u.name AS user_name, u.email AS user_email
+         FROM user_violations uv
+         LEFT JOIN users u ON uv.user_id = u.id
+         WHERE uv.id = :id LIMIT 1'
+    );
+    $stmt->execute(['id' => $violationId]);
+    $violation = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$violation) {
+        return false;
+    }
+
+    try {
+        $del = $pdo->prepare('DELETE FROM user_violations WHERE id = :id');
+        $del->execute(['id' => $violationId]);
+
+        $auditDetails = sprintf(
+            'Removed violation #%d - User: %s (ID: %d) - Type: %s, Severity: %s%s',
+            $violationId,
+            $violation['user_name'] ?? 'Unknown User',
+            (int)$violation['user_id'],
+            $violation['violation_type'],
+            $violation['severity'],
+            $violation['description'] ? ' - ' . $violation['description'] : ''
+        );
+        logAudit('Removed user violation', 'Violations', $auditDetails, $deletedBy);
+
+        return true;
+    } catch (Throwable $e) {
+        error_log('Error deleting violation: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
  * Checks if a user has high-severity violations (used for auto-approval)
  * 
  * @param int $userId User ID
