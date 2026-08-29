@@ -201,6 +201,58 @@ $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 $upcomingPaginated = array_slice(array_values($upcomingFiltered), $offset, $perPage);
 
+// Calendar month/year state - server-rendered (same convention as the
+// booking-page "My Reservations" calendar) instead of client-side JS, so
+// month navigation is a normal AJAX partial reload via mi-calendar.
+$calMonth = (int)($_GET['cal_month'] ?? date('n'));
+if ($calMonth < 1 || $calMonth > 12) {
+    $calMonth = (int)date('n');
+}
+$calYear = (int)($_GET['cal_year'] ?? date('Y'));
+if ($calYear < 2000 || $calYear > 2100) {
+    $calYear = (int)date('Y');
+}
+$calShowVicinity = ($_GET['cal_vicinity'] ?? '') === '1';
+$calFirstWeekday = (int)date('w', strtotime(sprintf('%04d-%02d-01', $calYear, $calMonth)));
+$calDaysInMonth = (int)date('t', strtotime(sprintf('%04d-%02d-01', $calYear, $calMonth)));
+$calMonthLabel = date('F Y', strtotime(sprintf('%04d-%02d-01', $calYear, $calMonth)));
+$calTodayISO = date('Y-m-d');
+
+$calEventsByDate = [];
+foreach ($maintenanceSchedules as $schedule) {
+    $affects = cimmCategoryAffectsFacility((string)($schedule['category'] ?? ''), (string)($schedule['maintenance_type'] ?? ''));
+    if (!$calShowVicinity && !$affects) {
+        continue;
+    }
+    $d = date('Y-m-d', strtotime($schedule['scheduled_start'] ?? 'now'));
+    $calEventsByDate[$d][] = $schedule;
+}
+
+// Maintenance History - search, type filter, pagination.
+$historySearch = trim((string)($_GET['hq'] ?? ''));
+$historyTypeFilter = strtolower(trim((string)($_GET['htype'] ?? 'all')));
+$historyFiltered = $mockMaintenanceHistory;
+if ($historySearch !== '') {
+    $needle = strtolower($historySearch);
+    $historyFiltered = array_filter($historyFiltered, function ($h) use ($needle) {
+        $haystack = strtolower(($h['facility_name'] ?? '') . ' ' . ($h['maintenance_type'] ?? '') . ' ' . ($h['technician'] ?? ''));
+        return str_contains($haystack, $needle);
+    });
+}
+if ($historyTypeFilter !== 'all') {
+    $historyFiltered = array_filter($historyFiltered, fn($h) => strtolower((string)($h['maintenance_type'] ?? '')) === $historyTypeFilter);
+}
+$historyFiltered = array_values($historyFiltered);
+$historyTypes = array_values(array_unique(array_filter(array_map(fn($h) => $h['maintenance_type'] ?? '', $mockMaintenanceHistory))));
+sort($historyTypes);
+
+$historyTotal = count($historyFiltered);
+$historyPerPage = 10;
+$historyTotalPages = max(1, (int)ceil($historyTotal / $historyPerPage));
+$historyPage = max(1, min($historyTotalPages, (int)($_GET['hpage'] ?? 1)));
+$historyOffset = ($historyPage - 1) * $historyPerPage;
+$historyPaginated = array_slice($historyFiltered, $historyOffset, $historyPerPage);
+
 ob_start();
 ?>
 <style>
@@ -410,7 +462,11 @@ ob_start();
 .mi-sync-bar .mi-sync-meta { margin:0; }
 .mi-sync-bar .mi-sync-warn { color:#b45309; font-weight:600; }
 .mi-schedule-layout { grid-template-columns: 1fr !important; }
-.mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:1rem; gap:0.5rem; }
+.mi-view-toggle { display:flex; justify-content:flex-end; align-items:center; margin-bottom:0.65rem; gap:0.5rem; }
+.mi-cal-toolbar-wrap { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem; }
+.mi-cal-month-heading { font-weight:800; font-size:1rem; color:#0f172a; }
+[data-theme="dark"] .mi-cal-month-heading { color: var(--text-primary); }
+.mi-cal-toolbar-form { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin:0; }
 .mi-view-toggle-btn { padding:0.4rem 0.85rem; font-size:0.85rem; }
 .mi-view-toggle-btn.active { background:#0284c7; color:#fff; border-color:#0284c7; }
 .mi-filter-bar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
@@ -419,6 +475,41 @@ ob_start();
 }
 .mi-filter-bar input[type="text"] { flex:1; min-width:180px; }
 .frs-partial-loading { opacity:0.5; pointer-events:none; transition:opacity 0.15s; }
+
+/* Shared "My Reservations" calendar look (see book_facility.php /
+   reservations_hub_mine_tab.php) - reused here so the Maintenance calendar
+   is visually consistent with the rest of the system instead of its own
+   one-off grid. */
+.my-reservations-calendar { background: var(--bg-secondary, #fff); border-radius: 12px; min-width:0; width:100%; max-width:100%; box-sizing:border-box; display:flex; flex-direction:column; }
+.my-reservations-calendar-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; }
+.my-reservations-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:0.35rem; flex:1; min-width:0; width:100%; max-width:100%; grid-auto-rows:minmax(56px,auto); }
+.my-reservations-calendar-dayname { font-size:0.8rem; font-weight:600; color:#6b7280; text-align:center; display:flex; align-items:center; justify-content:center; }
+.my-reservations-calendar-cell { min-height:56px; border-radius:10px; padding:0.25rem 0.35rem; font-size:0.8rem; position:relative; cursor:pointer; transition:background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease; }
+.my-reservations-calendar-cell:hover { background:rgba(37,99,235,0.06); box-shadow:0 4px 12px rgba(15,23,42,0.15); transform:translateY(-1px); }
+.my-reservations-calendar-cell.empty { cursor:default; background:transparent; box-shadow:none; }
+.my-reservations-calendar-cell .date-label { font-weight:700; margin-bottom:0.25rem; color:#0f172a; }
+[data-theme="dark"] .my-reservations-calendar-cell .date-label { color:#e5e7eb; }
+.my-reservations-calendar-cell.today .date-label { color:#1d4ed8; }
+.my-reservations-calendar-cell .status-chip { display:inline-block; padding:0.1rem 0.4rem; border-radius:999px; font-size:0.7rem; font-weight:600; background:rgba(15,23,42,0.1); color:#0f172a; }
+[data-theme="dark"] .my-reservations-calendar-cell .status-chip { background:rgba(15,23,42,0.4); color:#e5e7eb; }
+.my-reservations-calendar-cell.status-cimm-maintenance { background:#fde68a !important; color:#92400e !important; }
+[data-theme="dark"] .my-reservations-calendar-cell.status-cimm-maintenance { background:rgba(217,119,6,0.25) !important; color:#fcd34d !important; }
+.my-reservations-legend { display:flex; flex-wrap:wrap; gap:0.5rem 1rem; font-size:0.8rem; color:#6b7280; margin-bottom:0.5rem; }
+.my-reservations-legend-item { display:flex; align-items:center; gap:0.35rem; }
+.my-reservations-legend-dot { width:10px; height:10px; border-radius:999px; }
+.mine-cal-month-select, .mine-cal-year-select { padding:0.4rem 0.55rem; border:1px solid var(--border-color,#dbe3ef); border-radius:8px; background:var(--bg-secondary,#fff); font-size:0.85rem; color:var(--text-primary,#1e293b); cursor:pointer; }
+.mine-cal-nav-btn { text-decoration:none; padding:0.4rem 0.75rem; border-radius:8px; font-size:0.85rem; white-space:nowrap; }
+@media (max-width:640px) {
+    .my-reservations-calendar-grid { gap:0.15rem; grid-auto-rows:minmax(42px,auto); }
+    .my-reservations-calendar-dayname { font-size:0.65rem; padding:0.15rem 0; }
+    .my-reservations-calendar-cell { min-height:42px; padding:0.2rem 0.15rem; border-radius:7px; }
+    .my-reservations-calendar-cell .date-label { font-size:0.72rem; margin-bottom:0.1rem; }
+    .my-reservations-calendar-cell .status-chip { font-size:0; line-height:0; padding:0.05rem 0.25rem; }
+    .my-reservations-calendar-cell .status-chip::after { content: attr(data-chip-short); font-size:0.6rem; line-height:1.15; font-weight:700; }
+}
+.mi-history-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem; }
+.mi-history-toolbar input[type="text"], .mi-history-toolbar select { padding:0.5rem 0.65rem; border:1px solid #e0e6ed; border-radius:8px; font-size:0.85rem; }
+.mi-history-toolbar input[type="text"] { flex:1; min-width:180px; }
 </style>
 <div class="page-header">
     <div class="breadcrumb">
@@ -427,37 +518,37 @@ ob_start();
     <?= frs_page_title('Maintenance', 'CIMM schedules, calendar, and predictive maintenance requests.'); ?>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-        <div class="h-10 w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
-            <i class="bi bi-exclamation-triangle text-lg"></i>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+    <div class="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-3">
+        <div class="h-8 w-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-exclamation-triangle"></i>
         </div>
         <div>
             <p class="text-xs text-slate-500">High-risk facilities</p>
-            <p class="text-lg font-bold text-slate-900"><?= (int)$highCount; ?></p>
+            <p class="text-base font-bold text-slate-900"><?= (int)$highCount; ?></p>
         </div>
     </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-        <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-            <i class="bi bi-hourglass-split text-lg"></i>
+    <div class="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-3">
+        <div class="h-8 w-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-hourglass-split"></i>
         </div>
         <div>
             <p class="text-xs text-slate-500">Pending with CIMM</p>
-            <p class="text-lg font-bold text-slate-900"><?= (int)$pendingSent; ?></p>
+            <p class="text-base font-bold text-slate-900"><?= (int)$pendingSent; ?></p>
         </div>
     </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-        <div class="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
-            <i class="bi bi-arrow-repeat text-lg"></i>
+    <div class="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-3">
+        <div class="h-8 w-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <i class="bi bi-arrow-repeat"></i>
         </div>
         <div>
             <p class="text-xs text-slate-500">Last sync</p>
-            <p class="text-lg font-bold text-slate-900"><?= $schedulesCachedAt ? htmlspecialchars(date('M j, g:i A', strtotime($schedulesCachedAt))) : 'Never'; ?></p>
+            <p class="text-base font-bold text-slate-900"><?= $schedulesCachedAt ? htmlspecialchars(date('M j, g:i A', strtotime($schedulesCachedAt))) : 'Never'; ?></p>
         </div>
     </div>
 </div>
 
-<nav class="booking-hub-tabs" aria-label="Maintenance sections">
+<nav class="booking-hub-tabs" aria-label="Maintenance sections" style="margin-bottom:0.85rem;">
     <a class="booking-hub-tab <?= $activeTab === 'schedules' ? 'is-active' : ''; ?>" href="?tab=schedules">Schedules &amp; Calendar</a>
     <a class="booking-hub-tab <?= $activeTab === 'insights' ? 'is-active' : ''; ?>" href="?tab=insights">Maintenance Insights</a>
 </nav>
@@ -474,7 +565,7 @@ ob_start();
 
 <div class="mi-tab-pane <?= $activeTab === 'schedules' ? 'active' : ''; ?>" id="mi-tab-schedules">
 
-<div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5 mb-5 mi-sync-bar" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+<div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 mb-3 mi-sync-bar" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <span class="mi-sync-meta">
         <?php if ($schedulesCachedAt): ?>
             Schedule data synced <?= htmlspecialchars(date('M j, Y g:i A', strtotime($schedulesCachedAt))); ?>
@@ -491,7 +582,7 @@ ob_start();
             <?= csrf_field(); ?>
             <input type="hidden" name="sync_now" value="1">
             <input type="hidden" name="tab" value="schedules">
-            <button type="submit" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700;">
+            <button type="submit" class="btn-primary" style="padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:700;">
                 🔄 Sync Now
             </button>
         </form>
@@ -504,38 +595,69 @@ ob_start();
 </div>
 
 <div class="booking-wrapper mi-schedule-layout" id="mi-calendar-view-wrap">
-    <!-- Maintenance Calendar (New Design) -->
-    <aside class="booking-card maintenance-calendar-wrapper">
-        <h2>Maintenance Calendar</h2>
+    <aside class="booking-card maintenance-calendar-wrapper" data-frs-partial-id="mi-calendar" data-frs-partial-root>
+        <h2 style="margin-top:0;">Maintenance Calendar</h2>
 
-        <!-- Calendar View -->
-        <div id="calendarView">
-            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:#4b5563; margin-bottom:0.65rem; cursor:pointer;">
-                <input type="checkbox" id="calendarShowVicinity">
-                Show roads/street lights/drainage
-            </label>
-            <div class="calendar-header">
-                <button id="prevMonth" class="toggle-btn" style="padding:5px 10px;">&#8592;</button>
-                <span id="monthLabel" title="Click to jump date"></span>
-                <button id="nextMonth" class="toggle-btn" style="padding:5px 10px;">&#8594;</button>
-            </div>
-            <div class="calendar-weekdays">
-                <div>Sunday</div>
-                <div>Monday</div>
-                <div>Tuesday</div>
-                <div>Wednesday</div>
-                <div>Thursday</div>
-                <div>Friday</div>
-                <div>Saturday</div>
-            </div>
-            <div class="calendar-grid" id="calendarGrid"></div>
-            <div class="calendar-details-card">
-                <div class="calendar-details" id="calendarDetails">
-                    Select a date to view schedule.
+        <div class="mi-cal-toolbar-wrap">
+            <div class="mi-cal-month-heading"><?= htmlspecialchars($calMonthLabel); ?></div>
+            <form method="get" class="mi-cal-toolbar-form" data-frs-partial="mi-calendar" data-frs-partial-auto>
+                <input type="hidden" name="tab" value="schedules">
+                <select name="cal_month" class="mine-cal-month-select" aria-label="Select month">
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <option value="<?= $m; ?>" <?= $calMonth === $m ? 'selected' : ''; ?>><?= date('F', mktime(0, 0, 0, $m, 1)); ?></option>
+                    <?php endfor; ?>
+                </select>
+                <select name="cal_year" class="mine-cal-year-select" aria-label="Select year">
+                    <?php $calNowYear = (int)date('Y'); for ($y = $calNowYear - 1; $y <= $calNowYear + 1; $y++): ?>
+                        <option value="<?= $y; ?>" <?= $calYear === $y ? 'selected' : ''; ?>><?= $y; ?></option>
+                    <?php endfor; ?>
+                </select>
+                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:#4b5563; white-space:nowrap;">
+                    <input type="checkbox" name="cal_vicinity" value="1" <?= $calShowVicinity ? 'checked' : ''; ?>>
+                    Show roads/street lights/drainage
+                </label>
+                <a class="btn-outline mine-cal-nav-btn" data-frs-partial="mi-calendar" href="?tab=schedules&cal_month=<?= (int)date('n'); ?>&cal_year=<?= (int)date('Y'); ?>">Today</a>
+            </form>
+        </div>
+
+        <div class="my-reservations-calendar" style="min-height:auto;">
+            <div class="my-reservations-calendar-header">
+                <div class="my-reservations-legend">
+                    <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#fde68a;"></span> Maintenance scheduled</div>
                 </div>
-                <div class="scroll-indicator">⌄</div>
+            </div>
+            <div class="my-reservations-calendar-grid">
+                <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $w): ?>
+                    <div class="my-reservations-calendar-dayname"><?= $w; ?></div>
+                <?php endforeach; ?>
+                <?php for ($jx = 0; $jx < $calFirstWeekday; $jx++): ?>
+                    <div class="my-reservations-calendar-cell empty"></div>
+                <?php endfor; ?>
+                <?php for ($d = 1; $d <= $calDaysInMonth; $d++):
+                    $iso = sprintf('%04d-%02d-%02d', $calYear, $calMonth, $d);
+                    $dayEvents = $calEventsByDate[$iso] ?? [];
+                    $cellCls = 'my-reservations-calendar-cell';
+                    if ($iso === $calTodayISO) {
+                        $cellCls .= ' today';
+                    }
+                    if (empty($dayEvents)) {
+                        $cellCls .= ' empty';
+                    } else {
+                        $cellCls .= ' status-cimm-maintenance';
+                    }
+                    $count = count($dayEvents);
+                    $dayIds = implode(',', array_map(fn($s) => (string)($s['id'] ?? ''), $dayEvents));
+                ?>
+                    <div class="<?= $cellCls; ?>" data-cal-date="<?= $iso; ?>" data-cal-ids="<?= htmlspecialchars($dayIds); ?>"<?= $count ? ' role="button" tabindex="0"' : ''; ?>>
+                        <div class="date-label"><?= $d; ?></div>
+                        <?php if ($count): ?>
+                            <div class="status-chip" data-chip-short="<?= $count; ?>"><?= $count === 1 ? '1 job' : $count . ' jobs'; ?></div>
+                        <?php endif; ?>
+                    </div>
+                <?php endfor; ?>
             </div>
         </div>
+        <p class="pm-muted" id="calendarDetails" style="margin:0.65rem 0 0;">Click a date with jobs to view details.</p>
     </aside>
 </div>
 
@@ -667,9 +789,23 @@ ob_start();
 </div>
 
 <!-- Maintenance History Section -->
-<section class="booking-card" style="margin-top: 1.5rem;">
-    <h2>Maintenance History</h2>
-    <?php if (empty($mockMaintenanceHistory)): ?>
+<section class="booking-card" style="margin-top: 1rem;" data-frs-partial-id="mi-history-table" data-frs-partial-root>
+    <h2 style="margin-top:0;">Maintenance History</h2>
+
+    <form method="get" data-frs-partial="mi-history-table" data-frs-partial-auto class="mi-history-toolbar">
+        <input type="hidden" name="tab" value="schedules">
+        <input type="hidden" name="hpage" value="1">
+        <input type="text" name="hq" value="<?= htmlspecialchars($historySearch); ?>" placeholder="Search facility, type, or technician...">
+        <select name="htype">
+            <option value="all" <?= $historyTypeFilter === 'all' ? 'selected' : ''; ?>>All Types</option>
+            <?php foreach ($historyTypes as $t): ?>
+                <option value="<?= htmlspecialchars(strtolower($t)); ?>" <?= $historyTypeFilter === strtolower($t) ? 'selected' : ''; ?>><?= htmlspecialchars($t); ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn-outline" style="padding:0.5rem 0.85rem; font-size:0.85rem;">Filter</button>
+    </form>
+
+    <?php if ($historyTotal === 0): ?>
         <p style="color: #8b95b5; text-align: center; padding: 2rem;">No maintenance history available.</p>
     <?php else: ?>
         <div class="table-responsive">
@@ -687,7 +823,7 @@ ob_start();
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($mockMaintenanceHistory as $history): ?>
+                    <?php foreach ($historyPaginated as $history): ?>
                         <tr>
                             <td data-label="Maintenance ID"><strong><?= htmlspecialchars($history['id']); ?></strong></td>
                             <td data-label="Facility"><?= htmlspecialchars($history['facility_name']); ?></td>
@@ -707,6 +843,33 @@ ob_start();
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+        <?php
+        $historyLinkParams = array_filter([
+            'tab' => 'schedules',
+            'hq' => $historySearch !== '' ? $historySearch : null,
+            'htype' => $historyTypeFilter !== 'all' ? $historyTypeFilter : null,
+        ]);
+        $historyPrevQuery = $historyPage > 1 ? http_build_query($historyLinkParams + ['hpage' => $historyPage - 1]) : '';
+        $historyNextQuery = $historyPage < $historyTotalPages ? http_build_query($historyLinkParams + ['hpage' => $historyPage + 1]) : '';
+        ?>
+        <div class="pagination-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e6ed;">
+            <span style="color: #6b7280; font-size: 0.9rem;">
+                Showing <?= $historyTotal ? $historyOffset + 1 : 0 ?>–<?= min($historyOffset + $historyPerPage, $historyTotal); ?> of <?= $historyTotal; ?>
+            </span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <?php if ($historyPrevQuery): ?>
+                    <a href="?<?= htmlspecialchars($historyPrevQuery); ?>" data-frs-partial="mi-history-table" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">← Prev</a>
+                <?php else: ?>
+                    <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">← Prev</span>
+                <?php endif; ?>
+                <span style="font-size: 0.9rem; color: #4b5563;">Page <?= $historyPage; ?> of <?= $historyTotalPages; ?></span>
+                <?php if ($historyNextQuery): ?>
+                    <a href="?<?= htmlspecialchars($historyNextQuery); ?>" data-frs-partial="mi-history-table" class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem;">Next →</a>
+                <?php else: ?>
+                    <span class="btn-outline" style="padding: 0.4rem 0.75rem; font-size: 0.875rem; opacity: 0.5; pointer-events: none;">Next →</span>
+                <?php endif; ?>
+            </div>
         </div>
     <?php endif; ?>
 </section>
@@ -892,36 +1055,17 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
     ];
 }, $maintenanceSchedules), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
-// ============ NEW CALENDAR FUNCTIONALITY ============
+// ============ CALENDAR (shared "My Reservations" look) ============
+// The grid itself is server-rendered per month (mi-calendar partial), same
+// convention as the booking-page calendar - this just wires each day cell
+// to the existing modal/chooser instead of building the grid in JS.
 (function() {
     'use strict';
-    
-    function isMobileView() {
-        return window.innerWidth <= 768;
-    }
-    
-    const calendarGrid = document.getElementById('calendarGrid');
-    const calendarDetails = document.getElementById('calendarDetails');
-    const monthLabel = document.getElementById('monthLabel');
-    const prevMonthBtn = document.getElementById('prevMonth');
-    const nextMonthBtn = document.getElementById('nextMonth');
-    const showVicinityCheckbox = document.getElementById('calendarShowVicinity');
-
-    if (!calendarGrid || !calendarDetails) return;
-
-    let currentDate = new Date();
-
-    function visibleSchedules() {
-        const all = Array.isArray(window.scheduleData) ? window.scheduleData : [];
-        return showVicinityCheckbox && showVicinityCheckbox.checked
-            ? all
-            : all.filter(e => e.affects_facility !== false);
-    }
 
     // Same category + same facility on the same day is almost always
     // separate CIMM work-order records for the same ongoing job (e.g. five
-    // "Roads" entries at one facility), not five different things - one
-    // chip with a count reads far clearer than a wall of identical labels.
+    // "Roads" entries at one facility), not five different things - group
+    // them so a click offers a chooser instead of opening the wrong one.
     function groupEvents(events) {
         const groups = [];
         const seen = new Map();
@@ -938,153 +1082,14 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
         return groups;
     }
 
-    function getStatusKey(statusLabel) {
-        const s = (statusLabel || '').toLowerCase();
-        if (!s) return 'upcoming';
-        if (s.indexOf('delay') !== -1) return 'delayed';
-        if (s.indexOf('progress') !== -1 || s.indexOf('on-going') !== -1 || s.indexOf('ongoing') !== -1) return 'ongoing';
-        if (s.indexOf('completed') !== -1) return 'completed';
-        return 'upcoming';
-    }
-    
-    function renderCalendar() {
-        if (!calendarGrid || !calendarDetails) return;
-        calendarGrid.innerHTML = '';
-        calendarDetails.innerHTML = 'Select a date to view schedule.';
-        
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const monthText = currentDate.toLocaleString('default', {month: 'long', year: 'numeric'});
-        if (monthLabel) monthLabel.textContent = monthText;
-        
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        for (let i = 0; i < firstDay; i++) {
-            const emptyDiv = document.createElement('div');
-            emptyDiv.className = 'calendar-day';
-            calendarGrid.appendChild(emptyDiv);
-        }
-        
-        const visible = visibleSchedules();
-
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const events = visible.filter(e => e.schedule_date === dateStr);
-            const groups = groupEvents(events);
-
-            const dayDiv = document.createElement('div');
-            dayDiv.className = 'calendar-day' + (events.length ? ' has-event' : '');
-            dayDiv.setAttribute('data-date', dateStr);
-
-            const dayNumDiv = document.createElement('div');
-            dayNumDiv.textContent = d;
-            dayDiv.appendChild(dayNumDiv);
-
-            if (groups.length) {
-                const tasksDiv = document.createElement('div');
-                tasksDiv.className = 'day-tasks';
-
-                const groupLabel = function(group) {
-                    // Prefer the specific task name (e.g. "Roads") when every item in
-                    // the group agrees on it - more recognizable than the broader
-                    // category CIMM files it under (e.g. "Infrastructure Report").
-                    // Falls back to the category only when the group's tasks differ.
-                    const tasks = new Set(group.items.map(e => e.task).filter(Boolean));
-                    const base = tasks.size === 1
-                        ? [...tasks][0]
-                        : (group.items[0].category || group.items[0].task || 'Maintenance');
-                    return group.items.length > 1 ? `${base} (×${group.items.length})` : base;
-                };
-                const groupClick = function(group) {
-                    return function(ev) {
-                        ev.stopPropagation();
-                        if (group.items.length === 1) {
-                            const e = group.items[0];
-                            viewMaintenanceDetails(e.id || (e.sched_id ? ('CIMM-S-' + e.sched_id) : ''), dateStr);
-                        } else {
-                            openTaskChooser(dateStr, group.items.map(e => ({
-                                id: e.id, sched_id: e.sched_id, rep_id: e.rep_id, task: e.task,
-                                location: e.location, category: e.category, priority: e.priority,
-                                status_label: e.status_label, assigned_team: e.assigned_team, schedule_date: dateStr
-                            })));
-                        }
-                    };
-                };
-
-                if (groups.length === 1) {
-                    const group = groups[0];
-                    const btn = document.createElement('button');
-                    btn.className = 'task-btn';
-                    btn.textContent = isMobileView() ? String(group.items.length) : groupLabel(group);
-                    btn.title = `${groupLabel(group)} – ${group.items[0].location || ''}`;
-                    const key = getStatusKey(group.items[0].status_label);
-                    if (key) btn.classList.add('status-' + key + '-bg');
-                    btn.onclick = groupClick(group);
-                    tasksDiv.appendChild(btn);
-                } else {
-                    const first = groups[0];
-                    const firstBtn = document.createElement('button');
-                    firstBtn.className = 'task-btn';
-                    firstBtn.textContent = isMobileView() ? String(events.length) : groupLabel(first);
-                    firstBtn.title = `${groupLabel(first)} – ${first.items[0].location || ''}`;
-                    const firstKey = getStatusKey(first.items[0].status_label);
-                    if (firstKey) firstBtn.classList.add('status-' + firstKey + '-bg');
-                    firstBtn.onclick = groupClick(first);
-                    tasksDiv.appendChild(firstBtn);
-
-                    const moreWrap = document.createElement('div');
-                    moreWrap.className = 'more-tasks-wrap';
-                    const arrowBtn = document.createElement('button');
-                    arrowBtn.className = 'more-tasks-btn';
-                    arrowBtn.innerHTML = '▾';
-                    arrowBtn.onclick = function(ev) {
-                        ev.stopPropagation();
-                        openTaskChooser(dateStr, events.map(e => ({
-                            id: e.id, sched_id: e.sched_id, rep_id: e.rep_id, task: e.task,
-                            location: e.location, category: e.category, priority: e.priority,
-                            status_label: e.status_label, assigned_team: e.assigned_team, schedule_date: dateStr
-                        })));
-                    };
-                    moreWrap.appendChild(arrowBtn);
-                    if (!isMobileView()) {
-                        const counter = document.createElement('span');
-                        counter.className = 'task-counter';
-                        counter.textContent = `+${groups.length - 1}`;
-                        moreWrap.appendChild(counter);
-                    }
-                    tasksDiv.appendChild(moreWrap);
-                }
-                dayDiv.appendChild(tasksDiv);
-            }
-
-            dayDiv.addEventListener('click', function() {
-                if (groups.length) {
-                    let detailsHtml = `<strong>${dateStr}</strong><br>`;
-                    detailsHtml += groups.map(g => {
-                        const tasks = new Set(g.items.map(e => e.task).filter(Boolean));
-                        const label = tasks.size === 1 ? [...tasks][0] : (g.items[0].category || g.items[0].task || 'Maintenance');
-                        const suffix = g.items.length > 1 ? ` (×${g.items.length})` : '';
-                        return `• ${label}${suffix} – ${g.items[0].location || ''}`;
-                    }).join('<br>');
-                    calendarDetails.innerHTML = detailsHtml;
-                } else {
-                    calendarDetails.innerHTML = `<strong>${dateStr}</strong><br>No scheduled maintenance.`;
-                }
-            });
-
-            calendarGrid.appendChild(dayDiv);
-        }
-    }
-    
     function openTaskChooser(date, tasks) {
         const modal = document.getElementById('maintenanceModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalContent = document.getElementById('modalContent');
-        
+
         modalTitle.textContent = `Select a Task - ${date}`;
         modalContent.innerHTML = '';
-        
+
         tasks.forEach(t => {
             const btn = document.createElement('button');
             btn.className = 'btn-outline';
@@ -1096,36 +1101,40 @@ window.scheduleData = <?= json_encode(array_map(function($schedule) {
             };
             modalContent.appendChild(btn);
         });
-        
+
         modal.style.display = 'flex';
     }
-    
-    if (prevMonthBtn) prevMonthBtn.onclick = () => {
-        currentDate.setMonth(currentDate.getMonth() - 1);
-        renderCalendar();
-    };
-    if (nextMonthBtn) nextMonthBtn.onclick = () => {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-        renderCalendar();
-    };
-    if (showVicinityCheckbox) showVicinityCheckbox.addEventListener('change', renderCalendar);
 
-    renderCalendar();
-
-    function updateWeekdayLabels() {
-        const desktopDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        const shortDays = ['S','M','T','W','T','F','S'];
-        const weekdayDivs = document.querySelectorAll('.calendar-weekdays div');
-        if (!weekdayDivs.length) return;
-        if (window.innerWidth <= 768) {
-            weekdayDivs.forEach((el, i) => el.textContent = shortDays[i]);
-        } else {
-            weekdayDivs.forEach((el, i) => el.textContent = desktopDays[i]);
-        }
+    function decorateMiCalendar() {
+        const cells = document.querySelectorAll('#mi-calendar-view-wrap .my-reservations-calendar-cell[data-cal-ids]');
+        if (!cells.length) return;
+        const all = Array.isArray(window.scheduleData) ? window.scheduleData : [];
+        cells.forEach(cell => {
+            const dateStr = cell.getAttribute('data-cal-date');
+            const ids = (cell.getAttribute('data-cal-ids') || '').split(',').filter(Boolean);
+            if (!ids.length) return;
+            const events = all.filter(e => ids.includes(String(e.id)));
+            const groups = groupEvents(events);
+            cell.onclick = function() {
+                if (!groups.length) return;
+                if (groups.length === 1 && groups[0].items.length === 1) {
+                    const e = groups[0].items[0];
+                    viewMaintenanceDetails(e.id || (e.sched_id ? ('CIMM-S-' + e.sched_id) : ''), dateStr);
+                } else {
+                    openTaskChooser(dateStr, events.map(e => ({
+                        id: e.id, sched_id: e.sched_id, rep_id: e.rep_id, task: e.task,
+                        location: e.location, category: e.category, priority: e.priority,
+                        status_label: e.status_label, assigned_team: e.assigned_team, schedule_date: dateStr
+                    })));
+                }
+            };
+        });
     }
-    
-    window.addEventListener('load', updateWeekdayLabels);
-    window.addEventListener('resize', updateWeekdayLabels);
+
+    decorateMiCalendar();
+    document.addEventListener('frs:partial-loaded', function (e) {
+        if (e.detail && e.detail.id === 'mi-calendar') decorateMiCalendar();
+    });
 })();
 </script>
 
