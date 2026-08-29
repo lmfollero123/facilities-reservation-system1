@@ -9,16 +9,99 @@
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/audit.php';
+require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/upload_helper.php';
+
+const VIOLATION_PHOTO_STORAGE = 'storage/private/violation_photos/';
+
+function frs_ensure_violation_photo_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $pdo = db();
+        $col = $pdo->query("SHOW COLUMNS FROM user_violations LIKE 'photo_path'");
+        if ($col && $col->rowCount() === 0) {
+            $sql = @file_get_contents(__DIR__ . '/../database/migration_add_violation_photo.sql');
+            if (is_string($sql) && $sql !== '') {
+                $pdo->exec($sql);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('frs_ensure_violation_photo_schema: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Validates and stores an uploaded violation evidence photo in private storage.
+ *
+ * @return array{ok: bool, error?: string, path?: string}
+ */
+function frs_store_violation_photo(array $file, int $uploadedBy): array
+{
+    $errors = validateFileUpload($file, ['image/jpeg', 'image/png', 'image/webp'], 8 * 1024 * 1024);
+    if (!empty($errors)) {
+        return ['ok' => false, 'error' => implode(' ', $errors)];
+    }
+
+    $dir = app_root_path() . '/' . VIOLATION_PHOTO_STORAGE . $uploadedBy;
+    if (!is_dir($dir)) {
+        mkdir($dir, 0700, true);
+    }
+
+    $orig = basename((string)($file['name'] ?? 'photo'));
+    $ext = pathinfo($orig, PATHINFO_EXTENSION) ?: 'jpg';
+    $stored = 'violation_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $dest = $dir . '/' . $stored;
+
+    [$optimized] = saveOptimizedImage($file['tmp_name'], $dest);
+    if (!$optimized && !move_uploaded_file($file['tmp_name'], $dest)) {
+        return ['ok' => false, 'error' => 'Could not save uploaded photo.'];
+    }
+    chmod($dest, 0644);
+
+    return ['ok' => true, 'path' => $dest];
+}
+
+/**
+ * Owner of the violation, or Staff/Admin, may access the photo.
+ *
+ * @return array{allowed: bool, reason?: string}
+ */
+function frs_can_access_violation_photo(int $violationId, int $userId, string $role): array
+{
+    if (in_array($role, ['Admin', 'Staff'], true)) {
+        return ['allowed' => true];
+    }
+
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT user_id FROM user_violations WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $violationId]);
+    $ownerId = $stmt->fetchColumn();
+
+    if ($ownerId === false) {
+        return ['allowed' => false, 'reason' => 'Violation not found.'];
+    }
+    if ((int)$ownerId !== $userId) {
+        return ['allowed' => false, 'reason' => 'Not authorized to view this photo.'];
+    }
+
+    return ['allowed' => true];
+}
 
 /**
  * Records a violation for a user
- * 
+ *
  * @param int $userId User ID who committed the violation
  * @param string $violationType Type of violation: 'no_show', 'late_cancellation', 'policy_violation', 'damage', 'other'
  * @param string $severity Severity level: 'low', 'medium', 'high', 'critical'
  * @param string|null $description Description/details of the violation
  * @param int|null $reservationId Related reservation ID (if applicable)
  * @param int|null $createdBy Admin/Staff user ID who recorded the violation (defaults to session user)
+ * @param string|null $photoPath Private storage path to an uploaded evidence photo (see frs_store_violation_photo())
  * @return int|false Violation ID on success, false on failure
  */
 function recordViolation(
@@ -27,36 +110,38 @@ function recordViolation(
     string $severity = 'medium',
     ?string $description = null,
     ?int $reservationId = null,
-    ?int $createdBy = null
+    ?int $createdBy = null,
+    ?string $photoPath = null
 ): int|false {
     $pdo = db();
-    
+    frs_ensure_violation_photo_schema();
+
     // Validate violation type
     $allowedTypes = ['no_show', 'late_cancellation', 'policy_violation', 'damage', 'other'];
     if (!in_array($violationType, $allowedTypes, true)) {
         error_log("Invalid violation type: $violationType");
         return false;
     }
-    
+
     // Validate severity
     $allowedSeverities = ['low', 'medium', 'high', 'critical'];
     if (!in_array($severity, $allowedSeverities, true)) {
         error_log("Invalid severity: $severity");
         return false;
     }
-    
+
     // Get creator from session if not provided
     if ($createdBy === null && isset($_SESSION['user_id'])) {
         $createdBy = $_SESSION['user_id'];
     }
-    
+
     try {
         $stmt = $pdo->prepare(
-            'INSERT INTO user_violations 
-             (user_id, reservation_id, violation_type, description, severity, created_by) 
-             VALUES (:user_id, :reservation_id, :violation_type, :description, :severity, :created_by)'
+            'INSERT INTO user_violations
+             (user_id, reservation_id, violation_type, description, severity, created_by, photo_path)
+             VALUES (:user_id, :reservation_id, :violation_type, :description, :severity, :created_by, :photo_path)'
         );
-        
+
         $stmt->execute([
             'user_id' => $userId,
             'reservation_id' => $reservationId,
@@ -64,8 +149,9 @@ function recordViolation(
             'description' => $description,
             'severity' => $severity,
             'created_by' => $createdBy,
+            'photo_path' => $photoPath,
         ]);
-        
+
         $violationId = $pdo->lastInsertId();
         
         // Get user name for audit log

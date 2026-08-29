@@ -844,9 +844,17 @@ function getStaffPriorityRescheduleEmailTemplate(
 /**
  * Staff Pending-Approvals Digest Email Template
  */
-function getStaffPendingDigestEmailTemplate(int $pendingCount, string $manageUrl) {
+function getStaffPendingDigestEmailTemplate(int $pendingCount, string $manageUrl, int $agingCount = 0, int $slaDays = 3) {
     $header = getEmailHeader('Pending Approvals');
     $footer = getEmailFooter();
+
+    $agingLine = '';
+    if ($agingCount > 0) {
+        $agingLine = '
+        <p style="margin: 0 0 20px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 12px 16px; font-size: 15px;">
+            ⚠️ <strong>' . $agingCount . '</strong> of these ' . ($agingCount === 1 ? 'has' : 'have') . ' been waiting more than ' . $slaDays . ' day' . ($slaDays === 1 ? '' : 's') . '.
+        </p>';
+    }
 
     $content = '
         <h2 style="margin: 0 0 20px; color: #1e3a5f; font-size: 22px; font-weight: 600;">📋 Pending Reservation Approvals</h2>
@@ -854,6 +862,7 @@ function getStaffPendingDigestEmailTemplate(int $pendingCount, string $manageUrl
         <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px;">
             There ' . ($pendingCount === 1 ? 'is <strong>1</strong> reservation request' : 'are <strong>' . $pendingCount . '</strong> reservation requests') . ' waiting for staff approval in CPRF.
         </p>
+        ' . $agingLine . '
 
         ' . getEmailButton('Open Reservation Approvals', $manageUrl, '#6384d2') . '
 

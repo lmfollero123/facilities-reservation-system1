@@ -116,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
                     'login_otp_ttl_seconds' => ['seconds', 30, 900],
                     'login_otp_resend_cooldown_seconds' => ['seconds', 15, 300],
                     'email_verification_ttl_seconds' => ['minutes', 5, 120],
+                    'sla_pending_days' => ['days', 1, 30],
                 ];
                 $adminId = $_SESSION['user_id'] ?? null;
                 $invalid = false;
@@ -410,6 +411,7 @@ ob_start();
                 'login_otp_ttl_seconds' => 60,
                 'login_otp_resend_cooldown_seconds' => 60,
                 'email_verification_ttl_seconds' => 900,
+                'sla_pending_days' => 3,
             ];
             $timerVals = [];
             foreach ($timerDefaults as $k => $d) {
@@ -451,6 +453,14 @@ ob_start();
                            value="<?= (int)round($timerVals['email_verification_ttl_seconds'] / 60); ?>"
                            style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
                     <small style="color:#8b95b5;">How long the registration email verification code stays valid. 5–120 minutes.</small>
+                </label>
+
+                <label style="display:block; margin-bottom:1.25rem;">
+                    <span style="font-weight:600;">Pending approval SLA (days)</span>
+                    <input type="number" name="sla_pending_days" min="1" max="30" required
+                           value="<?= (int)$timerVals['sla_pending_days']; ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">A pending reservation older than this shows an aging badge and is called out in the staff digest. 1–30 days.</small>
                 </label>
 
                 <button type="submit" class="btn-primary">Save timers</button>

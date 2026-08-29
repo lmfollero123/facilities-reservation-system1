@@ -1238,6 +1238,21 @@ function frs_staff_apply_status_decision(
         }
     }
 
+    // A previously-approved reservation just freed its slot - offer it to the
+    // oldest matching waitlist entry, if any. Denying/cancelling a still-pending
+    // request doesn't free anything that was actually holding the slot, so this
+    // is deliberately scoped to $reservation['status'] === 'approved' (the
+    // status BEFORE this transition, not $finalAction).
+    if (($finalAction === 'cancelled' || $finalAction === 'denied') && ($reservation['status'] ?? '') === 'approved') {
+        require_once __DIR__ . '/waitlist_helpers.php';
+        frs_waitlist_offer_next_if_any(
+            $pdo,
+            (int)($reservation['facility_id'] ?? 0),
+            (string)($reservation['reservation_date'] ?? ''),
+            (string)($reservation['time_slot'] ?? '')
+        );
+    }
+
     $hist = $pdo->prepare('INSERT INTO reservation_history (reservation_id, status, note, created_by) VALUES (:id, :status, :note, :user)');
     $hist->execute([
         'id' => $reservationId,

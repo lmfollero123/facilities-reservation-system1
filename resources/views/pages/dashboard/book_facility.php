@@ -59,6 +59,30 @@ if (isset($_GET['tab']) && $_GET['tab'] === 'reservations') {
     exit;
 }
 
+require_once __DIR__ . '/../../../../config/waitlist_helpers.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['join_waitlist'])) {
+    if (!frs_csrf_ok()) {
+        frs_flash_error('Your session expired or the form is invalid. Please refresh and try again.');
+    } else {
+        $wlFacilityId = (int)($_POST['facility_id'] ?? 0);
+        $wlDate = (string)($_POST['reservation_date'] ?? '');
+        $wlTimeSlot = trim((string)($_POST['time_slot'] ?? ''));
+        $wlPurpose = trim((string)($_POST['purpose'] ?? ''));
+        if ($wlFacilityId <= 0 || $wlDate === '' || $wlTimeSlot === '') {
+            frs_flash_error('Unable to join the waitlist: missing facility, date, or time.');
+        } else {
+            $wlUserId = (int)($_SESSION['user_id'] ?? 0);
+            $wlResult = frs_waitlist_add_entry($pdo, $wlFacilityId, $wlUserId, $wlDate, $wlTimeSlot, $wlPurpose ?: null);
+            frs_flash_success($wlResult !== false
+                ? 'You\'re on the waitlist. We\'ll notify you if this slot opens up.'
+                : 'You\'re already on the waitlist for this facility, date, and time.');
+        }
+    }
+    header('Location: ' . base_path() . '/dashboard/book-facility');
+    exit;
+}
+
 $pageTitle = $reservationsHubMine ? 'My Reservations | LGU Facilities Reservation' : 'Book a Facility | LGU Facilities Reservation';
 $success = '';
 $error = '';
@@ -2155,6 +2179,17 @@ ul.bcf-scroll-select-menu {
 <?php if ($error): ?>
     <div class="message error booking-error" data-error-field="<?= htmlspecialchars($errorField); ?>" style="background:#fdecee;color:#b23030;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1.5rem;">
         <?= htmlspecialchars($error); ?>
+        <?php if (str_contains($error, 'Conflict Detected') && !empty($facilityId) && !empty($date) && !empty($timeSlot)): ?>
+            <form method="post" style="margin-top:0.65rem;">
+                <?= csrf_field(); ?>
+                <input type="hidden" name="join_waitlist" value="1">
+                <input type="hidden" name="facility_id" value="<?= (int)$facilityId; ?>">
+                <input type="hidden" name="reservation_date" value="<?= htmlspecialchars($date); ?>">
+                <input type="hidden" name="time_slot" value="<?= htmlspecialchars($timeSlot); ?>">
+                <input type="hidden" name="purpose" value="<?= htmlspecialchars($purpose ?? ''); ?>">
+                <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">Join Waitlist for This Slot</button>
+            </form>
+        <?php endif; ?>
     </div>
 <?php endif; ?>
 

@@ -532,7 +532,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isAjaxPost && $message !== '') {
 
 // Get filter parameters
 $umView = trim((string)($_GET['view'] ?? $_POST['view'] ?? 'all'));
-if (!in_array($umView, ['all', 'id_pending'], true)) {
+if (!in_array($umView, ['all', 'id_pending', 'deletion_pending'], true)) {
     $umView = 'all';
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verify') {
@@ -563,6 +563,16 @@ if ($umView === 'id_pending') {
 
     if ($searchQuery !== '') {
         $whereConditions[] = '(u.name LIKE :search_name OR u.email LIKE :search_email)';
+        $params['search_name'] = '%' . $searchQuery . '%';
+        $params['search_email'] = '%' . $searchQuery . '%';
+    }
+} elseif ($umView === 'deletion_pending') {
+    frs_ensure_account_deletion_schema();
+    $whereConditions[] = 'deletion_requested_at IS NOT NULL';
+    $usersOrderBy = 'deletion_requested_at ASC';
+
+    if ($searchQuery !== '') {
+        $whereConditions[] = '(name LIKE :search_name OR email LIKE :search_email)';
         $params['search_name'] = '%' . $searchQuery . '%';
         $params['search_email'] = '%' . $searchQuery . '%';
     }
@@ -613,6 +623,8 @@ if ($umView === 'id_pending') {
     $sql = 'SELECT u.id, u.name, u.email, u.role, u.status, u.is_verified, u.is_culiat_resident, COALESCE(u.email_verified, 0) AS email_verified, u.verified_at, u.created_at, u.updated_at,
         (SELECT MAX(d2.uploaded_at) FROM user_documents d2 WHERE d2.user_id = u.id AND d2.document_type = "valid_id" AND d2.is_archived = 0) AS id_uploaded_at
         FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
+} elseif ($umView === 'deletion_pending') {
+    $sql = 'SELECT id, name, email, role, status, is_verified, is_culiat_resident, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at, deletion_requested_at, deletion_reason FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
 } else {
     $sql = 'SELECT id, name, email, role, status, is_verified, is_culiat_resident, COALESCE(email_verified, 0) AS email_verified, verified_at, created_at, updated_at FROM ' . $usersFrom . ' ' . $whereClause . ' ORDER BY ' . $usersOrderBy . ' LIMIT :limit OFFSET :offset';
 }
@@ -665,6 +677,9 @@ $idPendingCountStmt = $pdo->query(
        AND u.status = "active"'
 );
 $idPendingCount = (int)$idPendingCountStmt->fetchColumn();
+
+frs_ensure_account_deletion_schema();
+$deletionPendingCount = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE deletion_requested_at IS NOT NULL')->fetchColumn();
 
 $totalUsersStmt = $pdo->query('SELECT COUNT(*) FROM users');
 $totalUsersCount = (int)$totalUsersStmt->fetchColumn();
@@ -729,6 +744,10 @@ ob_start();
         <span class="um-stat-label">ID pending review</span>
         <strong class="um-stat-value"><?= $idPendingCount; ?></strong>
     </div>
+    <div class="stat-card um-stat-card-highlight">
+        <span class="um-stat-label">Deletion requests</span>
+        <strong class="um-stat-value"><?= $deletionPendingCount; ?></strong>
+    </div>
 </div>
 
 <div class="um-layout">
@@ -745,6 +764,12 @@ ob_start();
                 ID Verification
                 <span class="um-view-tab__count"><?= $idPendingCount; ?></span>
             </a>
+            <a href="<?= htmlspecialchars($umBuildQuery(['view' => 'deletion_pending', 'page' => 1, 'role' => '', 'status' => ''])); ?>"
+               class="um-view-tab<?= $umView === 'deletion_pending' ? ' is-active' : ''; ?>"
+               <?= $umView === 'deletion_pending' ? 'aria-current="page"' : ''; ?>>
+                Deletion Requests
+                <span class="um-view-tab__count"><?= $deletionPendingCount; ?></span>
+            </a>
         </nav>
 
         <div class="um-section-head um-section-head-row">
@@ -752,6 +777,9 @@ ob_start();
                 <?php if ($umView === 'id_pending'): ?>
                     <h2>ID Verification Queue</h2>
                     <p class="resource-meta">Residents who uploaded a valid ID and are waiting for staff review. Verify to enable auto-approval on bookings.</p>
+                <?php elseif ($umView === 'deletion_pending'): ?>
+                    <h2>Account Deletion Requests</h2>
+                    <p class="resource-meta">Residents who requested their account/data be removed (RA 10173). Delete only succeeds for accounts with no reservation history — otherwise, lock/deactivate instead.</p>
                 <?php else: ?>
                     <h2>Accounts Directory</h2>
                     <p class="resource-meta">Search, filter, and manage user records. Unverified registrations are auto-removed after <?= $retentionHours; ?> hours.</p>
@@ -888,6 +916,9 @@ ob_start();
                                                             <span class="um-violation-severity"><?= htmlspecialchars(ucfirst($v['severity'])); ?></span>
                                                         </div>
                                                         <p class="um-violation-desc"><?= htmlspecialchars($v['description'] ?: 'No description provided.'); ?></p>
+                                                        <?php if (!empty($v['photo_path'])): ?>
+                                                            <a href="<?= htmlspecialchars(base_path() . '/dashboard/download-violation-photo?id=' . (int)$v['id']); ?>" target="_blank" rel="noopener" class="um-violation-photo-link">📷 View evidence photo</a>
+                                                        <?php endif; ?>
                                                         <p class="um-violation-meta">
                                                             <?= date('M j, Y g:i A', strtotime($v['created_at'])); ?>
                                                             <?php if (!empty($v['facility_name'])): ?>
@@ -951,6 +982,9 @@ ob_start();
                             <?= date('M j, Y', strtotime($user['created_at'])); ?>
                             <?php if ($umView === 'id_pending' && !empty($user['id_uploaded_at'])): ?>
                                 <div class="um-meta-sub">ID uploaded <?= date('M j, Y g:i A', strtotime((string)$user['id_uploaded_at'])); ?></div>
+                            <?php endif; ?>
+                            <?php if ($umView === 'deletion_pending' && !empty($user['deletion_requested_at'])): ?>
+                                <div class="um-meta-sub">Requested <?= date('M j, Y g:i A', strtotime((string)$user['deletion_requested_at'])); ?><?= !empty($user['deletion_reason']) ? ' — "' . htmlspecialchars($user['deletion_reason']) . '"' : ''; ?></div>
                             <?php endif; ?>
                         </td>
                         <td class="um-cell-actions">
@@ -1298,6 +1332,8 @@ ob_start();
 .um-violation-sev-high .um-violation-severity, .um-violation-sev-critical .um-violation-severity { color: #b91c1c; }
 .um-violation-desc { margin: 0.3rem 0 0; font-size: 0.8rem; color: #334155; line-height: 1.4; }
 .um-violation-meta { margin: 0.25rem 0 0; font-size: 0.75rem; color: #94a3b8; }
+.um-violation-photo-link { display: inline-block; margin-top: 0.35rem; font-size: 0.78rem; font-weight: 600; color: #2563eb; text-decoration: none; }
+.um-violation-photo-link:hover { text-decoration: underline; }
 .um-violation-remove-form { margin: 0.4rem 0 0; }
 .um-violation-remove-btn { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
 .um-violation-remove-btn:hover { background: #fee2e2; }
@@ -1384,6 +1420,7 @@ body.um-modal-open { overflow: hidden; }
 [data-theme="dark"] .um-violation-sev-high .um-violation-severity,
 [data-theme="dark"] .um-violation-sev-critical .um-violation-severity { color: #fca5a5; }
 [data-theme="dark"] .um-violation-desc { color: #cbd5e1; }
+[data-theme="dark"] .um-violation-photo-link { color: #60a5fa; }
 [data-theme="dark"] .um-violation-meta { color: #64748b; }
 [data-theme="dark"] .um-violation-remove-btn { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
 [data-theme="dark"] .um-violation-remove-btn:hover { background: #7f1d1d; }

@@ -23,6 +23,7 @@ require_once __DIR__ . '/../../../../config/notification_preferences.php';
 require_once __DIR__ . '/../../../../config/reservation_helpers.php';
 require_once __DIR__ . '/../../../../config/lookups.php';
 require_once __DIR__ . '/../../../../config/flash_helper.php';
+require_once __DIR__ . '/../../../../config/app_settings.php';
 require_once __DIR__ . '/../../../../config/violations.php';
 $pdo = db();
 $pageTitle = 'Reservation Approvals | LGU Facilities Reservation';
@@ -855,6 +856,7 @@ ob_start();
             </div>
         <?php else: ?>
             <?php
+            $slaPendingDays = frs_get_app_setting_int($pdo, 'sla_pending_days', 3);
             $pendingReviewData = [];
             foreach ($pendingReservations as $reservation) {
                 if (!in_array($reservation['status'], ['pending', 'postponed'], true)) {
@@ -918,6 +920,9 @@ ob_start();
                             $submittedLabel = !empty($reservation['created_at'])
                                 ? date('M j, g:i A', strtotime((string)$reservation['created_at']))
                                 : '';
+                            $daysPending = !empty($reservation['created_at'])
+                                ? (int)floor((time() - strtotime((string)$reservation['created_at'])) / 86400)
+                                : 0;
                             $attendeesLabel = isset($reservation['expected_attendees']) && $reservation['expected_attendees'] !== null && $reservation['expected_attendees'] !== ''
                                 ? (int)$reservation['expected_attendees']
                                 : null;
@@ -963,6 +968,11 @@ ob_start();
                                     <?php endif; ?>
                                     <?php if ($submittedLabel !== ''): ?>
                                         <span class="ra-cell-meta">Submitted <?= htmlspecialchars($submittedLabel); ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($daysPending >= $slaPendingDays): ?>
+                                        <span class="ra-aging-badge<?= $daysPending >= $slaPendingDays * 2 ? ' ra-aging-badge--critical' : ''; ?>" title="Pending for <?= $daysPending; ?> day<?= $daysPending === 1 ? '' : 's'; ?>">
+                                            ⏳ <?= $daysPending; ?>d pending
+                                        </span>
                                     <?php endif; ?>
                                 </td>
                                 <td data-label="Schedule">
@@ -2766,6 +2776,28 @@ html[data-theme="dark"] .ra-resident-link:focus-visible {
     font-size: 0.78rem;
     color: #94a3b8;
     line-height: 1.35;
+}
+.ra-aging-badge {
+    display: inline-block;
+    margin-top: 0.3rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: #fef3c7;
+    color: #92400e;
+}
+.ra-aging-badge--critical {
+    background: #fee2e2;
+    color: #991b1b;
+}
+[data-theme="dark"] .ra-aging-badge {
+    background: rgba(217, 119, 6, 0.2);
+    color: #fcd34d;
+}
+[data-theme="dark"] .ra-aging-badge--critical {
+    background: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
 }
 .ra-cell-purpose {
     display: -webkit-box;

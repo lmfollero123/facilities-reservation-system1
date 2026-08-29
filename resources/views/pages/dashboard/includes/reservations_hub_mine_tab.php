@@ -1,5 +1,11 @@
 <?php
 /** Shared My Reservations calendar + modals (hub include). */
+require_once __DIR__ . '/../../../../../config/waitlist_helpers.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_waitlist_entry']) && frs_csrf_ok()) {
+    frs_waitlist_cancel(db(), (int)$_POST['cancel_waitlist_entry'], (int)($_SESSION['user_id'] ?? 0));
+    header('Location: ' . $_SERVER['REQUEST_URI']);
+    exit;
+}
 $__frsMineOnBookHub = !empty($GLOBALS['frsMineCalOnHubBookFacility']);
 $__frsMineMod = $__frsMineOnBookHub ? ['module' => 'mine'] : [];
 $__mineCalQ = static function (array $q) use ($__frsMineMod): string {
@@ -663,6 +669,45 @@ $mineTabYearMax = (int)date('Y') + 5;
         <a href="<?= base_path(); ?>/dashboard/book-facility" class="btn-primary" style="padding: 0.85rem 1.75rem; font-size: 1rem; display: inline-block; text-decoration: none;">
             Book a Facility
         </a>
+    </div>
+<?php endif; ?>
+
+<?php $myWaitlistEntries = frs_waitlist_list_for_user($pdo, (int)$userId); ?>
+<?php if (!empty($myWaitlistEntries)): ?>
+    <div class="booking-card" style="margin-top:1rem;">
+        <h2 style="margin-top:0; font-size:1.05rem;">My Waitlist</h2>
+        <div style="display:grid; gap:0.65rem;">
+            <?php foreach ($myWaitlistEntries as $wl): ?>
+                <?php
+                    $wlIsOffered = $wl['status'] === 'offered';
+                    $wlBg = $wlIsOffered ? '#dcfce7' : '#f1f5f9';
+                    $wlColor = $wlIsOffered ? '#166534' : '#475569';
+                ?>
+                <div style="border:1px solid var(--border-color,#e5e7eb); border-radius:10px; padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div>
+                        <strong><?= htmlspecialchars($wl['facility_name']); ?></strong>
+                        <div style="color: var(--text-secondary,#6b7280); font-size:0.85rem;">
+                            <?= date('F j, Y', strtotime($wl['reservation_date'])); ?> · <?= htmlspecialchars($wl['time_slot']); ?>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="background:<?= $wlBg; ?>; color:<?= $wlColor; ?>; padding:0.2rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:700; text-transform:uppercase;">
+                            <?= $wlIsOffered ? 'Slot Offered' : 'Waiting'; ?>
+                        </span>
+                        <?php if ($wlIsOffered): ?>
+                            <a href="<?= base_path(); ?>/dashboard/book-facility?book_fac=<?= (int)$wl['facility_id']; ?>&year=<?= date('Y', strtotime($wl['reservation_date'])); ?>&month=<?= date('n', strtotime($wl['reservation_date'])); ?>" class="btn-primary" style="padding:0.35rem 0.75rem; font-size:0.82rem;">
+                                Claim (expires <?= date('M j, g:i A', strtotime($wl['offer_expires_at'])); ?>)
+                            </a>
+                        <?php endif; ?>
+                        <form method="post" onsubmit="return confirm('Leave the waitlist for this slot?');">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="cancel_waitlist_entry" value="<?= (int)$wl['id']; ?>">
+                            <button type="submit" class="btn-outline" style="padding:0.35rem 0.6rem; font-size:0.8rem;">Leave</button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
 <?php endif; ?>
 

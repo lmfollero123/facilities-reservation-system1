@@ -92,22 +92,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $severity = $_POST['severity'] ?? 'medium';
     $description = trim($_POST['violation_description'] ?? '');
     $relatedReservationId = (int)($_POST['reservation_id'] ?? 0);
-    
+
     if ($violationUserId && $violationType) {
-        $violationId = recordViolation(
-            $violationUserId,
-            $violationType,
-            $severity,
-            $description ?: null,
-            $relatedReservationId ?: null
-        );
-        
-        if ($violationId) {
-            $message = 'Violation recorded successfully.';
-            $messageType = 'success';
-        } else {
-            $message = 'Failed to record violation. Please try again.';
-            $messageType = 'error';
+        $violationPhotoPath = null;
+        if (!empty($_FILES['violation_photo']['tmp_name'])) {
+            $photoResult = frs_store_violation_photo($_FILES['violation_photo'], (int)($_SESSION['user_id'] ?? 0));
+            if ($photoResult['ok']) {
+                $violationPhotoPath = $photoResult['path'];
+            } else {
+                $message = 'Violation not recorded: ' . $photoResult['error'];
+                $messageType = 'error';
+            }
+        }
+
+        if ($messageType !== 'error') {
+            $violationId = recordViolation(
+                $violationUserId,
+                $violationType,
+                $severity,
+                $description ?: null,
+                $relatedReservationId ?: null,
+                null,
+                $violationPhotoPath
+            );
+
+            if ($violationId) {
+                $message = 'Violation recorded successfully.';
+                $messageType = 'success';
+            } else {
+                $message = 'Failed to record violation. Please try again.';
+                $messageType = 'error';
+            }
         }
     } else {
         $message = 'Missing required information to record violation.';
@@ -1410,7 +1425,7 @@ window.closeViolationModal = closeViolationModal;
             <h3>Record Violation</h3>
             <button type="button" class="btn-outline" onclick="closeViolationModal()">✕</button>
         </div>
-        <form method="POST" class="modal-body">
+        <form method="POST" class="modal-body" enctype="multipart/form-data">
             <?= csrf_field(); ?>
             <input type="hidden" name="action" value="record_violation">
             <input type="hidden" name="violation_user_id" id="violation-user-id">
@@ -1450,7 +1465,13 @@ window.closeViolationModal = closeViolationModal;
                 Description (Optional)
                 <textarea name="violation_description" rows="4" placeholder="Provide details about the violation..." style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:6px; margin-top:0.25rem; font-family:inherit; resize:vertical;"></textarea>
             </label>
-            
+
+            <label style="margin-top:1rem; display:block;">
+                Evidence Photo (Optional)
+                <input type="file" name="violation_photo" accept="image/jpeg,image/png,image/webp" style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:6px; margin-top:0.25rem;">
+                <small style="color:#8b95b5; font-size:0.85rem; display:block; margin-top:0.25rem;">JPEG, PNG, or WebP, up to 8MB. Useful for damage claims.</small>
+            </label>
+
             <div style="margin-top:1.5rem; display:flex; gap:0.75rem; justify-content:flex-end;">
                 <button type="button" class="btn-outline" onclick="closeViolationModal()">Cancel</button>
                 <button type="submit" class="btn-primary" style="background:#dc3545; border-color:#dc3545;">Record Violation</button>

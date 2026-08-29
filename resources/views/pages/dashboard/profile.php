@@ -113,6 +113,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account'])
     }
 }
 
+// Self-service account/data deletion request (RA 10173). This does NOT
+// delete anything immediately - it flags the account for Admin review,
+// since the existing hard-delete action refuses accounts with reservation
+// history (config/user_admin.php has no delete function; the real delete
+// logic lives in user_management.php's 'delete' case).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_account_deletion'])) {
+    require_once __DIR__ . '/../../../../config/audit.php';
+    require_once __DIR__ . '/../../../../config/notifications.php';
+    require_once __DIR__ . '/../../../../config/user_admin.php';
+    frs_ensure_account_deletion_schema();
+
+    if (!frs_csrf_ok()) {
+        $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+    } else {
+        $stmt = $pdo->prepare('SELECT id, name, status, role, deletion_requested_at FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $userId]);
+        $userCheck = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$userCheck) {
+            $error = 'User not found.';
+        } elseif (in_array($userCheck['role'], ['Admin', 'Staff'], true)) {
+            $error = 'Administrator and Staff accounts cannot self-request deletion. Please contact system administrator.';
+        } elseif (!empty($userCheck['deletion_requested_at'])) {
+            $error = 'You already have a pending deletion request.';
+        } else {
+            $reason = trim($_POST['deletion_reason'] ?? '');
+            $reason = $reason !== '' ? substr($reason, 0, 1000) : null;
+
+            $updateStmt = $pdo->prepare(
+                'UPDATE users SET deletion_requested_at = CURRENT_TIMESTAMP, deletion_reason = :reason WHERE id = :id'
+            );
+            $updateStmt->execute(['reason' => $reason, 'id' => $userId]);
+
+            logAudit('Requested account deletion', 'Users', ($userCheck['name'] ?? 'Unknown') . ($reason ? ' - Reason: ' . $reason : ''), $userId);
+
+            $adminStmt = $pdo->query("SELECT id FROM users WHERE role = 'Admin' AND status = 'active'");
+            foreach ($adminStmt->fetchAll(PDO::FETCH_COLUMN) as $adminId) {
+                createNotification(
+                    (int)$adminId,
+                    'system',
+                    'Account deletion requested',
+                    ($userCheck['name'] ?? 'A user') . ' has requested their account be deleted.',
+                    base_path() . '/dashboard/user-management?view=deletion_pending'
+                );
+            }
+
+            $success = 'Your deletion request has been submitted. An administrator will review it.';
+        }
+    }
+}
+
+// Cancel a pending self-service deletion request.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_account_deletion_request'])) {
+    require_once __DIR__ . '/../../../../config/audit.php';
+    if (!frs_csrf_ok()) {
+        $error = 'Your session expired or the form is invalid. Please refresh and try again.';
+    } else {
+        $pdo->prepare('UPDATE users SET deletion_requested_at = NULL, deletion_reason = NULL WHERE id = :id')->execute(['id' => $userId]);
+        logAudit('Cancelled account deletion request', 'Users', '', $userId);
+        $success = 'Your deletion request has been cancelled.';
+    }
+}
+
 // Handle TOTP (Google Authenticator) - Admin/Staff only
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId && in_array($_SESSION['role'] ?? '', ['Admin', 'Staff'], true)) {
     if (isset($_POST['totp_disable'])) {
@@ -231,6 +294,10 @@ $hasDeactivatedAt = $checkColumn->rowCount() > 0;
 $selectFields = 'id, name, email, mobile, address, latitude, longitude, profile_picture, password_hash, role, status, is_verified, verified_at, COALESCE(enable_otp, 1) as enable_otp, COALESCE(totp_enabled, 0) as totp_enabled, COALESCE(sms_otp_enabled, 0) as sms_otp_enabled';
 if ($hasDeactivatedAt) {
     $selectFields .= ', deactivated_at, deactivation_reason';
+}
+$hasDeletionRequestedAt = (bool)$pdo->query("SHOW COLUMNS FROM users LIKE 'deletion_requested_at'")->fetchColumn();
+if ($hasDeletionRequestedAt) {
+    $selectFields .= ', deletion_requested_at, deletion_reason';
 }
 $stmt = $pdo->prepare("SELECT $selectFields FROM users WHERE id = :id LIMIT 1");
 $stmt->execute(['id' => $userId]);
@@ -1774,6 +1841,53 @@ html[data-theme="dark"] .facility-modal-body .input-icon {
                             Request account deactivation
                         </button>
                     </form>
+                </div>
+            </details>
+        </section>
+
+        <section class="booking-card profile-deactivate-zone">
+            <details class="profile-collapsible">
+                <summary>
+                    <span>🗑️ Request account deletion</span>
+                    <span class="profile-collapsible-hint">Data Privacy Act (RA 10173) — admin reviews before anything is removed</span>
+                </summary>
+                <div class="profile-collapsible-body">
+                    <?php if (!empty($user['deletion_requested_at'])): ?>
+                        <p style="color:#7f1d1d; margin:0 0 0.75rem; font-size:0.9rem; line-height:1.55;">
+                            Deletion requested on <?= htmlspecialchars(date('M j, Y g:i A', strtotime($user['deletion_requested_at']))); ?> — pending admin review.
+                        </p>
+                        <form method="POST" style="margin-top:0.5rem;">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="cancel_account_deletion_request" value="1">
+                            <button type="submit" class="btn-outline" style="padding:0.55rem 1rem; font-size:0.9rem; font-weight:600;">
+                                Cancel deletion request
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <p style="color:#7f1d1d; margin:0 0 0.75rem; font-size:0.9rem; line-height:1.55;">
+                            Requesting deletion asks an administrator to review and remove your account and personal data, in line with the Data Privacy Act. Accounts with reservation history may be deactivated instead, since LGU records must be retained.
+                        </p>
+                        <form method="POST" style="margin-top:0.85rem;">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="request_account_deletion" value="1">
+                            <label style="display:block; margin-bottom:0.5rem;">
+                                <span style="font-weight:600; color:#7f1d1d; font-size:0.88rem;">Reason (optional)</span>
+                                <textarea
+                                    name="deletion_reason"
+                                    rows="2"
+                                    placeholder="Optional reason for the LGU"
+                                    style="width:100%; margin-top:0.35rem; padding:0.6rem 0.75rem; border:1px solid #fecaca; border-radius:6px; font-family:inherit; font-size:0.88rem; resize:vertical;"
+                                ></textarea>
+                            </label>
+                            <button
+                                type="submit"
+                                class="btn-outline"
+                                style="padding:0.55rem 1rem; font-size:0.9rem; font-weight:600; border-color:#dc2626; color:#dc2626; background:#fff;"
+                            >
+                                Request account deletion
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </details>
         </section>

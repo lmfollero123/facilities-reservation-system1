@@ -102,6 +102,8 @@ if ($path === 'announcements') {
     require_once __DIR__ . '/resources/views/pages/auth/verify_email.php';
 } elseif ($path === 'logout') {
     require_once __DIR__ . '/resources/views/pages/auth/logout.php';
+} elseif ($path === 'set-language') {
+    require_once __DIR__ . '/resources/views/pages/public/set_language.php';
 } elseif ($path === 'reset-password') {
     require_once __DIR__ . '/resources/views/pages/auth/reset_password.php';
 } elseif ($path === 'privacy') {
@@ -232,6 +234,7 @@ if ($path === 'announcements') {
         'download-document' => 'download_document.php',
         'download-reservation-document' => 'download_reservation_document.php',
         'download-reservation-referral-id' => 'download_reservation_referral_id.php',
+        'download-violation-photo' => 'download_violation_photo.php',
         'download-export' => 'download_export.php',
         'contact-inquiries' => 'contact_inquiries.php',
         'sms-test' => 'sms_test.php',

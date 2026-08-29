@@ -17,6 +17,31 @@ function frs_generate_temporary_password(): string
 }
 
 /**
+ * Self-service account deletion request (RA 10173) - adds deletion_requested_at
+ * / deletion_reason to users if missing.
+ */
+function frs_ensure_account_deletion_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $pdo = db();
+        $col = $pdo->query("SHOW COLUMNS FROM users LIKE 'deletion_requested_at'");
+        if ($col && $col->rowCount() === 0) {
+            $sql = @file_get_contents(__DIR__ . '/../database/migration_add_account_deletion_request.sql');
+            if (is_string($sql) && $sql !== '') {
+                $pdo->exec($sql);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('frs_ensure_account_deletion_schema: ' . $e->getMessage());
+    }
+}
+
+/**
  * @return array{ok: bool, message: string, user_id?: int, plain_password?: string}
  */
 function frs_admin_create_user(

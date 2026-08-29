@@ -10,6 +10,8 @@ require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/mail_helper.php';
 require_once __DIR__ . '/../config/email_templates.php';
+require_once __DIR__ . '/../config/app_settings.php';
+require_once __DIR__ . '/../config/notifications.php';
 
 $options = getopt('', ['dry-run', 'verbose']);
 $dryRun = isset($options['dry-run']);
@@ -32,6 +34,13 @@ if ($count === 0) {
     exit(0);
 }
 
+$slaDays = frs_get_app_setting_int($pdo, 'sla_pending_days', 3);
+$agingStmt = $pdo->prepare("SELECT COUNT(*) FROM reservations WHERE status = 'pending' AND created_at < NOW() - INTERVAL :days DAY");
+$agingStmt->bindValue(':days', $slaDays, PDO::PARAM_INT);
+$agingStmt->execute();
+$agingCount = (int)$agingStmt->fetchColumn();
+echo "Aging (> {$slaDays} days): {$agingCount}\n";
+
 $staffStmt = $pdo->query(
     "SELECT id, name, email FROM users
      WHERE role IN ('Staff', 'Admin') AND status = 'active' AND email IS NOT NULL AND email != ''"
@@ -51,7 +60,7 @@ if ($staff === []) {
 $manageUrl = base_url() . '/dashboard/reservations-manage?view=pending';
 
 $subject = "[CPRF] {$count} pending reservation(s) need review";
-$body = getStaffPendingDigestEmailTemplate($count, $manageUrl);
+$body = getStaffPendingDigestEmailTemplate($count, $manageUrl, $agingCount, $slaDays);
 $textBody = strip_tags(str_replace(['<br>', '</p>', '</li>'], ["\n", "\n", "\n"], $body));
 
 $sent = 0;
@@ -63,16 +72,26 @@ foreach ($staff as $row) {
     if ($verbose) {
         echo "Would email: {$email}\n";
     }
-    if ($dryRun) {
-        $sent++;
-        continue;
+    if (!$dryRun) {
+        $staffName = trim((string)($row['name'] ?? '')) ?: 'Staff';
+        if (sendEmail($email, $staffName, $subject, $body, $textBody)) {
+            echo "Sent: {$email}\n";
+        } else {
+            echo "Failed: {$email}\n";
+        }
     }
-    $staffName = trim((string)($row['name'] ?? '')) ?: 'Staff';
-    if (sendEmail($email, $staffName, $subject, $body, $textBody)) {
-        $sent++;
-        echo "Sent: {$email}\n";
-    } else {
-        echo "Failed: {$email}\n";
+    $sent++;
+
+    // One in-app notification per run per recipient when there are genuinely
+    // stale requests - not per stale reservation, to avoid flooding.
+    if ($agingCount > 0 && !$dryRun) {
+        createNotification(
+            (int)$row['id'],
+            'system',
+            "{$agingCount} reservation(s) pending too long",
+            "{$agingCount} reservation request(s) have been pending more than {$slaDays} day(s) and need review.",
+            $manageUrl
+        );
     }
 }
 
