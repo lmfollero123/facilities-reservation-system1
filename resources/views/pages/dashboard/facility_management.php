@@ -1413,7 +1413,7 @@ ob_start();
 </div>
 
 <!-- ── Phase 3: UMAN Return Request Modal (Return / Replace / Decommission) ── -->
-<div id="umanReturnModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1400; align-items:center; justify-content:center; padding:1rem;">
+<div id="umanReturnModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:2100; align-items:center; justify-content:center; padding:1rem;">
     <div class="modal" style="width:100%; max-width:560px; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
         <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(90deg,#fef3c7,#fef9c3);">
             <h3 id="umanReturnModalTitle" style="margin:0; font-size:1.05rem; color:#92400e;">Request Equipment Return</h3>
@@ -1471,7 +1471,7 @@ ob_start();
 </form>
 
 <!-- ── Phase 3c: Mark Replacement as Received modal ──────────────────────── -->
-<div id="umanReceivedModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1400; align-items:center; justify-content:center; padding:1rem;">
+<div id="umanReceivedModal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:2100; align-items:center; justify-content:center; padding:1rem;">
     <div class="modal" style="width:100%; max-width:560px; background:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.15); overflow:hidden;">
         <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(90deg,#ede9fe,#c7d2fe);">
             <h3 id="umanReceivedModalTitle" style="margin:0; font-size:1.05rem; color:#4c1d95;">Mark Replacement as Received</h3>
