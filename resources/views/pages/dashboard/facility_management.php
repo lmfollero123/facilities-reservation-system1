@@ -927,6 +927,11 @@ ob_start();
 .fm-card {
     display: flex;
     flex-direction: column;
+    /* .facility-card-admin (kept for shared base styling) sets
+       align-items:flex-start, which in a column flex container collapses
+       any child with no intrinsic width (like the image-only media div)
+       to 0 width - override back to the flex default. */
+    align-items: stretch;
     padding: 0 !important;
     margin-bottom: 0 !important;
     overflow: hidden;
@@ -961,6 +966,7 @@ ob_start();
     font-size: 0.86rem;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
