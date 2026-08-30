@@ -615,7 +615,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             // Payment holds use payment window; normal pending keeps 48-hour expiry.
             $expiresAt = $initialStatus === 'pending_payment'
                 ? $paymentDueAt
-                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+48 hours')) : null);
+                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+' . frs_pending_expiry_hours() . ' hours')) : null);
             
             // Insert reservation with dynamic columns based on current database schema.
             $insertColumns = [
@@ -852,7 +852,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
             $paymentDueAt = date('Y-m-d H:i:s', strtotime('+' . $paymentWindowMinutes . ' minutes'));
             $expiresAt = $initialStatus === 'pending_payment'
                 ? $paymentDueAt
-                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+48 hours')) : null);
+                : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+' . frs_pending_expiry_hours() . ' hours')) : null);
 
             $insertColumns = [
                 'user_id',

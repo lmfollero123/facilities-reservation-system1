@@ -117,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && frs_csrf_ok()) {
                     'login_otp_resend_cooldown_seconds' => ['seconds', 15, 300],
                     'email_verification_ttl_seconds' => ['minutes', 5, 120],
                     'sla_pending_days' => ['days', 1, 30],
+                    'pending_expiry_hours' => ['hours', 1, 168],
                 ];
                 $adminId = $_SESSION['user_id'] ?? null;
                 $invalid = false;
@@ -412,6 +413,7 @@ ob_start();
                 'login_otp_resend_cooldown_seconds' => 60,
                 'email_verification_ttl_seconds' => 900,
                 'sla_pending_days' => 3,
+                'pending_expiry_hours' => 48,
             ];
             $timerVals = [];
             foreach ($timerDefaults as $k => $d) {
@@ -461,6 +463,14 @@ ob_start();
                            value="<?= (int)$timerVals['sla_pending_days']; ?>"
                            style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
                     <small style="color:#8b95b5;">A pending reservation older than this shows an aging badge and is called out in the staff digest. 1–30 days.</small>
+                </label>
+
+                <label style="display:block; margin-bottom:1rem;">
+                    <span style="font-weight:600;">Pending booking hold (hours)</span>
+                    <input type="number" name="pending_expiry_hours" min="1" max="168" required
+                           value="<?= (int)$timerVals['pending_expiry_hours']; ?>"
+                           style="width:100%; padding:0.55rem; border:1px solid #dbe2ef; border-radius:6px; margin-top:0.35rem;">
+                    <small style="color:#8b95b5;">How long an unreviewed "Pending" reservation holds its slot before it's automatically denied and the slot frees up again. 1–168 hours (default 48).</small>
                 </label>
 
                 <button type="submit" class="btn-primary">Save timers</button>

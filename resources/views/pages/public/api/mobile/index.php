@@ -1394,7 +1394,7 @@ if ($route === 'reservations' && $method === 'POST') {
     $paymentDueAt = date('Y-m-d H:i:s', strtotime('+' . $paymentWindow . ' minutes'));
     $expiresAt = $initialStatus === 'pending_payment'
         ? $paymentDueAt
-        : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+48 hours')) : null);
+        : ($initialStatus === 'pending' ? date('Y-m-d H:i:s', strtotime('+' . frs_pending_expiry_hours() . ' hours')) : null);
 
     try {
         $pdo->beginTransaction();

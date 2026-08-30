@@ -86,6 +86,28 @@ function frs_payment_window_minutes(): int
 }
 
 /**
+ * How long a plain "pending" (pencil) booking holds its slot before the hold
+ * lapses and the slot is free for others to compete for again - configurable
+ * in System Settings alongside the other security/booking timers. Default
+ * matches the previous hardcoded 48 hours.
+ */
+function frs_pending_expiry_hours(): int
+{
+    static $hours = null;
+    if ($hours !== null) {
+        return $hours;
+    }
+    $hours = 48;
+    try {
+        require_once __DIR__ . '/app_settings.php';
+        $hours = frs_get_app_setting_int(db(), 'pending_expiry_hours', 48);
+    } catch (Throwable $e) {
+        // app_settings table not ready yet - keep default
+    }
+    return $hours;
+}
+
+/**
  * @return array{payment_due_at: string, expires_at: string}
  */
 function frs_payment_hold_timestamps(): array
@@ -211,10 +233,11 @@ function autoDeclineExpiredReservations(): int {
         $expiredReservations = [];
         $seenIds = [];
 
-        $appendExpired = static function (array $row) use (&$expiredReservations, &$seenIds): void {
+        $appendExpired = static function (array $row, string $reason = 'event_passed') use (&$expiredReservations, &$seenIds): void {
             $id = (int)($row['id'] ?? 0);
             if ($id > 0 && !isset($seenIds[$id])) {
                 $seenIds[$id] = true;
+                $row['reason'] = $reason;
                 $expiredReservations[] = $row;
             }
         };
@@ -228,10 +251,28 @@ function autoDeclineExpiredReservations(): int {
                AND payment_due_at < NOW()'
         );
         foreach ($paymentHoldStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendExpired($row);
+            $appendExpired($row, 'payment_expired');
         }
 
-        // 2) Past event dates
+        // 2) Plain pending holds whose configurable expiry window has lapsed,
+        // even though the event date itself is still upcoming (previously
+        // this only stopped the request from blocking OTHER bookings via
+        // frs_reservation_blocks_booking() - the status stayed "Pending" and
+        // the requester was never told, until the event date eventually
+        // passed via case 3 below, which could be days/weeks later).
+        $holdExpiredStmt = $pdo->query(
+            'SELECT id, reservation_date, time_slot, user_id, status
+             FROM reservations
+             WHERE status = "pending"
+               AND expires_at IS NOT NULL
+               AND expires_at < NOW()
+               AND reservation_date >= CURDATE()'
+        );
+        foreach ($holdExpiredStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendExpired($row, 'hold_expired');
+        }
+
+        // 3) Past event dates
         $pastStmt = $pdo->query(
             'SELECT id, reservation_date, time_slot, user_id, status
              FROM reservations
@@ -242,7 +283,7 @@ function autoDeclineExpiredReservations(): int {
             $appendExpired($row);
         }
 
-        // 3) Today — slot ended (pending/postponed only; pending_payment uses payment_due_at above)
+        // 4) Today — slot ended (pending/postponed only; pending_payment uses payment_due_at above)
         $todayStmt = $pdo->query(
             'SELECT id, reservation_date, time_slot, user_id, status
              FROM reservations
@@ -259,10 +300,16 @@ function autoDeclineExpiredReservations(): int {
         foreach ($expiredReservations as $expired) {
             // pending_payment = payment not completed in time => cancelled
             // pending/postponed = approval did not happen in time => denied
+            $reason = $expired['reason'] ?? 'event_passed';
             $targetStatus = (($expired['status'] ?? '') === 'pending_payment') ? 'cancelled' : 'denied';
-            $targetNote = (($expired['status'] ?? '') === 'pending_payment')
-                ? 'Automatically cancelled: Pencil booking expired before payment confirmation.'
-                : 'Automatically denied: Reservation date/time has passed without approval.';
+            if ($reason === 'hold_expired') {
+                $targetNote = 'Automatically denied: Pending hold expired (' . frs_pending_expiry_hours()
+                    . 'h) before staff reviewed it. Slot is available again.';
+            } elseif ($targetStatus === 'cancelled') {
+                $targetNote = 'Automatically cancelled: Pencil booking expired before payment confirmation.';
+            } else {
+                $targetNote = 'Automatically denied: Reservation date/time has passed without approval.';
+            }
 
             $updateStmt = $pdo->prepare(
                 'UPDATE reservations 
@@ -305,11 +352,13 @@ function autoDeclineExpiredReservations(): int {
                         'booking',
                         $targetStatus === 'cancelled' ? 'Reservation Automatically Cancelled' : 'Reservation Automatically Denied',
                         'Your reservation request for ' . $facilityName . ' on ' .
-                        date('F j, Y', strtotime($expired['reservation_date'])) . 
+                        date('F j, Y', strtotime($expired['reservation_date'])) .
                         ' (' . $expired['time_slot'] . ') ' . (
                             $targetStatus === 'cancelled'
                                 ? 'was automatically cancelled because the payment window has expired.'
-                                : 'has been automatically denied because the reservation time has passed without approval.'
+                                : ($reason === 'hold_expired'
+                                    ? 'has been automatically denied because it was not reviewed within the pending hold window. You can submit a new request or check the waitlist.'
+                                    : 'has been automatically denied because the reservation time has passed without approval.')
                         ),
                         base_url() . '/dashboard/my-reservations'
                     );
@@ -323,7 +372,9 @@ function autoDeclineExpiredReservations(): int {
                         'RES-' . $expired['id'] . ' – ' . (
                             $targetStatus === 'cancelled'
                                 ? 'Payment window expired'
-                                : 'Past reservation date/time without approval'
+                                : ($reason === 'hold_expired'
+                                    ? 'Pending hold expired (' . frs_pending_expiry_hours() . 'h) without staff review'
+                                    : 'Past reservation date/time without approval')
                         )
                     );
                 }
