@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conflictCheck['demand_score'] = $demandPrediction['score'];
         $conflictCheck['demand_classification'] = $demandPrediction['classification'];
         $conflictCheck['demand_confidence'] = $demandPrediction['confidence'];
+        $conflictCheck['demand_has_sufficient_data'] = $demandPrediction['has_sufficient_data'];
         $conflictCheck['demand_factors'] = $demandPrediction['factors'];
         $conflictCheck['demand_alternatives'] = $alternatives;
         

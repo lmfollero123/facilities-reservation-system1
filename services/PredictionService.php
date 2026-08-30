@@ -529,7 +529,8 @@ class PredictionService
                 $dayForecast['slots'][] = [
                     'time_slot' => $slot,
                     'score' => $prediction['score'],
-                    'classification' => $prediction['classification']
+                    'classification' => $prediction['classification'],
+                    'has_sufficient_data' => $prediction['has_sufficient_data']
                 ];
             }
             

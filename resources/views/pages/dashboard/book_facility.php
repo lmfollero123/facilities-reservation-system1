@@ -1102,22 +1102,29 @@ if ($bookFacilityPick > 0) {
             $date = $dayForecast['date'];
             $slots = $dayForecast['slots'] ?? [];
             
-            if (!empty($slots)) {
+            // Only average slots that actually have enough historical bookings
+            // (PredictionService::predictDemand()) to mean something - a slot
+            // below that threshold falls back to a hardcoded placeholder score,
+            // and averaging that in made every lightly-booked facility show the
+            // same fake "Medium" on nearly every date.
+            $dataBackedSlots = array_filter($slots, fn($slot) => !empty($slot['has_sufficient_data']));
+
+            if (!empty($dataBackedSlots)) {
                 $totalScore = 0;
-                $slotCount = count($slots);
-                
-                foreach ($slots as $slot) {
+                $slotCount = count($dataBackedSlots);
+
+                foreach ($dataBackedSlots as $slot) {
                     $totalScore += $slot['score'];
                 }
-                
+
                 $avgScore = $slotCount > 0 ? round($totalScore / $slotCount) : 0;
-                
+
                 // Determine classification
                 $classification = 'Low';
                 if ($avgScore >= 76) $classification = 'Very High';
                 elseif ($avgScore >= 51) $classification = 'High';
                 elseif ($avgScore >= 26) $classification = 'Medium';
-                
+
                 $demandForecastMatrix[$date] = [
                     'score' => $avgScore,
                     'classification' => $classification
