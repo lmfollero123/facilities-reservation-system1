@@ -11226,6 +11226,22 @@ html[data-theme="dark"] .chart-filter-preset {
 .facility-map-pin-dot--maintenance { background: #d97706; }
 .facility-map-pin-dot--offline { background: #dc2626; }
 
+.frs-facility-map-label {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+    border-radius: 6px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    pointer-events: none;
+}
+.frs-facility-map-label::before {
+    border-top-color: rgba(15, 23, 42, 0.15);
+}
+
 /* Colored teardrop pin used on Leaflet facility-filter maps (status-coded) */
 .frs-facility-pin span {
     display: block;

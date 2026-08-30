@@ -450,14 +450,29 @@
 
         const STATUS_LABELS = { available: 'Available', maintenance: 'Under maintenance', offline: 'Offline' };
         const points = config.points || [];
+        // Cluster close-together pins so their permanent name labels don't
+        // stack on top of each other - a cluster expands into its individual,
+        // labeled pins on zoom/click. Falls back to a plain layer group if the
+        // clustering plugin failed to load, so the map still renders.
+        const markerGroup = (typeof L.markerClusterGroup === 'function')
+            ? L.markerClusterGroup({ maxClusterRadius: 45, spiderfyOnMaxZoom: true, showCoverageOnHover: false })
+            : L.layerGroup();
         points.forEach(function (p) {
             const statusKey = STATUS_LABELS[p.status] ? p.status : 'available';
-            const marker = L.marker([p.lat, p.lng], { icon: frsFacilityStatusIcon(statusKey) }).addTo(map);
+            const marker = L.marker([p.lat, p.lng], { icon: frsFacilityStatusIcon(statusKey) });
+            marker.bindTooltip(frsEscapeHtml(p.name), {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -26],
+                className: 'frs-facility-map-label',
+            });
             marker.bindPopup('<strong>' + frsEscapeHtml(p.name) + '</strong><br>' + STATUS_LABELS[statusKey]);
             marker.on('click', function () {
                 frsFacilityMapNavigate(config, p.id);
             });
+            markerGroup.addLayer(marker);
         });
+        map.addLayer(markerGroup);
 
         if (points.length > 0) {
             const bounds = L.latLngBounds(points.map(function (p) { return [p.lat, p.lng]; }));
