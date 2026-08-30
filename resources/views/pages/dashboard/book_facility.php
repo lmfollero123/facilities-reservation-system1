@@ -3158,6 +3158,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const BCF_OPEN_ON_LOAD = <?= !empty($bcfOpenBookingModal) ? 'true' : 'false'; ?>;
+    // A conflict error (and its Join Waitlist button) renders near the top of
+    // the page, well above where the booking modal sits - without this the
+    // modal just closes on submit and the banner is off-screen, which reads
+    // as "nothing happened" even though it worked correctly.
+    if (!BCF_OPEN_ON_LOAD) {
+        const bcfErrorBanner = document.querySelector('.booking-error');
+        if (bcfErrorBanner) {
+            bcfErrorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
     const BCF_FIELD_SELECTORS = <?= json_encode($bookingFieldSelectors, JSON_UNESCAPED_SLASHES); ?>;
     const BCF_PURPOSE_MAX = <?= (int)FRS_BOOKING_PURPOSE_MAX; ?>;
     const BCF_NOTES_MAX = <?= (int)FRS_BOOKING_NOTES_MAX; ?>;
