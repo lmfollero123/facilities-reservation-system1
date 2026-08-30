@@ -2573,15 +2573,14 @@ ul.bcf-scroll-select-menu {
                     <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
                 </div>
                 <p id="conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
-                <form method="post" id="bcf-modal-join-waitlist-form" style="display:none; margin-top:0.75rem;">
-                    <?= csrf_field(); ?>
-                    <input type="hidden" name="join_waitlist" value="1">
-                    <input type="hidden" name="facility_id" id="bcf-wl-facility-id">
-                    <input type="hidden" name="reservation_date" id="bcf-wl-date">
-                    <input type="hidden" name="time_slot" id="bcf-wl-time-slot">
-                    <input type="hidden" name="purpose" id="bcf-wl-purpose">
-                    <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">Join Waitlist for This Slot</button>
-                </form>
+                <?php // Not a real <form> - this box lives inside #main-booking-form,
+                      // and nested <form> elements are invalid HTML (the browser
+                      // silently drops the inner tag, so a submit button here would
+                      // actually submit the outer booking form instead). Submitted
+                      // via fetch() in JS (bcfSubmitModalJoinWaitlist) instead. ?>
+                <div id="bcf-modal-join-waitlist-wrap" style="display:none; margin-top:0.75rem;">
+                    <button type="button" id="bcf-modal-join-waitlist-btn" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">Join Waitlist for This Slot</button>
+                </div>
                 <p id="demand-prediction" style="margin:0.5rem 0 0.75rem; font-size:0.85rem; display:none;"></p>
                 <div id="demand-alternatives" style="display:none;">
                     <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Suggested alternatives (lower demand):</p>
@@ -3165,6 +3164,34 @@ document.addEventListener('DOMContentLoaded', function() {
             credentials: 'same-origin'
         });
     }
+
+    document.getElementById('bcf-modal-join-waitlist-btn')?.addEventListener('click', async function () {
+        const btn = this;
+        if (btn.disabled) return;
+        const facilityId = btn.dataset.facilityId || '';
+        const date = btn.dataset.date || '';
+        const timeSlot = btn.dataset.timeSlot || '';
+        const purpose = btn.dataset.purpose || '';
+        if (!facilityId || !date || !timeSlot) return;
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Joining…';
+        try {
+            await bcfFetchPost(window.location.pathname + window.location.search, {
+                join_waitlist: '1',
+                facility_id: facilityId,
+                reservation_date: date,
+                time_slot: timeSlot,
+                purpose: purpose,
+            });
+            window.location.reload();
+        } catch (e) {
+            console.error('Join waitlist failed:', e);
+            btn.disabled = false;
+            btn.textContent = originalText;
+            alert('Unable to join the waitlist right now. Please try again.');
+        }
+    });
 
     const BCF_OPEN_ON_LOAD = <?= !empty($bcfOpenBookingModal) ? 'true' : 'false'; ?>;
     // A conflict error (and its Join Waitlist button) renders near the top of
@@ -4153,17 +4180,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // modal - surface Join Waitlist right here instead of only in the
         // page-level banner that only appears after a submit attempt, which a
         // disabled button can never trigger.
-        const wlForm = document.getElementById('bcf-modal-join-waitlist-form');
-        if (wlForm) {
+        const wlWrap = document.getElementById('bcf-modal-join-waitlist-wrap');
+        const wlBtn = document.getElementById('bcf-modal-join-waitlist-btn');
+        if (wlWrap && wlBtn) {
             if (conflictType === 'hard' && facilitySel && dateInput && startTimeInput && endTimeInput) {
-                document.getElementById('bcf-wl-facility-id').value = facilitySel.value || '';
-                document.getElementById('bcf-wl-date').value = dateInput.value || '';
-                document.getElementById('bcf-wl-time-slot').value = (startTimeInput.value || '') + ' - ' + (endTimeInput.value || '');
                 const purposeEl = document.getElementById('purpose-input') || bcfPurposePreview;
-                document.getElementById('bcf-wl-purpose').value = purposeEl ? (purposeEl.value || '') : '';
-                wlForm.style.display = 'block';
+                wlBtn.dataset.facilityId = facilitySel.value || '';
+                wlBtn.dataset.date = dateInput.value || '';
+                wlBtn.dataset.timeSlot = (startTimeInput.value || '') + ' - ' + (endTimeInput.value || '');
+                wlBtn.dataset.purpose = purposeEl ? (purposeEl.value || '') : '';
+                wlWrap.style.display = 'block';
             } else {
-                wlForm.style.display = 'none';
+                wlWrap.style.display = 'none';
             }
         }
         // Show message box with fade in
