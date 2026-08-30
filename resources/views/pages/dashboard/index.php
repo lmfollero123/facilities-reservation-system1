@@ -838,7 +838,7 @@ ob_start();
     <?php endif; ?>
 </div>
 
-<div class="booking-wrapper" style="margin-top: 1rem;">
+<div class="booking-wrapper" style="margin-top: 1rem; grid-template-columns: 1fr;">
     <section class="booking-card collapsible-card">
         <button type="button" class="collapsible-header" data-collapse-target="upcoming-reservations">
             <span><?= in_array($userRole, ['Admin', 'Staff']) ? 'Upcoming Reservations (All Users)' : 'My Upcoming Reservations'; ?></span>
