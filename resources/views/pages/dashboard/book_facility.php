@@ -2573,6 +2573,15 @@ ul.bcf-scroll-select-menu {
                     <ul id="alternatives-list" style="margin:0; padding-left:1.25rem; font-size:0.85rem;"></ul>
                 </div>
                 <p id="conflict-risk" style="margin:0; font-size:0.82rem; display:none;"></p>
+                <form method="post" id="bcf-modal-join-waitlist-form" style="display:none; margin-top:0.75rem;">
+                    <?= csrf_field(); ?>
+                    <input type="hidden" name="join_waitlist" value="1">
+                    <input type="hidden" name="facility_id" id="bcf-wl-facility-id">
+                    <input type="hidden" name="reservation_date" id="bcf-wl-date">
+                    <input type="hidden" name="time_slot" id="bcf-wl-time-slot">
+                    <input type="hidden" name="purpose" id="bcf-wl-purpose">
+                    <button type="submit" class="btn-outline" style="padding:0.4rem 0.85rem; font-size:0.85rem; font-weight:700;">Join Waitlist for This Slot</button>
+                </form>
                 <p id="demand-prediction" style="margin:0.5rem 0 0.75rem; font-size:0.85rem; display:none;"></p>
                 <div id="demand-alternatives" style="display:none;">
                     <p style="margin:0 0 0.5rem; font-size:0.85rem; font-weight:600;">Suggested alternatives (lower demand):</p>
@@ -4139,6 +4148,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showMessage(text, alternatives, riskScore, eventLabel, conflictType = 'hard') {
+        // Hard conflict disables the Submit button entirely (refreshBookingGates()
+        // below), leaving the resident with no way to proceed from inside the
+        // modal - surface Join Waitlist right here instead of only in the
+        // page-level banner that only appears after a submit attempt, which a
+        // disabled button can never trigger.
+        const wlForm = document.getElementById('bcf-modal-join-waitlist-form');
+        if (wlForm) {
+            if (conflictType === 'hard' && facilitySel && dateInput && startTimeInput && endTimeInput) {
+                document.getElementById('bcf-wl-facility-id').value = facilitySel.value || '';
+                document.getElementById('bcf-wl-date').value = dateInput.value || '';
+                document.getElementById('bcf-wl-time-slot').value = (startTimeInput.value || '') + ' - ' + (endTimeInput.value || '');
+                const purposeEl = document.getElementById('purpose-input') || bcfPurposePreview;
+                document.getElementById('bcf-wl-purpose').value = purposeEl ? (purposeEl.value || '') : '';
+                wlForm.style.display = 'block';
+            } else {
+                wlForm.style.display = 'none';
+            }
+        }
         // Show message box with fade in
         messageBox.style.display = 'block';
         messageBox.style.opacity = '0';
