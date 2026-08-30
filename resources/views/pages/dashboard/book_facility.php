@@ -1014,7 +1014,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$frsCsrfOk && $isReservationsMgmtP
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($error)) {
+// A conflict error shows a "Join Waitlist" action in the page body - if the
+// modal reopens on top of it (as it does for every other error, so the
+// resident can fix the offending field inline), that action is completely
+// hidden behind the modal overlay and submitting just looks like it did
+// nothing. Leave the modal closed for conflicts specifically.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($error) && stripos($error, 'conflict') === false) {
     $bcfOpenBookingModal = true;
 }
 
