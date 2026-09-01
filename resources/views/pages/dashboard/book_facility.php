@@ -3875,9 +3875,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (facility.image_url) {
                 html += '<div class="bcf-facility-image-wrap">';
                 html += '<img class="bcf-facility-image" src="' + escapeHtml(facility.image_url) + '" alt="' + escapeHtml(facility.name || 'Facility') + ' photo">';
-                if (facility.image_citation) {
-                    html += '<div class="bcf-facility-image-citation" title="Image source">📷 ' + escapeHtml(facility.image_citation) + '</div>';
-                }
                 html += '</div>';
             }
             

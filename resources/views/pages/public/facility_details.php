@@ -80,11 +80,6 @@ ob_start();
                 ?>
                 <div class="facility-hero-image-wrapper">
                     <div class="facility-hero-image" style="background-image:url('<?= htmlspecialchars($imageUrl); ?>');"></div>
-                    <?php if (!empty($facility['image_path']) && !empty($facility['image_citation'])): ?>
-                        <div class="image-citation" title="Image Source">
-                            <small>📷 <?= htmlspecialchars($facility['image_citation']); ?></small>
-                        </div>
-                    <?php endif; ?>
                 </div>
                 <div class="facility-hero-body">
                     <div class="facility-hero-header">
