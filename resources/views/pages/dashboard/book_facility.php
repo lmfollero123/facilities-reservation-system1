@@ -1947,6 +1947,21 @@ ul.bcf-scroll-select-menu {
 .bcf-aside-col {
     margin-top: 0;
 }
+@media (min-width: 1025px) {
+    .bcf-aside-col {
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+    }
+    .bcf-aside-col::-webkit-scrollbar {
+        width: 6px;
+    }
+    .bcf-aside-col::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+}
 
 .status-blackout {
     background: #fecaca !important;
