@@ -3829,6 +3829,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const facilityDetailsTitle = document.getElementById('facility-details-title');
     const facilityDetailsContent = document.getElementById('facility-details-content');
     const bcfHubGrid = document.getElementById('bcf-hub-grid');
+    let bcfFacilityMap = null;
 
     // Function to fetch and display facility details
     async function loadFacilityDetails(facilityId) {
@@ -3837,6 +3838,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // calendar reclaim its column width instead of leaving it empty.
             if (facilityDetailsAside) facilityDetailsAside.style.display = 'none';
             if (bcfHubGrid) bcfHubGrid.classList.remove('bcf-has-aside');
+            if (bcfFacilityMap) {
+                bcfFacilityMap.remove();
+                bcfFacilityMap = null;
+            }
             const aeClear = document.getElementById('expected-attendees');
             if (aeClear) aeClear.removeAttribute('max');
             refreshBookingGates();
@@ -3901,11 +3906,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<div style="flex: 1;">';
                 html += '<strong style="color: #5b6888; font-size: 0.9rem; display: block; margin-bottom: 0.25rem;">Location</strong>';
                 html += '<p style="margin: 0; color: #1b1b1f; line-height: 1.6;">' + escapeHtml(facility.location) + '</p>';
+                const hasCoords = facility.latitude != null && facility.longitude != null && facility.latitude !== '' && facility.longitude !== '';
+                if (hasCoords) {
+                    html += '<div id="bcf-facility-map" style="width:100%; height:170px; border-radius:10px; border:1px solid #e8ecf4; margin-top:0.6rem; overflow:hidden;"></div>';
+                    html += '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(facility.latitude + ',' + facility.longitude) + '" target="_blank" rel="noopener" style="display:inline-block; margin-top:0.5rem; font-size:0.85rem; color:var(--gov-blue-dark); text-decoration:none; font-weight:600;">Get directions &rarr;</a>';
+                }
                 html += '</div>';
                 html += '</div>';
                 html += '</div>';
             }
-            
+
             // Capacity
             if (facility.capacity) {
                 html += '<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #e8ecf4;">';
@@ -3987,6 +3997,29 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof window.frsRefreshFieldTips === 'function') {
                 window.frsRefreshFieldTips();
             }
+
+            // Facility location preview map (Leaflet + OSM, already loaded globally)
+            if (bcfFacilityMap) {
+                bcfFacilityMap.remove();
+                bcfFacilityMap = null;
+            }
+            const mapLat = parseFloat(facility.latitude);
+            const mapLng = parseFloat(facility.longitude);
+            const mapEl = document.getElementById('bcf-facility-map');
+            if (mapEl && !isNaN(mapLat) && !isNaN(mapLng) && typeof L !== 'undefined') {
+                bcfFacilityMap = L.map('bcf-facility-map', {
+                    zoomControl: false,
+                    dragging: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    touchZoom: false
+                }).setView([mapLat, mapLng], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(bcfFacilityMap);
+                L.marker([mapLat, mapLng]).addTo(bcfFacilityMap);
+            }
             window._bcfMaxFacilityCapacity = null;
             if (facility.capacity) {
                 const capMatch = String(facility.capacity).match(/(\d{1,7})/);
@@ -4005,6 +4038,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.error('Error loading facility details:', error);
+            if (bcfFacilityMap) {
+                bcfFacilityMap.remove();
+                bcfFacilityMap = null;
+            }
             facilityDetailsContent.innerHTML = '<div style="text-align: center; padding: 2rem; color: #b23030;"><p>Unable to load facility details. Please try again.</p></div>';
             const aeErr = document.getElementById('expected-attendees');
             if (aeErr) aeErr.removeAttribute('max');

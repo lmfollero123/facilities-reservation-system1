@@ -31,7 +31,7 @@ try {
     $pdo = db();
     
     // Fetch facility details
-    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, is_free, status, image_path, image_citation FROM facilities WHERE id = :id LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, name, location, capacity, capacity_threshold, description, amenities, rules, base_rate, is_free, status, image_path, image_citation, latitude, longitude FROM facilities WHERE id = :id LIMIT 1');
     $stmt->execute(['id' => $facilityId]);
     $facility = $stmt->fetch(PDO::FETCH_ASSOC);
 
