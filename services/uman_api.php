@@ -306,6 +306,20 @@ function submitUMANUtilityReading(array $payload): array
 }
 
 /**
+ * Submit a water-only meter reading to UMAN's dedicated Water Management
+ * module (separate from the combined electric+water utility-readings.php
+ * feed above — UMAN tracks water in its own water_consumption_records
+ * table, surfaced on the Water Management Dashboard).
+ *
+ * @param array<string, mixed> $payload from frs_uman_build_water_reading_payload()
+ * @return array{data: array, error: ?string}
+ */
+function submitUMANWaterReading(array $payload): array
+{
+    return uman_api_post('/api/water-readings.php', $payload);
+}
+
+/**
  * Idempotently upgrade local uman_asset_requests table to include the new
  * specific columns introduced with the v2 CPRF↔UMAN integration payload.
  * Safe to call on every page render — catches duplicate column exceptions.

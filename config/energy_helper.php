@@ -157,6 +157,41 @@ function frs_uman_build_utility_reading_payload(array $reading): array
 }
 
 /**
+ * Map a local energy_meter_readings row to UMAN's dedicated water-only
+ * intake payload (api/water-readings.php -> water_consumption_records,
+ * the table backing UMAN's separate Water Management Dashboard). Returns
+ * null when the reading has no water component to report.
+ *
+ * @param array<string, mixed> $reading local row
+ */
+function frs_uman_build_water_reading_payload(array $reading): ?array
+{
+    if ($reading['current_reading_water'] === null) {
+        return null;
+    }
+    $payload = [
+        'facility_id' => (int)$reading['facility_id'],
+        'facility_name' => (string)($reading['facility_name'] ?? ''),
+        'location' => (string)($reading['facility_location'] ?? ''),
+        'year' => (int)$reading['year'],
+        'month' => (int)$reading['month'],
+        'previous_reading_cbm' => (float)$reading['previous_reading_water'],
+        'current_reading_cbm' => (float)$reading['current_reading_water'],
+        'consumption_cbm' => (float)$reading['consumption_water'],
+        'rate_per_cbm' => (float)$reading['rate_per_water'],
+        'cost' => round((float)$reading['consumption_water'] * (float)$reading['rate_per_water'], 2),
+        'external_ref' => 'CPRF-' . (int)$reading['id'],
+    ];
+    if (!empty($reading['notes'])) {
+        $payload['notes'] = (string)$reading['notes'];
+    }
+    if (!empty($reading['recorded_by_name'])) {
+        $payload['recorded_by_name'] = (string)$reading['recorded_by_name'];
+    }
+    return $payload;
+}
+
+/**
  * Push one local reading to UMAN and record the outcome. Simpler sibling of
  * frs_energy_push_reading() — no facility-mapping lookup, since UMAN already
  * shares CPRF's facility_id directly (see services/uman_api.php).
@@ -190,6 +225,21 @@ function frs_uman_push_utility_reading(PDO $pdo, int $readingId): array
         $fail = $pdo->prepare("UPDATE energy_meter_readings SET sync_status = 'failed', sync_error = :err WHERE id = :id");
         $fail->execute(['err' => (string)$result['error'], 'id' => $readingId]);
         return ['success' => false, 'error' => $result['error']];
+    }
+
+    // Also feed UMAN's separate Water Management Dashboard (its own
+    // water_consumption_records table, distinct from the combined
+    // electric+water record above). Only when this reading has a water
+    // component; a failure here fails the overall push since the resident
+    // did submit water usage and it must land somewhere UMAN staff can see.
+    $waterPayload = frs_uman_build_water_reading_payload($reading);
+    if ($waterPayload !== null) {
+        $waterResult = submitUMANWaterReading($waterPayload);
+        if (!empty($waterResult['error'])) {
+            $fail = $pdo->prepare("UPDATE energy_meter_readings SET sync_status = 'failed', sync_error = :err WHERE id = :id");
+            $fail->execute(['err' => 'Water Management sync failed: ' . (string)$waterResult['error'], 'id' => $readingId]);
+            return ['success' => false, 'error' => $waterResult['error']];
+        }
     }
 
     $ok = $pdo->prepare("
