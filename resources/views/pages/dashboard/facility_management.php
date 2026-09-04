@@ -558,7 +558,7 @@ if (!isset($allowedSorts[$sortKey])) {
 }
 $sortSql = $allowedSorts[$sortKey];
 
-$perPage = 5;
+$perPage = 8;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 
