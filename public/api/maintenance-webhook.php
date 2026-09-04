@@ -117,36 +117,45 @@ try {
                     'LGU Integration',
                     "{$facilityName} (ID {$facilityId}) - category '{$category}' task '{$task}'"
                 );
-            } elseif ($currentStatus !== 'maintenance') {
+            } else {
+                // Atomic check-and-set: the WHERE guard makes the read and
+                // write one operation, so concurrent webhook calls for the
+                // same facility (CIMM fires one per affected task) can't all
+                // see the pre-update status and each log a duplicate
+                // transition. Only the call that actually flips the row
+                // (rowCount() > 0) runs the side effects and audit log.
                 $updateStmt = $pdo->prepare(
-                    'UPDATE facilities SET status = "maintenance", updated_at = NOW() WHERE id = :id'
+                    "UPDATE facilities SET status = 'maintenance', updated_at = NOW() WHERE id = :id AND status != 'maintenance'"
                 );
                 $updateStmt->execute(['id' => $facilityId]);
 
-                $cimmManagedMaintenance[$facilityId] = true;
-                frs_cimm_save_managed_maintenance_ids($cimmManagedMaintenance);
+                if ($updateStmt->rowCount() > 0) {
+                    $cimmManagedMaintenance[$facilityId] = true;
+                    frs_cimm_save_managed_maintenance_ids($cimmManagedMaintenance);
 
-                $result['new_status'] = 'maintenance';
-                $result['action_taken'] = 'Facility set to maintenance status';
-                $result['reservations_affected'] = handleFacilityMaintenanceStatusChange($facilityId, $facilityName);
+                    $result['new_status'] = 'maintenance';
+                    $result['action_taken'] = 'Facility set to maintenance status';
+                    $result['reservations_affected'] = handleFacilityMaintenanceStatusChange($facilityId, $facilityName);
 
-                logAudit(
-                    'Facility maintenance status changed via CIMM webhook',
-                    'LGU Integration',
-                    "{$facilityName} (ID {$facilityId}) set to maintenance ({$maintenanceStatus})"
-                );
-            } else {
-                $result['action_taken'] = 'Facility already in maintenance status';
+                    logAudit(
+                        'Facility maintenance status changed via CIMM webhook',
+                        'LGU Integration',
+                        "{$facilityName} (ID {$facilityId}) set to maintenance ({$maintenanceStatus})"
+                    );
+                } else {
+                    $result['action_taken'] = 'Facility already in maintenance status';
+                }
             }
             break;
 
         case 'end_maintenance':
-            if ($currentStatus === 'maintenance') {
-                $updateStmt = $pdo->prepare(
-                    'UPDATE facilities SET status = "available", updated_at = NOW() WHERE id = :id'
-                );
-                $updateStmt->execute(['id' => $facilityId]);
+            // Same atomic-guard pattern as start_maintenance above.
+            $updateStmt = $pdo->prepare(
+                "UPDATE facilities SET status = 'available', updated_at = NOW() WHERE id = :id AND status = 'maintenance'"
+            );
+            $updateStmt->execute(['id' => $facilityId]);
 
+            if ($updateStmt->rowCount() > 0) {
                 unset($cimmManagedMaintenance[$facilityId]);
                 frs_cimm_save_managed_maintenance_ids($cimmManagedMaintenance);
 
