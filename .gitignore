@@ -3,6 +3,9 @@
 /vendor/
 .phpunit.cache/
 
+# Subagent-driven-development scratch state (session-local, never shared)
+/.superpowers/
+
 # Environment & secrets
 .env
 .env.local
