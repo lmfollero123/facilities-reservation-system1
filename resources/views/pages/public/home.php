@@ -43,13 +43,13 @@ ob_start();
     <div class="reservation-hero-gradient"></div>
 
     <div class="reservation-hero-content">
-        <p class="reservation-hero-eyebrow">District 6, Quezon City &middot; Public Facilities Reservation Portal</p>
-        <h1 class="reservation-hero-title">Barangay Culiat</h1>
-        <div class="reservation-hero-rule"></div>
-        <p class="reservation-hero-lead">
+        <p class="reservation-hero-eyebrow home-animate home-animate-delay-1">District 6, Quezon City &middot; Public Facilities Reservation Portal</p>
+        <h1 class="reservation-hero-title home-animate home-animate-delay-2">Barangay Culiat</h1>
+        <div class="reservation-hero-rule home-animate home-animate-delay-3"></div>
+        <p class="reservation-hero-lead home-animate home-animate-delay-4">
             Malugod na pagbati! Ang Sistema ng Reserbasyon ng Pasilidad ng Barangay Culiat ay dinisenyo upang mapadali ang pag-book ng mga pampublikong pasilidad &mdash; mula sa covered court hanggang sa multi-purpose hall &mdash; nang mabilis, ligtas, at maayos. Sa pamamagitan ng aming online portal, maaari kang mag-book, subaybayan ang katayuan ng iyong reservation, at makatanggap ng abiso, lahat sa iisang lugar.
         </p>
-        <div class="reservation-hero-ctas">
+        <div class="reservation-hero-ctas home-animate home-animate-delay-5">
             <a href="<?= $base; ?>/facilities" class="reservation-hero-cta reservation-hero-cta-solid">Browse Facilities</a>
             <a href="<?= $base; ?>/register" class="reservation-hero-cta reservation-hero-cta-outline">Create Account</a>
         </div>
@@ -423,8 +423,9 @@ ob_start();
     var hcDots = document.querySelectorAll('.hc-dot');
     var toggle = document.getElementById('hcAutoToggle');
     if (hcSlides.length > 0) {
+        var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var hcIndex = 0;
-        var autoOn = true;
+        var autoOn = !prefersReducedMotion;
         var timer = null;
         var hcShow = function (i) {
             hcSlides.forEach(function (s, idx) { s.classList.toggle('is-active', idx === i); });
@@ -439,13 +440,21 @@ ob_start();
             }
         };
         if (toggle) {
+            toggle.setAttribute('aria-pressed', autoOn ? 'true' : 'false');
             toggle.addEventListener('click', function () {
                 autoOn = !autoOn;
                 toggle.setAttribute('aria-pressed', autoOn ? 'true' : 'false');
                 if (autoOn) { startAuto(); } else { stopAuto(); }
             });
         }
-        startAuto();
+        var widget = document.querySelector('.hc-widget');
+        if (widget) {
+            widget.addEventListener('mouseenter', stopAuto);
+            widget.addEventListener('focusin', stopAuto);
+            widget.addEventListener('mouseleave', function () { if (autoOn) startAuto(); });
+            widget.addEventListener('focusout', function () { if (autoOn) startAuto(); });
+        }
+        if (autoOn) { startAuto(); }
     }
 })();
 </script>

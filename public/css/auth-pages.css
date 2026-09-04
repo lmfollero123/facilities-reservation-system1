@@ -965,6 +965,34 @@ body.auth-split-page {
     box-shadow: 0 6px 20px rgba(5, 150, 105, 0.35);
 }
 
+.auth-split-form .btn-primary:disabled {
+    opacity: 0.85;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.auth-split-btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 0.4rem;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-top-color: #fff;
+    border-radius: 50%;
+    vertical-align: -2px;
+    animation: authBtnSpin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-split-btn-spinner {
+        animation: none;
+    }
+}
+
+@keyframes authBtnSpin {
+    to { transform: rotate(360deg); }
+}
+
 .auth-split-forgot {
     text-align: right;
     margin-top: -0.4rem;

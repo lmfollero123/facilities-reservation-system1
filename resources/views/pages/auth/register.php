@@ -1119,16 +1119,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!isValid) {
             e.preventDefault();
-            
+
             // Scroll to first error
             const firstError = form.querySelector('[aria-invalid="true"]');
             if (firstError) {
                 firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 firstError.focus();
             }
-            
+
             // Show general error message
             alert('Please fix the errors in the form before submitting.');
+        } else {
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn && !submitBtn.disabled) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> Creating account&hellip;';
+            }
         }
     });
 });

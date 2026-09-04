@@ -430,6 +430,16 @@ document.addEventListener('DOMContentLoaded', function() {
             toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
         });
     }
+
+    const loginForm = document.querySelector('.auth-split-form');
+    const loginSubmitBtn = loginForm ? loginForm.querySelector('button[type="submit"]') : null;
+    if (loginForm && loginSubmitBtn) {
+        loginForm.addEventListener('submit', function () {
+            if (loginSubmitBtn.disabled) return;
+            loginSubmitBtn.disabled = true;
+            loginSubmitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> Signing in&hellip;';
+        });
+    }
 });
 </script>
 <?php
