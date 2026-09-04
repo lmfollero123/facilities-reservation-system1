@@ -157,16 +157,16 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     // Operations/Integrations - check permissions
     $integrationsGroup = [];
     if (frs_can_read($role, 'maintenance')) {
-        $integrationsGroup[] = ['label' => 'Maintenance', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
+        $integrationsGroup[] = ['label' => 'Maintenance Management', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
     }
     if (frs_can_read($role, 'infrastructure')) {
         $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];
     }
     if (frs_can_read($role, 'utilities')) {
-        $integrationsGroup[] = ['label' => 'UMAN Integration', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
+        $integrationsGroup[] = ['label' => 'Utilities and Equipments Management', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
     }
     if (frs_can_read($role, 'energy')) {
-        $integrationsGroup[] = ['label' => 'Energy Efficiency', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
+        $integrationsGroup[] = ['label' => 'Energy Savings and Recommendations', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
     }
 
     // Reports & Analytics is the only item left in this group now that Live

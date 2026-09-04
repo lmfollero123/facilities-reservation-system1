@@ -51,14 +51,14 @@ if (frs_can_read($role, 'communications')) {
     $dashboardSearchItems[] = ['label' => 'Contact Information', 'url' => $base . '/dashboard/contact-info', 'keywords' => 'contact info phone email address barangay'];
 }
 if (frs_can_read($role, 'maintenance')) {
-    $dashboardSearchItems[] = ['label' => 'Maintenance', 'url' => $base . '/dashboard/maintenance-integration', 'keywords' => 'maintenance cimm integration schedules calendar'];
+    $dashboardSearchItems[] = ['label' => 'Maintenance Management', 'url' => $base . '/dashboard/maintenance-integration', 'keywords' => 'maintenance cimm integration schedules calendar'];
     $dashboardSearchItems[] = ['label' => 'Maintenance Insights', 'url' => $base . '/dashboard/maintenance-integration?tab=insights', 'keywords' => 'maintenance insights predictive analytics risk request cimm'];
 }
 if (frs_can_read($role, 'infrastructure')) {
     $dashboardSearchItems[] = ['label' => 'Infrastructure Projects', 'url' => $base . '/dashboard/infrastructure-projects', 'keywords' => 'infrastructure projects construction renovation preview'];
 }
 if (frs_can_read($role, 'utilities')) {
-    $dashboardSearchItems[] = ['label' => 'UMAN Integration', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'uman utilities integration equipment assets request'];
+    $dashboardSearchItems[] = ['label' => 'Utilities and Equipments Management', 'url' => $base . '/dashboard/utilities-integration', 'keywords' => 'uman utilities integration equipment assets request'];
 }
 if (frs_can_read($role, 'reports')) {
     $dashboardSearchItems[] = ['label' => 'Live Occupancy', 'url' => $base . '/dashboard/occupancy-monitor', 'keywords' => 'live occupancy monitor facilities in use vacant'];
