@@ -519,16 +519,24 @@
         busy = true;
         showProgress();
 
+        // Kick off the fetch in parallel with the exit animation instead of
+        // waiting for animateOut() to finish first — sequencing them back to
+        // back stacked the animation time (~340ms) and network latency into
+        // one uninterrupted blank/opacity:0 window (the "white flash" between
+        // pages). Starting both at once shrinks that window to whichever is
+        // longer, since the response is usually ready before the fade-out is.
+        const fetchPromise = fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'FRS-Public-Nav',
+            },
+        });
+
         await animateOut(main, direction);
 
         try {
-            const response = await fetch(url, {
-                credentials: 'same-origin',
-                headers: {
-                    Accept: 'text/html',
-                    'X-Requested-With': 'FRS-Public-Nav',
-                },
-            });
+            const response = await fetchPromise;
 
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status);
