@@ -5007,31 +5007,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const bookPane = document.getElementById('booking-pane-book');
     if (bookPane && !bookPane.dataset.bcfCalDelegated) {
         bookPane.dataset.bcfCalDelegated = '1';
-        function activateBookingCalDate(cell) {
-            const ds = cell.getAttribute('data-bcf-date');
-            if (!ds || !dateInput || !facilitySel) return;
-            dateInput.value = ds;
+        function activateBookingCalDate(dateIso, facilityId) {
+            if (!dateIso || !dateInput || !facilitySel) return;
+            dateInput.value = dateIso;
             dateInput.dispatchEvent(new Event('input', { bubbles: true }));
             dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-            const calSel = document.getElementById('book-fac-cal-select');
-            if (calSel && calSel.value) {
-                facilitySel.value = calSel.value;
+            if (facilityId) {
+                facilitySel.value = String(facilityId);
                 facilitySel.dispatchEvent(new Event('change', { bubbles: true }));
             }
             openBookingFlowModal();
             debouncedRefillAvail();
             setTimeout(debouncedCheckConflict, 200);
         }
+        window.bcfCalendarActivateDate = activateBookingCalDate;
+        // Legacy delegated listeners: harmless once the React island (Task 7)
+        // replaces the server-rendered .bcf-book-cal-cell markup, since that
+        // selector will no longer match anything. Left in place rather than
+        // deleted, matching this feature's rollback-safety approach.
         bookPane.addEventListener('click', function (e) {
             const cell = e.target.closest('.bcf-book-cal-cell');
-            if (cell) activateBookingCalDate(cell);
+            if (cell) {
+                const calSel = document.getElementById('book-fac-cal-select');
+                activateBookingCalDate(cell.getAttribute('data-bcf-date'), calSel ? calSel.value : null);
+            }
         });
         bookPane.addEventListener('keydown', function (e) {
             const cell = e.target.closest('.bcf-book-cal-cell');
             if (!cell) return;
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                activateBookingCalDate(cell);
+                const calSel = document.getElementById('book-fac-cal-select');
+                activateBookingCalDate(cell.getAttribute('data-bcf-date'), calSel ? calSel.value : null);
             }
         });
     }

@@ -133,7 +133,7 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                     ))}
                     <AnimatePresence mode="popLayout">
                         {days.map((entry) => (
-                            <CalendarCell key={entry.date} entry={entry} />
+                            <CalendarCell key={entry.date} entry={entry} facilityId={facilityId} />
                         ))}
                     </AnimatePresence>
                 </div>
@@ -143,7 +143,13 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
     );
 }
 
-function CalendarCell({ entry }) {
+function CalendarCell({ entry, facilityId }) {
+    function handleActivate() {
+        if (!entry.is_pickable) return;
+        if (typeof window.bcfCalendarActivateDate === 'function') {
+            window.bcfCalendarActivateDate(entry.date, facilityId);
+        }
+    }
     const cls = [
         'my-reservations-calendar-cell',
         entry.is_today ? 'today' : '',
@@ -163,7 +169,18 @@ function CalendarCell({ entry }) {
             transition={{ duration: 0.18 }}
             className={cls}
             data-cal-date={entry.date}
-            {...(entry.is_pickable ? { role: 'button', tabIndex: 0, 'data-bcf-date': entry.date } : {})}
+            {...(entry.is_pickable ? {
+                role: 'button',
+                tabIndex: 0,
+                'data-bcf-date': entry.date,
+                onClick: handleActivate,
+                onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleActivate();
+                    }
+                },
+            } : {})}
         >
             <div className="date-label">{entry.day}</div>
             {entry.chip_label && (
