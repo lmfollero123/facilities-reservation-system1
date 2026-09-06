@@ -58,9 +58,20 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
         window.history.replaceState(null, '', window.location.pathname + '?' + params.toString());
     }, [facilityId, year, month]);
 
+    const [highlightedDates, setHighlightedDates] = useState(() => new Set());
+
     useEffect(() => {
         window.bcfCalendarGetState = () => ({ year, month, facilityId });
     }, [year, month, facilityId]);
+
+    useEffect(() => {
+        window.bcfCalendarSetHighlights = (isoDates) => {
+            setHighlightedDates(new Set(Array.isArray(isoDates) ? isoDates : []));
+        };
+        return () => {
+            delete window.bcfCalendarSetHighlights;
+        };
+    }, []);
 
     const monthLabel = MONTH_NAMES[month - 1] + ' ' + year;
     const leadingBlanks = facilityId ? firstWeekdayOfMonth(year, month) : 0;
@@ -133,7 +144,12 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                     ))}
                     <AnimatePresence mode="popLayout">
                         {days.map((entry) => (
-                            <CalendarCell key={entry.date} entry={entry} facilityId={facilityId} />
+                            <CalendarCell
+                                key={entry.date}
+                                entry={entry}
+                                facilityId={facilityId}
+                                highlighted={highlightedDates.has(entry.date)}
+                            />
                         ))}
                     </AnimatePresence>
                 </div>
@@ -143,7 +159,7 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
     );
 }
 
-function CalendarCell({ entry, facilityId }) {
+function CalendarCell({ entry, facilityId, highlighted }) {
     function handleActivate() {
         if (!entry.is_pickable) return;
         if (typeof window.bcfCalendarActivateDate === 'function') {
@@ -156,6 +172,7 @@ function CalendarCell({ entry, facilityId }) {
         !entry.is_pickable ? 'empty' : '',
         entry.status_class || '',
         entry.is_pickable ? 'bcf-book-cal-cell' : '',
+        highlighted ? 'bcf-ai-suggest-date' : '',
     ].filter(Boolean).join(' ');
 
     const demandClass = entry.demand_classification

@@ -3395,9 +3395,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let bcfSmartHintsTimer = null;
     function bcfClearCalendarAiHints() {
-        document.querySelectorAll('.bcf-ai-suggest-date').forEach(function (el) {
-            el.classList.remove('bcf-ai-suggest-date');
-        });
+        if (typeof window.bcfCalendarSetHighlights === 'function') {
+            window.bcfCalendarSetHighlights([]);
+        } else {
+            document.querySelectorAll('.bcf-ai-suggest-date').forEach(function (el) {
+                el.classList.remove('bcf-ai-suggest-date');
+            });
+        }
         const bar = document.getElementById('bcf-smart-hints-bar');
         if (bar) {
             bar.classList.remove('is-visible');
@@ -3416,13 +3420,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const dates = payload && payload.highlight_dates ? payload.highlight_dates : [];
-        const dateSet = new Set(dates);
-        document.querySelectorAll('[data-cal-date]').forEach(function (cell) {
-            const d = cell.getAttribute('data-cal-date');
-            if (d && dateSet.has(d)) {
-                cell.classList.add('bcf-ai-suggest-date');
-            }
-        });
+        if (typeof window.bcfCalendarSetHighlights === 'function') {
+            window.bcfCalendarSetHighlights(dates);
+        } else {
+            const dateSet = new Set(dates);
+            document.querySelectorAll('[data-cal-date]').forEach(function (cell) {
+                const d = cell.getAttribute('data-cal-date');
+                if (d && dateSet.has(d)) {
+                    cell.classList.add('bcf-ai-suggest-date');
+                }
+            });
+        }
         if (!bar) return;
         if (!payload || !payload.facilities || payload.facilities.length === 0) {
             return;
@@ -3441,8 +3449,17 @@ document.addEventListener('DOMContentLoaded', function() {
             html += '<br><span style="font-size:0.82rem;opacity:.92">' + bcfHintEscape(payload.best_times_label) + '</span>';
         }
         if (payload.primary_facility_id) {
-            const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(window._bcfCalYear)) + '&month=' + encodeURIComponent(String(window._bcfCalMonth)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
-            html += '<div class="bcf-smart-hints-actions"><a class="btn-outline bcf-smart-hints-link" data-frs-partial="bcf-calendar" href="' + u + '">Show this facility on the calendar</a></div>';
+            const calState = typeof window.bcfCalendarGetState === 'function'
+                ? window.bcfCalendarGetState()
+                : { year: window._bcfCalYear, month: window._bcfCalMonth };
+            const u = basePath + '/dashboard/book-facility?year=' + encodeURIComponent(String(calState.year)) + '&month=' + encodeURIComponent(String(calState.month)) + '&book_fac=' + encodeURIComponent(String(payload.primary_facility_id));
+            // Plain full-page link, not a data-frs-partial fragment swap: the
+            // bcf-calendar partial region no longer exists once the React
+            // island (Task 7) replaces that markup. A full navigation still
+            // lands on the right facility/month/year since book_facility.php
+            // reads these from $_GET on load and seeds the island's initial
+            // state from them.
+            html += '<div class="bcf-smart-hints-actions"><a class="btn-outline bcf-smart-hints-link" href="' + u + '">Show this facility on the calendar</a></div>';
         }
         bar.innerHTML = html;
         bar.classList.add('is-visible');
@@ -3456,10 +3473,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         const attEl = document.getElementById('bcf-purpose-attendees-preview');
+        const calState = typeof window.bcfCalendarGetState === 'function'
+            ? window.bcfCalendarGetState()
+            : { year: window._bcfCalYear, month: window._bcfCalMonth };
         let fd = new URLSearchParams();
         fd.append('purpose', purpose);
-        fd.append('year', String(window._bcfCalYear));
-        fd.append('month', String(window._bcfCalMonth));
+        fd.append('year', String(calState.year));
+        fd.append('month', String(calState.month));
         const attV = attEl ? attEl.value.trim() : '';
         if (attV !== '') fd.append('expected_attendees', attV);
         try {
