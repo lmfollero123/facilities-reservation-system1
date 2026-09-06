@@ -1860,9 +1860,17 @@ ul.bcf-scroll-select-menu {
     color: var(--accent-ai-text, #5b21b6);
     font-weight: 600;
 }
+.my-reservations-calendar-cell {
+    transition: box-shadow 0.25s ease, background 0.25s ease;
+}
 .my-reservations-calendar-cell.bcf-ai-suggest-date:not(.empty) {
     box-shadow: inset 0 0 0 2px #7c3aed;
     background: linear-gradient(135deg, rgba(124, 58, 237, 0.07), rgba(255, 255, 255, 0));
+}
+@media (prefers-reduced-motion: reduce) {
+    .my-reservations-calendar-cell {
+        transition: none;
+    }
 }
 .my-reservations-calendar-cell.bcf-ai-suggest-date:not(.empty) .date-label {
     font-weight: 800;

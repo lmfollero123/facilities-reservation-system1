@@ -15,6 +15,10 @@ function firstWeekdayOfMonth(year, month) {
     return new Date(year, month - 1, 1).getDay();
 }
 
+const REDUCE_MOTION = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export default function BookingCalendar({ facilities, initialFacilityId, initialYear, initialMonth }) {
     const [facilityId, setFacilityId] = useState(initialFacilityId || 0);
     const [year, setYear] = useState(initialYear || new Date().getFullYear());
@@ -181,9 +185,9 @@ function CalendarCell({ entry, facilityId, highlighted }) {
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 6 }}
+            initial={REDUCE_MOTION ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: REDUCE_MOTION ? 0 : 0.18 }}
             className={cls}
             data-cal-date={entry.date}
             {...(entry.is_pickable ? {
