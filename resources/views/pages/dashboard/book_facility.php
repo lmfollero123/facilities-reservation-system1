@@ -1088,84 +1088,6 @@ if ($bookCalYear < 2000 || $bookCalYear > 2100) {
 }
 $bookFacilityPick = (int)($_GET['book_fac'] ?? $_GET['cal_fac'] ?? ($prefillFacilityId ?? 0));
 
-$calendarToneMatrix = [];
-if ($bookFacilityPick > 0) {
-    $calendarToneMatrix = frs_facility_calendar_matrix($pdo, $bookFacilityPick, $bookCalYear, $bookCalMonth);
-}
-
-// Get demand forecast for the selected facility and month
-$demandForecastMatrix = [];
-if ($bookFacilityPick > 0) {
-    $predictionService = new PredictionService($pdo);
-    
-    // Get forecast for 60 days (booking advance window) instead of just days in month
-    $advanceBookingDays = 60;
-    $monthForecast = $predictionService->getFacilityDemandForecast($bookFacilityPick, $advanceBookingDays);
-    
-    if (!empty($monthForecast)) {
-        foreach ($monthForecast as $dayForecast) {
-            $date = $dayForecast['date'];
-            $slots = $dayForecast['slots'] ?? [];
-            
-            // Only average slots that actually have enough historical bookings
-            // (PredictionService::predictDemand()) to mean something - a slot
-            // below that threshold falls back to a hardcoded placeholder score,
-            // and averaging that in made every lightly-booked facility show the
-            // same fake "Medium" on nearly every date.
-            $dataBackedSlots = array_filter($slots, fn($slot) => !empty($slot['has_sufficient_data']));
-
-            if (!empty($dataBackedSlots)) {
-                $totalScore = 0;
-                $slotCount = count($dataBackedSlots);
-
-                foreach ($dataBackedSlots as $slot) {
-                    $totalScore += $slot['score'];
-                }
-
-                $avgScore = $slotCount > 0 ? round($totalScore / $slotCount) : 0;
-
-                // Determine classification
-                $classification = 'Low';
-                if ($avgScore >= 76) $classification = 'Very High';
-                elseif ($avgScore >= 51) $classification = 'High';
-                elseif ($avgScore >= 26) $classification = 'Medium';
-
-                $demandForecastMatrix[$date] = [
-                    'score' => $avgScore,
-                    'classification' => $classification
-                ];
-            }
-        }
-    }
-}
-
-// Get Philippines holidays for the selected calendar month/year
-$holidayMatrix = [];
-$holidayData = [];
-$holidayService = new HolidayService();
-
-$monthStart = sprintf('%04d-%02d-01', $bookCalYear, $bookCalMonth);
-$monthEnd = sprintf('%04d-%02d-%02d', $bookCalYear, $bookCalMonth, date('t', mktime(0, 0, 0, $bookCalMonth, 1, $bookCalYear)));
-
-$holidayList = $holidayService->getHolidaysInRange($monthStart, $monthEnd);
-
-if (!empty($holidayList)) {
-    foreach ($holidayList as $holiday) {
-        $holidayMatrix[$holiday['date']] = $holiday;
-        $holidayData[$holiday['date']] = [
-            'name' => $holiday['name'],
-            'type' => $holiday['type']
-        ];
-    }
-}
-$bookCalFirstDay = sprintf('%04d-%02d-01', $bookCalYear, $bookCalMonth);
-$bookCalAnchor = new DateTimeImmutable($bookCalFirstDay);
-$bookCalNavPrev = $bookCalAnchor->modify('-1 month');
-$bookCalNavNext = $bookCalAnchor->modify('+1 month');
-$bookCalMonthLabel = $bookCalAnchor->format('F Y');
-$bookCalMonthTs = mktime(0, 0, 0, $bookCalMonth, 1, $bookCalYear);
-$bookFirstWeekday = (int)date('w', $bookCalMonthTs);
-$bookDaysInMonth = (int)date('t', $bookCalMonthTs);
 $todayISO = date('Y-m-d');
 $bcfNowDt = new DateTime('now', frs_app_timezone());
 
@@ -2259,48 +2181,7 @@ ul.bcf-scroll-select-menu {
                     </div>
                     <div id="bcf-smart-hints-bar" class="bcf-smart-hints-bar" role="status" aria-live="polite"></div>
                 </div>
-                <div data-frs-partial-id="bcf-calendar" data-frs-partial-root>
-                <div class="bcf-cal-toolbar-wrap">
-                    <div class="bcf-cal-month-heading"><?= htmlspecialchars($bookCalMonthLabel); ?></div>
-                    <form method="get" action="<?= htmlspecialchars(base_path() . '/dashboard/book-facility'); ?>" class="bcf-cal-toolbar-form booking-cal-toolbar" data-frs-partial="bcf-calendar" data-frs-partial-auto>
-                        <div class="bcf-cal-toolbar-grid">
-                            <div class="bcf-cal-fac-field">
-                                <label class="bcf-cal-fac-field-label" for="book-fac-cal-select">Facility</label>
-                                <div class="bcf-cal-shell">
-                                    <i class="bi bi-building" aria-hidden="true"></i>
-                                    <select id="book-fac-cal-select" name="book_fac" class="bcf-cal-fac-select" aria-label="Choose facility for calendar">
-                                        <option value="0">Choose a facility…</option>
-                                        <?php foreach ($facilities as $f): ?>
-                                            <option value="<?= (int)$f['id']; ?>" <?= $bookFacilityPick === (int)$f['id'] ? 'selected' : ''; ?>>
-                                                <?= htmlspecialchars((string)$f['name']); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="bcf-cal-nav-cluster">
-                                <select name="month" class="bcf-cal-month-select" aria-label="Select month">
-                                    <?php for ($m = 1; $m <= 12; $m++): ?>
-                                        <option value="<?= $m; ?>" <?= $bookCalMonth === $m ? 'selected' : ''; ?>>
-                                            <?= date('F', mktime(0, 0, 0, $m, 1)); ?>
-                                        </option>
-                                    <?php endfor; ?>
-                                </select>
-                                <select name="year" class="bcf-cal-year-select" aria-label="Select year">
-                                    <?php 
-                                    $currentYear = (int)date('Y');
-                                    for ($y = $currentYear; $y <= $currentYear + 2; $y++): ?>
-                                        <option value="<?= $y; ?>" <?= $bookCalYear === $y ? 'selected' : ''; ?>>
-                                            <?= $y; ?>
-                                        </option>
-                                    <?php endfor; ?>
-                                </select>
-                                <a class="btn-outline bcf-cal-nav-btn" data-frs-partial="bcf-calendar" href="<?= htmlspecialchars(base_path() . '/dashboard/book-facility' . $bookCalQuery(array_merge($bookPaneQuery, ['year' => (int)date('Y'), 'month' => (int)date('n')]))); ?>">Today</a>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="my-reservations-calendar" style="min-height:auto;">
+                <div>
                     <div class="my-reservations-calendar-header" style="margin-bottom:0.65rem;">
                         <div class="my-reservations-legend">
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#22c55e;"></span> Open</div>
@@ -2317,107 +2198,16 @@ ul.bcf-scroll-select-menu {
                             <div class="my-reservations-legend-item"><span class="my-reservations-legend-dot" style="background:#fee2e2;"></span> Very High</div>
                         </div>
                     </div>
-                    <div class="my-reservations-calendar-grid">
-                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $w): ?>
-                            <div class="my-reservations-calendar-dayname"><?= $w; ?></div>
-                        <?php endforeach; ?>
-                        <?php for ($jx = 0; $jx < $bookFirstWeekday; $jx++): ?>
-                            <div class="my-reservations-calendar-cell empty"></div>
-                        <?php endfor; ?>
-                        <?php for ($bd = 1; $bd <= $bookDaysInMonth; $bd++):
-                            $iso = sprintf('%04d-%02d-%02d', $bookCalYear, $bookCalMonth, $bd);
-                            if (!$bookFacilityPick) {
-                                $tone = ($iso < $todayISO) ? 'past' : 'muted';
-                            } else {
-                                $tone = $calendarToneMatrix[$iso] ?? 'green';
-                            }
-                            $dayStatusClass = '';
-                            $chipLabel = '';
-                            $chipShort = '';
-                            if ($iso < $todayISO) {
-                                $chipLabel = '';
-                            } elseif (!$bookFacilityPick) {
-                                $chipLabel = '—';
-                                $chipShort = '—';
-                            } else {
-                                if ($tone === 'green') {
-                                    $dayStatusClass = ' status-approved';
-                                    $chipLabel = 'Open';
-                                    $chipShort = 'Open';
-                                } elseif ($tone === 'yellow') {
-                                    $dayStatusClass = ' status-pending';
-                                    $chipLabel = 'Busy';
-                                    $chipShort = 'Busy';
-                                } elseif ($tone === 'red') {
-                                    $dayStatusClass = ' status-denied';
-                                    $chipLabel = 'Full';
-                                    $chipShort = 'Full';
-                                } elseif ($tone === 'blackout' || $tone === 'cimm_maintenance' || $tone === 'maintenance' || $tone === 'offline') {
-                                    $dayStatusClass = $tone === 'cimm_maintenance' ? ' status-cimm-maintenance' : ' status-blackout';
-                                    if ($tone === 'blackout') {
-                                        $chipLabel = 'Blackout';
-                                        $chipShort = 'Blk';
-                                    } elseif ($tone === 'cimm_maintenance') {
-                                        $chipLabel = 'Sched. maint.';
-                                        $chipShort = 'Maint';
-                                    } elseif ($tone === 'maintenance') {
-                                        $chipLabel = 'Maintenance';
-                                        $chipShort = 'Maint';
-                                    } elseif ($tone === 'offline') {
-                                        $chipLabel = 'Offline';
-                                        $chipShort = 'Off';
-                                    } else {
-                                        $chipLabel = 'N/A';
-                                        $chipShort = 'N/A';
-                                    }
-                                } elseif ($tone === 'muted') {
-                                    $chipLabel = '—';
-                                    $chipShort = '—';
-                                } elseif ($tone === 'past') {
-                                    $chipLabel = '';
-                                } else {
-                                    $chipLabel = '';
-                                }
-                            }
-                            $bookPickable = ($iso >= $todayISO) && $bookFacilityPick > 0 && in_array($tone, ['green', 'yellow', 'red'], true);
-                            $cellCls = 'my-reservations-calendar-cell';
-                            if ($iso === $todayISO) {
-                                $cellCls .= ' today';
-                            }
-                            if (!$bookPickable) {
-                                $cellCls .= ' empty';
-                            }
-                            $cellCls .= $dayStatusClass;
-                            if ($bookPickable) {
-                                $cellCls .= ' bcf-book-cal-cell';
-                            }
-                            ?>
-                            <div class="<?= htmlspecialchars($cellCls, ENT_QUOTES, 'UTF-8'); ?>" data-cal-date="<?= htmlspecialchars($iso, ENT_QUOTES, 'UTF-8'); ?>"<?= $bookPickable ? ' role="button" tabindex="0" data-bcf-date="' . htmlspecialchars($iso, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
-                                <div class="date-label"><?= (int)$bd; ?></div>
-                                <?php if ($chipLabel !== ''): ?>
-                                    <div class="status-chip" title="<?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?>"<?= $chipShort !== '' ? ' data-chip-short="' . htmlspecialchars($chipShort, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?= htmlspecialchars($chipLabel, ENT_QUOTES, 'UTF-8'); ?></div>
-                                <?php endif; ?>
-                                <?php if (isset($holidayMatrix[$iso])): ?>
-                                    <div class="holiday-indicator" title="<?= htmlspecialchars($holidayMatrix[$iso]['name']); ?> (<?= htmlspecialchars($holidayMatrix[$iso]['type']); ?>)">
-                                        <i class="bi bi-calendar-event"></i>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if (isset($demandForecastMatrix[$iso]) && $iso >= $todayISO): ?>
-                                    <?php 
-                                    $demand = $demandForecastMatrix[$iso];
-                                    $demandClass = 'demand-low';
-                                    if ($demand['score'] >= 76) $demandClass = 'demand-very-high';
-                                    elseif ($demand['score'] >= 51) $demandClass = 'demand-high';
-                                    elseif ($demand['score'] >= 26) $demandClass = 'demand-medium';
-                                    ?>
-                                    <div class="demand-strip <?= $demandClass; ?>" title="Demand: <?= $demand['classification']; ?> (<?= $demand['score']; ?>%)">
-                                        <span class="demand-score"><?= htmlspecialchars($demand['classification']); ?></span>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endfor; ?>
-                    </div>
-                </div>
+                    <div id="bcf-calendar-root"
+                         data-initial-facility-id="<?= (int)$bookFacilityPick; ?>"
+                         data-initial-year="<?= (int)$bookCalYear; ?>"
+                         data-initial-month="<?= (int)$bookCalMonth; ?>"
+                         data-facilities="<?= htmlspecialchars(json_encode(array_map(
+                             fn($f) => ['id' => (int)$f['id'], 'name' => (string)$f['name']],
+                             $facilities
+                         )), ENT_QUOTES, 'UTF-8'); ?>"
+                    ></div>
+                    <script type="module" src="<?= htmlspecialchars($basePath); ?>/public/js/dist/booking-calendar.js"></script>
                 </div>
             </div>
 
