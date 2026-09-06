@@ -212,6 +212,7 @@ if ($path === 'announcements') {
         'facility-recommendations' => 'facility_recommendations_api.php',
         'system-settings' => 'system_settings.php',
         'booking-smart-hints' => 'booking_smart_hints_api.php',
+        'book-facility-calendar-data' => 'book-facility-calendar-data.php',
         'occupancy-monitor' => 'occupancy_monitor.php',
         'occupancy-live' => 'occupancy_live_api.php',
         'check-in' => 'check_in_gate.php',

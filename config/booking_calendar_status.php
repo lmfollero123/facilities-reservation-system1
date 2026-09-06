@@ -225,3 +225,94 @@ function frs_calendar_month_fill_tone(int $year, int $month, string $tone): arra
     }
     return $out;
 }
+
+/**
+ * Format one month's worth of day entries for the React booking-calendar
+ * island's JSON endpoint. Pure — no PDO, no I/O — mirrors the tone/chip/
+ * pickability logic that used to live inline in book_facility.php's
+ * day-cell render loop (see resources/views/pages/dashboard/
+ * book-facility-calendar-data.php for the caller that supplies the matrices).
+ *
+ * @param array<string,string> $toneMatrix date => tone, from frs_facility_calendar_matrix()
+ * @param array<string,array{score:int,classification:string}> $demandMatrix date => demand
+ * @param array<string,array{name:string,type:string}> $holidayMatrix date => holiday
+ * @return list<array{date:string,day:int,tone:string,status_class:string,
+ *   chip_label:string,is_today:bool,is_pickable:bool,holiday_name:?string,
+ *   holiday_type:?string,demand_classification:?string,demand_score:?int}>
+ */
+function frs_bcf_calendar_day_entries(
+    string $todayISO,
+    int $year,
+    int $month,
+    array $toneMatrix,
+    array $demandMatrix,
+    array $holidayMatrix
+): array {
+    $daysInMonth = (int)date('t', mktime(0, 0, 0, $month, 1, $year));
+    $entries = [];
+
+    for ($day = 1; $day <= $daysInMonth; $day++) {
+        $iso = sprintf('%04d-%02d-%02d', $year, $month, $day);
+        $tone = $toneMatrix[$iso] ?? 'green';
+
+        $statusClass = '';
+        $chipLabel = '';
+
+        if ($iso < $todayISO) {
+            $tone = 'past';
+        } elseif ($tone === 'green') {
+            $statusClass = 'status-approved';
+            $chipLabel = 'Open';
+        } elseif ($tone === 'yellow') {
+            $statusClass = 'status-pending';
+            $chipLabel = 'Busy';
+        } elseif ($tone === 'red') {
+            $statusClass = 'status-denied';
+            $chipLabel = 'Full';
+        } elseif ($tone === 'blackout') {
+            $statusClass = 'status-blackout';
+            $chipLabel = 'Blackout';
+        } elseif ($tone === 'cimm_maintenance') {
+            $statusClass = 'status-cimm-maintenance';
+            $chipLabel = 'Sched. maint.';
+        } elseif ($tone === 'maintenance') {
+            $statusClass = 'status-blackout';
+            $chipLabel = 'Maintenance';
+        } elseif ($tone === 'offline') {
+            $statusClass = 'status-blackout';
+            $chipLabel = 'Offline';
+        }
+
+        $isPickable = ($iso >= $todayISO) && in_array($tone, ['green', 'yellow', 'red'], true);
+
+        $holidayName = null;
+        $holidayType = null;
+        if (isset($holidayMatrix[$iso])) {
+            $holidayName = (string)$holidayMatrix[$iso]['name'];
+            $holidayType = (string)$holidayMatrix[$iso]['type'];
+        }
+
+        $demandClassification = null;
+        $demandScore = null;
+        if ($iso >= $todayISO && isset($demandMatrix[$iso])) {
+            $demandClassification = (string)$demandMatrix[$iso]['classification'];
+            $demandScore = (int)$demandMatrix[$iso]['score'];
+        }
+
+        $entries[] = [
+            'date' => $iso,
+            'day' => $day,
+            'tone' => $tone,
+            'status_class' => $statusClass,
+            'chip_label' => $chipLabel,
+            'is_today' => $iso === $todayISO,
+            'is_pickable' => $isPickable,
+            'holiday_name' => $holidayName,
+            'holiday_type' => $holidayType,
+            'demand_classification' => $demandClassification,
+            'demand_score' => $demandScore,
+        ];
+    }
+
+    return $entries;
+}
