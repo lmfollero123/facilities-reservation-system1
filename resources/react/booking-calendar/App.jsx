@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
@@ -15,9 +15,31 @@ function firstWeekdayOfMonth(year, month) {
     return new Date(year, month - 1, 1).getDay();
 }
 
-const REDUCE_MOTION = typeof window !== 'undefined'
-    && window.matchMedia
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function daysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+
+function getPrefersReducedMotion() {
+    return typeof window !== 'undefined'
+        && window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function useReducedMotion() {
+    const [reduced, setReduced] = useState(getPrefersReducedMotion);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return;
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const onChange = () => setReduced(mq.matches);
+        mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
+        return () => {
+            mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange);
+        };
+    }, []);
+
+    return reduced;
+}
 
 export default function BookingCalendar({ facilities, initialFacilityId, initialYear, initialMonth }) {
     const [facilityId, setFacilityId] = useState(initialFacilityId || 0);
@@ -25,10 +47,13 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
     const [month, setMonth] = useState(initialMonth || new Date().getMonth() + 1);
     const [days, setDays] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const reduceMotion = useReducedMotion();
 
     const loadCalendar = useCallback(async (fid, y, m) => {
         if (!fid) {
             setDays([]);
+            setError(null);
             return;
         }
         setLoading(true);
@@ -38,11 +63,16 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                 + '&year=' + encodeURIComponent(y)
                 + '&month=' + encodeURIComponent(m);
             const res = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
             const data = await res.json();
             setDays(Array.isArray(data.days) ? data.days : []);
+            setError(null);
         } catch (err) {
             console.error('book-facility-calendar-data fetch failed', err);
             setDays([]);
+            setError('Unable to load calendar data. Please refresh the page.');
         } finally {
             setLoading(false);
         }
@@ -58,6 +88,8 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
         params.set('month', String(month));
         if (facilityId) {
             params.set('book_fac', String(facilityId));
+        } else {
+            params.delete('book_fac');
         }
         window.history.replaceState(null, '', window.location.pathname + '?' + params.toString());
     }, [facilityId, year, month]);
@@ -69,6 +101,12 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
     }, [year, month, facilityId]);
 
     useEffect(() => {
+        if (typeof window.bcfCalendarOnChange === 'function') {
+            window.bcfCalendarOnChange({ facilityId, year, month });
+        }
+    }, [facilityId, year, month]);
+
+    useEffect(() => {
         window.bcfCalendarSetHighlights = (isoDates) => {
             setHighlightedDates(new Set(Array.isArray(isoDates) ? isoDates : []));
         };
@@ -78,8 +116,9 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
     }, []);
 
     const monthLabel = MONTH_NAMES[month - 1] + ' ' + year;
-    const leadingBlanks = facilityId ? firstWeekdayOfMonth(year, month) : 0;
+    const leadingBlanks = firstWeekdayOfMonth(year, month);
     const yearOptions = [0, 1, 2].map((offset) => new Date().getFullYear() + offset);
+    const mutedDayCount = facilityId ? 0 : daysInMonth(year, month);
 
     return (
         <div className="bcf-cal-toolbar-wrap">
@@ -146,24 +185,28 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                     {Array.from({ length: leadingBlanks }, (_, i) => (
                         <div key={'blank-' + i} className="my-reservations-calendar-cell empty"></div>
                     ))}
-                    <AnimatePresence mode="popLayout">
-                        {days.map((entry) => (
+                    {mutedDayCount > 0
+                        ? Array.from({ length: mutedDayCount }, (_, i) => (
+                            <div key={'muted-' + i} className="my-reservations-calendar-cell empty"></div>
+                        ))
+                        : days.map((entry) => (
                             <CalendarCell
                                 key={entry.date}
                                 entry={entry}
                                 facilityId={facilityId}
                                 highlighted={highlightedDates.has(entry.date)}
+                                reduceMotion={reduceMotion}
                             />
                         ))}
-                    </AnimatePresence>
                 </div>
             </div>
             {loading && <div className="bcf-cal-loading" aria-live="polite">Loading availability…</div>}
+            {error && <div className="bcf-cal-error" role="alert" style={{ color: '#b3261e', marginTop: '0.5rem' }}>{error}</div>}
         </div>
     );
 }
 
-function CalendarCell({ entry, facilityId, highlighted }) {
+function CalendarCell({ entry, facilityId, highlighted, reduceMotion }) {
     function handleActivate() {
         if (!entry.is_pickable) return;
         if (typeof window.bcfCalendarActivateDate === 'function') {
@@ -185,9 +228,9 @@ function CalendarCell({ entry, facilityId, highlighted }) {
 
     return (
         <motion.div
-            initial={REDUCE_MOTION ? false : { opacity: 0, y: 6 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: REDUCE_MOTION ? 0 : 0.18 }}
+            transition={{ duration: reduceMotion ? 0 : 0.18 }}
             className={cls}
             data-cal-date={entry.date}
             {...(entry.is_pickable ? {
@@ -205,7 +248,11 @@ function CalendarCell({ entry, facilityId, highlighted }) {
         >
             <div className="date-label">{entry.day}</div>
             {entry.chip_label && (
-                <div className="status-chip" title={entry.chip_label}>{entry.chip_label}</div>
+                <div
+                    className="status-chip"
+                    title={entry.chip_label}
+                    {...(entry.chip_short ? { 'data-chip-short': entry.chip_short } : {})}
+                >{entry.chip_label}</div>
             )}
             {entry.holiday_name && (
                 <div className="holiday-indicator" title={entry.holiday_name + ' (' + entry.holiday_type + ')'}>
@@ -213,7 +260,7 @@ function CalendarCell({ entry, facilityId, highlighted }) {
                 </div>
             )}
             {entry.demand_classification && (
-                <div className={'demand-strip ' + demandClass} title={'Demand: ' + entry.demand_classification}>
+                <div className={'demand-strip ' + demandClass} title={'Demand: ' + entry.demand_classification + ' (' + entry.demand_score + '%)'}>
                     <span className="demand-score">{entry.demand_classification}</span>
                 </div>
             )}

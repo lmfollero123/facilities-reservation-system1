@@ -20,8 +20,6 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/flash_helper.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
 require_once __DIR__ . '/../../../../config/blackout_dates.php';
-require_once __DIR__ . '/../../../../services/PredictionService.php';
-require_once __DIR__ . '/../../../../services/HolidayService.php';
 
 // Check permissions for booking facility
 $role = $_SESSION['role'] ?? 'Resident';
@@ -1508,7 +1506,6 @@ html[data-theme="dark"] .bcf-walkin-option.is-active {
     margin-bottom: 1rem;
     width: 100%;
 }
-.bcf-cal-toolbar-form { width: 100%; margin: 0; }
 .bcf-cal-month-heading {
     font-size: 1.05rem;
     font-weight: 700;
@@ -4839,6 +4836,14 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(debouncedCheckConflict, 200);
         }
         window.bcfCalendarActivateDate = activateBookingCalDate;
+        window.bcfCalendarOnChange = function (state) {
+            if (state && state.facilityId && typeof loadFacilityDetails === 'function') {
+                loadFacilityDetails(state.facilityId);
+            }
+            if (typeof bcfDebouncedSmartHints === 'function') {
+                bcfDebouncedSmartHints();
+            }
+        };
         // Legacy delegated listeners: harmless once the React island (Task 7)
         // replaces the server-rendered .bcf-book-cal-cell markup, since that
         // selector will no longer match anything. Left in place rather than
@@ -4860,23 +4865,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    window.frsOnPartialLoaded = function (partialId) {
-        if (partialId !== 'bcf-calendar') return;
-        bcfSyncCalFromUrl();
-        const params = new URLSearchParams(window.location.search);
-        const bookFac = params.get('book_fac');
-        const calSel = document.getElementById('book-fac-cal-select');
-        if (bookFac && calSel) {
-            calSel.value = bookFac;
-        }
-        if (calSel && calSel.value && typeof loadFacilityDetails === 'function') {
-            loadFacilityDetails(calSel.value);
-        }
-        if (typeof bcfDebouncedSmartHints === 'function') {
-            bcfDebouncedSmartHints();
-        }
-    };
 
     if (BCF_OPEN_ON_LOAD) {
         setTimeout(function () {

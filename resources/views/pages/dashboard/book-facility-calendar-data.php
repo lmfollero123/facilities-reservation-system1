@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../../services/PredictionService.php';
 require_once __DIR__ . '/../../../../services/HolidayService.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store');
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     http_response_code(401);

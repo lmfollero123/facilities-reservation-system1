@@ -27,6 +27,7 @@ final class BcfCalendarDayEntriesTest extends TestCase
         $this->assertSame('past', $day1['tone']);
         $this->assertFalse($day1['is_pickable']);
         $this->assertSame('', $day1['chip_label']);
+        $this->assertSame('', $day1['chip_short']);
     }
 
     public function testOpenDayGetsApprovedStatusAndIsPickable(): void
@@ -37,6 +38,7 @@ final class BcfCalendarDayEntriesTest extends TestCase
         $this->assertSame('green', $day15['tone']);
         $this->assertSame('status-approved', $day15['status_class']);
         $this->assertSame('Open', $day15['chip_label']);
+        $this->assertSame('Open', $day15['chip_short']);
         $this->assertTrue($day15['is_pickable']);
     }
 
@@ -49,6 +51,7 @@ final class BcfCalendarDayEntriesTest extends TestCase
         $day20 = $entries[19];
         $this->assertSame('status-denied', $day20['status_class']);
         $this->assertSame('Full', $day20['chip_label']);
+        $this->assertSame('Full', $day20['chip_short']);
         $this->assertTrue($day20['is_pickable']);
     }
 
@@ -58,7 +61,62 @@ final class BcfCalendarDayEntriesTest extends TestCase
         $day20 = $entries[19];
         $this->assertSame('status-blackout', $day20['status_class']);
         $this->assertSame('Blackout', $day20['chip_label']);
+        $this->assertSame('Blk', $day20['chip_short']);
         $this->assertFalse($day20['is_pickable']);
+    }
+
+    public function testYellowDayGetsPendingStatusAndIsPickable(): void
+    {
+        $entries = frs_bcf_calendar_day_entries('2026-09-10', 2026, 9, ['2026-09-20' => 'yellow'], [], []);
+        $day20 = $entries[19];
+        $this->assertSame('yellow', $day20['tone']);
+        $this->assertSame('status-pending', $day20['status_class']);
+        $this->assertSame('Busy', $day20['chip_label']);
+        $this->assertSame('Busy', $day20['chip_short']);
+        $this->assertTrue($day20['is_pickable']);
+    }
+
+    public function testCimmMaintenanceDayIsNotPickable(): void
+    {
+        $entries = frs_bcf_calendar_day_entries('2026-09-10', 2026, 9, ['2026-09-20' => 'cimm_maintenance'], [], []);
+        $day20 = $entries[19];
+        $this->assertSame('status-cimm-maintenance', $day20['status_class']);
+        $this->assertSame('Sched. maint.', $day20['chip_label']);
+        $this->assertSame('Maint', $day20['chip_short']);
+        $this->assertFalse($day20['is_pickable']);
+    }
+
+    public function testMaintenanceDayIsNotPickable(): void
+    {
+        $entries = frs_bcf_calendar_day_entries('2026-09-10', 2026, 9, ['2026-09-20' => 'maintenance'], [], []);
+        $day20 = $entries[19];
+        $this->assertSame('status-blackout', $day20['status_class']);
+        $this->assertSame('Maintenance', $day20['chip_label']);
+        $this->assertSame('Maint', $day20['chip_short']);
+        $this->assertFalse($day20['is_pickable']);
+    }
+
+    public function testOfflineDayIsNotPickable(): void
+    {
+        $entries = frs_bcf_calendar_day_entries('2026-09-10', 2026, 9, ['2026-09-20' => 'offline'], [], []);
+        $day20 = $entries[19];
+        $this->assertSame('status-blackout', $day20['status_class']);
+        $this->assertSame('Offline', $day20['chip_label']);
+        $this->assertSame('Off', $day20['chip_short']);
+        $this->assertFalse($day20['is_pickable']);
+    }
+
+    public function testDateMissingFromToneMatrixDefaultsToGreen(): void
+    {
+        // No entry for 2026-09-20 in the tone matrix at all — the `?? 'green'`
+        // fallback branch.
+        $entries = frs_bcf_calendar_day_entries('2026-09-10', 2026, 9, [], [], []);
+        $day20 = $entries[19];
+        $this->assertSame('green', $day20['tone']);
+        $this->assertSame('status-approved', $day20['status_class']);
+        $this->assertSame('Open', $day20['chip_label']);
+        $this->assertSame('Open', $day20['chip_short']);
+        $this->assertTrue($day20['is_pickable']);
     }
 
     public function testHolidayAndDemandDataAttachToTheRightDay(): void

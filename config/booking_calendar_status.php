@@ -237,8 +237,9 @@ function frs_calendar_month_fill_tone(int $year, int $month, string $tone): arra
  * @param array<string,array{score:int,classification:string}> $demandMatrix date => demand
  * @param array<string,array{name:string,type:string}> $holidayMatrix date => holiday
  * @return list<array{date:string,day:int,tone:string,status_class:string,
- *   chip_label:string,is_today:bool,is_pickable:bool,holiday_name:?string,
- *   holiday_type:?string,demand_classification:?string,demand_score:?int}>
+ *   chip_label:string,chip_short:string,is_today:bool,is_pickable:bool,
+ *   holiday_name:?string,holiday_type:?string,demand_classification:?string,
+ *   demand_score:?int}>
  */
 function frs_bcf_calendar_day_entries(
     string $todayISO,
@@ -257,30 +258,38 @@ function frs_bcf_calendar_day_entries(
 
         $statusClass = '';
         $chipLabel = '';
+        $chipShort = '';
 
         if ($iso < $todayISO) {
             $tone = 'past';
         } elseif ($tone === 'green') {
             $statusClass = 'status-approved';
             $chipLabel = 'Open';
+            $chipShort = 'Open';
         } elseif ($tone === 'yellow') {
             $statusClass = 'status-pending';
             $chipLabel = 'Busy';
+            $chipShort = 'Busy';
         } elseif ($tone === 'red') {
             $statusClass = 'status-denied';
             $chipLabel = 'Full';
+            $chipShort = 'Full';
         } elseif ($tone === 'blackout') {
             $statusClass = 'status-blackout';
             $chipLabel = 'Blackout';
+            $chipShort = 'Blk';
         } elseif ($tone === 'cimm_maintenance') {
             $statusClass = 'status-cimm-maintenance';
             $chipLabel = 'Sched. maint.';
+            $chipShort = 'Maint';
         } elseif ($tone === 'maintenance') {
             $statusClass = 'status-blackout';
             $chipLabel = 'Maintenance';
+            $chipShort = 'Maint';
         } elseif ($tone === 'offline') {
             $statusClass = 'status-blackout';
             $chipLabel = 'Offline';
+            $chipShort = 'Off';
         }
 
         $isPickable = ($iso >= $todayISO) && in_array($tone, ['green', 'yellow', 'red'], true);
@@ -305,6 +314,7 @@ function frs_bcf_calendar_day_entries(
             'tone' => $tone,
             'status_class' => $statusClass,
             'chip_label' => $chipLabel,
+            'chip_short' => $chipShort,
             'is_today' => $iso === $todayISO,
             'is_pickable' => $isPickable,
             'holiday_name' => $holidayName,
