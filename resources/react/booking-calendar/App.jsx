@@ -186,9 +186,21 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                         <div key={'blank-' + i} className="my-reservations-calendar-cell empty"></div>
                     ))}
                     {mutedDayCount > 0
-                        ? Array.from({ length: mutedDayCount }, (_, i) => (
-                            <div key={'muted-' + i} className="my-reservations-calendar-cell empty"></div>
-                        ))
+                        ? Array.from({ length: mutedDayCount }, (_, i) => {
+                            const now = new Date();
+                            const isToday = year === now.getFullYear()
+                                && month === now.getMonth() + 1
+                                && (i + 1) === now.getDate();
+                            return (
+                                <div
+                                    key={'muted-' + i}
+                                    className={'my-reservations-calendar-cell empty' + (isToday ? ' today' : '')}
+                                >
+                                    <div className="date-label">{i + 1}</div>
+                                    <div className="status-chip" title="—">—</div>
+                                </div>
+                            );
+                        })
                         : days.map((entry) => (
                             <CalendarCell
                                 key={entry.date}
@@ -201,7 +213,7 @@ export default function BookingCalendar({ facilities, initialFacilityId, initial
                 </div>
             </div>
             {loading && <div className="bcf-cal-loading" aria-live="polite">Loading availability…</div>}
-            {error && <div className="bcf-cal-error" role="alert" style={{ color: '#b3261e', marginTop: '0.5rem' }}>{error}</div>}
+            {error && <div className="bcf-cal-error" role="alert" style={{ color: 'var(--error-text, #b3261e)', marginTop: '0.5rem' }}>{error}</div>}
         </div>
     );
 }

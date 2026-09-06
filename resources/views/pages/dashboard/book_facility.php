@@ -4837,13 +4837,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         window.bcfCalendarActivateDate = activateBookingCalDate;
         window.bcfCalendarOnChange = function (state) {
-            if (state && state.facilityId && typeof loadFacilityDetails === 'function') {
+            if (state && typeof loadFacilityDetails === 'function') {
                 loadFacilityDetails(state.facilityId);
             }
             if (typeof bcfDebouncedSmartHints === 'function') {
                 bcfDebouncedSmartHints();
             }
         };
+        if (typeof window.bcfCalendarGetState === 'function') {
+            window.bcfCalendarOnChange(window.bcfCalendarGetState());
+        }
         // Legacy delegated listeners: harmless once the React island (Task 7)
         // replaces the server-rendered .bcf-book-cal-cell markup, since that
         // selector will no longer match anything. Left in place rather than
