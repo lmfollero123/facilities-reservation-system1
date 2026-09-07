@@ -577,7 +577,7 @@ ob_start();
                                     <?php endif; ?>
                                     <td>
                                         <?php if ($inUseCount > 0): ?>
-                                            <span class="ss-usage-badge"><?= $inUseCount; ?> facility<?= $inUseCount === 1 ? '' : 'ies'; ?></span>
+                                            <span class="ss-usage-badge"><?= $inUseCount; ?> <?= $inUseCount === 1 ? 'facility' : 'facilities'; ?></span>
                                         <?php else: ?>
                                             <span class="ss-usage-none">—</span>
                                         <?php endif; ?>

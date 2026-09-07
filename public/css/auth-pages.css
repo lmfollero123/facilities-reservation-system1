@@ -1060,26 +1060,43 @@ body.auth-split-page {
     cursor: pointer;
 }
 
-.auth-split-terms input[type="checkbox"] {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 20px !important;
-    height: 20px !important;
+.auth-split-terms-input {
+    /* Real checkbox stays functional (focusable, checked state, form
+       submission) but visually hidden -- the label already forwards
+       clicks anywhere in it (including on the text) to this input per
+       native browser behavior, so hiding it doesn't break click-to-toggle.
+       The checkmark is painted on the sibling .auth-split-terms-box below
+       instead of directly on this input: appearance:none inputs painting
+       their own background-image on :checked have a known Chromium repaint
+       lag (only appearing once something else forces a repaint, e.g. blur)
+       -- a separate sibling element doesn't have that bug and always
+       repaints immediately on the state change. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.auth-split-terms-box {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
     min-width: 20px;
     margin-top: 0.1rem;
     border: 2px solid #cbd5e1;
     border-radius: 6px;
     background: #fff;
-    cursor: pointer;
     position: relative;
+    flex-shrink: 0;
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.auth-split-terms input[type="checkbox"]:checked {
-    /* Checkmark as a background-image (not a ::after pseudo-element) so it
-       paints in the same step as the background-color change on click --
-       the ::after approach could lag a frame in some browsers, only
-       appearing once something else forced a repaint (e.g. blur). */
+.auth-split-terms-input:checked + .auth-split-terms-box {
     background-color: #059669;
     border-color: #059669;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3 8 6.5 12 13 4'/%3E%3C/svg%3E");
@@ -1088,7 +1105,7 @@ body.auth-split-page {
     background-size: 12px 12px;
 }
 
-.auth-split-terms input[type="checkbox"]:focus-visible {
+.auth-split-terms-input:focus-visible + .auth-split-terms-box {
     outline: 2px solid #059669;
     outline-offset: 2px;
 }
@@ -1455,12 +1472,12 @@ body.auth-split-page {
     color: #cbd5e1;
 }
 
-[data-theme="dark"] .auth-split-terms input[type="checkbox"] {
+[data-theme="dark"] .auth-split-terms-box {
     background: #1e293b;
     border-color: #475569;
 }
 
-[data-theme="dark"] .auth-split-terms input[type="checkbox"]:checked {
+[data-theme="dark"] .auth-split-terms-input:checked + .auth-split-terms-box {
     background-color: #059669;
     border-color: #059669;
 }
