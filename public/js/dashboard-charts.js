@@ -387,6 +387,10 @@
 
     // ---- Shared "click a pin to filter" facility map (Reports + Dashboard) ----
     const frsFacilityMapConfigs = {};
+    // Live map/marker instances, separate from frsFacilityMapConfigs above --
+    // used only for the "Live Facility Status" list sync (pan/zoom/select),
+    // not the existing chart-filter behavior.
+    const frsFacilityMapInstances = {};
 
     function frsEscapeHtml(str) {
         return String(str == null ? '' : str).replace(/[&<>"']/g, function (ch) {
@@ -437,6 +441,7 @@
             return;
         }
         frsFacilityMapConfigs[mapId] = config;
+        const markersById = {};
 
         // Barangay Culiat, Quezon City fallback center (used when no facility
         // has coordinates yet, so the card still renders instead of erroring).
@@ -469,10 +474,15 @@
             marker.bindPopup('<strong>' + frsEscapeHtml(p.name) + '</strong><br>' + STATUS_LABELS[statusKey]);
             marker.on('click', function () {
                 frsFacilityMapNavigate(config, p.id);
+                document.dispatchEvent(new CustomEvent('frs:facility-status-select', {
+                    detail: { id: p.id, source: 'map' },
+                }));
             });
             markerGroup.addLayer(marker);
+            markersById[p.id] = marker;
         });
         map.addLayer(markerGroup);
+        frsFacilityMapInstances[mapId] = { map: map, markersById: markersById };
 
         if (points.length > 0) {
             const bounds = L.latLngBounds(points.map(function (p) { return [p.lat, p.lng]; }));
@@ -484,6 +494,17 @@
         // swap) - nudge it once the surrounding layout has painted.
         setTimeout(function () { map.invalidateSize(); }, 150);
     }
+
+    document.addEventListener('frs:facility-status-select', function (e) {
+        if (!e.detail || e.detail.source === 'map') return;
+        Object.keys(frsFacilityMapInstances).forEach(function (mapId) {
+            const inst = frsFacilityMapInstances[mapId];
+            const marker = inst.markersById[e.detail.id];
+            if (!marker) return;
+            inst.map.setView(marker.getLatLng(), 17);
+            marker.openPopup();
+        });
+    });
 
     document.addEventListener('click', function (e) {
         const resetBtn = e.target.closest('[data-facility-map-reset]');

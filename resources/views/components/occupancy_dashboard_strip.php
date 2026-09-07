@@ -42,22 +42,7 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
         </div>
     </div>
 
-    <div class="occ-dash-carousel" data-occ-dash-carousel hidden>
-        <div class="occ-dash-stage-wrap">
-            <button type="button" class="occ-dash-nav occ-dash-nav--prev" data-occ-dash-prev aria-label="Previous facility">
-                <span aria-hidden="true">‹</span>
-            </button>
-            <div class="occ-dash-stage" data-occ-dash-stage aria-live="polite"></div>
-            <button type="button" class="occ-dash-nav occ-dash-nav--next" data-occ-dash-next aria-label="Next facility">
-                <span aria-hidden="true">›</span>
-            </button>
-            <div class="occ-dash-dots occ-dash-dots--overlay" data-occ-dash-dots role="tablist" aria-label="Choose facility"></div>
-        </div>
-    </div>
-
-    <div class="occ-dash-carousel-foot" data-occ-dash-foot hidden>
-        <span class="occ-dash-counter" data-occ-dash-counter></span>
-    </div>
+    <div class="occ-dash-list" data-occ-dash-list hidden aria-live="polite"></div>
 
     <p class="occ-dash-empty" data-occ-dash-empty <?= empty($occDashSnapshot['facilities']) ? '' : 'hidden'; ?>>No facilities to show yet.</p>
 </section>
@@ -136,154 +121,67 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
     font-size: 0.78rem;
 }
 
-/* Modern full-bleed slideshow */
-.occ-dash-carousel {
-    position: relative;
+/* All-facilities scrollable list (replaces the old auto-cycling hero slide) */
+.occ-dash-list {
+    height: 380px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-right: 0.25rem;
 }
-.occ-dash-stage-wrap {
-    position: relative;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
-    background: #0f172a;
-}
-.occ-dash-stage {
-    min-width: 0;
-}
-.occ-dash-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 3;
-    width: 42px;
-    height: 42px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(15, 23, 42, 0.42);
-    color: #fff;
-    font-size: 1.55rem;
-    line-height: 1;
+.occ-dash-row {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #eef2f7;
+    border-left: 3px solid transparent;
+    border-radius: 10px;
+    background: #fff;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(6px);
-    transition: background 0.15s, border-color 0.15s, transform 0.15s;
-}
-.occ-dash-nav:hover:not(:disabled) {
-    background: rgba(5, 150, 105, 0.85);
-    border-color: rgba(255, 255, 255, 0.45);
-}
-.occ-dash-nav:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-.occ-dash-nav--prev { left: 0.85rem; }
-.occ-dash-nav--next { right: 0.85rem; }
-
-.occ-dash-hero {
-    position: relative;
-    display: block;
+    text-align: left;
     width: 100%;
-    min-height: 280px;
-    height: clamp(260px, 36vw, 380px);
-    overflow: hidden;
+    font: inherit;
+    color: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
-.occ-dash-hero__media {
-    position: absolute;
-    inset: 0;
+.occ-dash-row:hover {
+    background: #f8fafc;
 }
-.occ-dash-hero__img {
-    width: 100%;
-    height: 100%;
+.occ-dash-row.is-selected {
+    background: #ecfdf5;
+    border-left-color: #059669;
+    border-color: #a7f3d0;
+}
+.occ-dash-row__img {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
     object-fit: cover;
-    display: block;
-    transform: scale(1.02);
+    background: #f1f5f9;
 }
-.occ-dash-hero__shade {
-    position: absolute;
-    inset: 0;
-    background:
-        linear-gradient(90deg, rgba(6, 95, 70, 0.82) 0%, rgba(6, 95, 70, 0.45) 42%, rgba(15, 23, 42, 0.18) 100%),
-        linear-gradient(180deg, transparent 40%, rgba(15, 23, 42, 0.55) 100%);
-    pointer-events: none;
-}
-.occ-dash-hero__content {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2;
-    padding: 1.35rem 4.25rem 2.4rem 1.5rem;
-    color: #fff;
+.occ-dash-row__body {
     min-width: 0;
 }
-.occ-dash-hero__eyebrow {
-    margin: 0 0 0.45rem;
-    font-size: 0.72rem;
+.occ-dash-row__name {
+    margin: 0;
+    font-size: 0.88rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.72);
+    color: #0f172a;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.occ-dash-hero__name {
-    margin: 0 0 0.65rem;
-    font-size: clamp(1.35rem, 2.4vw, 1.9rem);
-    font-weight: 800;
-    color: #fff;
-    line-height: 1.2;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-    max-width: 28rem;
-}
-.occ-dash-hero__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.55rem 1.25rem;
-    margin-top: 0.75rem;
-    font-size: 0.86rem;
-    color: rgba(255, 255, 255, 0.88);
-}
-.occ-dash-hero__meta strong {
-    color: #fff;
-    font-weight: 600;
-}
-.occ-dash-carousel-foot {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    margin-top: 0.55rem;
-}
-.occ-dash-counter {
-    font-size: 0.78rem;
+.occ-dash-row__meta {
+    margin: 0.15rem 0 0;
+    font-size: 0.76rem;
     color: #94a3b8;
     white-space: nowrap;
-}
-.occ-dash-dots--overlay {
-    position: absolute;
-    left: 50%;
-    bottom: 0.85rem;
-    transform: translateX(-50%);
-    z-index: 3;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    justify-content: center;
-    max-width: calc(100% - 6rem);
-}
-.occ-dash-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    border: 0;
-    padding: 0;
-    background: rgba(255, 255, 255, 0.4);
-    cursor: pointer;
-    transition: transform 0.15s, background 0.15s, width 0.15s;
-}
-.occ-dash-dot.is-active {
-    width: 22px;
-    background: #34d399;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .occ-dash-pill {
     display: inline-flex;
@@ -338,8 +236,7 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
     padding: 1rem 0;
 }
 .occ-dash-empty[hidden],
-.occ-dash-carousel[hidden],
-.occ-dash-carousel-foot[hidden] {
+.occ-dash-list[hidden] {
     display: none !important;
 }
 
@@ -509,22 +406,8 @@ $occDashStaffBoardUrl = base_path() . '/dashboard/occupancy-monitor';
         align-items: flex-start;
         width: 100%;
     }
-    .occ-dash-hero {
-        min-height: 220px;
-        height: 240px;
-    }
-    .occ-dash-hero__content {
-        padding: 1rem 3.25rem 2.2rem 1rem;
-    }
-    .occ-dash-nav {
-        width: 34px;
-        height: 34px;
-        font-size: 1.25rem;
-    }
-    .occ-dash-nav--prev { left: 0.5rem; }
-    .occ-dash-nav--next { right: 0.5rem; }
-    .occ-dash-carousel-foot {
-        justify-content: center;
+    .occ-dash-list {
+        height: 300px;
     }
 }
 </style>

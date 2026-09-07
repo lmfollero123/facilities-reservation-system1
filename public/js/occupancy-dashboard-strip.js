@@ -70,34 +70,21 @@
         return reservations[0] ? (reservations[0].time_slot || '') : '';
     }
 
-    function renderHeroCard(fac) {
-        const slot = activeSlotHint(fac);
-        const nextSlot = nextReservationHint(fac);
+    function renderListRow(fac, isSelected) {
+        const slot = activeSlotHint(fac) || nextReservationHint(fac);
         const img = fac.image_url || '';
         const name = escapeHtml(fac.facility_name || 'Facility');
-        const bookingCount = (fac.reservations_today || []).length;
+        const id = escapeHtml(String(fac.facility_id || ''));
 
         return (
-            '<article class="occ-dash-hero" data-facility-id="' + escapeHtml(String(fac.facility_id || '')) + '">' +
-                '<div class="occ-dash-hero__media">' +
-                    '<img src="' + escapeHtml(img) + '" alt="" loading="lazy" class="occ-dash-hero__img">' +
-                    '<div class="occ-dash-hero__shade" aria-hidden="true"></div>' +
+            '<button type="button" class="occ-dash-row' + (isSelected ? ' is-selected' : '') + '" data-occ-dash-row="' + id + '">' +
+                '<img src="' + escapeHtml(img) + '" alt="" class="occ-dash-row__img" loading="lazy">' +
+                '<div class="occ-dash-row__body">' +
+                    '<p class="occ-dash-row__name">' + name + '</p>' +
+                    '<p class="occ-dash-row__meta">' + (slot ? escapeHtml(slot) : 'No reservations today') + '</p>' +
                 '</div>' +
-                '<div class="occ-dash-hero__content">' +
-                    '<p class="occ-dash-hero__eyebrow">Live facility status</p>' +
-                    '<h3 class="occ-dash-hero__name">' + name + '</h3>' +
-                    statusBadgeHtml(fac) +
-                    '<div class="occ-dash-hero__meta">' +
-                        (nextSlot
-                            ? '<span><strong>Next / current:</strong> ' + escapeHtml(nextSlot) + '</span>'
-                            : '<span><strong>Schedule:</strong> No reservations today</span>') +
-                        (slot && slot !== nextSlot
-                            ? '<span><strong>Detail:</strong> ' + escapeHtml(slot) + '</span>'
-                            : '') +
-                        '<span><strong>Today:</strong> ' + bookingCount + ' booking' + (bookingCount === 1 ? '' : 's') + '</span>' +
-                    '</div>' +
-                '</div>' +
-            '</article>'
+                statusBadgeHtml(fac) +
+            '</button>'
         );
     }
 
@@ -141,21 +128,12 @@
         }
 
         let facilities = snapshot.facilities || [];
-        let currentIndex = 0;
+        let selectedId = null;
         let modalFilter = 'all';
         let modalQuery = '';
-        let autoTimer = null;
-        const AUTO_MS = 5500;
 
-        const carousel = root.querySelector('[data-occ-dash-carousel]');
-        const foot = root.querySelector('[data-occ-dash-foot]');
+        const listEl = root.querySelector('[data-occ-dash-list]');
         const emptyEl = root.querySelector('[data-occ-dash-empty]');
-        const stage = root.querySelector('[data-occ-dash-stage]');
-        const stageWrap = root.querySelector('.occ-dash-stage-wrap');
-        const counter = root.querySelector('[data-occ-dash-counter]');
-        const dots = root.querySelector('[data-occ-dash-dots]');
-        const prevBtn = root.querySelector('[data-occ-dash-prev]');
-        const nextBtn = root.querySelector('[data-occ-dash-next]');
         const busyEl = root.querySelector('[data-occ-dash-busy]');
         const totalEl = root.querySelector('[data-occ-dash-total]');
         const asofEl = root.querySelector('[data-occ-dash-asof]');
@@ -168,20 +146,10 @@
         const liveUrl = root.dataset.liveUrl || '';
         const REFRESH_MS = 45000;
 
-        function clampIndex() {
-            if (!facilities.length) {
-                currentIndex = 0;
-                return;
-            }
-            if (currentIndex >= facilities.length) currentIndex = 0;
-            if (currentIndex < 0) currentIndex = facilities.length - 1;
-        }
-
-        function findIndexById(id) {
-            const idx = facilities.findIndex(function (f) {
+        function findById(id) {
+            return facilities.find(function (f) {
                 return String(f.facility_id) === String(id);
-            });
-            return idx >= 0 ? idx : 0;
+            }) || null;
         }
 
         function updateSummary() {
@@ -191,50 +159,33 @@
             if (asofEl) asofEl.textContent = 'Updated ' + (snapshot.as_of || '');
         }
 
-        function renderDots() {
-            if (!dots) return;
-            dots.innerHTML = facilities.map(function (_fac, i) {
-                return '<button type="button" class="occ-dash-dot' + (i === currentIndex ? ' is-active' : '') +
-                    '" data-occ-dash-dot="' + i + '" aria-label="Facility ' + (i + 1) + '"></button>';
-            }).join('');
-        }
-
-        function stopAuto() {
-            if (autoTimer) {
-                clearInterval(autoTimer);
-                autoTimer = null;
+        function selectFacility(id, source) {
+            selectedId = id;
+            renderList();
+            if (source) {
+                document.dispatchEvent(new CustomEvent('frs:facility-status-select', {
+                    detail: { id: id, source: source },
+                }));
             }
         }
 
-        function startAuto() {
-            stopAuto();
-            if (facilities.length <= 1) return;
-            autoTimer = setInterval(function () {
-                goTo(currentIndex + 1);
-            }, AUTO_MS);
-        }
-
-        function renderCarousel() {
+        function renderList() {
             updateSummary();
             const hasFacilities = facilities.length > 0;
 
             if (emptyEl) emptyEl.hidden = hasFacilities;
-            if (carousel) carousel.hidden = !hasFacilities;
-            if (foot) foot.hidden = !hasFacilities;
+            if (listEl) listEl.hidden = !hasFacilities;
 
             if (!hasFacilities) {
-                if (stage) stage.innerHTML = '';
-                stopAuto();
+                if (listEl) listEl.innerHTML = '';
                 return;
             }
 
-            clampIndex();
-            const fac = facilities[currentIndex];
-            if (stage) stage.innerHTML = renderHeroCard(fac);
-            if (counter) counter.textContent = (currentIndex + 1) + ' / ' + facilities.length;
-            if (prevBtn) prevBtn.disabled = facilities.length <= 1;
-            if (nextBtn) nextBtn.disabled = facilities.length <= 1;
-            renderDots();
+            if (listEl) {
+                listEl.innerHTML = facilities.map(function (fac) {
+                    return renderListRow(fac, selectedId != null && String(fac.facility_id) === String(selectedId));
+                }).join('');
+            }
         }
 
         function renderModalList() {
@@ -249,7 +200,6 @@
 
         function openModal() {
             if (!modal) return;
-            stopAuto();
             if (modal.parentNode !== document.body) document.body.appendChild(modal);
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
@@ -263,28 +213,17 @@
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
-            startAuto();
         }
 
-        function goTo(index) {
-            if (!facilities.length) return;
-            currentIndex = ((index % facilities.length) + facilities.length) % facilities.length;
-            renderCarousel();
-        }
-
-        function applySnapshot(next, preserveId) {
+        function applySnapshot(next) {
             if (!next || typeof next !== 'object') return;
-            const prevId = preserveId && facilities[currentIndex]
-                ? facilities[currentIndex].facility_id
-                : null;
             snapshot = next;
             facilities = snapshot.facilities || [];
             root.dataset.snapshot = JSON.stringify(next);
-            if (prevId != null && facilities.length) {
-                currentIndex = findIndexById(prevId);
+            if (selectedId != null && !findById(selectedId)) {
+                selectedId = null;
             }
-            clampIndex();
-            renderCarousel();
+            renderList();
             if (modal && modal.classList.contains('is-open')) {
                 renderModalList();
             }
@@ -300,40 +239,27 @@
                 if (!resp.ok) return;
                 const data = await resp.json();
                 if (data.success && data.snapshot) {
-                    applySnapshot(data.snapshot, true);
+                    applySnapshot(data.snapshot);
                 }
             } catch (e) {
                 /* keep last good snapshot */
             }
         }
 
-        if (prevBtn) {
-            prevBtn.addEventListener('click', function () {
-                goTo(currentIndex - 1);
-                startAuto();
-            });
-        }
-        if (nextBtn) {
-            nextBtn.addEventListener('click', function () {
-                goTo(currentIndex + 1);
-                startAuto();
-            });
-        }
-        if (dots) {
-            dots.addEventListener('click', function (e) {
-                const btn = e.target.closest('[data-occ-dash-dot]');
-                if (!btn) return;
-                goTo(parseInt(btn.getAttribute('data-occ-dash-dot'), 10));
-                startAuto();
-            });
-        }
+        listEl?.addEventListener('click', function (e) {
+            const row = e.target.closest('[data-occ-dash-row]');
+            if (!row) return;
+            selectFacility(row.getAttribute('data-occ-dash-row'), 'strip');
+        });
 
-        if (stageWrap) {
-            stageWrap.addEventListener('mouseenter', stopAuto);
-            stageWrap.addEventListener('mouseleave', function () {
-                if (!modal || !modal.classList.contains('is-open')) startAuto();
-            });
-        }
+        document.addEventListener('frs:facility-status-select', function (e) {
+            if (!e.detail || e.detail.source === 'strip') return;
+            if (!findById(e.detail.id)) return;
+            selectedId = e.detail.id;
+            renderList();
+            const row = listEl?.querySelector('[data-occ-dash-row="' + CSS.escape(String(e.detail.id)) + '"]');
+            row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        });
 
         root.querySelector('[data-occ-dash-open-modal]')?.addEventListener('click', openModal);
         modal?.querySelectorAll('[data-occ-dash-close-modal]').forEach(function (el) {
@@ -355,8 +281,7 @@
         modalList?.addEventListener('click', function (e) {
             const row = e.target.closest('[data-occ-dash-pick]');
             if (!row) return;
-            currentIndex = findIndexById(row.getAttribute('data-occ-dash-pick'));
-            renderCarousel();
+            selectFacility(row.getAttribute('data-occ-dash-pick'), 'strip');
             closeModal();
         });
 
@@ -366,8 +291,7 @@
             }
         });
 
-        renderCarousel();
-        startAuto();
+        renderList();
         if (liveUrl) {
             setInterval(refresh, REFRESH_MS);
         }
