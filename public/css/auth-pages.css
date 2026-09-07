@@ -1060,44 +1060,51 @@ body.auth-split-page {
     cursor: pointer;
 }
 
+.auth-split-terms-control {
+    /* Tightly-sized positioning context for the real input below -- NOT the
+       whole (large, internally-scrollable) form panel. Keeping this wrapper
+       exactly the same size as the visible box means the real input's focus
+       target sits exactly where it visually appears, so there's nothing for
+       the browser to "scroll into view": no scroll-jump on click/focus, and
+       no giant 1px-clip hack that can render as a second visible checkbox if
+       the clip trick's required position:absolute is ever dropped. */
+    position: relative;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
 .auth-split-terms-input {
     /* Real checkbox stays functional (focusable, checked state, form
        submission) but visually hidden -- the label already forwards
        clicks anywhere in it (including on the text) to this input per
-       native browser behavior, so hiding it doesn't break click-to-toggle.
-       The checkmark is painted on the sibling .auth-split-terms-box below
+       native browser behavior, and this overlay covers the box directly
+       too. The checkmark is painted on the sibling .auth-split-terms-box
        instead of directly on this input: appearance:none inputs painting
        their own background-image on :checked have a known Chromium repaint
        lag (only appearing once something else forces a repaint, e.g. blur)
        -- a separate sibling element doesn't have that bug and always
-       repaints immediately on the state change.
-       Deliberately NOT position:absolute: this form panel is itself
-       position:relative and can scroll internally, and an absolutely
-       positioned focus target inside it made the browser scroll the
-       panel to "reveal" the (still tiny/clipped) focused element on
-       click, plus added a stray scrollbar. Standard sr-only technique
-       keeps the element in normal flow at ~0 visual size instead. */
-    width: 1px;
-    height: 1px;
+       repaints immediately on the state change. */
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
     padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+    opacity: 0;
+    cursor: pointer;
 }
 
 .auth-split-terms-box {
-    display: inline-block;
+    display: block;
     width: 20px;
     height: 20px;
-    min-width: 20px;
-    margin-top: 0.1rem;
     border: 2px solid #cbd5e1;
     border-radius: 6px;
     background: #fff;
-    position: relative;
-    flex-shrink: 0;
+    pointer-events: none;
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 

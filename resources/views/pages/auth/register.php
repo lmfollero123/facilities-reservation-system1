@@ -455,8 +455,10 @@ ob_start();
                     </div>
 
                     <label class="auth-split-terms">
-                        <input type="checkbox" name="accept_terms" required class="auth-split-terms-input">
-                        <span class="auth-split-terms-box" aria-hidden="true"></span>
+                        <span class="auth-split-terms-control">
+                            <input type="checkbox" name="accept_terms" required class="auth-split-terms-input">
+                            <span class="auth-split-terms-box" aria-hidden="true"></span>
+                        </span>
                         <span>I agree to the <a href="#" id="termsLink">Terms &amp; Conditions</a> and <a href="#" id="privacyLink">Data Privacy Policy</a> of Barangay Culiat CPRFS, including compliance with the Data Privacy Act of 2012 (RA 10173).</span>
                     </label>
                 </div>
