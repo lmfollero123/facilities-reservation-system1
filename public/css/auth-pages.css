@@ -1070,8 +1070,13 @@ body.auth-split-page {
        their own background-image on :checked have a known Chromium repaint
        lag (only appearing once something else forces a repaint, e.g. blur)
        -- a separate sibling element doesn't have that bug and always
-       repaints immediately on the state change. */
-    position: absolute;
+       repaints immediately on the state change.
+       Deliberately NOT position:absolute: this form panel is itself
+       position:relative and can scroll internally, and an absolutely
+       positioned focus target inside it made the browser scroll the
+       panel to "reveal" the (still tiny/clipped) focused element on
+       click, plus added a stray scrollbar. Standard sr-only technique
+       keeps the element in normal flow at ~0 visual size instead. */
     width: 1px;
     height: 1px;
     padding: 0;
