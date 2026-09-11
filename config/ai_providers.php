@@ -106,6 +106,96 @@ function frs_ai_provider_chain(): array
     return $chain;
 }
 
+/**
+ * Why each known provider is not in the chain, keyed by provider name.
+ * Only unusable providers appear. Diagnostics for the health check — this
+ * reports which setting is missing without revealing any key.
+ *
+ * @return array<string,string>
+ */
+function frs_ai_provider_skip_reasons(): array
+{
+    $reasons = [];
+
+    $requirements = [
+        'groq' => ['GROQ_API_KEY'],
+        'cerebras' => ['CEREBRAS_API_KEY'],
+        'mistral' => ['MISTRAL_API_KEY'],
+        'cloudflare' => ['CLOUDFLARE_AI_ACCOUNT_ID', 'CLOUDFLARE_AI_API_TOKEN'],
+        'openrouter' => ['OPENROUTER_API_KEY'],
+    ];
+
+    $configured = [];
+    foreach (frs_ai_provider_chain() as $provider) {
+        $configured[$provider['name']] = true;
+    }
+
+    $order = frs_ai_env('AI_PROVIDER_ORDER', 'groq,cerebras,mistral,cloudflare,openrouter');
+    $ordered = array_filter(array_map('trim', explode(',', $order)));
+
+    foreach ($requirements as $name => $vars) {
+        if (isset($configured[$name])) {
+            continue;
+        }
+        if (!in_array($name, $ordered, true)) {
+            $reasons[$name] = 'not listed in AI_PROVIDER_ORDER';
+            continue;
+        }
+        $missing = array_values(array_filter($vars, static fn (string $v) => frs_ai_env($v) === ''));
+        $reasons[$name] = $missing === []
+            ? 'unusable for an unknown reason'
+            : 'missing ' . implode(' and ', $missing);
+    }
+
+    return $reasons;
+}
+
+/**
+ * Model ids this provider will accept, via its OpenAI-compatible /models
+ * endpoint. Used by the health check when a configured model is rejected.
+ *
+ * @param array{url:string,key:string,headers:list<string>} $provider
+ * @return list<string>|null Null when the listing could not be fetched.
+ */
+function frs_ai_list_models(array $provider): ?array
+{
+    $url = str_replace('/chat/completions', '/models', $provider['url']);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => array_merge([
+            'Authorization: Bearer ' . $provider['key'],
+        ], $provider['headers']),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $raw = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $httpCode !== 200) {
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $rows = $data['data'] ?? $data['result'] ?? null;
+    if (!is_array($rows)) {
+        return null;
+    }
+
+    $ids = [];
+    foreach ($rows as $row) {
+        $id = is_array($row) ? ($row['id'] ?? $row['name'] ?? null) : null;
+        if (is_string($id) && $id !== '') {
+            $ids[] = $id;
+        }
+    }
+    sort($ids);
+
+    return $ids;
+}
+
 /** Path of the small JSON file tracking per-provider cooldowns. */
 function frs_ai_cooldown_file(): string
 {

@@ -5,8 +5,14 @@
  * Shows which providers are configured, then sends each a one-word prompt and
  * reports whether it answered. Use it after adding or rotating a key.
  *
- * Usage: php scripts/check_ai_providers.php [--no-call]
- *   --no-call   List the configured chain without spending any quota.
+ * Usage: php scripts/check_ai_providers.php [--no-call] [--list-models]
+ *   --no-call      List the configured chain without spending any quota.
+ *   --list-models  Also print the model ids each provider accepts, which is
+ *                  what you need when a model id is rejected as not found.
+ *
+ * Needs a PHP binary with curl. The cPanel CLI php has no curl extension, so
+ * on the live host run it through LiteSpeed's build instead:
+ *   /usr/local/lsws/lsphp82/bin/lsphp -q scripts/check_ai_providers.php
  *
  * API keys are never printed — only whether one is present.
  */
@@ -14,8 +20,9 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/ai_providers.php';
 
-$options = getopt('', ['no-call']);
+$options = getopt('', ['no-call', 'list-models']);
 $callProviders = !isset($options['no-call']);
+$listModels = isset($options['list-models']);
 
 $chain = frs_ai_provider_chain();
 
@@ -69,9 +76,31 @@ foreach ($chain as $index => $provider) {
     echo "     status    OK in {$ms}ms — replied \"{$answer}\"\n\n";
 }
 
+foreach (frs_ai_provider_skip_reasons() as $name => $reason) {
+    echo "-- {$name}: not configured — {$reason}\n";
+}
+
+if ($listModels) {
+    echo "\nModel ids each configured provider accepts:\n\n";
+    foreach ($chain as $provider) {
+        $models = frs_ai_list_models($provider);
+        if ($models === null) {
+            echo "  {$provider['name']}: could not fetch the model list\n";
+            continue;
+        }
+        echo "  {$provider['name']} (" . count($models) . "):\n";
+        foreach ($models as $model) {
+            $marker = $model === $provider['model'] ? ' <- configured' : '';
+            echo "    {$model}{$marker}\n";
+        }
+        echo "\n";
+    }
+}
+
 if (!$callProviders) {
     exit(0);
 }
+echo "\n";
 
 $working = count($chain) - $failures;
 echo "{$working} of " . count($chain) . " providers answered.\n";
