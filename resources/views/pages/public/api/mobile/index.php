@@ -1301,6 +1301,22 @@ if ($route === 'reservations' && $method === 'POST') {
     $eventDocumentName = trim((string) ($body['event_document_name'] ?? ''));
     $eventDocumentSize = (int) ($body['event_document_size'] ?? 0);
 
+    // These paths are echoed straight from the upload endpoints, but a client
+    // can send anything here. Only accept a path inside the document store and
+    // with no traversal, so a later download cannot be pointed at .env or
+    // another user's file.
+    $frsDocPathOk = static function (string $path): bool {
+        if ($path === '') {
+            return true; // optional field
+        }
+        return str_starts_with($path, 'storage/private/documents/')
+            && !str_contains($path, '..')
+            && !str_contains($path, "\0");
+    };
+    if (!$frsDocPathOk($referralIdDocumentPath) || !$frsDocPathOk($eventDocumentPath)) {
+        mobile_error('Invalid document reference.', 422, 'validation');
+    }
+
     require_once dirname(__DIR__, 6) . '/config/ai_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/reservation_helpers.php';
     require_once dirname(__DIR__, 6) . '/config/auto_approval.php';

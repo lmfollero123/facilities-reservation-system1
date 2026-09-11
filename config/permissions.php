@@ -73,6 +73,19 @@ function frs_can_delete(string $role, string $permissionKey): bool
 }
 
 /**
+ * True only for staff-level roles.
+ *
+ * Residents legitimately hold reservations update=true (to cancel or
+ * reschedule their OWN booking), so update permission cannot gate staff-only
+ * actions like approving or denying someone else's reservation. Those must
+ * check the role itself.
+ */
+function frs_is_staff(string $role): bool
+{
+    return in_array($role, ['Staff', 'Admin'], true);
+}
+
+/**
  * Load all permissions from database into cache
  */
 function frs_load_permissions(): void

@@ -6,7 +6,10 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/permissions.php';
 
 $role = $_SESSION['role'] ?? '';
-if (!($_SESSION['user_authenticated'] ?? false) || !frs_can_read($role, 'reservations')) {
+// Staff-only approvals queue. frs_can_read alone let residents in (they hold
+// reservations read=true for their own bookings), exposing every requester's
+// name, email and mobile plus working approve/deny controls.
+if (!($_SESSION['user_authenticated'] ?? false) || !frs_is_staff($role)) {
     header('Location: ' . base_path() . '/dashboard');
     exit;
 }

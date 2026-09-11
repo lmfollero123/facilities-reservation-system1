@@ -5,15 +5,16 @@
  */
 require_once __DIR__ . '/../../../../../config/app.php';
 require_once __DIR__ . '/../../../../../config/database.php';
+require_once __DIR__ . '/../../../../../config/sso_helper.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-$ssoSecret = env_value('SSO_SHARED_SECRET', '6724201881389f70d4d233dcd87caa15d507ebfd56f3fc73e0ad2b1c61e2d825');
+$ssoSecret = frs_sso_shared_secret();
 
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? (function_exists('apache_request_headers') ? (apache_request_headers()['Authorization'] ?? '') : '');
 $token = preg_match('/^Bearer\s+(.+)$/i', $authHeader, $m) ? $m[1] : '';
 
-if (!hash_equals($ssoSecret, $token)) {
+if ($ssoSecret === null || $token === '' || !hash_equals($ssoSecret, $token)) {
     http_response_code(403);
     echo json_encode(['error' => 'unauthorized']);
     exit;

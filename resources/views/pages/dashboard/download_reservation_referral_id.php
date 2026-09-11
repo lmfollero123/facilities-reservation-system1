@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/audit.php';
+require_once __DIR__ . '/../../../../config/secure_documents.php';
 
 if (!($_SESSION['user_authenticated'] ?? false)) {
     http_response_code(401);
@@ -50,7 +51,22 @@ if (!$isOwner && !$isStaffOrAdmin) {
     die('Forbidden.');
 }
 
-$filePath = app_root_path() . '/' . ltrim((string)$row['referral_id_document_path'], '/');
+// Containment: the stored path came from a client request, so resolve it and
+// confirm it stays inside the document store. Without this, a crafted
+// referral_id_document_path like ".env" or "../../../etc/passwd" would let the
+// reservation owner read any file the PHP process can reach.
+$allowedBase = realpath(app_root_path() . '/' . SECURE_DOCUMENT_STORAGE_PATH);
+$filePath = realpath(app_root_path() . '/' . ltrim((string)$row['referral_id_document_path'], '/'));
+if ($allowedBase === false || $filePath === false
+    || strncmp($filePath, $allowedBase . DIRECTORY_SEPARATOR, strlen($allowedBase) + 1) !== 0) {
+    http_response_code(404);
+    logSecurityEvent(
+        'reservation_referral_id_path_rejected',
+        "User #{$userId} referral ID for reservation #{$reservationId} resolved outside the document store",
+        'warning'
+    );
+    die('Document not found or has been moved.');
+}
 if (!is_file($filePath)) {
     http_response_code(404);
     die('Document not found or has been moved.');

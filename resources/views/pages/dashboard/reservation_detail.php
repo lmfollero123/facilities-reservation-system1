@@ -84,9 +84,13 @@ $messageType = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
     $message = 'Your session expired or the form is invalid. Please refresh and try again.';
     $messageType = 'error';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'record_violation' && !frs_is_staff($role)) {
+    http_response_code(403);
+    $message = 'You do not have permission to perform this action.';
+    $messageType = 'error';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'record_violation') {
     require_once __DIR__ . '/../../../../config/violations.php';
-    
+
     $violationUserId = (int)($_POST['violation_user_id'] ?? 0);
     $violationType = $_POST['violation_type'] ?? '';
     $severity = $_POST['severity'] ?? 'medium';
@@ -144,6 +148,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] !== 'record_violation') {
     $action = $_POST['action'];
     $allowed = ['approved', 'denied', 'cancelled', 'modify', 'postpone', 'extend'];
+
+    // Approving, denying, rescheduling or cancelling another user's booking is
+    // a staff action. Residents hold reservations update=true only to manage
+    // their own bookings (via My Reservations / the mobile app), so the role
+    // must be checked here — the permission flag alone lets a resident through.
+    if (!frs_is_staff($role)) {
+        http_response_code(403);
+        $message = 'You do not have permission to perform this action.';
+        $messageType = 'error';
+        $action = '';
+        $allowed = [];
+    }
 
     if (in_array($action, $allowed, true)) {
         try {
@@ -489,6 +505,13 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute(['id' => $reservationId]);
 $reservation = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// A resident may only view their OWN reservation here; staff may view any.
+// Without this, changing the id in the URL exposed any resident's booking
+// (requester name, email, role, purpose) to any logged-in user.
+if ($reservation && !frs_is_staff($role) && (int) $reservation['user_id'] !== (int) ($_SESSION['user_id'] ?? 0)) {
+    $reservation = false;
+}
 
 if (!$reservation) {
     header('Location: ' . base_path() . '/dashboard/reservations-manage');
