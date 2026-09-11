@@ -58,7 +58,7 @@ function frs_ai_provider_chain(): array
         'cerebras' => [
             'url' => 'https://api.cerebras.ai/v1/chat/completions',
             'key' => frs_ai_env('CEREBRAS_API_KEY'),
-            'model' => frs_ai_env('CEREBRAS_MODEL', 'llama-3.3-70b'),
+            'model' => frs_ai_env('CEREBRAS_MODEL', 'gpt-oss-120b'),
             'token_param' => 'max_tokens',
             'extra' => [],
             'headers' => [],
