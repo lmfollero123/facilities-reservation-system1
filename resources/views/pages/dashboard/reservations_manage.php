@@ -2431,7 +2431,7 @@ window.closeStaffRescheduleModal = closeStaffRescheduleModal;
     position: absolute;
     top: calc(100% + 0.35rem);
     right: 0;
-    z-index: 40;
+    z-index: 1150;
     min-width: 13.5rem;
     max-width: min(18rem, 80vw);
     padding: 0.4rem;
