@@ -9,6 +9,7 @@
  *   --no-call      List the configured chain without spending any quota.
  *   --list-models  Also print the model ids each provider accepts, which is
  *                  what you need when a model id is rejected as not found.
+ *   --reset        Clear all cooldowns first, so every provider is retried.
  *
  * Needs a PHP binary with curl. The cPanel CLI php has no curl extension, so
  * on the live host run it through LiteSpeed's build instead:
@@ -20,9 +21,16 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/ai_providers.php';
 
-$options = getopt('', ['no-call', 'list-models']);
+$options = getopt('', ['no-call', 'list-models', 'reset']);
 $callProviders = !isset($options['no-call']);
 $listModels = isset($options['list-models']);
+
+if (isset($options['reset'])) {
+    frs_ai_clear_cooldowns();
+    echo "Cleared all provider cooldowns.
+
+";
+}
 
 $chain = frs_ai_provider_chain();
 

@@ -267,6 +267,12 @@ function frs_ai_start_cooldown(string $provider, int $seconds): void
     @file_put_contents(frs_ai_cooldown_file(), json_encode($cooldowns), LOCK_EX);
 }
 
+/** Clear every cooldown, so the next call retries all providers. */
+function frs_ai_clear_cooldowns(): void
+{
+    @unlink(frs_ai_cooldown_file());
+}
+
 /**
  * Send a chat completion to one specific provider.
  *
@@ -309,7 +315,10 @@ function frs_ai_chat_single(
 
     if ($httpCode === 429) {
         frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_RATE_LIMITED);
-        error_log("AI provider {$provider['name']} rate limited.");
+        // Log the body too — a 429 on a brand new key usually means the
+        // account is not activated rather than that a quota ran out, and the
+        // two are only distinguishable from the provider's message.
+        error_log("AI provider {$provider['name']} rate limited: " . substr((string) $raw, 0, 400));
         return null;
     }
 
