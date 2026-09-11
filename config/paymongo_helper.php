@@ -679,7 +679,7 @@ function frs_finalize_reservation_payment(
             'booking',
             'Payment Confirmed',
             'Your payment was successful. Reservation #' . $reservationId . ' is now approved.',
-            base_path() . '/dashboard/book-facility?module=mine'
+            base_path() . '/dashboard/reservation-detail?id=' . $reservationId
         );
 
         $pdo->commit();

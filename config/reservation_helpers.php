@@ -360,7 +360,7 @@ function autoDeclineExpiredReservations(): int {
                                     ? 'has been automatically denied because it was not reviewed within the pending hold window. You can submit a new request or check the waitlist.'
                                     : 'has been automatically denied because the reservation time has passed without approval.')
                         ),
-                        base_url() . '/dashboard/my-reservations'
+                        base_url() . '/dashboard/reservation-detail?id=' . $expired['id']
                     );
                 }
                 
@@ -1192,7 +1192,7 @@ function frs_deny_competing_pending_reservations(
             'Your request for ' . $facilityName . ' on ' . date('F j, Y', strtotime($date)) . ' (' . $row['time_slot'] . ') '
                 . 'could not be approved because another request for an overlapping time was approved first. '
                 . "We've added you to the waitlist for this slot - you'll be notified if it opens up.",
-            base_path() . '/dashboard/book-facility?module=mine'
+            base_path() . '/dashboard/reservation-detail?id=' . $row['id']
         );
 
         if (!empty($row['requester_email']) && !empty($row['requester_name'])) {
@@ -1456,7 +1456,7 @@ function frs_staff_apply_status_decision(
         }
         $notifLink = $finalAction === 'pending_payment'
             ? (base_path() . '/dashboard/pay-now?reservation_id=' . $reservationId)
-            : (base_path() . '/dashboard/my-reservations');
+            : (base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
         createNotification($requesterId, 'booking', $notifTitle, $notifMessage, $notifLink);
 
         require_once __DIR__ . '/mail_helper.php';
@@ -1704,7 +1704,7 @@ function frs_staff_reschedule_postponed_priority(
         $notifMessage .= ' Reason: ' . $reason;
         $notifLink = $finalAction === 'pending_payment'
             ? (base_path() . '/dashboard/pay-now?reservation_id=' . $reservationId)
-            : (base_path() . '/dashboard/my-reservations');
+            : (base_path() . '/dashboard/reservation-detail?id=' . $reservationId);
         createNotification($requesterId, 'booking', $notifTitle, $notifMessage, $notifLink);
 
         require_once __DIR__ . '/mail_helper.php';

@@ -1491,13 +1491,14 @@ if ($route === 'reservations' && $method === 'POST') {
         require_once dirname(__DIR__, 6) . '/config/notifications.php';
         if (function_exists('createNotification')) {
             $fname = (string) ($facility['name'] ?? 'Facility');
+            $notifLink = base_path() . '/dashboard/reservation-detail?id=' . $newId;
             if ($initialStatus === 'pending_payment') {
                 createNotification(
                     $uid,
                     'booking',
                     'Payment required',
                     'Your hold for ' . $fname . ' is ready. Complete payment to secure the slot.',
-                    null
+                    $notifLink
                 );
             } elseif ($initialStatus === 'approved') {
                 createNotification(
@@ -1505,7 +1506,7 @@ if ($route === 'reservations' && $method === 'POST') {
                     'booking',
                     'Reservation approved',
                     'Your booking for ' . $fname . ' is confirmed.',
-                    null
+                    $notifLink
                 );
             } else {
                 createNotification(
@@ -1513,7 +1514,7 @@ if ($route === 'reservations' && $method === 'POST') {
                     'booking',
                     'Reservation submitted',
                     'Your request for ' . $fname . ' is pending staff review.',
-                    null
+                    $notifLink
                 );
             }
         }
@@ -1675,7 +1676,13 @@ if (preg_match('#^reservations/(\d+)/cancel$#', $route, $m) && $method === 'POST
             } elseif ($refundWarning !== '') {
                 $notifBody .= ' Automatic refund needs staff follow-up.';
             }
-            createNotification((int) $user['id'], 'booking', 'Reservation cancelled', $notifBody, null);
+            createNotification(
+                (int) $user['id'],
+                'booking',
+                'Reservation cancelled',
+                $notifBody,
+                base_path() . '/dashboard/reservation-detail?id=' . $id
+            );
         }
     }
 
@@ -1959,7 +1966,7 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
                 'booking',
                 'Reservation rescheduled',
                 $notifMsg,
-                null
+                base_path() . '/dashboard/reservation-detail?id=' . $id
             );
         }
     }
@@ -2135,26 +2142,33 @@ if ($route === 'notifications' && $method === 'GET') {
     $user = mobile_require_user($pdo);
     try {
         $stmt = $pdo->prepare(
-            'SELECT id, title, message, is_read, created_at FROM notifications
+            'SELECT id, title, message, type, link, is_read, created_at FROM notifications
              WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
         );
         $stmt->execute([(int) $user['id']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Throwable $e) {
         $stmt = $pdo->prepare(
-            'SELECT id, title, body AS message, is_read, created_at FROM notifications
+            'SELECT id, title, body AS message, type, link, is_read, created_at FROM notifications
              WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
         );
         $stmt->execute([(int) $user['id']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
     $items = array_map(static function ($r) {
+        $link = (string) ($r['link'] ?? '');
+        $reservationId = null;
+        if ($link !== '' && preg_match('/[?&](?:id|reservation_id)=(\d+)/', $link, $lm)) {
+            $reservationId = (int) $lm[1];
+        }
         return [
             'id' => (int) $r['id'],
             'title' => (string) ($r['title'] ?? 'Notification'),
             'message' => (string) ($r['message'] ?? ''),
+            'type' => (string) ($r['type'] ?? ''),
             'is_read' => (bool) ($r['is_read'] ?? false),
             'created_at' => $r['created_at'] ?? null,
+            'reservation_id' => $reservationId,
         ];
     }, $rows);
     mobile_json(['ok' => true, 'notifications' => $items]);
@@ -2166,6 +2180,17 @@ if (preg_match('#^notifications/(\d+)/read$#', $route, $m) && $method === 'POST'
     try {
         $pdo->prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?')
             ->execute([$id, (int) $user['id']]);
+    } catch (Throwable $e) {
+        // ignore
+    }
+    mobile_json(['ok' => true]);
+}
+
+if ($route === 'notifications/read-all' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    try {
+        $pdo->prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0')
+            ->execute([(int) $user['id']]);
     } catch (Throwable $e) {
         // ignore
     }
