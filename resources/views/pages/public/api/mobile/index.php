@@ -1983,56 +1983,6 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
     ]);
 }
 
-if (preg_match('#^reservations/(\d+)/pass$#', $route, $m) && $method === 'GET') {
-    $user = mobile_require_user($pdo);
-    $id = (int) $m[1];
-    require_once dirname(__DIR__, 6) . '/config/occupancy_monitoring.php';
-    $stmt = $pdo->prepare(
-        'SELECT r.*, f.name AS facility_name, f.location AS facility_location
-         FROM reservations r JOIN facilities f ON f.id = r.facility_id
-         WHERE r.id = ? AND r.user_id = ? LIMIT 1'
-    );
-    $stmt->execute([$id, (int) $user['id']]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row) {
-        mobile_error('Reservation not found.', 404, 'not_found');
-    }
-    if (($row['status'] ?? '') !== 'approved') {
-        mobile_error('QR pass is only available for approved reservations.', 400, 'not_approved');
-    }
-    $token = '';
-    if (function_exists('frs_ensure_checkin_token')) {
-        $token = (string) (frs_ensure_checkin_token($pdo, $id) ?? '');
-    }
-    if ($token === '' && !empty($row['attendance_checkin_token'])) {
-        $token = (string) $row['attendance_checkin_token'];
-    }
-    if ($token === '') {
-        $token = bin2hex(random_bytes(16));
-        try {
-            $pdo->prepare('UPDATE reservations SET attendance_checkin_token = ? WHERE id = ?')->execute([$token, $id]);
-        } catch (Throwable $e) {
-            // column may not exist
-        }
-    }
-    $payload = json_encode([
-        'type' => 'reservation_pass',
-        'reservation_id' => $id,
-        'token' => $token,
-        'user_id' => (int) $user['id'],
-    ], JSON_UNESCAPED_SLASHES);
-
-    mobile_json([
-        'ok' => true,
-        'pass' => [
-            'reservation' => mobile_serialize_reservation($row),
-            'qr_payload' => $payload,
-            'token' => $token,
-            'facility_location' => $row['facility_location'] ?? null,
-        ],
-    ]);
-}
-
 // ---------- CHECK-IN ----------
 if ($route === 'check-in/facility' && $method === 'POST') {
     $user = mobile_require_user($pdo);
@@ -2467,7 +2417,8 @@ if ($route === 'booking/policy' && $method === 'GET') {
                 'Rejected or cancelled reservations cannot be rescheduled; create a new booking instead.',
             ],
             'qr_checkin' => [
-                'QR facility pass is available only for approved reservations.',
+                'Scan the QR code posted at the facility to check in and out.',
+                'You can only check in once your booking is approved.',
                 'Bring a valid ID when checking in at the facility.',
                 'Follow barangay staff instructions on-site.',
             ],
