@@ -139,6 +139,70 @@ function frs_ai_start_cooldown(string $provider, int $seconds): void
 }
 
 /**
+ * Send a chat completion to one specific provider.
+ *
+ * A provider that rate-limits or errors is put in cooldown here, so callers
+ * that walk the chain do not have to repeat that bookkeeping.
+ *
+ * @param array{name:string,url:string,key:string,model:string,token_param:string,extra:array<string,mixed>,headers:list<string>} $provider
+ * @param list<array{role:string,content:string}> $messages
+ * @return string|null Reply text, or null when this provider did not answer.
+ */
+function frs_ai_chat_single(
+    array $provider,
+    array $messages,
+    int $maxTokens = 400,
+    float $temperature = 0.1
+): ?string {
+    $payload = [
+        'model' => $provider['model'],
+        'messages' => $messages,
+        'temperature' => $temperature,
+        $provider['token_param'] => $maxTokens,
+    ] + $provider['extra'];
+
+    $ch = curl_init($provider['url']);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => array_merge([
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $provider['key'],
+        ], $provider['headers']),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $raw = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode === 429) {
+        frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_RATE_LIMITED);
+        error_log("AI provider {$provider['name']} rate limited.");
+        return null;
+    }
+
+    if ($raw === false || $httpCode !== 200) {
+        frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_ERROR);
+        error_log("AI provider {$provider['name']} failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 400)));
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $text = $data['choices'][0]['message']['content'] ?? null;
+    if (is_string($text) && $text !== '') {
+        return $text;
+    }
+
+    // A 200 with no content usually means the completion budget was spent
+    // before any visible tokens were produced.
+    error_log("AI provider {$provider['name']} returned an empty completion.");
+    return null;
+}
+
+/**
  * Send a chat completion through the provider chain.
  *
  * @param list<array{role:string,content:string}> $messages
@@ -166,52 +230,11 @@ function frs_ai_chat_raw(
         }
         $attempted = true;
 
-        $payload = [
-            'model' => $provider['model'],
-            'messages' => $messages,
-            'temperature' => $temperature,
-            $provider['token_param'] => $maxTokens,
-        ] + $provider['extra'];
-
-        $ch = curl_init($provider['url']);
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_HTTPHEADER => array_merge([
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $provider['key'],
-            ], $provider['headers']),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
-        ]);
-        $raw = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
-
-        if ($httpCode === 429) {
-            frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_RATE_LIMITED);
-            error_log("AI provider {$provider['name']} rate limited; trying next.");
-            continue;
-        }
-
-        if ($raw === false || $httpCode !== 200) {
-            frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_ERROR);
-            error_log("AI provider {$provider['name']} failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
-            continue;
-        }
-
-        $data = json_decode((string) $raw, true);
-        $text = $data['choices'][0]['message']['content'] ?? null;
-        if (is_string($text) && $text !== '') {
+        $text = frs_ai_chat_single($provider, $messages, $maxTokens, $temperature);
+        if ($text !== null) {
             $usedProvider = $provider['name'];
             return $text;
         }
-
-        // A 200 with no content usually means the completion budget was spent
-        // before any visible tokens; another provider may still answer.
-        error_log("AI provider {$provider['name']} returned an empty completion; trying next.");
     }
 
     error_log($attempted
