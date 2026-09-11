@@ -20,6 +20,13 @@ const FRS_AI_COOLDOWN_RATE_LIMITED = 300;
 /** Cooldown after a provider errors or times out, in seconds. */
 const FRS_AI_COOLDOWN_ERROR = 60;
 
+/**
+ * Cooldown after a provider rejects the credentials or the account itself
+ * (401/402/403), in seconds. A revoked key or an unpaid balance will not clear
+ * on its own, so retrying every minute only adds latency to real requests.
+ */
+const FRS_AI_COOLDOWN_REJECTED = 3600;
+
 function frs_ai_env(string $key, string $default = ''): string
 {
     $value = function_exists('env_value')
@@ -307,8 +314,13 @@ function frs_ai_chat_single(
     }
 
     if ($raw === false || $httpCode !== 200) {
-        frs_ai_start_cooldown($provider['name'], FRS_AI_COOLDOWN_ERROR);
-        error_log("AI provider {$provider['name']} failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 400)));
+        $rejected = in_array($httpCode, [401, 402, 403], true);
+        frs_ai_start_cooldown(
+            $provider['name'],
+            $rejected ? FRS_AI_COOLDOWN_REJECTED : FRS_AI_COOLDOWN_ERROR
+        );
+        $note = $rejected ? ' (key or billing problem — backing off for an hour)' : '';
+        error_log("AI provider {$provider['name']} failed{$note}: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 400)));
         return null;
     }
 
