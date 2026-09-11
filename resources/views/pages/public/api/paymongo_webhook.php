@@ -92,6 +92,18 @@ try {
         // Prefer PayMongo payment resource id (pay_...) for refunds; keep event id only as fallback.
         $providerId = $paymongoPaymentId !== '' ? $paymongoPaymentId : $eventId;
 
+        // Idempotency: PayMongo delivers at-least-once. If this payment is
+        // already settled, a duplicate event must not re-approve, re-refund,
+        // or fire another notification — just backfill the provider id and stop.
+        if (in_array((string) ($payment['status'] ?? ''), ['paid', 'refunded'], true)) {
+            $pdo->prepare(
+                'UPDATE payments SET provider_event_id = COALESCE(NULLIF(provider_event_id, ""), :event_id) WHERE id = :id'
+            )->execute(['event_id' => $providerId, 'id' => $paymentId]);
+            $pdo->commit();
+            echo json_encode(['success' => true, 'message' => 'Already processed']);
+            exit;
+        }
+
         $updatePay = $pdo->prepare(
             'UPDATE payments
              SET status = :status,
@@ -117,24 +129,81 @@ try {
             'id' => $reservationId,
             'from_status' => 'pending_payment',
         ]);
+        $approvedNow = $updateReservation->rowCount() === 1;
 
         $hist = $pdo->prepare(
             'INSERT INTO reservation_history (reservation_id, status, note, created_by)
              VALUES (:reservation_id, :status, :note, NULL)'
         );
-        $hist->execute([
-            'reservation_id' => $reservationId,
-            'status' => 'approved',
-            'note' => 'Payment confirmed via PayMongo webhook (' . ($eventType ?: 'payment.paid') . ').',
-        ]);
 
-        createNotification(
-            $userId,
-            'booking',
-            'Payment Confirmed',
-            'Your payment was successful. Reservation #' . $reservationId . ' is now approved.',
-            base_path() . '/dashboard/book-facility?module=mine'
-        );
+        if ($approvedNow) {
+            $hist->execute([
+                'reservation_id' => $reservationId,
+                'status' => 'approved',
+                'note' => 'Payment confirmed via PayMongo webhook (' . ($eventType ?: 'payment.paid') . ').',
+            ]);
+            createNotification(
+                $userId,
+                'booking',
+                'Payment Confirmed',
+                'Your payment was successful. Reservation #' . $reservationId . ' is now approved.',
+                base_path() . '/dashboard/reservation-detail?id=' . $reservationId
+            );
+        } else {
+            // The reservation was no longer awaiting payment when the paid event
+            // landed. Find out why and act correctly rather than falsely telling
+            // the resident it was approved.
+            $curStmt = $pdo->prepare('SELECT status FROM reservations WHERE id = ? LIMIT 1');
+            $curStmt->execute([$reservationId]);
+            $curStatus = (string) ($curStmt->fetchColumn() ?: '');
+
+            if ($curStatus === 'approved') {
+                // Already approved (e.g. a manual payment-sync beat the webhook).
+                // Record the confirmation but do not send a duplicate notice.
+                $hist->execute([
+                    'reservation_id' => $reservationId,
+                    'status' => 'approved',
+                    'note' => 'Payment confirmed via PayMongo webhook; reservation was already approved.',
+                ]);
+            } else {
+                // Paid for a slot that is no longer held (auto-declined on
+                // expiry, or cancelled/denied by staff). Refund and tell the
+                // resident the truth — never claim approval.
+                require_once dirname(__DIR__, 5) . '/config/paymongo_helper.php';
+                $fullPayStmt = $pdo->prepare('SELECT * FROM payments WHERE id = ? LIMIT 1');
+                $fullPayStmt->execute([$paymentId]);
+                $fullPayRow = $fullPayStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+                $refund = frs_refund_payment_row(
+                    $pdo,
+                    $fullPayRow,
+                    'requested_by_customer',
+                    'Auto-refund: reservation was no longer available (status=' . $curStatus . ') when payment confirmed.'
+                );
+
+                $refunded = !empty($refund['refunded']);
+                $hist->execute([
+                    'reservation_id' => $reservationId,
+                    'status' => $curStatus !== '' ? $curStatus : 'cancelled',
+                    'note' => 'Payment received via PayMongo after the reservation was ' . ($curStatus ?: 'closed')
+                        . '. ' . ($refunded ? 'Automatically refunded.' : 'Automatic refund needs staff follow-up: ' . ($refund['message'] ?? '')),
+                ]);
+
+                createNotification(
+                    $userId,
+                    'booking',
+                    $refunded ? 'Payment refunded' : 'Payment received — refund pending',
+                    $refunded
+                        ? 'Your payment for reservation #' . $reservationId . ' was refunded because the slot was no longer available.'
+                        : 'We received your payment for reservation #' . $reservationId . ', but the slot was no longer available. Our staff will process your refund.',
+                    base_path() . '/dashboard/reservation-detail?id=' . $reservationId
+                );
+
+                if (!$refunded) {
+                    error_log('PayMongo webhook: refund needed but not completed for payment #' . $paymentId . ' reservation #' . $reservationId . ': ' . ($refund['message'] ?? ''));
+                }
+            }
+        }
     } elseif ($isFailed) {
         $updatePay = $pdo->prepare(
             'UPDATE payments
