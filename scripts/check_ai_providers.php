@@ -10,6 +10,9 @@
  *   --list-models  Also print the model ids each provider accepts, which is
  *                  what you need when a model id is rejected as not found.
  *   --reset        Clear all cooldowns first, so every provider is retried.
+ *   --only=NAME    Check just one provider.
+ *   --model=ID     Override the model id, to test whether a rejection is
+ *                  specific to the configured model.
  *
  * Needs a PHP binary with curl. The cPanel CLI php has no curl extension, so
  * on the live host run it through LiteSpeed's build instead:
@@ -21,9 +24,11 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/ai_providers.php';
 
-$options = getopt('', ['no-call', 'list-models', 'reset']);
+$options = getopt('', ['no-call', 'list-models', 'reset', 'only:', 'model:']);
 $callProviders = !isset($options['no-call']);
 $listModels = isset($options['list-models']);
+$onlyProvider = isset($options['only']) ? (string) $options['only'] : null;
+$modelOverride = isset($options['model']) ? (string) $options['model'] : null;
 
 if (isset($options['reset'])) {
     frs_ai_clear_cooldowns();
@@ -33,6 +38,19 @@ if (isset($options['reset'])) {
 }
 
 $chain = frs_ai_provider_chain();
+
+if ($onlyProvider !== null) {
+    $chain = array_values(array_filter(
+        $chain,
+        static fn (array $p) => $p['name'] === $onlyProvider
+    ));
+}
+if ($modelOverride !== null) {
+    $chain = array_map(
+        static fn (array $p) => ['model' => $modelOverride] + $p,
+        $chain
+    );
+}
 
 if ($chain === []) {
     echo "No providers configured.\n";
