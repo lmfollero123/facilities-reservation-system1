@@ -77,6 +77,7 @@ function sendPlainTextEmail(string $toEmail, string $subject, string $textBody):
         $mail->Password   = $config['password'] ?? '';
         $mail->SMTPSecure = $config['encryption'] ?? PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = $config['port'] ?? 587;
+        $mail->Timeout    = 10;
 
         $mail->setFrom($config['from_email'] ?? 'no-reply@example.com', $config['from_name'] ?? 'LGU Facilities');
         $mail->addAddress($toEmail);
@@ -108,6 +109,7 @@ function sendEmail(string $toEmail, string $toName, string $subject, string $htm
         $mail->Password   = $config['password'] ?? '';
         $mail->SMTPSecure = $config['encryption'] ?? PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = $config['port'] ?? 587;
+        $mail->Timeout    = 10;
 
         $mail->setFrom($config['from_email'] ?? 'no-reply@example.com', $config['from_name'] ?? 'LGU Facilities');
         $mail->addAddress($toEmail, $toName);
