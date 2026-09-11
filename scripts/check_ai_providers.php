@@ -29,14 +29,16 @@ $chain = frs_ai_provider_chain();
 if ($chain === []) {
     echo "No providers configured.\n";
     echo "Add at least one key (GROQ_API_KEY, CEREBRAS_API_KEY, MISTRAL_API_KEY,\n";
-    echo "CLOUDFLARE_AI_ACCOUNT_ID + CLOUDFLARE_AI_API_TOKEN, OPENROUTER_API_KEY).\n";
+    echo "CLOUDFLARE_AI_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, OPENROUTER_API_KEY).\n";
     exit(1);
 }
 
 echo 'Provider chain (' . count($chain) . " configured, tried in this order):\n\n";
 
 $cooldowns = frs_ai_cooldowns();
+$answered = 0;
 $failures = 0;
+$skipped = 0;
 
 foreach ($chain as $index => $provider) {
     $position = $index + 1;
@@ -47,6 +49,7 @@ foreach ($chain as $index => $provider) {
     if (isset($cooldowns[$provider['name']])) {
         $seconds = $cooldowns[$provider['name']] - time();
         echo "     status    in cooldown for {$seconds}s — requests skip it until then\n\n";
+        $skipped++;
         continue;
     }
 
@@ -74,6 +77,7 @@ foreach ($chain as $index => $provider) {
         $answer = mb_substr($answer, 0, 40) . '…';
     }
     echo "     status    OK in {$ms}ms — replied \"{$answer}\"\n\n";
+    $answered++;
 }
 
 foreach (frs_ai_provider_skip_reasons() as $name => $reason) {
@@ -102,12 +106,18 @@ if (!$callProviders) {
 }
 echo "\n";
 
-$working = count($chain) - $failures;
-echo "{$working} of " . count($chain) . " providers answered.\n";
+echo "{$answered} of " . count($chain) . ' providers answered';
+echo $skipped > 0
+    ? ", {$skipped} skipped while already in cooldown.\n"
+    : ".\n";
 
 if ($failures > 0) {
     echo "A failing provider is skipped at runtime, so the chain still works as\n";
     echo "long as one answers — but it is not adding any headroom.\n";
 }
 
-exit($working > 0 ? 0 : 1);
+if ($answered === 0 && $skipped > 0) {
+    echo "Nothing was called this run. Re-run once the cooldowns above expire.\n";
+}
+
+exit($answered > 0 ? 0 : 1);
