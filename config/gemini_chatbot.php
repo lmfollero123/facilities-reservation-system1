@@ -183,71 +183,28 @@ function frs_groq_api_key(): string
 }
 
 /**
- * Low-level Groq chat completion call, shared by every Groq-backed feature.
- * Returns the raw text content of the model's reply, or null if the API
- * key is missing, the request fails, or the response has no content.
- * gpt-oss-20b is a reasoning model - its internal reasoning tokens count
- * against max_completion_tokens too, so keep reasoning_effort low or a
- * hard task can burn the whole budget "thinking" and return empty content
- * (finish_reason: "length").
+ * Low-level chat completion call, shared by every OpenAI-compatible-backed
+ * feature. Groq is just the first provider in the chain now — see
+ * config/ai_providers.php — so a Groq rate limit falls through to the next
+ * free tier instead of failing the feature.
+ *
+ * Name kept for its existing callers.
  */
 function frs_groq_chat_raw(array $messages, int $maxCompletionTokens = 400, float $temperature = 0.1): ?string
 {
-    $apiKey = frs_groq_api_key();
-    if ($apiKey === '') {
-        return null;
-    }
-
-    $payload = [
-        'model' => 'openai/gpt-oss-20b',
-        'messages' => $messages,
-        'temperature' => $temperature,
-        'reasoning_effort' => 'low',
-        'max_completion_tokens' => $maxCompletionTokens,
-    ];
-
-    $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $apiKey,
-        ],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 15,
-    ]);
-    $raw = curl_exec($ch);
-    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
-
-    if ($raw === false || $httpCode !== 200) {
-        error_log("Groq chat call failed: HTTP {$httpCode}, " . ($curlErr ?: substr((string) $raw, 0, 200)));
-        return null;
-    }
-
-    $data = json_decode((string) $raw, true);
-    $text = $data['choices'][0]['message']['content'] ?? null;
-    return (is_string($text) && $text !== '') ? $text : null;
+    require_once __DIR__ . '/ai_providers.php';
+    return frs_ai_chat_raw($messages, $maxCompletionTokens, $temperature);
 }
 
 /**
- * Runs a Groq chat call and decodes the reply as JSON, stripping any
- * markdown code fences the model adds despite being told not to.
+ * Runs a chat call and decodes the reply as JSON, stripping any markdown code
+ * fences the model adds despite being told not to.
  * Returns null on any failure (network, empty reply, invalid JSON).
  */
 function frs_groq_chat_json(array $messages, int $maxCompletionTokens = 400, float $temperature = 0.1): ?array
 {
-    $text = frs_groq_chat_raw($messages, $maxCompletionTokens, $temperature);
-    if ($text === null) {
-        return null;
-    }
-
-    $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($text));
-    $json = json_decode((string) $text, true);
-    return is_array($json) ? $json : null;
+    require_once __DIR__ . '/ai_providers.php';
+    return frs_ai_chat_json($messages, $maxCompletionTokens, $temperature);
 }
 
 /**
@@ -326,6 +283,22 @@ function frs_check_purpose_gate(string $purpose): ?array
  * @return array{success: bool, reply: string, booking?: array}|null
  */
 function geminiChatbotResponse(string $systemPrompt, string $userMessage, array $conversationHistory = []): ?array {
+    $text = frs_gemini_generate_text($systemPrompt, $userMessage, $conversationHistory);
+
+    if ($text === null) {
+        // Gemini is unavailable (missing key, quota, timeout). Rather than fail
+        // the whole feature, retry through the OpenAI-compatible provider chain.
+        $text = frs_ai_chat_via_chain($systemPrompt, $userMessage, $conversationHistory);
+    }
+
+    return $text === null ? null : frs_ai_parse_chatbot_reply($text);
+}
+
+/**
+ * Gemini text generation. Returns the raw reply text, or null when every
+ * attempted model fails.
+ */
+function frs_gemini_generate_text(string $systemPrompt, string $userMessage, array $conversationHistory = []): ?string {
     $apiKey = frs_gemini_api_key();
     if ($apiKey === '') {
         return null;
@@ -416,9 +389,43 @@ function geminiChatbotResponse(string $systemPrompt, string $userMessage, array 
         return null;
     }
 
-    $text = trim($text);
+    return trim($text);
+}
 
-    // Check for booking prefill JSON block (Gemini may wrap in ```json ... ```)
+/**
+ * Run the same chatbot turn through the OpenAI-compatible provider chain.
+ * Gemini's history format is converted to chat messages; the system prompt
+ * becomes the system message.
+ */
+function frs_ai_chat_via_chain(string $systemPrompt, string $userMessage, array $conversationHistory = []): ?string
+{
+    require_once __DIR__ . '/ai_providers.php';
+
+    $messages = [['role' => 'system', 'content' => $systemPrompt]];
+    foreach ($conversationHistory as $msg) {
+        $text = $msg['parts'][0]['text'] ?? '';
+        if ($text === '') {
+            continue;
+        }
+        $messages[] = [
+            'role' => ($msg['role'] ?? '') === 'model' ? 'assistant' : 'user',
+            'content' => $text,
+        ];
+    }
+    $messages[] = ['role' => 'user', 'content' => $userMessage];
+
+    return frs_ai_chat_raw($messages, 2048, 0.7);
+}
+
+/**
+ * Turn raw model reply text into the chatbot response contract, pulling out a
+ * booking prefill block when the model emitted one.
+ *
+ * @return array{success: bool, reply: string, booking: array|null}
+ */
+function frs_ai_parse_chatbot_reply(string $text): array
+{
+    // Check for booking prefill JSON block (models may wrap in ```json ... ```)
     $booking = null;
     if (preg_match('/```(?:json)?\s*(\{[\s\S]*?"action"\s*:\s*"prefill_booking"[\s\S]*?\})\s*```/', $text, $m)) {
         $json = json_decode(trim($m[1]), true);
