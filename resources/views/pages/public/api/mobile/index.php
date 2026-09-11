@@ -1983,6 +1983,98 @@ if (preg_match('#^reservations/(\d+)/reschedule$#', $route, $m) && $method === '
     ]);
 }
 
+// Past check-ins for the signed-in resident, newest first. Filterable by
+// facility and by month so the app can offer both without extra endpoints.
+if ($route === 'check-in/history' && $method === 'GET') {
+    $user = mobile_require_user($pdo);
+
+    $facilityId = (int) ($_GET['facility_id'] ?? 0);
+    $month = trim((string) ($_GET['month'] ?? ''));
+
+    $sql = 'SELECT ra.time_in_at, ra.time_out_at, r.id AS reservation_id,
+                   r.reservation_date, r.time_slot, r.purpose, r.status,
+                   f.id AS facility_id, f.name AS facility_name
+            FROM reservation_attendance ra
+            JOIN reservations r ON r.id = ra.reservation_id
+            JOIN facilities f ON f.id = r.facility_id
+            WHERE ra.user_id = ? AND ra.time_in_at IS NOT NULL';
+    $params = [(int) $user['id']];
+
+    if ($facilityId > 0) {
+        $sql .= ' AND f.id = ?';
+        $params[] = $facilityId;
+    }
+    if ($month !== '' && preg_match('/^\d{4}-\d{2}$/', $month)) {
+        $sql .= ' AND DATE_FORMAT(ra.time_in_at, "%Y-%m") = ?';
+        $params[] = $month;
+    }
+
+    $sql .= ' ORDER BY ra.time_in_at DESC LIMIT 200';
+
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        // Attendance table missing on older installs — an empty history is
+        // more useful here than a 500.
+        error_log('Mobile check-in history: ' . $e->getMessage());
+        $rows = [];
+    }
+
+    $items = array_map(static function (array $row): array {
+        $in = $row['time_in_at'] ?? null;
+        $out = $row['time_out_at'] ?? null;
+        $minutes = null;
+        if ($in !== null && $out !== null) {
+            $minutes = (int) round((strtotime((string) $out) - strtotime((string) $in)) / 60);
+            if ($minutes < 0) {
+                $minutes = null;
+            }
+        }
+
+        return [
+            'reservation_id' => (int) $row['reservation_id'],
+            'facility_id' => (int) $row['facility_id'],
+            'facility_name' => (string) $row['facility_name'],
+            'reservation_date' => $row['reservation_date'],
+            'time_slot' => $row['time_slot'],
+            'purpose' => $row['purpose'],
+            'checked_in_at' => $in,
+            'checked_out_at' => $out,
+            'duration_minutes' => $minutes,
+        ];
+    }, $rows);
+
+    // Facilities the resident has ever checked into, so the app can build its
+    // filter from real options instead of every facility in the barangay.
+    // Deliberately unfiltered — otherwise selecting a facility would collapse
+    // the filter to that one option and there would be no way back.
+    $facilityOptions = [];
+    try {
+        $optionsStmt = $pdo->prepare(
+            'SELECT DISTINCT f.id, f.name
+             FROM reservation_attendance ra
+             JOIN reservations r ON r.id = ra.reservation_id
+             JOIN facilities f ON f.id = r.facility_id
+             WHERE ra.user_id = ? AND ra.time_in_at IS NOT NULL
+             ORDER BY f.name'
+        );
+        $optionsStmt->execute([(int) $user['id']]);
+        foreach ($optionsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $facilityOptions[] = ['id' => (int) $row['id'], 'name' => (string) $row['name']];
+        }
+    } catch (Throwable $e) {
+        error_log('Mobile check-in history facilities: ' . $e->getMessage());
+    }
+
+    mobile_json([
+        'ok' => true,
+        'records' => $items,
+        'facilities' => $facilityOptions,
+    ]);
+}
+
 // ---------- CHECK-IN ----------
 if ($route === 'check-in/facility' && $method === 'POST') {
     $user = mobile_require_user($pdo);
