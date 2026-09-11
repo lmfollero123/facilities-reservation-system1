@@ -31,6 +31,133 @@ $DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 /** Validate an "HH:MM" 24h time. */
 $validTime = static fn (string $t): bool => (bool) preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t);
 
+/**
+ * Render the weekly-rota card body for one staffer. Returned as a string so it
+ * can be embedded on first load AND sent back over AJAX after an add/delete.
+ */
+function frs_render_staff_rota(PDO $pdo, int $staffId, bool $isAdmin, array $DAYS): string
+{
+    $shiftsByDay = array_fill(0, 7, []);
+    $sh = $pdo->prepare('SELECT id, day_of_week, start_time, end_time FROM staff_shifts WHERE staff_id = ? ORDER BY day_of_week, start_time');
+    $sh->execute([$staffId]);
+    foreach ($sh->fetchAll(PDO::FETCH_ASSOC) as $s) {
+        $shiftsByDay[(int) $s['day_of_week']][] = $s;
+    }
+    $hasAny = false;
+    foreach ($shiftsByDay as $d) {
+        if ($d) { $hasAny = true; break; }
+    }
+
+    ob_start(); ?>
+    <h2 style="margin-top:0;">Weekly rota<?= $isAdmin ? '' : ' (your shifts)'; ?></h2>
+    <?php if (!$hasAny): ?>
+        <p style="color:#6b7280;">No rota defined<?= $isAdmin ? '' : ' — you are treated as always available'; ?>.
+        <?= $isAdmin ? 'This staffer is treated as always available until you add shifts below.' : ''; ?></p>
+    <?php endif; ?>
+    <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+        <tbody>
+        <?php foreach ($DAYS as $dow => $dayName): ?>
+            <tr style="border-top:1px solid #f3f4f6;">
+                <td style="padding:0.5rem;font-weight:600;width:110px;vertical-align:top;"><?= $dayName; ?></td>
+                <td style="padding:0.5rem;">
+                    <?php if ($shiftsByDay[$dow]): ?>
+                        <?php foreach ($shiftsByDay[$dow] as $s): ?>
+                            <span style="display:inline-flex;align-items:center;gap:0.3rem;background:#eef2ff;border-radius:8px;padding:0.2rem 0.5rem;margin:0 0.3rem 0.3rem 0;">
+                                <?= htmlspecialchars(substr((string) $s['start_time'], 0, 5)); ?>–<?= htmlspecialchars(substr((string) $s['end_time'], 0, 5)); ?>
+                                <?php if ($isAdmin): ?>
+                                    <form method="POST" class="js-shift-form" style="display:inline;" onsubmit="return confirm('Remove this shift?');">
+                                        <?= csrf_field(); ?>
+                                        <input type="hidden" name="action" value="delete_shift">
+                                        <input type="hidden" name="shift_id" value="<?= (int) $s['id']; ?>">
+                                        <input type="hidden" name="staff_id" value="<?= $staffId; ?>">
+                                        <button type="submit" title="Remove" style="border:none;background:none;color:#b91c1c;cursor:pointer;font-weight:700;">×</button>
+                                    </form>
+                                <?php endif; ?>
+                            </span>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <span style="color:#9ca3af;">Off</span>
+                    <?php endif; ?>
+                    <?php if ($isAdmin): ?>
+                        <form method="POST" class="js-shift-form" style="display:inline-flex;gap:0.3rem;margin-left:0.5rem;">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="action" value="add_shift">
+                            <input type="hidden" name="staff_id" value="<?= $staffId; ?>">
+                            <input type="hidden" name="day_of_week" value="<?= $dow; ?>">
+                            <input type="time" name="start_time" required style="padding:0.2rem;">
+                            <input type="time" name="end_time" required style="padding:0.2rem;">
+                            <button type="submit" class="btn-outline" style="padding:0.2rem 0.6rem;">+ Add</button>
+                        </form>
+                    <?php endif; ?>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php
+    return (string) ob_get_clean();
+}
+
+/**
+ * Render the date-exceptions card body for one staffer (AJAX-swappable).
+ */
+function frs_render_staff_exceptions(PDO $pdo, int $staffId, bool $isAdmin): string
+{
+    $exc = $pdo->prepare('SELECT * FROM staff_shift_exceptions WHERE staff_id = ? AND exception_date >= CURDATE() ORDER BY exception_date');
+    $exc->execute([$staffId]);
+    $exceptions = $exc->fetchAll(PDO::FETCH_ASSOC);
+
+    ob_start(); ?>
+    <h2 style="margin-top:0;">Date exceptions (leave / cover)</h2>
+    <?php if ($exceptions): ?>
+        <ul style="list-style:none;padding:0;margin:0 0 1rem 0;">
+            <?php foreach ($exceptions as $ex): ?>
+                <li style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid #f3f4f6;">
+                    <span>
+                        <strong><?= htmlspecialchars(date('D, M j, Y', strtotime((string) $ex['exception_date']))); ?></strong>
+                        — <?= $ex['type'] === 'off' ? 'Off' : ('Custom ' . htmlspecialchars(substr((string) $ex['start_time'], 0, 5)) . '–' . htmlspecialchars(substr((string) $ex['end_time'], 0, 5))); ?>
+                        <?php if (!empty($ex['note'])): ?><em style="color:#6b7280;">(<?= htmlspecialchars($ex['note']); ?>)</em><?php endif; ?>
+                    </span>
+                    <?php if ($isAdmin): ?>
+                        <form method="POST" class="js-shift-form" onsubmit="return confirm('Remove this exception?');">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="action" value="delete_exception">
+                            <input type="hidden" name="exception_id" value="<?= (int) $ex['id']; ?>">
+                            <input type="hidden" name="staff_id" value="<?= $staffId; ?>">
+                            <button type="submit" style="border:none;background:none;color:#b91c1c;cursor:pointer;">Remove</button>
+                        </form>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php else: ?>
+        <p style="color:#6b7280;">No upcoming exceptions.</p>
+    <?php endif; ?>
+
+    <?php if ($isAdmin): ?>
+        <form method="POST" class="js-shift-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+            <?= csrf_field(); ?>
+            <input type="hidden" name="action" value="set_exception">
+            <input type="hidden" name="staff_id" value="<?= $staffId; ?>">
+            <label>Date<br><input type="date" name="exception_date" required style="padding:0.3rem;"></label>
+            <label>Type<br>
+                <select name="type" style="padding:0.35rem;">
+                    <option value="off">Off (whole day)</option>
+                    <option value="custom">Custom hours</option>
+                </select>
+            </label>
+            <label>From<br><input type="time" name="start_time" style="padding:0.3rem;"></label>
+            <label>To<br><input type="time" name="end_time" style="padding:0.3rem;"></label>
+            <label style="flex:1;min-width:160px;">Note<br><input type="text" name="note" placeholder="e.g. sick leave" style="padding:0.3rem;width:100%;"></label>
+            <button type="submit" class="btn-primary" style="padding:0.4rem 0.9rem;">Save exception</button>
+        </form>
+    <?php endif; ?>
+    <?php
+    return (string) ob_get_clean();
+}
+
+$isAjax = ($_SERVER['REQUEST_METHOD'] === 'POST') && (($_POST['ajax'] ?? '') === '1');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
         $flash = 'Invalid security token. Please refresh and try again.';
@@ -90,7 +217,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE staff_shift_requests SET status=?, decided_by=?, decided_at=NOW() WHERE id=?')
                     ->execute([$decision, $myId, $reqId]);
                 if ($decision === 'approved') {
-                    // Approving a request materialises it as a date exception.
                     $pdo->prepare(
                         'INSERT INTO staff_shift_exceptions (staff_id, exception_date, type, start_time, end_time, note)
                          VALUES (?,?,?,?,?,?)
@@ -136,7 +262,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flash = 'Facilitator assigned.';
             }
         } elseif ($action === 'submit_request') {
-            // Staff (and admins) can request a change to their OWN availability.
             $date = (string) ($_POST['request_date'] ?? '');
             $type = ($_POST['type'] ?? 'off') === 'custom' ? 'custom' : 'off';
             $start = (string) ($_POST['start_time'] ?? '');
@@ -151,7 +276,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO staff_shift_requests (staff_id, request_date, type, start_time, end_time, reason)
                      VALUES (?,?,?,?,?,?)'
                 )->execute([$myId, $date, $type, $type === 'custom' ? $start : null, $type === 'custom' ? $end : null, $reason]);
-                // Notify admins there is something to review.
                 foreach ($pdo->query("SELECT id FROM users WHERE role='Admin' AND status='active'")->fetchAll(PDO::FETCH_COLUMN) as $adminId) {
                     createNotification(
                         (int) $adminId, 'system', 'New shift request',
@@ -163,8 +287,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+
+    // AJAX: return JSON with the freshly-rendered rota + exceptions so the
+    // client can swap them in place instead of reloading the whole page.
+    if ($isAjax) {
+        $sid = $isAdmin ? (int) ($_POST['staff_id'] ?? $myId) : $myId;
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode([
+            'ok' => $flashType !== 'error',
+            'message' => $flash,
+            'rota' => frs_render_staff_rota($pdo, $sid, $isAdmin, $DAYS),
+            'exceptions' => frs_render_staff_exceptions($pdo, $sid, $isAdmin),
+        ]);
+        exit;
+    }
+
     if ($flashType === 'success' && $flash !== '') {
-        // PRG so a refresh doesn't resubmit.
+        // PRG so a non-AJAX refresh doesn't resubmit.
         $_SESSION['staff_sched_flash'] = $flash;
         header('Location: ' . base_path() . '/dashboard/staff-scheduling'
             . (isset($_POST['staff_id']) && $isAdmin ? '?staff=' . (int) $_POST['staff_id'] : ''));
@@ -183,17 +322,6 @@ $staffList = $pdo->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 
 $selectedStaffId = $isAdmin ? (int) ($_GET['staff'] ?? ($staffList[0]['id'] ?? 0)) : $myId;
-
-$shiftsByDay = array_fill(0, 7, []);
-$sh = $pdo->prepare('SELECT id, day_of_week, start_time, end_time FROM staff_shifts WHERE staff_id = ? ORDER BY day_of_week, start_time');
-$sh->execute([$selectedStaffId]);
-foreach ($sh->fetchAll(PDO::FETCH_ASSOC) as $s) {
-    $shiftsByDay[(int) $s['day_of_week']][] = $s;
-}
-
-$exc = $pdo->prepare('SELECT * FROM staff_shift_exceptions WHERE staff_id = ? AND exception_date >= CURDATE() ORDER BY exception_date');
-$exc->execute([$selectedStaffId]);
-$exceptions = $exc->fetchAll(PDO::FETCH_ASSOC);
 
 $myAssignments = [];
 $assignStmt = $pdo->prepare(
@@ -230,6 +358,8 @@ ob_start();
         <div class="breadcrumb"><span>Reservations &amp; Facilities</span><span class="sep">/</span><span>Staff Scheduling</span></div>
         <?= frs_page_title('Staff Scheduling', 'Set who is on duty so approved reservations are auto-assigned only to available facilitators.'); ?>
     </div>
+
+    <div id="staff-sched-toast" role="status" style="display:none;padding:0.7rem 1rem;border-radius:12px;margin-bottom:1rem;"></div>
 
     <?php if ($flash): ?>
         <div class="message" style="padding:0.85rem 1rem;border-radius:12px;margin-bottom:1rem;border:1px solid <?= $flashType === 'error' ? '#fecaca' : '#bbf7d0'; ?>;<?= $flashType === 'error' ? 'background:#fef2f2;color:#b91c1c;' : 'background:#ecfdf5;color:#047857;'; ?>">
@@ -291,103 +421,12 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <div class="booking-card" style="margin-bottom:1.25rem;">
-        <h2 style="margin-top:0;">Weekly rota<?= $isAdmin ? '' : ' (your shifts)'; ?></h2>
-        <?php
-        $hasAnyShift = false;
-        foreach ($shiftsByDay as $d) { if ($d) { $hasAnyShift = true; break; } }
-        ?>
-        <?php if (!$hasAnyShift): ?>
-            <p style="color:#6b7280;">No rota defined<?= $isAdmin ? '' : ' — you are treated as always available'; ?>.
-            <?= $isAdmin ? 'This staffer is treated as always available until you add shifts below.' : ''; ?></p>
-        <?php endif; ?>
-        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
-            <tbody>
-            <?php foreach ($DAYS as $dow => $dayName): ?>
-                <tr style="border-top:1px solid #f3f4f6;">
-                    <td style="padding:0.5rem;font-weight:600;width:110px;vertical-align:top;"><?= $dayName; ?></td>
-                    <td style="padding:0.5rem;">
-                        <?php if ($shiftsByDay[$dow]): ?>
-                            <?php foreach ($shiftsByDay[$dow] as $s): ?>
-                                <span style="display:inline-flex;align-items:center;gap:0.3rem;background:#eef2ff;border-radius:8px;padding:0.2rem 0.5rem;margin:0 0.3rem 0.3rem 0;">
-                                    <?= htmlspecialchars(substr((string) $s['start_time'], 0, 5)); ?>–<?= htmlspecialchars(substr((string) $s['end_time'], 0, 5)); ?>
-                                    <?php if ($isAdmin): ?>
-                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Remove this shift?');">
-                                            <?= csrf_field(); ?>
-                                            <input type="hidden" name="action" value="delete_shift">
-                                            <input type="hidden" name="shift_id" value="<?= (int) $s['id']; ?>">
-                                            <input type="hidden" name="staff_id" value="<?= $selectedStaffId; ?>">
-                                            <button type="submit" title="Remove" style="border:none;background:none;color:#b91c1c;cursor:pointer;font-weight:700;">×</button>
-                                        </form>
-                                    <?php endif; ?>
-                                </span>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <span style="color:#9ca3af;">Off</span>
-                        <?php endif; ?>
-                        <?php if ($isAdmin): ?>
-                            <form method="POST" style="display:inline-flex;gap:0.3rem;margin-left:0.5rem;">
-                                <?= csrf_field(); ?>
-                                <input type="hidden" name="action" value="add_shift">
-                                <input type="hidden" name="staff_id" value="<?= $selectedStaffId; ?>">
-                                <input type="hidden" name="day_of_week" value="<?= $dow; ?>">
-                                <input type="time" name="start_time" required style="padding:0.2rem;">
-                                <input type="time" name="end_time" required style="padding:0.2rem;">
-                                <button type="submit" class="btn-outline" style="padding:0.2rem 0.6rem;">+ Add</button>
-                            </form>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
+    <div class="booking-card" style="margin-bottom:1.25rem;" id="staff-rota-region">
+        <?= frs_render_staff_rota($pdo, $selectedStaffId, $isAdmin, $DAYS); ?>
     </div>
 
-    <div class="booking-card" style="margin-bottom:1.25rem;">
-        <h2 style="margin-top:0;">Date exceptions (leave / cover)</h2>
-        <?php if ($exceptions): ?>
-            <ul style="list-style:none;padding:0;margin:0 0 1rem 0;">
-                <?php foreach ($exceptions as $ex): ?>
-                    <li style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid #f3f4f6;">
-                        <span>
-                            <strong><?= htmlspecialchars(date('D, M j, Y', strtotime((string) $ex['exception_date']))); ?></strong>
-                            — <?= $ex['type'] === 'off' ? 'Off' : ('Custom ' . htmlspecialchars(substr((string) $ex['start_time'], 0, 5)) . '–' . htmlspecialchars(substr((string) $ex['end_time'], 0, 5))); ?>
-                            <?php if (!empty($ex['note'])): ?><em style="color:#6b7280;">(<?= htmlspecialchars($ex['note']); ?>)</em><?php endif; ?>
-                        </span>
-                        <?php if ($isAdmin): ?>
-                            <form method="POST" onsubmit="return confirm('Remove this exception?');">
-                                <?= csrf_field(); ?>
-                                <input type="hidden" name="action" value="delete_exception">
-                                <input type="hidden" name="exception_id" value="<?= (int) $ex['id']; ?>">
-                                <input type="hidden" name="staff_id" value="<?= $selectedStaffId; ?>">
-                                <button type="submit" style="border:none;background:none;color:#b91c1c;cursor:pointer;">Remove</button>
-                            </form>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php else: ?>
-            <p style="color:#6b7280;">No upcoming exceptions.</p>
-        <?php endif; ?>
-
-        <?php if ($isAdmin): ?>
-            <form method="POST" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
-                <?= csrf_field(); ?>
-                <input type="hidden" name="action" value="set_exception">
-                <input type="hidden" name="staff_id" value="<?= $selectedStaffId; ?>">
-                <label>Date<br><input type="date" name="exception_date" required style="padding:0.3rem;"></label>
-                <label>Type<br>
-                    <select name="type" style="padding:0.35rem;">
-                        <option value="off">Off (whole day)</option>
-                        <option value="custom">Custom hours</option>
-                    </select>
-                </label>
-                <label>From<br><input type="time" name="start_time" style="padding:0.3rem;"></label>
-                <label>To<br><input type="time" name="end_time" style="padding:0.3rem;"></label>
-                <label style="flex:1;min-width:160px;">Note<br><input type="text" name="note" placeholder="e.g. sick leave" style="padding:0.3rem;width:100%;"></label>
-                <button type="submit" class="btn-primary" style="padding:0.4rem 0.9rem;">Save exception</button>
-            </form>
-        <?php endif; ?>
+    <div class="booking-card" style="margin-bottom:1.25rem;" id="staff-exceptions-region">
+        <?= frs_render_staff_exceptions($pdo, $selectedStaffId, $isAdmin); ?>
     </div>
 
     <?php if (!$isAdmin || $selectedStaffId === $myId): ?>
@@ -455,6 +494,55 @@ ob_start();
         <?php endif; ?>
     </div>
 </div>
+<script>
+(function () {
+    var rotaRegion = document.getElementById('staff-rota-region');
+    var excRegion = document.getElementById('staff-exceptions-region');
+    var toast = document.getElementById('staff-sched-toast');
+    if (!rotaRegion || !excRegion) return;
+
+    function showToast(msg, ok) {
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        toast.style.border = '1px solid ' + (ok ? '#bbf7d0' : '#fecaca');
+        toast.style.background = ok ? '#ecfdf5' : '#fef2f2';
+        toast.style.color = ok ? '#047857' : '#b91c1c';
+        clearTimeout(showToast._t);
+        if (ok) showToast._t = setTimeout(function () { toast.style.display = 'none'; }, 2500);
+    }
+
+    // Rota add/delete and exception add/delete post via fetch and swap the two
+    // regions in place — no full page reload while building a week's rota.
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.classList.contains('js-shift-form')) return;
+        // Respect the confirm() dialogs on delete forms.
+        e.preventDefault();
+        var body = new FormData(form);
+        body.append('ajax', '1');
+        var submitBtn = form.querySelector('button[type=submit]');
+        if (submitBtn) submitBtn.disabled = true;
+
+        fetch(window.location.pathname + window.location.search, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+            body: body
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (typeof data.rota === 'string') rotaRegion.innerHTML = data.rota;
+            if (typeof data.exceptions === 'string') excRegion.innerHTML = data.exceptions;
+            showToast(data.message || (data.ok ? 'Saved.' : 'Could not save.'), !!data.ok);
+        })
+        .catch(function () {
+            showToast('Network error — please try again.', false);
+            if (submitBtn) submitBtn.disabled = false;
+        });
+    });
+})();
+</script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../layouts/dashboard_layout.php';
