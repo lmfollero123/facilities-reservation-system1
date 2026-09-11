@@ -92,7 +92,11 @@ function frs_ai_provider_chain(): array
         'mistral' => [
             'url' => 'https://api.mistral.ai/v1/chat/completions',
             'key' => frs_ai_env('MISTRAL_API_KEY'),
-            'model' => frs_ai_env('MISTRAL_MODEL', 'mistral-small-latest'),
+            // The mistral-small and mistral-medium families are capped at
+            // 20k tokens/minute on the free tier and refuse even a single
+            // request with a 429; the ministral family gets a far larger
+            // allocation and actually serves.
+            'model' => frs_ai_env('MISTRAL_MODEL', 'ministral-14b-latest'),
             'token_param' => 'max_tokens',
             'extra' => [],
             'headers' => [],
