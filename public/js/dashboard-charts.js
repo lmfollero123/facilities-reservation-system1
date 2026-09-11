@@ -503,6 +503,13 @@
             if (!marker) return;
             inst.map.setView(marker.getLatLng(), 17);
             marker.openPopup();
+            // Match pin-click's existing behavior: also filter the charts
+            // below to this facility, so selecting from either side has the
+            // same downstream effect.
+            const config = frsFacilityMapConfigs[mapId];
+            if (config) {
+                frsFacilityMapNavigate(config, e.detail.id);
+            }
         });
     });
 
