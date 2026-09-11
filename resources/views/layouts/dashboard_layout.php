@@ -109,11 +109,14 @@ $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivi
     $frsToastJsVer = is_file($frsToastJsPath) ? (string)filemtime($frsToastJsPath) : '1';
     $frsConfirmJsPath = dirname(__DIR__, 3) . '/public/js/frs-confirm.js';
     $frsConfirmJsVer = is_file($frsConfirmJsPath) ? (string)filemtime($frsConfirmJsPath) : '1';
+    $frsBookingReviewJsPath = dirname(__DIR__, 3) . '/public/js/chatbot-booking-review.js';
+    $frsBookingReviewJsVer = is_file($frsBookingReviewJsPath) ? (string)filemtime($frsBookingReviewJsPath) : '1';
     ?>
     <script src="<?= base_path(); ?>/public/js/frs-form-validation.js?v=<?= htmlspecialchars($formValidationJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/frs-animations.js?v=<?= htmlspecialchars($frsAnimJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/frs-toast.js?v=<?= htmlspecialchars($frsToastJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?= base_path(); ?>/public/js/frs-confirm.js?v=<?= htmlspecialchars($frsConfirmJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script src="<?= base_path(); ?>/public/js/chatbot-booking-review.js?v=<?= htmlspecialchars($frsBookingReviewJsVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php
     $dashboardChartsJsPath = dirname(__DIR__, 3) . '/public/js/dashboard-charts.js';
     $dashboardChartsJsVer = is_file($dashboardChartsJsPath) ? (string)filemtime($dashboardChartsJsPath) : '1';
@@ -875,17 +878,20 @@ document.addEventListener('DOMContentLoaded', function () {
             removeTypingIndicator(typingId);
             const responseText = data.reply || 'I apologize, but I couldn\'t process your request. Please try again.';
             addMessage(responseText, 'bot');
-            // Handle prefill_booking action from AI (supports partial data)
-            if (data.action === 'prefill_booking' && data.data && typeof data.data === 'object') {
+            const basePath = window.APP_BASE_PATH || '';
+            if (data.action === 'booking_review' && data.review) {
+                // Every detail is in — let the resident check it, then book.
+                window.frsChatbotBooking.renderReview(messagesContainer, data.review, {
+                    endpoint: basePath + '/dashboard/ai-chatbot',
+                    basePath: basePath,
+                    csrfToken: window.CSRF_TOKEN,
+                    onSettled: function () { scrollToBottom(); }
+                });
+                scrollToBottom();
+            } else if (data.action === 'booking_needs_form' && data.data && typeof data.data === 'object') {
+                // Needs a document upload, which only the booking form can take.
                 const d = data.data;
-                const basePath = window.APP_BASE_PATH || '';
-                const params = new URLSearchParams();
-                if (d.facility_id) params.set('facility_id', String(d.facility_id));
-                if (d.reservation_date) params.set('reservation_date', d.reservation_date);
-                const timeSlot = (d.start_time && d.end_time) ? (d.start_time + ' - ' + d.end_time) : (d.time_slot || '');
-                if (timeSlot) params.set('time_slot', timeSlot);
-                if (d.purpose) params.set('purpose', d.purpose);
-                if (d.expected_attendees) params.set('expected_attendees', String(d.expected_attendees));
+                const params = window.frsChatbotBooking.prefillParams(d);
                 if (params.toString()) {
                     const isBookFacilityPage = window.location.pathname.indexOf('book-facility') !== -1 || window.location.href.indexOf('book_facility') !== -1;
                     if (isBookFacilityPage) {

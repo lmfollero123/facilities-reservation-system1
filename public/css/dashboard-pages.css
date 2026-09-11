@@ -1315,3 +1315,138 @@
     background: #0284c7;
 }
 
+
+/* ---------------------------------------------------------------------------
+   Chatbot final-review card (public/js/chatbot-booking-review.js)
+   Shown when the assistant has every booking detail and needs the resident to
+   confirm before the reservation is created.
+--------------------------------------------------------------------------- */
+.frs-booking-review {
+    margin: 0.5rem 0 0.25rem;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid #cfe0f5;
+    border-left: 4px solid #1d4ed8;
+    border-radius: 10px;
+    background: #f6f9ff;
+    color: #1f2937;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+.frs-booking-review.is-done {
+    border-color: #bbf0d0;
+    border-left-color: #15803d;
+    background: #f2fbf5;
+}
+.frs-booking-review.is-error {
+    border-color: #f6cdcd;
+    border-left-color: #b91c1c;
+    background: #fdf5f5;
+}
+.frs-booking-review__title {
+    margin: 0 0 0.6rem;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #1e3a8a;
+}
+.frs-booking-review__list {
+    margin: 0;
+}
+.frs-booking-review__row {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.2rem 0;
+}
+.frs-booking-review__row dt {
+    flex: 0 0 5.5rem;
+    color: #64748b;
+    font-weight: 600;
+}
+.frs-booking-review__row dd {
+    margin: 0;
+    flex: 1 1 auto;
+    word-break: break-word;
+}
+.frs-booking-review__note {
+    margin: 0.6rem 0 0;
+    color: #92400e;
+    font-size: 0.82rem;
+}
+.frs-booking-review__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+.frs-booking-review__confirm,
+.frs-booking-review__cancel {
+    padding: 0.45rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.frs-booking-review__confirm {
+    background: #1d4ed8;
+    color: #fff;
+}
+.frs-booking-review__confirm:hover:not(:disabled) {
+    background: #1e40af;
+}
+.frs-booking-review__cancel {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+.frs-booking-review__cancel:hover:not(:disabled) {
+    background: #f1f5f9;
+}
+.frs-booking-review__confirm:disabled,
+.frs-booking-review__cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.frs-booking-review__status {
+    margin: 0.7rem 0 0;
+    font-weight: 600;
+}
+.frs-booking-review__link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: none;
+}
+.frs-booking-review__link:hover {
+    text-decoration: underline;
+}
+
+[data-theme="dark"] .frs-booking-review {
+    border-color: #2b3d57;
+    background: #16202f;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .frs-booking-review.is-done {
+    border-color: #1f4531;
+    background: #12231a;
+}
+[data-theme="dark"] .frs-booking-review.is-error {
+    border-color: #4a2222;
+    background: #241414;
+}
+[data-theme="dark"] .frs-booking-review__title {
+    color: #93b4f5;
+}
+[data-theme="dark"] .frs-booking-review__row dt {
+    color: #94a3b8;
+}
+[data-theme="dark"] .frs-booking-review__cancel {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .frs-booking-review__cancel:hover:not(:disabled) {
+    background: #263449;
+}

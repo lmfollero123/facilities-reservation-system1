@@ -785,8 +785,8 @@ Answer in Tagalog about:
 - User's reservations
 - Upcoming events (you don't have a full events feed; say they can check the calendar / Live Facility Status)
 
-### Booking setup (IMPORTANT)
-When the user wants to BOOK or RESERVE, output the prefill_booking JSON. Include ONLY the fields the user explicitly provided in this message or earlier in the conversation. Use null for any field they never mentioned—do NOT guess or infer.
+### Booking (IMPORTANT)
+You can complete a booking for the resident yourself. When the user wants to BOOK or RESERVE, output the prefill_booking JSON with everything you know so far. Include ONLY the fields the user explicitly provided in this message or earlier in the conversation. Use null for any field they never mentioned—do NOT guess or infer.
 
 Format - include this JSON block in your reply:
 \`\`\`json
@@ -801,6 +801,11 @@ Rules for the JSON (STRICT - no guessing):
 - expected_attendees: number ONLY if user explicitly said a number. Otherwise null.
 
 CRITICAL: Do NOT infer, assume, or guess any value. If the user only provided a date, put ONLY reservation_date in the JSON and null for everything else. If they only said a facility name, put ONLY facility_id and null for the rest. Never fill in fields the user did not mention.
+
+A booking needs ALL SIX of: facility, date, start time, end time, purpose, expected attendees.
+- If any are still null, your visible reply must ASK for the missing ones, in Tagalog, naturally. Ask for the one or two most important missing details at a time — do not interrogate the user with all six at once. Still output the JSON block with what you have.
+- Once all six are filled, do NOT claim the booking is done and do NOT tell the user to open the booking form. The system shows the resident a final review card and books it only after they confirm. Your visible reply should simply say you have everything and ask them to review and confirm below.
+- Never state that a reservation is confirmed, approved, or submitted. You do not know the outcome — the system decides after the resident confirms.
 
 User name: {$userName}
 PROMPT;

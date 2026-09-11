@@ -41,6 +41,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $userName = $_SESSION['name'] ?? 'User';
     $message  = trim($_POST['message'] ?? '');
 
+    // The resident confirmed the final review card — create the reservation.
+    if (isset($_POST['confirm_booking'])) {
+        require_once __DIR__ . '/../../../../config/chatbot_booking.php';
+        $result = frs_chatbot_create_reservation($pdo, $userId, [
+            'facility_id' => $_POST['facility_id'] ?? null,
+            'reservation_date' => $_POST['reservation_date'] ?? null,
+            'start_time' => $_POST['start_time'] ?? null,
+            'end_time' => $_POST['end_time'] ?? null,
+            'time_slot' => $_POST['time_slot'] ?? null,
+            'purpose' => $_POST['purpose'] ?? null,
+            'expected_attendees' => $_POST['expected_attendees'] ?? null,
+        ]);
+        if (empty($result['ok'])) {
+            http_response_code((int) ($result['http'] ?? 400));
+            echo json_encode([
+                'reply' => $result['message'],
+                'error' => $result['error'] ?? 'booking_failed',
+            ]);
+            exit;
+        }
+        echo json_encode([
+            'reply' => $result['message'],
+            'action' => 'booking_created',
+            'reservation_id' => $result['reservation_id'],
+            'status' => $result['status'],
+        ]);
+        exit;
+    }
+
     if ($message === '') {
         echo json_encode(['reply' => getRandomResponse(getEmptyMessageResponses())]);
         exit;
@@ -150,11 +179,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
-                    // Allow prefill with any partial data (facility, date, time, purpose, etc.)
-                    $hasUsefulData = isset($b['facility_id']) || isset($b['reservation_date']) || isset($b['start_time']) || isset($b['end_time']) || isset($b['time_slot']) || isset($b['purpose']);
-                    if ($hasUsefulData) {
-                        $out['action'] = 'prefill_booking';
-                        $out['data'] = $b;
+
+                    require_once __DIR__ . '/../../../../config/chatbot_booking.php';
+                    $state = frs_chatbot_booking_state($pdo, $userId, $b);
+                    if ($state !== null) {
+                        $out['action'] = $state['action'];
+                        $out['data'] = $state['slots'] ?? [];
+                        if ($state['action'] === 'booking_review') {
+                            $out['review'] = $state['review'];
+                        } elseif ($state['action'] === 'booking_needs_form') {
+                            // Only the booking form can take the required upload.
+                            $out['reply'] = $reply . "\n\n" . $state['message'];
+                        } elseif ($state['action'] === 'booking_rejected') {
+                            $out['reply'] = $reply . "\n\n" . $state['message'];
+                        }
                     }
                 }
                 echo json_encode($out);
@@ -644,15 +682,17 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (data) {
             removeTypingIndicator(typingId);
             addMessage(data.reply || 'I apologize, but I couldn\'t process your request. Please try again.', 'bot');
-            if (data.action === 'prefill_booking' && data.data && typeof data.data === 'object') {
-                const d = data.data;
-                const params = new URLSearchParams();
-                if (d.facility_id) params.set('facility_id', String(d.facility_id));
-                if (d.reservation_date) params.set('reservation_date', d.reservation_date);
-                const timeSlot = (d.start_time && d.end_time) ? (d.start_time + ' - ' + d.end_time) : (d.time_slot || '');
-                if (timeSlot) params.set('time_slot', timeSlot);
-                if (d.purpose) params.set('purpose', d.purpose);
-                if (d.expected_attendees) params.set('expected_attendees', String(d.expected_attendees));
+            if (data.action === 'booking_review' && data.review) {
+                window.frsChatbotBooking.renderReview(messagesContainer, data.review, {
+                    endpoint: basePath + '/dashboard/ai-chatbot',
+                    basePath: basePath,
+                    csrfToken: window.CSRF_TOKEN,
+                    onSettled: function () { scrollToBottom(); }
+                });
+                scrollToBottom();
+            } else if (data.action === 'booking_needs_form' && data.data) {
+                // Needs a document upload, which only the booking form can take.
+                const params = window.frsChatbotBooking.prefillParams(data.data);
                 if (params.toString()) {
                     params.set('open_booking', '1');
                     window.location.href = basePath + '/dashboard/book-facility?' + params.toString();

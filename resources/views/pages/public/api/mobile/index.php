@@ -2475,6 +2475,38 @@ if ($route === 'booking/policy' && $method === 'GET') {
     ]);
 }
 
+// The resident confirmed the assistant's final review card — create the booking.
+if ($route === 'assistant/confirm-booking' && $method === 'POST') {
+    $user = mobile_require_user($pdo);
+    $body = mobile_body();
+
+    require_once dirname(__DIR__, 6) . '/config/chatbot_booking.php';
+    $result = frs_chatbot_create_reservation($pdo, (int) $user['id'], [
+        'facility_id' => $body['facility_id'] ?? null,
+        'reservation_date' => $body['reservation_date'] ?? null,
+        'start_time' => $body['start_time'] ?? null,
+        'end_time' => $body['end_time'] ?? null,
+        'time_slot' => $body['time_slot'] ?? null,
+        'purpose' => $body['purpose'] ?? null,
+        'expected_attendees' => $body['expected_attendees'] ?? null,
+    ]);
+
+    if (empty($result['ok'])) {
+        mobile_error(
+            (string) $result['message'],
+            (int) ($result['http'] ?? 400),
+            (string) ($result['error'] ?? 'booking_failed')
+        );
+    }
+
+    mobile_json([
+        'ok' => true,
+        'message' => $result['message'],
+        'reservation_id' => $result['reservation_id'],
+        'status' => $result['status'],
+    ]);
+}
+
 // ---------- AI ASSISTANT (Gemini) ----------
 if ($route === 'assistant/chat' && $method === 'POST') {
     @set_time_limit(45);
@@ -2612,12 +2644,16 @@ if ($route === 'assistant/chat' && $method === 'POST') {
                             }
                         }
                     }
-                    $hasUsefulData = isset($b['facility_id']) || isset($b['reservation_date'])
-                        || isset($b['start_time']) || isset($b['end_time'])
-                        || isset($b['time_slot']) || isset($b['purpose']);
-                    if ($hasUsefulData) {
-                        $out['action'] = 'prefill_booking';
-                        $out['data'] = $b;
+                    require_once dirname(__DIR__, 6) . '/config/chatbot_booking.php';
+                    $state = frs_chatbot_booking_state($pdo, (int) $user['id'], $b);
+                    if ($state !== null) {
+                        $out['action'] = $state['action'];
+                        $out['data'] = $state['slots'] ?? [];
+                        if ($state['action'] === 'booking_review') {
+                            $out['review'] = $state['review'];
+                        } elseif (isset($state['message'])) {
+                            $out['reply'] = $reply . "\n\n" . $state['message'];
+                        }
                     }
                 }
 
