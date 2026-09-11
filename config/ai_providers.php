@@ -26,8 +26,27 @@ function frs_ai_env(string $key, string $default = ''): string
         ? trim((string) env_value($key, $default))
         : trim((string) (getenv($key) ?: $default));
 
+    // Keys pasted from a dashboard sometimes arrive wrapped in quotes.
+    $value = trim($value, "\"'");
+
     // Treat the .env.example placeholders as "not configured".
     return str_starts_with($value, 'YOUR_') ? '' : $value;
+}
+
+/**
+ * First non-empty value among several env names, for settings whose canonical
+ * name differs from the one a provider's own dashboard suggests.
+ */
+function frs_ai_env_any(array $keys, string $default = ''): string
+{
+    foreach ($keys as $key) {
+        $value = frs_ai_env($key);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return $default;
 }
 
 /**
@@ -75,7 +94,9 @@ function frs_ai_provider_chain(): array
             'url' => $cloudflareAccount === ''
                 ? ''
                 : 'https://api.cloudflare.com/client/v4/accounts/' . rawurlencode($cloudflareAccount) . '/ai/v1/chat/completions',
-            'key' => frs_ai_env('CLOUDFLARE_AI_API_TOKEN'),
+            // Cloudflare's dashboard calls it an API token, so accept that
+            // name too rather than insisting on the AI-prefixed one.
+            'key' => frs_ai_env_any(['CLOUDFLARE_AI_API_TOKEN', 'CLOUDFLARE_API_TOKEN']),
             'model' => frs_ai_env('CLOUDFLARE_AI_MODEL', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'),
             'token_param' => 'max_tokens',
             'extra' => [],
@@ -121,7 +142,7 @@ function frs_ai_provider_skip_reasons(): array
         'groq' => ['GROQ_API_KEY'],
         'cerebras' => ['CEREBRAS_API_KEY'],
         'mistral' => ['MISTRAL_API_KEY'],
-        'cloudflare' => ['CLOUDFLARE_AI_ACCOUNT_ID', 'CLOUDFLARE_AI_API_TOKEN'],
+        'cloudflare' => ['CLOUDFLARE_AI_ACCOUNT_ID', 'CLOUDFLARE_AI_API_TOKEN|CLOUDFLARE_API_TOKEN'],
         'openrouter' => ['OPENROUTER_API_KEY'],
     ];
 
@@ -141,7 +162,18 @@ function frs_ai_provider_skip_reasons(): array
             $reasons[$name] = 'not listed in AI_PROVIDER_ORDER';
             continue;
         }
-        $missing = array_values(array_filter($vars, static fn (string $v) => frs_ai_env($v) === ''));
+        // A requirement may list interchangeable names as "PREFERRED|ALIAS".
+        $missing = [];
+        foreach ($vars as $spec) {
+            $alternatives = explode('|', $spec);
+            if (frs_ai_env_any($alternatives) !== '') {
+                continue;
+            }
+            $missing[] = count($alternatives) > 1
+                ? $alternatives[0] . ' (or ' . implode(' or ', array_slice($alternatives, 1)) . ')'
+                : $alternatives[0];
+        }
+
         $reasons[$name] = $missing === []
             ? 'unusable for an unknown reason'
             : 'missing ' . implode(' and ', $missing);
