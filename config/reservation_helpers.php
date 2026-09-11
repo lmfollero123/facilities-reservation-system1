@@ -1798,34 +1798,31 @@ function frs_ensure_reservation_facilitator_assigned(PDO $pdo, int $reservationI
         return;
     }
 
-    foreach (['Staff', 'Admin'] as $role) {
-        $pick = $pdo->prepare(
-            "SELECT u.id
-             FROM users u
-             WHERE u.role = :role AND u.status = 'active'
-             ORDER BY (
-                 SELECT COUNT(*) FROM reservations r
-                 WHERE r.assigned_staff_id = u.id
-                   AND r.status = 'approved'
-                   AND r.reservation_date >= CURDATE()
-             ) ASC, u.id ASC
-             LIMIT 1"
-        );
-        $pick->execute(['role' => $role]);
-        $staffId = $pick->fetchColumn();
-        if ($staffId) {
-            $update = $pdo->prepare('UPDATE reservations SET assigned_staff_id = :staff_id WHERE id = :id');
-            $update->execute(['staff_id' => (int)$staffId, 'id' => $reservationId]);
-
-            $dateLabel = date('M j, Y', strtotime((string)$row['reservation_date']));
-            createNotification(
-                (int)$staffId,
-                'system',
-                'You are the facilitator for a booking',
-                "{$row['facility_name']} — {$dateLabel} ({$row['time_slot']}).",
-                base_path() . '/dashboard/reservation-detail?id=' . $reservationId
-            );
-            return;
-        }
+    // Only assign a staffer who is actually on shift for this date+slot and
+    // not already busy. If nobody qualifies, leave it unassigned — an admin
+    // picks manually from the "needs facilitator" queue. Never auto-assign an
+    // off-duty person.
+    require_once __DIR__ . '/staff_shifts.php';
+    $eligible = frs_eligible_facilitator_ids(
+        $pdo,
+        (string) $row['reservation_date'],
+        (string) $row['time_slot'],
+        $reservationId
+    );
+    if (!$eligible) {
+        return;
     }
+
+    $staffId = (int) $eligible[0];
+    $update = $pdo->prepare('UPDATE reservations SET assigned_staff_id = :staff_id WHERE id = :id');
+    $update->execute(['staff_id' => $staffId, 'id' => $reservationId]);
+
+    $dateLabel = date('M j, Y', strtotime((string)$row['reservation_date']));
+    createNotification(
+        $staffId,
+        'system',
+        'You are the facilitator for a booking',
+        "{$row['facility_name']} — {$dateLabel} ({$row['time_slot']}).",
+        base_path() . '/dashboard/reservation-detail?id=' . $reservationId
+    );
 }

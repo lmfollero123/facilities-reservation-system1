@@ -129,6 +129,8 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     $reservationsFacilitiesGroup = [];
     if (frs_can_read($role, 'reservations')) {
         $reservationsFacilitiesGroup[] = ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'];
+        // Facilitator rostering — both Admin and Staff (staff manage their own availability).
+        $reservationsFacilitiesGroup[] = ['label' => 'Staff Scheduling', 'href' => $base . '/dashboard/staff-scheduling', 'icon' => 'calendar', 'page' => 'staff_scheduling'];
     }
     if (frs_can_read($role, 'facilities')) {
         // Blackout Dates used to be a separate sidebar item; it's now a tab
