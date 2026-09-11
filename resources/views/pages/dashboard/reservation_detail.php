@@ -478,7 +478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !frs_csrf_ok()) {
 
 // Fetch reservation details
 $stmt = $pdo->prepare(
-    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.status, r.created_at, r.updated_at,
+    'SELECT r.id, r.reservation_date, r.time_slot, r.purpose, r.expected_attendees, r.auto_approved, r.status, r.created_at, r.updated_at,
             u.id AS user_id, u.name AS requester_name, u.email AS requester_email, u.role AS requester_role,
             f.id AS facility_id, f.name AS facility_name, f.description AS facility_description, f.status AS facility_status, f.base_rate AS facility_base_rate, f.extension_fee_per_hour AS facility_extension_fee_per_hour,
             f.requires_document AS facility_requires_document, f.document_requirement_note AS facility_document_requirement_note, f.operating_hours AS facility_operating_hours
@@ -621,6 +621,11 @@ ob_start();
                         <?= $reservation['status'] === 'pending_payment' ? 'Awaiting Payment' : ucfirst($reservation['status']); ?>
                     <?php endif; ?>
                 </span>
+                <?php if ($reservation['status'] === 'approved'): ?>
+                    <span class="status-badge <?= !empty($reservation['auto_approved']) ? 'approved' : 'cancelled'; ?>" style="margin-left:0.35rem;">
+                        <?= !empty($reservation['auto_approved']) ? 'Auto-approved' : 'Approved by staff'; ?>
+                    </span>
+                <?php endif; ?>
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Reservation Date</strong>
@@ -633,6 +638,10 @@ ob_start();
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Purpose</strong>
                 <p style="margin:0;font-size:1rem;line-height:1.6;"><?= htmlspecialchars($reservation['purpose']); ?></p>
+            </div>
+            <div>
+                <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Attendees</strong>
+                <p style="margin:0;font-size:1rem;"><?= $reservation['expected_attendees'] !== null ? (int)$reservation['expected_attendees'] : '—'; ?></p>
             </div>
             <div>
                 <strong style="color:#5b6888;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Submitted</strong>
