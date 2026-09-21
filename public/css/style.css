@@ -12570,3 +12570,65 @@ img[src*="geralt-maintenance"] { object-position: center 75% !important; }
         height: 36px;
     }
 }
+
+/* ---------------------------------------------------------------
+   Responsive public navbar.
+
+   The row holds brand + 5 links + login/register + theme and language
+   toggles, with the clock absolutely positioned at the right. Together
+   that needs ~1420px; below it the flex row overflowed its container,
+   which pushed the brand off the left edge and the clock past the right
+   edge (the clock is position:absolute, so it was being placed against
+   the overflowing box rather than the viewport).
+
+   Three bands keep everything on screen instead of clipping:
+     < 1200px         hamburger + mobile sidebar (already carries the
+                      links, theme toggle and language toggle)
+     1200 - 1449px    compact desktop row, clock dropped
+     1450 - 1599px    normal desktop row, clock shows time only
+     >= 1600px        untouched original layout
+   --------------------------------------------------------------- */
+@media (max-width: 1199px) {
+    #mainNav .navbar-collapse { display: none !important; }
+    #mainNav .public-nav-actions.d-none.d-lg-flex { display: none !important; }
+    #mainNav .navbar-toggler { display: block !important; }
+    #mainNav .public-nav-actions-mobile { display: flex !important; }
+    #mainNav .navbar-datetime { display: none !important; }
+}
+
+@media (min-width: 1200px) and (max-width: 1449px) {
+    #mainNav .container { padding-left: 1rem !important; padding-right: 1rem !important; }
+    #mainNav .navbar-nav .nav-link {
+        padding-left: 0.4rem !important;
+        padding-right: 0.4rem !important;
+        font-size: 0.85rem !important;
+    }
+    #mainNav .navbar-brand img { height: 30px !important; }
+    #mainNav .navbar-brand span { font-size: 0.72rem !important; }
+    #mainNav .public-btn-login,
+    #mainNav .public-btn-register {
+        padding: 0.35rem 0.7rem !important;
+        font-size: 0.8rem !important;
+    }
+    #mainNav .navbar-datetime { display: none !important; }
+}
+
+@media (min-width: 1450px) and (max-width: 1599px) {
+    #mainNav .container { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+    #mainNav .navbar-nav .nav-link {
+        padding-left: 0.55rem !important;
+        padding-right: 0.55rem !important;
+    }
+    #mainNav .navbar-datetime #navbar-date { display: none !important; }
+    #mainNav .navbar-datetime { font-size: 0.8rem; }
+}
+
+#mainNav .container { flex-wrap: nowrap; }
+#mainNav .navbar-collapse { min-width: 0; }
+
+/* Dashboard header: let the search field absorb the squeeze instead of
+   pushing the notification/theme/language buttons off the right edge. */
+.dashboard-header { flex-wrap: nowrap; }
+.dashboard-header-left { min-width: 0; }
+.dashboard-global-search-wrapper { min-width: 0; }
+.dashboard-header .header-right { flex: 0 0 auto; }
