@@ -82,17 +82,17 @@ if ($role === 'Admin') {
 ?>
 <header class="dashboard-header" id="dashboardHeader">
     <div class="dashboard-header-left">
-        <button class="btn btn-outline sidebar-toggle-btn" data-sidebar-toggle aria-expanded="true" title="Toggle Sidebar">
+        <button class="btn btn-outline sidebar-toggle-btn" data-sidebar-toggle aria-expanded="true" title="<?= frs_te('dashnav.toggle_sidebar'); ?>">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="9" y1="3" x2="9" y2="21"></line>
             </svg>
         </button>
-        <button type="button" class="btn btn-outline dashboard-mobile-search-trigger" aria-label="Open search" title="Search dashboard" id="dashboardMobileSearchTrigger">
+        <button type="button" class="btn btn-outline dashboard-mobile-search-trigger" aria-label="Open search" title="<?= frs_te('dashnav.search'); ?>" id="dashboardMobileSearchTrigger">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
         <div class="dashboard-global-search-wrapper" id="dashboardGlobalSearchWrapper">
-            <input type="search" class="dashboard-global-search" id="dashboardGlobalSearch" placeholder="Search dashboard (e.g. booking, maintenance)..." autocomplete="off" aria-label="Search dashboard">
+            <input type="search" class="dashboard-global-search" id="dashboardGlobalSearch" placeholder="<?= frs_te('dashnav.search_placeholder'); ?>" autocomplete="off" aria-label="Search dashboard">
             <span class="dashboard-global-search-icon" aria-hidden="true">🔍</span>
             <button type="button" class="dashboard-search-close" aria-label="Close search" id="dashboardSearchClose">×</button>
             <div class="dashboard-global-search-results" id="dashboardGlobalSearchResults" role="listbox" aria-hidden="true"></div>
@@ -100,7 +100,7 @@ if ($role === 'Admin') {
     </div>
     <div class="header-right">
         <div class="notif-container">
-            <button class="notif-bell" type="button" title="Notifications" data-toggle="notif-panel">
+            <button class="notif-bell" type="button" title="<?= frs_te('dashnav.notifications'); ?>" data-toggle="notif-panel">
                 🔔
                 <?php if ($unreadCount > 0): ?>
                     <span class="notif-dot"><?= $unreadCount > 9 ? '9+' : $unreadCount; ?></span>
@@ -108,26 +108,27 @@ if ($role === 'Admin') {
             </button>
             <div class="notif-panel" id="notifPanel">
                 <div class="notif-panel-header">
-                    <h3>Notifications</h3>
+                    <h3><?= frs_te('dashnav.notifications'); ?></h3>
                     <div class="notif-panel-actions">
                         <?php if ($unreadCount > 0): ?>
-                            <button type="button" class="notif-mark-all-btn" id="notifMarkAllBtn" title="Mark all as read">Mark all read</button>
+                            <button type="button" class="notif-mark-all-btn" id="notifMarkAllBtn" title="<?= frs_te('dashnav.mark_all_read_title'); ?>"><?= frs_te('dashnav.mark_all_read'); ?></button>
                         <?php endif; ?>
-                        <a href="<?= $base; ?>/dashboard/notifications" class="view-all-link">View All</a>
+                        <a href="<?= $base; ?>/dashboard/notifications" class="view-all-link"><?= frs_te('dashnav.view_all'); ?></a>
                     </div>
                 </div>
                 <div class="notif-panel-content" id="notifPanelContent">
-                    <div class="notif-loading">Loading...</div>
+                    <div class="notif-loading"><?= frs_te('dashnav.loading'); ?></div>
                 </div>
             </div>
         </div>
         <div class="theme-toggle-container">
-            <button class="theme-toggle-btn" id="themeToggle" type="button" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
+            <button class="theme-toggle-btn" id="themeToggle" type="button" title="<?= frs_te('dashnav.toggle_dark_mode'); ?>" aria-label="<?= frs_te('dashnav.toggle_dark_mode'); ?>">
                 <span class="theme-icon theme-icon-light">☀️</span>
                 <span class="theme-icon theme-icon-dark">🌙</span>
             </button>
         </div>
-        <?= frs_logout_form('btn btn-primary', 'Logout', 'Are you sure you want to log out?'); ?>
+        <div class="lang-toggle-container"><?= frs_language_switcher('dashboard-nav-lang'); ?></div>
+        <?= frs_logout_form('btn btn-primary', frs_t('nav.logout'), frs_t('nav.logout_confirm')); ?>
     </div>
 </header>
 <script>
@@ -138,7 +139,7 @@ if ($role === 'Admin') {
     if (!input || !resultsEl) return;
     function showResults(items) {
         if (items.length === 0) {
-            resultsEl.innerHTML = '<div class="dashboard-search-no-results">No matches</div>';
+            resultsEl.innerHTML = '<div class="dashboard-search-no-results">' + <?= json_encode(frs_t('dashnav.no_matches')); ?> + '</div>';
         } else {
             resultsEl.innerHTML = items.slice(0, 10).map(function(item) {
                 return '<a href="' + (item.url || '') + '" class="dashboard-search-result-item" role="option">' + (item.label || '') + '</a>';

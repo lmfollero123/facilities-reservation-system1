@@ -9,62 +9,62 @@ $base = base_path();
         <div class="footer-grid">
             <!-- Branding Section -->
             <div class="footer-brand">
-                <h3 class="brand-title">Barangay Culiat</h3>
-                <p class="brand-subtitle">Public Facilities Reservation System</p>
+                <h3 class="brand-title"><?= frs_te('footer.brand_title'); ?></h3>
+                <p class="brand-subtitle"><?= frs_te('footer.brand_subtitle'); ?></p>
                 <p class="brand-description">
-                    Simplifying facility reservations for our community with secure, efficient, and transparent booking services.
+                    <?= frs_te('footer.brand_description'); ?>
                 </p>
             </div>
-            
+
             <!-- Quick Links -->
             <div class="footer-section">
-                <h4 class="footer-title">Quick Links</h4>
+                <h4 class="footer-title"><?= frs_te('footer.quick_links'); ?></h4>
                 <ul class="footer-links">
                     <li><a href="<?= $base; ?>/">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
                         </svg>
-                        Home
+                        <?= frs_te('footer.link_home'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/facilities">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"></path>
                         </svg>
-                        Browse Facilities
+                        <?= frs_te('footer.link_browse_facilities'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/announcements">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z"></path>
                         </svg>
-                        Announcements
+                        <?= frs_te('footer.link_announcements'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/faqs">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
                         </svg>
-                        FAQs
+                        <?= frs_te('footer.link_faqs'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/contact">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path>
                         </svg>
-                        Contact Us
+                        <?= frs_te('footer.link_contact'); ?>
                     </a></li>
                     <?php if (isset($_SESSION['user_id'])): ?>
                     <li><a href="<?= $base; ?>/dashboard/book-facility?module=mine">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
                         </svg>
-                        My Reservations
+                        <?= frs_te('footer.link_my_reservations'); ?>
                     </a></li>
                     <?php endif; ?>
                 </ul>
             </div>
-            
+
             <!-- Location Map -->
             <div class="footer-section footer-map-section">
-                <h4 class="footer-title">Location</h4>
-                <p class="footer-map-label">Barangay Culiat, Quezon City, Philippines</p>
+                <h4 class="footer-title"><?= frs_te('footer.location'); ?></h4>
+                <p class="footer-map-label"><?= frs_te('footer.location_label'); ?></p>
                 <div class="footer-map-wrapper">
                     <iframe 
                         src="https://www.google.com/maps?q=Barangay+Culiat,Quezon+City,Philippines&output=embed" 
@@ -81,40 +81,40 @@ $base = base_path();
             
             <!-- Legal & Compliance -->
             <div class="footer-section">
-                <h4 class="footer-title">Legal & Compliance</h4>
+                <h4 class="footer-title"><?= frs_te('footer.legal_compliance'); ?></h4>
                 <ul class="footer-links">
                     <li><a href="<?= $base; ?>/privacy">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
                         </svg>
-                        Privacy Policy
+                        <?= frs_te('footer.link_privacy'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/terms">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"></path>
                         </svg>
-                        Terms & Conditions
+                        <?= frs_te('footer.link_terms'); ?>
                     </a></li>
                     <li><a href="<?= $base; ?>/legal">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
                         </svg>
-                        Legal Notice
+                        <?= frs_te('footer.link_legal'); ?>
                     </a></li>
                 </ul>
                 <div class="compliance-badge">
                     <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20" class="me-2">
                         <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                     </svg>
-                    <small>Compliant with RA 10173<br>(Data Privacy Act of 2012)</small>
+                    <small><?= frs_t('footer.compliance_badge'); ?></small>
                 </div>
             </div>
         </div>
-        
+
         <!-- Footer Bottom -->
         <div class="footer-bottom">
-            <p>&copy; <?= date('Y'); ?> Barangay Culiat, Quezon City. All rights reserved.</p>
-            <p class="footer-tagline">Serving our community with transparency and efficiency</p>
+            <p><?= frs_t('footer.copyright', ['year' => date('Y')]); ?></p>
+            <p class="footer-tagline"><?= frs_te('footer.tagline'); ?></p>
         </div>
     </div>
 </footer>

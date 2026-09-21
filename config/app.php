@@ -9,6 +9,9 @@ require_once __DIR__ . '/security.php';
 // UI helpers (field tips, headings) — used by dashboard/public views before layouts load
 require_once __DIR__ . '/ui_helpers.php';
 
+// English/Tagalog toggle for resident-facing pages (frs_t(), frs_language_switcher())
+require_once __DIR__ . '/i18n.php';
+
 // Set security headers
 setSecurityHeaders();
 

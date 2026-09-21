@@ -3,11 +3,11 @@ require_once __DIR__ . '/../../../config/app.php';
 $base = base_path();
 $currentPage = $_SERVER['PHP_SELF'] ?? '';
 $navLinks = [
-    ['label' => 'Home', 'href' => $base . '/', 'anchor' => '#page-top'],
-    ['label' => 'Facilities', 'href' => $base . '/facilities'],
-    ['label' => 'Announcements', 'href' => $base . '/announcements'],
-    ['label' => 'FAQ', 'href' => $base . '/faqs'],
-    ['label' => 'Contact', 'href' => $base . '/contact', 'anchor' => '#contact'],
+    ['label' => frs_t('nav.home'), 'href' => $base . '/', 'anchor' => '#page-top'],
+    ['label' => frs_t('nav.facilities'), 'href' => $base . '/facilities'],
+    ['label' => frs_t('nav.announcements'), 'href' => $base . '/announcements'],
+    ['label' => frs_t('nav.faq'), 'href' => $base . '/faqs'],
+    ['label' => frs_t('nav.contact'), 'href' => $base . '/contact', 'anchor' => '#contact'],
 ];
 ?>
 <!-- Navigation - Modern dark navbar -->
@@ -39,21 +39,24 @@ $navLinks = [
                 </li>
             <?php endforeach; ?>
             <li class="nav-item nav-item-theme d-none d-md-flex" style="list-style:none;">
-                <button type="button" class="theme-toggle-btn theme-toggle-nav" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark/light mode" style="pointer-events:auto;">
+                <button type="button" class="theme-toggle-btn theme-toggle-nav" id="themeToggle" aria-label="<?= frs_te('nav.toggle_dark_mode'); ?>" title="<?= frs_te('nav.toggle_dark_mode'); ?>" style="pointer-events:auto;">
                     <i class="bi bi-sun-fill theme-icon-light"></i>
                     <i class="bi bi-moon-fill theme-icon-dark"></i>
                 </button>
             </li>
+            <li class="nav-item d-none d-md-flex" style="list-style:none; align-items:center;">
+                <?= frs_language_switcher('public-nav-lang'); ?>
+            </li>
         </ul>
         <div class="public-nav-actions d-none d-lg-flex">
-            <a href="<?= $base; ?>/login" class="btn public-btn-login">Login</a>
-            <a href="<?= $base; ?>/register" class="btn public-btn-register">Register</a>
+            <a href="<?= $base; ?>/login" class="btn public-btn-login"><?= frs_te('nav.login'); ?></a>
+            <a href="<?= $base; ?>/register" class="btn public-btn-register"><?= frs_te('nav.register'); ?></a>
         </div>
     </div>
-    
+
     <div class="public-nav-actions public-nav-actions-mobile d-lg-none">
-        <a href="<?= $base; ?>/login" class="btn public-btn-login btn-sm">Login</a>
-        <a href="<?= $base; ?>/register" class="btn public-btn-register btn-sm">Register</a>
+        <a href="<?= $base; ?>/login" class="btn public-btn-login btn-sm"><?= frs_te('nav.login'); ?></a>
+        <a href="<?= $base; ?>/register" class="btn public-btn-register btn-sm"><?= frs_te('nav.register'); ?></a>
     </div>
     <button class="navbar-toggler navbar-toggler-right" type="button" id="mobileNavToggle" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -70,16 +73,17 @@ $navLinks = [
 <aside class="mobile-nav-sidebar" id="mobileNavSidebar">
     <div class="mobile-nav-header">
         <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 44px; width: auto; object-fit: contain;">
-        <span>Menu</span>
-        <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
+        <span><?= frs_te('nav.menu'); ?></span>
+        <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="<?= frs_te('nav.close_menu'); ?>">✕</button>
     </div>
     <nav class="mobile-nav-menu">
-        <div class="mobile-nav-theme-wrap" style="padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <button type="button" class="theme-toggle-btn mobile-theme-toggle" id="themeToggleMobile" aria-label="Toggle dark mode">
+        <div class="mobile-nav-theme-wrap" style="padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
+            <button type="button" class="theme-toggle-btn mobile-theme-toggle" id="themeToggleMobile" aria-label="<?= frs_te('nav.toggle_dark_mode'); ?>">
                 <i class="bi bi-sun-fill theme-icon-light"></i>
                 <i class="bi bi-moon-fill theme-icon-dark"></i>
-                <span class="theme-toggle-label ms-2">Dark Mode</span>
+                <span class="theme-toggle-label ms-2"><?= frs_te('nav.dark_mode'); ?></span>
             </button>
+            <?= frs_language_switcher('mobile-nav-lang'); ?>
         </div>
         <ul class="mobile-nav-list">
             <?php 
@@ -105,8 +109,8 @@ $navLinks = [
             <?php endforeach; ?>
         </ul>
         <div class="mobile-nav-actions">
-            <a href="<?= $base; ?>/login" class="mobile-nav-btn mobile-nav-btn-login">Login</a>
-            <a href="<?= $base; ?>/register" class="mobile-nav-btn mobile-nav-btn-register">Register</a>
+            <a href="<?= $base; ?>/login" class="mobile-nav-btn mobile-nav-btn-login"><?= frs_te('nav.login'); ?></a>
+            <a href="<?= $base; ?>/register" class="mobile-nav-btn mobile-nav-btn-register"><?= frs_te('nav.register'); ?></a>
         </div>
     </nav>
 </aside>

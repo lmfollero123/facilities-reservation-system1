@@ -105,10 +105,10 @@ $bookingGroup = [];
 
 // Check reservations permissions - Read controls page access
 if (frs_can_read($role, 'reservations')) {
-    $bookingGroup[] = ['label' => 'Book a Facility', 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'];
-    $bookingGroup[] = ['label' => 'My Reservations', 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'];
+    $bookingGroup[] = ['label' => frs_t('sidebar.book_facility'), 'href' => $base . '/dashboard/book-facility', 'icon' => 'calendar-plus', 'page' => 'book_facility'];
+    $bookingGroup[] = ['label' => frs_t('sidebar.my_reservations'), 'href' => $base . '/dashboard/book-facility?module=mine', 'icon' => 'calendar', 'page' => 'my_reservations'];
 }
-$bookingGroup[] = ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'];
+$bookingGroup[] = ['label' => frs_t('sidebar.check_in_out'), 'href' => $base . '/dashboard/time-tracking', 'icon' => 'check-circle', 'page' => 'time_tracking'];
 
 // Smart Scheduler used to live in its own "AI Tools" group alongside AI Model
 // Lab - with AI Model Lab moved into Administration (dev-only tool, rarely
@@ -116,7 +116,7 @@ $bookingGroup[] = ['label' => 'Check In/Out', 'href' => $base . '/dashboard/time
 // plain top-level link instead, alongside Dashboard.
 $mainExtraLinks = [];
 if (frs_can_read($role, 'ai_tools')) {
-    $mainExtraLinks[] = ['label' => 'Smart Scheduler', 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
+    $mainExtraLinks[] = ['label' => frs_t('sidebar.smart_scheduler'), 'href' => $base . '/dashboard/ai-scheduling', 'icon' => 'robot', 'page' => 'ai_scheduling'];
 }
 
 $reservationsFacilitiesGroup = [];
@@ -128,54 +128,54 @@ if (in_array($role, ['Admin', 'Staff'], true)) {
     // Reservations & Facilities - check permissions
     $reservationsFacilitiesGroup = [];
     if (frs_can_read($role, 'reservations')) {
-        $reservationsFacilitiesGroup[] = ['label' => 'Reservation Approvals', 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'];
+        $reservationsFacilitiesGroup[] = ['label' => frs_t('sidebar.reservation_approvals'), 'href' => $base . '/dashboard/reservations-manage', 'icon' => 'check-circle', 'page' => 'reservations_manage'];
         // Facilitator rostering — both Admin and Staff (staff manage their own availability).
-        $reservationsFacilitiesGroup[] = ['label' => 'Staff Scheduling', 'href' => $base . '/dashboard/staff-scheduling', 'icon' => 'calendar', 'page' => 'staff_scheduling'];
+        $reservationsFacilitiesGroup[] = ['label' => frs_t('sidebar.staff_scheduling'), 'href' => $base . '/dashboard/staff-scheduling', 'icon' => 'calendar', 'page' => 'staff_scheduling'];
     }
     if (frs_can_read($role, 'facilities')) {
         // Blackout Dates used to be a separate sidebar item; it's now a tab
         // on this same page (both are facility-configuration tasks, same
         // audience) - route/page still fully live, just reached via the tab
         // bar instead of its own sidebar link.
-        $reservationsFacilitiesGroup[] = ['label' => 'Facility Management', 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'];
+        $reservationsFacilitiesGroup[] = ['label' => frs_t('sidebar.facility_management'), 'href' => $base . '/dashboard/facility-management', 'icon' => 'building', 'page' => 'facility_management'];
     }
     // Live Occupancy + Check-In Waivers merged into one "Occupancy & Waivers"
     // entry (2 tabs) - both are real-time attendance oversight for Staff/Admin
     // sharing config/occupancy_monitoring.php, so they belong together, and
     // neither is really a "Booking" or "Report" action on its own.
     if (frs_can_read($role, 'reports')) {
-        $reservationsFacilitiesGroup[] = ['label' => 'Occupancy & Waivers', 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'];
+        $reservationsFacilitiesGroup[] = ['label' => frs_t('sidebar.occupancy_waivers'), 'href' => $base . '/dashboard/occupancy-monitor', 'icon' => 'chart-bar', 'page' => 'occupancy_monitor'];
     }
 
     // Communications - check permissions
     $communicationsGroup = [];
     if (frs_can_read($role, 'announcements')) {
-        $communicationsGroup[] = ['label' => 'Announcements', 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'];
+        $communicationsGroup[] = ['label' => frs_t('sidebar.announcements'), 'href' => $base . '/dashboard/announcements-manage', 'icon' => 'megaphone', 'page' => 'announcements_manage'];
     }
     if (frs_can_read($role, 'communications')) {
-        $communicationsGroup[] = ['label' => 'Contact Management', 'href' => $base . '/dashboard/contact', 'icon' => 'telephone', 'page' => 'contact'];
+        $communicationsGroup[] = ['label' => frs_t('sidebar.contact_management'), 'href' => $base . '/dashboard/contact', 'icon' => 'telephone', 'page' => 'contact'];
     }
 
     // Operations/Integrations - check permissions
     $integrationsGroup = [];
     if (frs_can_read($role, 'maintenance')) {
-        $integrationsGroup[] = ['label' => 'Maintenance Management', 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
+        $integrationsGroup[] = ['label' => frs_t('sidebar.maintenance_management'), 'href' => $base . '/dashboard/maintenance-integration', 'icon' => 'wrench', 'page' => 'maintenance_integration'];
     }
     if (frs_can_read($role, 'infrastructure')) {
-        $integrationsGroup[] = ['label' => 'Infrastructure Projects', 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];
+        $integrationsGroup[] = ['label' => frs_t('sidebar.infrastructure_projects'), 'href' => $base . '/dashboard/infrastructure-projects', 'icon' => 'hammer', 'page' => 'infrastructure_projects_integration'];
     }
     if (frs_can_read($role, 'utilities')) {
-        $integrationsGroup[] = ['label' => 'Utilities and Equipments Management', 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
+        $integrationsGroup[] = ['label' => frs_t('sidebar.utilities_management'), 'href' => $base . '/dashboard/utilities-integration', 'icon' => 'bolt', 'page' => 'utilities_integration'];
     }
     if (frs_can_read($role, 'energy')) {
-        $integrationsGroup[] = ['label' => 'Energy Savings and Recommendations', 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
+        $integrationsGroup[] = ['label' => frs_t('sidebar.energy_efficiency'), 'href' => $base . '/dashboard/energy-efficiency', 'icon' => 'lightbulb', 'page' => 'energy_efficiency'];
     }
 
     // Reports & Analytics is the only item left in this group now that Live
     // Occupancy moved to Reservations & Facilities - a one-item collapsible
     // group isn't worth it, so it's a plain top-level link (see $mainExtraLinks).
     if (frs_can_read($role, 'reports')) {
-        $mainExtraLinks[] = ['label' => 'Reports & Analytics', 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'];
+        $mainExtraLinks[] = ['label' => frs_t('sidebar.reports_analytics'), 'href' => $base . '/dashboard/reports', 'icon' => 'chart-bar', 'page' => 'reports'];
     }
 }
 
@@ -183,32 +183,32 @@ if ($role === 'Admin') {
     // Administration - check permissions
     $administrationGroup = [];
     if (frs_can_read($role, 'users')) {
-        $administrationGroup[] = ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.user_management'), 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
     }
     if (frs_can_read($role, 'settings')) {
-        $administrationGroup[] = ['label' => 'System Settings', 'href' => $base . '/dashboard/system-settings', 'icon' => 'wrench', 'page' => 'system_settings'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.system_settings'), 'href' => $base . '/dashboard/system-settings', 'icon' => 'wrench', 'page' => 'system_settings'];
     }
     if (frs_can_read($role, 'documents')) {
-        $administrationGroup[] = ['label' => 'Document Management', 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.document_management'), 'href' => $base . '/dashboard/document-management', 'icon' => 'folder', 'page' => 'document_management'];
     }
     if (frs_can_read($role, 'audit_trail')) {
-        $administrationGroup[] = ['label' => 'Audit Trail', 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.audit_trail'), 'href' => $base . '/dashboard/audit-trail', 'icon' => 'file-text', 'page' => 'audit_trail'];
     }
     // Dev-only tool, previously its own "AI Tools" group alongside Smart
     // Scheduler - moved here since it's Admin-only and rarely used.
     if (frs_ai_dev_tools_visible()) {
-        $administrationGroup[] = ['label' => 'AI Model Lab', 'href' => $base . '/dashboard/ai-model-lab', 'icon' => 'robot', 'page' => 'ai_model_lab'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.ai_model_lab'), 'href' => $base . '/dashboard/ai-model-lab', 'icon' => 'robot', 'page' => 'ai_model_lab'];
     }
 } elseif ($role === 'Staff') {
     // Administration - check permissions
     $administrationGroup = [];
     if (frs_can_read($role, 'users')) {
-        $administrationGroup[] = ['label' => 'User Management', 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
+        $administrationGroup[] = ['label' => frs_t('sidebar.user_management'), 'href' => $base . '/dashboard/user-management', 'icon' => 'users', 'page' => 'user_management'];
     }
 }
 
 $accountLinks = [
-    ['label' => 'Profile', 'href' => $base . '/dashboard/profile', 'icon' => 'user', 'page' => 'profile'],
+    ['label' => frs_t('sidebar.profile'), 'href' => $base . '/dashboard/profile', 'icon' => 'user', 'page' => 'profile'],
 ];
 
 $sidebarAvatarInitial = function_exists('mb_substr')
@@ -219,37 +219,37 @@ $sidebarAvatarInitial = function_exists('mb_substr')
 <aside class="sidebar">
     <div class="brand">
         <img src="<?= $base; ?>/public/img/brgy-culiat-logo.png" alt="Infra Gov Services" style="height: 32px; width: auto; object-fit: contain;">
-        <span>Facilities</span>
-        <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close sidebar">✕</button>
+        <span><?= frs_te('sidebar.brand'); ?></span>
+        <button type="button" class="sidebar-close" data-sidebar-close aria-label="<?= frs_te('sidebar.close'); ?>">✕</button>
     </div>
-    <nav aria-label="Dashboard navigation">
+    <nav aria-label="<?= frs_te('sidebar.nav_label'); ?>">
         <!-- Main: Dashboard + ungrouped single-item links (Smart Scheduler, Reports & Analytics) -->
         <div class="sidebar-section">
-            <div class="sidebar-section-title">Main</div>
-            <?= renderNavLink(['label' => 'Dashboard', 'href' => $base . '/dashboard', 'icon' => 'dashboard', 'page' => 'index'], $current, $iconPaths); ?>
+            <div class="sidebar-section-title"><?= frs_te('sidebar.main'); ?></div>
+            <?= renderNavLink(['label' => frs_t('sidebar.dashboard'), 'href' => $base . '/dashboard', 'icon' => 'dashboard', 'page' => 'index'], $current, $iconPaths); ?>
             <?php foreach ($mainExtraLinks as $link): ?>
                 <?= renderNavLink($link, $current, $iconPaths); ?>
             <?php endforeach; ?>
         </div>
 
         <!-- Booking Group -->
-        <?= renderCollapsibleGroup('Booking', 'sidebar-booking', $bookingGroup, $current, $iconPaths, true); ?>
+        <?= renderCollapsibleGroup(frs_t('sidebar.booking'), 'sidebar-booking', $bookingGroup, $current, $iconPaths, true); ?>
 
         <!-- Reservations & Facilities (Admin/Staff) -->
-        <?= renderCollapsibleGroup('Reservations & Facilities', 'sidebar-reservations-facilities', $reservationsFacilitiesGroup, $current, $iconPaths, true); ?>
+        <?= renderCollapsibleGroup(frs_t('sidebar.reservations_facilities'), 'sidebar-reservations-facilities', $reservationsFacilitiesGroup, $current, $iconPaths, true); ?>
 
         <!-- Communications (Admin/Staff) -->
-        <?= renderCollapsibleGroup('Communications', 'sidebar-communications', $communicationsGroup, $current, $iconPaths, true); ?>
+        <?= renderCollapsibleGroup(frs_t('sidebar.communications'), 'sidebar-communications', $communicationsGroup, $current, $iconPaths, true); ?>
 
         <!-- Operations (Admin/Staff) -->
-        <?= renderCollapsibleGroup('Operations', 'sidebar-integrations', $integrationsGroup, $current, $iconPaths, false); ?>
+        <?= renderCollapsibleGroup(frs_t('sidebar.operations'), 'sidebar-integrations', $integrationsGroup, $current, $iconPaths, false); ?>
 
         <!-- Administration (Admin; Staff: User Management) -->
-        <?= renderCollapsibleGroup('Administration', 'sidebar-administration', $administrationGroup, $current, $iconPaths, false); ?>
+        <?= renderCollapsibleGroup(frs_t('sidebar.administration'), 'sidebar-administration', $administrationGroup, $current, $iconPaths, false); ?>
 
         <!-- Account -->
         <div class="sidebar-section sidebar-bottom">
-            <div class="sidebar-section-title">Account</div>
+            <div class="sidebar-section-title"><?= frs_te('sidebar.account'); ?></div>
             <?php foreach ($accountLinks as $link): ?>
                 <?= renderNavLink($link, $current, $iconPaths); ?>
             <?php endforeach; ?>

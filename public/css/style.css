@@ -12494,3 +12494,79 @@ img[src*="geralt-maintenance"] { object-position: center 75% !important; }
     background: linear-gradient(135deg, #f87171, #dc2626) !important;
     box-shadow: 0 6px 15px rgba(239, 68, 68, 0.45) !important;
 }
+
+/* ---------------------------------------------------------------
+   Icon-only English/Tagalog toggle (frs_language_switcher()).
+   Shares the round-icon-button shape with .theme-toggle-btn so the
+   two sit together in the navbar as a matched pair.
+   --------------------------------------------------------------- */
+.frs-lang-toggle {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+    color: var(--text-primary);
+    text-decoration: none;
+    flex: 0 0 auto;
+}
+
+.frs-lang-toggle:hover {
+    background: var(--bg-tertiary);
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px var(--shadow-hover);
+    color: var(--text-primary);
+}
+
+.frs-lang-toggle:focus-visible {
+    outline: 2px solid var(--primary-color, #2563eb);
+    outline-offset: 2px;
+}
+
+.lang-toggle-container {
+    display: flex;
+    align-items: center;
+}
+
+/* Public navbar sits on a dark translucent bar until it scrolls, so the
+   icon follows the same light/dark inversion the nav links use. */
+.public-navbar-modern .frs-lang-toggle {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.public-navbar-modern .frs-lang-toggle:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.navbar-scrolled .frs-lang-toggle {
+    background: rgba(31, 41, 55, 0.06);
+    border-color: rgba(31, 41, 55, 0.25);
+    color: #1f2937;
+}
+
+.navbar-scrolled .frs-lang-toggle:hover {
+    background: rgba(31, 41, 55, 0.12);
+    color: #111827;
+}
+
+.mobile-nav-lang.frs-lang-toggle {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+@media (max-width: 480px) {
+    .frs-lang-toggle {
+        width: 36px;
+        height: 36px;
+    }
+}
