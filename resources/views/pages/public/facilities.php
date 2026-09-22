@@ -3,16 +3,24 @@ $useTailwind = true;
 require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/ui_helpers.php';
-$pageTitle = 'Facilities | LGU Facilities Reservation';
+$pageTitle = frs_t('facilities.page_title');
 $base = base_path();
 $pdo = db();
 
 $stmt = $pdo->query("SELECT id, name, description, image_path, status FROM facilities WHERE status != 'deleted' ORDER BY name");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Facility status enum is a closed set ('available', 'maintenance',
+// 'offline'); anything unexpected falls back to the raw value.
+$statusLabels = [
+    'available' => frs_t('facilities.status_available'),
+    'maintenance' => frs_t('facilities.status_maintenance'),
+    'offline' => frs_t('facilities.status_offline'),
+];
+
 $facilities = [];
 foreach ($rows as $idx => $row) {
-    $statusLabel = ucfirst($row['status']);
+    $statusLabel = $statusLabels[$row['status']] ?? ucfirst($row['status']);
     $statusClass = $row['status'] === 'available' ? 'status-available' : 'status-booked';
     $image = $row['image_path']
         ? $base . $row['image_path']
@@ -21,7 +29,7 @@ foreach ($rows as $idx => $row) {
     $facilities[] = [
         'id' => $row['id'],
         'name' => $row['name'],
-        'description' => $row['description'] ?: 'LGU facility.',
+        'description' => $row['description'] ?: frs_t('facilities.default_description'),
         'status' => $statusLabel,
         'status_class' => $statusClass,
         'image' => $image,
@@ -29,15 +37,15 @@ foreach ($rows as $idx => $row) {
 }
 
 $pageHeaderIcon = 'bi-building';
-$pageHeaderTitle = 'Facilities Directory';
-$pageHeaderTagline = 'Browse and reserve our barangay facilities. Your community spaces, one click away.';
+$pageHeaderTitle = frs_t('facilities.header_title');
+$pageHeaderTagline = frs_t('facilities.header_tagline');
 ob_start();
 ?>
 <?php include __DIR__ . '/../../components/page_header.php'; ?>
 <section class="section public-fade-in facilities-content-section" id="portfolio">
     <div class="container">
         <?php if (empty($facilities)): ?>
-            <p class="text-gray-600 text-center py-12">No facilities are published yet. Please check again later or contact the LGU Facilities Office.</p>
+            <p class="text-gray-600 text-center py-12"><?= frs_te('facilities.empty_state'); ?></p>
         <?php else: ?>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 page-content-animate">
                 <?php foreach ($facilities as $idx => $facility): ?>
@@ -52,7 +60,7 @@ ob_start();
                             <h3 class="text-lg font-bold text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors"><?= htmlspecialchars($facility['name']); ?></h3>
                             <p class="text-gray-600 text-sm mb-4 line-clamp-2"><?= htmlspecialchars($facility['description']); ?></p>
                             <span class="text-emerald-600 font-semibold text-sm inline-flex items-center gap-1">
-                                View Details
+                                <?= frs_te('facilities.view_details'); ?>
                                 <svg class="w-5 h-5 public-icon-transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                             </span>
                         </div>

@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 
-$pageTitle = 'Reset Password | LGU Facilities Reservation';
+$pageTitle = frs_t('resetpw.pagetitle');
 $error = '';
 $passwordError = ''; // Separate error for password validation (doesn't invalidate token)
 $success = false;
@@ -22,14 +22,14 @@ $token = trim($rawToken);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-        $error = 'Invalid security token. Please refresh the page.';
+        $error = frs_t('resetpw.error.csrf');
         } else {
             $token = isset($_POST['token']) ? trim($_POST['token']) : '';
             $password = $_POST['password'] ?? '';
             $confirmPassword = $_POST['confirm_password'] ?? '';
             
             if (empty($token)) {
-                $error = 'Invalid reset token.';
+                $error = frs_t('resetpw.error.invalid_token');
             } else {
                 try {
                     $pdo = db();
@@ -61,22 +61,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $checkData = $checkStmt->fetch(PDO::FETCH_ASSOC);
                         
                         if (!$checkData) {
-                            $error = 'Invalid reset token. Please request a new password reset.';
+                            $error = frs_t('resetpw.error.invalid_token_request_new');
                         } elseif ($checkData['used_at']) {
-                            $error = 'This reset link has already been used. Please request a new one.';
+                            $error = frs_t('resetpw.error.link_used');
                         } elseif (!$checkData['is_not_expired']) {
-                            $error = 'This reset link has expired. Please request a new one.';
+                            $error = frs_t('resetpw.error.link_expired');
                         } else {
-                            $error = 'Invalid or expired reset token. Please request a new password reset.';
+                            $error = frs_t('resetpw.error.invalid_or_expired');
                         }
                     } else {
                         // Token is valid - now validate password
                         $tokenValid = true;
                         
                         if (empty($password) || strlen($password) < 8) {
-                            $passwordError = 'Password must be at least 8 characters long.';
+                            $passwordError = frs_t('resetpw.error.password_too_short');
                         } elseif ($password !== $confirmPassword) {
-                            $passwordError = 'Passwords do not match.';
+                            $passwordError = frs_t('resetpw.error.password_mismatch');
                         } else {
                             // Validate password strength
                             $passwordErrors = validatePassword($password);
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } catch (Exception $e) {
                     error_log('Password reset error: ' . $e->getMessage());
-                    $error = 'An error occurred. Please try again.';
+                    $error = frs_t('resetpw.error.generic');
                 }
             }
     }
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Ensure token is 64 characters (hex string from bin2hex(random_bytes(32)))
         if (strlen($token) !== 64 || !ctype_xdigit($token)) {
-            $error = 'Invalid token format. Please request a new password reset.';
+            $error = frs_t('resetpw.error.invalid_token_format');
         } else {
             // Generate hash from the token
             $tokenHash = hash('sha256', $token);
@@ -141,17 +141,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (!$checkData) {
                 error_log('Password reset: Token hash not found in database. Hash: ' . substr($tokenHash, 0, 20) . '...');
-                $error = 'Invalid reset token. Please request a new password reset link.';
+                $error = frs_t('resetpw.error.invalid_token_request_new_link');
             } else {
                 // Token found - validate it
                 error_log('Password reset: Token found. User ID: ' . $checkData['user_id'] . ', User Status: "' . $checkData['user_status'] . '", Expires: ' . $checkData['expires_at'] . ', Used: ' . ($checkData['used_at'] ?? 'NULL') . ', Is Not Expired (DB): ' . ($checkData['is_not_expired'] ?? 'NULL'));
                 
                 if (strtolower($checkData['user_status']) !== 'active') {
-                    $error = 'Your account is not active. Please contact support.';
+                    $error = frs_t('resetpw.error.inactive');
                 } elseif ($checkData['used_at']) {
-                    $error = 'This reset link has already been used. Please request a new one.';
+                    $error = frs_t('resetpw.error.link_used');
                 } elseif (!$checkData['is_not_expired']) {
-                    $error = 'This reset link has expired. Please request a new one.';
+                    $error = frs_t('resetpw.error.link_expired');
                 } else {
                     // Token is valid - clear any error and set flag
                     $error = '';
@@ -161,10 +161,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Exception $e) {
         error_log('Password reset validation error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $error = 'An error occurred. Please try again.';
+        $error = frs_t('resetpw.error.generic');
     }
 } else {
-    $error = 'No reset token provided.';
+    $error = frs_t('resetpw.error.no_token');
 }
 
 ob_start();
@@ -174,9 +174,9 @@ ob_start();
         <div class="auth-header">
             <div class="auth-icon">🔑</div>
             <?php if ($success): ?>
-                <?= frs_heading_with_tip('Password Reset Successful', 'You can sign in with your new password. For security, other sessions may have been cleared.', 'h1'); ?>
+                <?= frs_heading_with_tip(frs_t('resetpw.success_heading'), frs_t('resetpw.success_heading_tip'), 'h1'); ?>
             <?php else: ?>
-                <?= frs_heading_with_tip('Reset Password', 'Choose a strong password (length and complexity rules apply). This link works once and expires.', 'h1'); ?>
+                <?= frs_heading_with_tip(frs_t('resetpw.heading'), frs_t('resetpw.heading_tip'), 'h1'); ?>
             <?php endif; ?>
         </div>
         

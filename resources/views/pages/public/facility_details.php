@@ -25,7 +25,17 @@ if (!$facility) {
     exit;
 }
 
-$pageTitle = htmlspecialchars($facility['name']) . ' | LGU Facilities Reservation';
+// The layout escapes $pageTitle itself, so pass the raw name through.
+$pageTitle = frs_t('facilitydetail.page_title', ['name' => $facility['name']]);
+
+// Facility status enum is a closed set ('available', 'maintenance',
+// 'offline'); anything unexpected falls back to the raw value.
+$statusLabels = [
+    'available' => frs_t('facilitydetail.status_available'),
+    'maintenance' => frs_t('facilitydetail.status_maintenance'),
+    'offline' => frs_t('facilitydetail.status_offline'),
+];
+$statusLabel = $statusLabels[$facility['status']] ?? ucfirst((string)$facility['status']);
 
 $facilityEquipment = frs_get_facility_equipment($pdo, (int)$facility['id']);
 
@@ -85,36 +95,36 @@ ob_start();
                     <div class="facility-hero-header">
                         <h2><?= htmlspecialchars($facility['name']); ?></h2>
                         <span class="status-pill <?= $facility['status'] === 'available' ? 'status-available' : 'status-booked'; ?>">
-                            <?= ucfirst(htmlspecialchars($facility['status'])); ?>
+                            <?= htmlspecialchars($statusLabel); ?>
                         </span>
                     </div>
                     <?php if (!empty($facility['location']) || !empty($facility['capacity'])): ?>
                         <p class="facility-meta">
                             <?php if (!empty($facility['location'])): ?>
-                                <span><strong>Location:</strong> <?= htmlspecialchars($facility['location']); ?></span>
+                                <span><strong><?= frs_te('facilitydetail.location_label'); ?></strong> <?= htmlspecialchars($facility['location']); ?></span>
                             <?php endif; ?>
                             <?php if (!empty($facility['capacity'])): ?>
-                                <span><strong>Capacity:</strong> <?= htmlspecialchars($facility['capacity']); ?></span>
+                                <span><strong><?= frs_te('facilitydetail.capacity_label'); ?></strong> <?= htmlspecialchars($facility['capacity']); ?></span>
                             <?php endif; ?>
                         </p>
                     <?php endif; ?>
                     
                     <p class="facility-description">
-                        <?= nl2br(htmlspecialchars($facility['description'] ?: 'LGU-owned facility available for reservation.')); ?>
+                        <?= nl2br(htmlspecialchars($facility['description'] ?: frs_t('facilitydetail.default_description'))); ?>
                     </p>
                 </div>
             </div>
 
             <div class="facility-detail-sections">
                 <section class="facility-section">
-                    <h3>Usage</h3>
-                    <p class="rate-text"><strong>Free of Charge</strong></p>
-                    <p style="color:#4c5b7c; font-size:0.9rem; margin-top:0.5rem;">This facility is provided free of charge for public use by the LGU/Barangay.</p>
+                    <h3><?= frs_te('facilitydetail.usage_title'); ?></h3>
+                    <p class="rate-text"><strong><?= frs_te('facilitydetail.usage_free'); ?></strong></p>
+                    <p style="color:#4c5b7c; font-size:0.9rem; margin-top:0.5rem;"><?= frs_te('facilitydetail.usage_note'); ?></p>
                 </section>
 
                 <?php if (!empty($facilityEquipment)): ?>
                     <section class="facility-section">
-                        <h3>Equipment & Utilities</h3>
+                        <h3><?= frs_te('facilitydetail.equipment_title'); ?></h3>
                         <ul class="rules-list" style="list-style:disc; padding-left:1.25rem;">
                             <?php foreach ($facilityEquipment as $item): ?>
                                 <li>
@@ -133,14 +143,14 @@ ob_start();
 
                 <?php if (!empty($facility['amenities'])): ?>
                     <section class="facility-section">
-                        <h3>Amenities</h3>
+                        <h3><?= frs_te('facilitydetail.amenities_title'); ?></h3>
                         <p><?= nl2br(htmlspecialchars($facility['amenities'])); ?></p>
                     </section>
                 <?php endif; ?>
 
                 <?php if (!empty($facility['rules'])): ?>
                     <section class="facility-section">
-                        <h3>Rules & Regulations</h3>
+                        <h3><?= frs_te('facilitydetail.rules_title'); ?></h3>
                         <ol class="rules-list">
                             <?php foreach (preg_split('/\r\n|\r|\n/', $facility['rules']) as $rule): ?>
                                 <?php if (trim($rule) !== ''): ?>
@@ -155,7 +165,7 @@ ob_start();
 
         <aside class="facility-detail-sidebar">
             <div class="facility-availability-card">
-                <h3>Availability (Next 14 Days)</h3>
+                <h3><?= frs_te('facilitydetail.availability_title'); ?></h3>
                 <div class="calendar" role="grid">
                     <?php foreach ($calendar as $slot): ?>
                         <div class="day <?= $slot['status']; ?>" data-label="<?= htmlspecialchars($slot['label']); ?>" data-date="<?= htmlspecialchars($slot['date']); ?>">
@@ -164,25 +174,23 @@ ob_start();
                     <?php endforeach; ?>
                 </div>
                 <p class="availability-note">
-                    For full availability and to submit a reservation request, please log in and use the booking module.
+                    <?= frs_te('facilitydetail.availability_note'); ?>
                 </p>
             </div>
 
             <div style="background:#fff4e5; border:1px solid #ffc107; border-radius:8px; padding:1rem; margin-top:1rem;">
                 <h4 style="margin:0 0 0.5rem; color:#856404; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
-                    <span>⚠️</span> Important Notice
+                    <span>⚠️</span> <?= frs_te('facilitydetail.notice_title'); ?>
                 </h4>
                 <p style="margin:0; color:#856404; font-size:0.85rem; line-height:1.5;">
-                    <strong>Emergency Override Policy:</strong> In case of emergencies (e.g., evacuation centers, disaster response, urgent LGU/Barangay needs), 
-                    the LGU reserves the right to override or cancel existing reservations. Affected residents will be notified immediately. 
-                    All facilities are provided free of charge for public use.
+                    <strong><?= frs_te('facilitydetail.notice_policy_label'); ?></strong> <?= frs_te('facilitydetail.notice_text'); ?>
                 </p>
             </div>
             
             <?php if (!empty($facility['latitude']) && !empty($facility['longitude'])): ?>
                 <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 1rem;">
                     <h4 style="margin:0 0 0.5rem; color:#1b1b1f; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem;">
-                        <span>🗺️</span> Facility Location Map
+                        <span>🗺️</span> <?= frs_te('facilitydetail.map_title'); ?>
                     </h4>
                     <div id="facility-map" data-lat="<?= (float)$facility['latitude']; ?>" data-lng="<?= (float)$facility['longitude']; ?>" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; min-height: 300px;"></div>
                 </div>

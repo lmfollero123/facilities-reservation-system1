@@ -16,13 +16,13 @@ if (!function_exists('base_url')) {
     }
 }
 
-$pageTitle = 'Forgot Password | LGU Facilities Reservation';
+$pageTitle = frs_t('forgotpw.pagetitle');
 $message = '';
 $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-        $message = 'Invalid security token. Please refresh the page.';
+        $message = frs_t('forgotpw.error.csrf');
         $messageType = 'error';
     } else {
         $clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
@@ -32,17 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } else
         if (!checkRateLimit('forgot_password_ip', (string)$clientIp, 3, 600)) {
-            $message = 'Too many password reset requests. Please try again in 10 minutes.';
+            $message = frs_t('forgotpw.error.rate_limit_ip');
             $messageType = 'error';
         } else {
         $email = sanitizeInput($_POST['email'] ?? '', 'email');
         
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $message = 'Please enter a valid email address.';
+            $message = frs_t('forgotpw.error.invalid_email');
             $messageType = 'error';
         } else {
             if (!checkRateLimit('forgot_password_email', strtolower($email), 2, 600)) {
-                $message = 'Too many reset attempts for this email. Please try again later.';
+                $message = frs_t('forgotpw.error.rate_limit_email');
                 $messageType = 'error';
             } else {
             try {
@@ -106,12 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Always show success (security best practice)
-                $message = 'If an account with that email exists, a password reset link has been sent. Please check your email.';
+                $message = frs_t('forgotpw.success');
                 $messageType = 'success';
                 
             } catch (Exception $e) {
                 error_log('Password reset error: ' . $e->getMessage());
-                $message = 'An error occurred. Please try again later.';
+                $message = frs_t('forgotpw.error.generic');
                 $messageType = 'error';
             }
             }
@@ -126,7 +126,7 @@ ob_start();
     <div class="auth-card">
         <div class="auth-header">
             <div class="auth-icon">🔒</div>
-            <?= frs_heading_with_tip('Forgot Password', 'Enter the email on your account. If it exists, we send a reset link (check spam). The link expires after a short time.', 'h1'); ?>
+            <?= frs_heading_with_tip(frs_t('forgotpw.heading'), frs_t('forgotpw.heading_tip'), 'h1'); ?>
         </div>
         
         <?php if ($message): ?>
@@ -143,17 +143,17 @@ ob_start();
                 </div>
             <?php endif; ?>
             <label>
-                Email Address
+                <?= frs_te('forgotpw.label.email'); ?>
                 <div class="input-wrapper">
                     <input name="email" type="email" placeholder="your@email.com" required autofocus>
                 </div>
             </label>
-            
-            <button class="btn-primary" type="submit">Send Reset Link</button>
+
+            <button class="btn-primary" type="submit"><?= frs_te('forgotpw.submit'); ?></button>
         </form>
-        
+
         <div class="auth-footer">
-            <a href="<?= base_path(); ?>/login">← Back to Login</a>
+            <a href="<?= base_path(); ?>/login">← <?= frs_te('forgotpw.back_to_login'); ?></a>
         </div>
     </div>
 </div>

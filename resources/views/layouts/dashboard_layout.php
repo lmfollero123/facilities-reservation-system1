@@ -62,7 +62,7 @@ $lastActivityTs = isset($_SESSION['last_activity']) ? (int)$_SESSION['last_activ
 $sessionRemainingSeconds = max(0, $sessionTimeoutSeconds - (time() - $lastActivityTs));
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(frs_current_locale(), ENT_QUOTES, 'UTF-8'); ?>">
 <head>
     <meta charset="UTF-8">
     <script>

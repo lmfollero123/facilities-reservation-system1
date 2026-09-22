@@ -117,4 +117,13 @@ return [
     'common.status' => 'Status',
     'common.actions' => 'Actions',
     'common.facility' => 'Facility',
+
+    // Announcement category badges (config/announcement_categories.php)
+    'category.emergency' => 'Emergency',
+    'category.urgent' => 'Urgent',
+    'category.event' => 'Event',
+    'category.health' => 'Health',
+    'category.deadline' => 'Deadline',
+    'category.advisory' => 'Advisory',
+    'category.general' => 'General',
 ];

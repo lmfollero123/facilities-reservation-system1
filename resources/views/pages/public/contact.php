@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/security.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
-$pageTitle = 'Contact | Barangay Culiat Public Facilities Reservation';
+$pageTitle = frs_t('contact.page_title');
 $base = base_path();
 $contactCsrfToken = generateCSRFToken();
 
@@ -32,8 +32,8 @@ $contactInfo = [
 ];
 
 $pageHeaderIcon = 'bi-telephone';
-$pageHeaderTitle = 'Contact Us';
-$pageHeaderTagline = 'Get in touch with Barangay Culiat Facilities Management Office. We\'re here to help.';
+$pageHeaderTitle = frs_t('contact.header_title');
+$pageHeaderTagline = frs_t('contact.header_tagline');
 ob_start();
 ?>
 <?php include __DIR__ . '/../../components/page_header.php'; ?>
@@ -54,7 +54,7 @@ ob_start();
                             <i class="bi bi-geo-alt-fill"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Address</strong>
+                            <strong><?= frs_te('contact.label.address'); ?></strong>
                             <p><?= htmlspecialchars($contactInfo['address']); ?></p>
                         </div>
                     </div>
@@ -64,7 +64,7 @@ ob_start();
                             <i class="bi bi-telephone-fill"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Phone</strong>
+                            <strong><?= frs_te('contact.label.phone'); ?></strong>
                             <p><a href="tel:<?= htmlspecialchars($contactInfo['phone']); ?>"><?= htmlspecialchars($contactInfo['phone']); ?></a></p>
                         </div>
                     </div>
@@ -74,7 +74,7 @@ ob_start();
                             <i class="bi bi-phone-fill"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Mobile</strong>
+                            <strong><?= frs_te('contact.label.mobile'); ?></strong>
                             <p><a href="tel:<?= htmlspecialchars($contactInfo['mobile']); ?>"><?= htmlspecialchars($contactInfo['mobile']); ?></a></p>
                         </div>
                     </div>
@@ -84,7 +84,7 @@ ob_start();
                             <i class="bi bi-envelope-fill"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Email</strong>
+                            <strong><?= frs_te('contact.label.email'); ?></strong>
                             <p><a href="mailto:<?= htmlspecialchars($contactInfo['email']); ?>"><?= htmlspecialchars($contactInfo['email']); ?></a></p>
                         </div>
                     </div>
@@ -94,7 +94,7 @@ ob_start();
                             <i class="bi bi-clock-history"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Office Hours</strong>
+                            <strong><?= frs_te('contact.label.office_hours'); ?></strong>
                             <p><?= $contactInfo['office_hours']; ?></p>
                         </div>
                     </div>
@@ -104,7 +104,7 @@ ob_start();
                             <i class="bi bi-shield-check"></i>
                         </div>
                         <div class="info-content">
-                            <strong>Data Protection Officer</strong>
+                            <strong><?= frs_te('contact.label.dpo'); ?></strong>
                             <p><a href="mailto:dpo@barangayculiat.gov.ph">dpo@barangayculiat.gov.ph</a></p>
                         </div>
                     </div>
@@ -113,8 +113,8 @@ ob_start();
 
             <!-- Inquiry Form -->
             <div class="inquiry-form-card">
-                <h3><i class="bi bi-chat-left-text"></i> Send an Inquiry</h3>
-                <p class="inquiry-form-intro">Have a question about facilities, reservations, or policies? Send us a message and our team will respond by email.</p>
+                <h3><i class="bi bi-chat-left-text"></i> <?= frs_te('contact.inquiry.heading'); ?></h3>
+                <p class="inquiry-form-intro"><?= frs_te('contact.inquiry.intro'); ?></p>
                 <form id="contact-inquiry-form" class="contact-inquiry-form" novalidate>
                     <input type="hidden" name="<?= htmlspecialchars(CSRF_TOKEN_NAME, ENT_QUOTES, 'UTF-8'); ?>" value="<?= htmlspecialchars($contactCsrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="hp-field" aria-hidden="true" style="position:absolute;left:-9999px;height:0;overflow:hidden;">
@@ -122,20 +122,20 @@ ob_start();
                         <input type="text" id="contact-website" name="website" tabindex="-1" autocomplete="off">
                     </div>
                     <div class="form-row">
-                        <label for="contact-name">Full Name <span class="req">*</span></label>
+                        <label for="contact-name"><?= frs_te('contact.form.name'); ?> <span class="req">*</span></label>
                         <input type="text" id="contact-name" name="name" required minlength="2" maxlength="120" autocomplete="name">
                     </div>
                     <div class="form-row">
-                        <label for="contact-email">Email <span class="req">*</span></label>
+                        <label for="contact-email"><?= frs_te('contact.form.email'); ?> <span class="req">*</span></label>
                         <input type="email" id="contact-email" name="email" required maxlength="190" autocomplete="email">
                     </div>
                     <div class="form-row">
-                        <label for="contact-organization">Organization (optional)</label>
+                        <label for="contact-organization"><?= frs_te('contact.form.organization'); ?></label>
                         <input type="text" id="contact-organization" name="organization" maxlength="190" autocomplete="organization">
                     </div>
                     <div class="form-row">
-                        <label for="contact-message">Message <span class="req">*</span></label>
-                        <textarea id="contact-message" name="message" rows="5" required minlength="10" maxlength="5000" placeholder="How can we help you?"></textarea>
+                        <label for="contact-message"><?= frs_te('contact.form.message'); ?> <span class="req">*</span></label>
+                        <textarea id="contact-message" name="message" rows="5" required minlength="10" maxlength="5000" placeholder="<?= frs_te('contact.form.message_placeholder'); ?>"></textarea>
                     </div>
                     <?php if (frs_captcha_enabled() && frs_turnstile_site_key() !== ''): ?>
                     <div class="form-row">
@@ -143,29 +143,29 @@ ob_start();
                     </div>
                     <?php endif; ?>
                     <div id="contact-form-feedback" class="contact-form-feedback" role="status" aria-live="polite"></div>
-                    <button type="submit" class="btn-submit-inquiry" id="contact-submit-btn">Send Message</button>
+                    <button type="submit" class="btn-submit-inquiry" id="contact-submit-btn"><?= frs_te('contact.form.submit'); ?></button>
                 </form>
             </div>
 
             <!-- Quick Links Card -->
             <div class="quick-links-card">
-                <h3><i class="bi bi-link-45deg"></i> Quick Links</h3>
+                <h3><i class="bi bi-link-45deg"></i> <?= frs_te('contact.quick_links.heading'); ?></h3>
                 <div class="quick-links">
                     <a href="<?= $base; ?>/faqs" class="quick-link">
                         <i class="bi bi-question-circle"></i>
-                        <span>Frequently Asked Questions</span>
+                        <span><?= frs_te('contact.quick_links.faqs'); ?></span>
                     </a>
                     <a href="<?= $base; ?>/facilities" class="quick-link">
                         <i class="bi bi-building"></i>
-                        <span>Browse Facilities</span>
+                        <span><?= frs_te('contact.quick_links.facilities'); ?></span>
                     </a>
                     <a href="<?= $base; ?>/register" class="quick-link">
                         <i class="bi bi-person-plus"></i>
-                        <span>Create an Account</span>
+                        <span><?= frs_te('contact.quick_links.register'); ?></span>
                     </a>
                     <a href="<?= $base; ?>/login" class="quick-link">
                         <i class="bi bi-box-arrow-in-right"></i>
-                        <span>Login to Your Account</span>
+                        <span><?= frs_te('contact.quick_links.login'); ?></span>
                     </a>
                 </div>
             </div>

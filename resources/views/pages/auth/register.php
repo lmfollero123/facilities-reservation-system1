@@ -11,7 +11,7 @@ require_once __DIR__ . '/../../../../config/sms_helper.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
 require_once __DIR__ . '/../../../../config/geocoding.php';
 
-$pageTitle = 'Register | LGU Facilities Reservation';
+$pageTitle = frs_t('register.page_title');
 $message = '';
 $messageType = '';
 
@@ -19,7 +19,7 @@ $messageType = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify CSRF token
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-        $message = 'Invalid security token. Please refresh the page and try again.';
+        $message = frs_t('register.error_csrf');
         $messageType = 'error';
         logSecurityEvent('csrf_validation_failed', 'Registration form', 'warning');
     } else {
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } else
         if (!checkRateLimit('register_form_ip', (string)$clientIp, 3, 900)) {
-            $message = 'Too many registration attempts from your network. Please try again later.';
+            $message = frs_t('register.error_rate_ip');
             $messageType = 'error';
         } else {
         // Get name fields
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'] ?? '';
         $acceptTerms = isset($_POST['accept_terms']) && $_POST['accept_terms'] === 'on';
         if ($email !== '' && !checkRateLimit('register_form_email', strtolower($email), 2, 3600)) {
-            $message = 'Too many registration attempts for this email. Please try again later.';
+            $message = frs_t('register.error_rate_email');
             $messageType = 'error';
         } else {
         
@@ -65,28 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Validate inputs
         if (empty($firstName) || strlen($firstName) < 2) {
-            $message = 'Please enter a valid first name (at least 2 characters).';
+            $message = frs_t('register.error_first_name');
             $messageType = 'error';
         } elseif (empty($lastName) || strlen($lastName) < 2) {
-            $message = 'Please enter a valid last name (at least 2 characters).';
+            $message = frs_t('register.error_last_name');
             $messageType = 'error';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $message = 'Please enter a valid email address.';
+            $message = frs_t('register.error_email_invalid');
             $messageType = 'error';
         } elseif (empty($address) || strlen($address) < 5) {
-            $message = 'Please enter your complete address.';
+            $message = frs_t('register.error_address');
             $messageType = 'error';
         } elseif ($mobileRaw !== '' && $mobile === null) {
-            $message = 'Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966).';
+            $message = frs_t('register.error_mobile');
             $messageType = 'error';
         } elseif (!$acceptTerms) {
-            $message = 'You must read and accept the Terms and Conditions and Data Privacy Policy to register.';
+            $message = frs_t('register.error_terms');
             $messageType = 'error';
         } else {
             // Check rate limiting (by IP)
             $clientIP = getClientIP();
             if (!checkRegisterRateLimit($clientIP)) {
-                $message = 'Too many registration attempts. Please try again in 1 hour.';
+                $message = frs_t('register.error_rate_limit');
                 $messageType = 'error';
                 logSecurityEvent('rate_limit_exceeded', "Registration attempts exceeded from IP: $clientIP", 'warning');
             } else {
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
                         $stmt->execute([$email]);
                         if ($stmt->fetch()) {
-                            $message = 'This email is already registered.';
+                            $message = frs_t('register.error_email_taken');
                             $messageType = 'error';
                             logSecurityEvent('registration_attempt_existing_email', "Registration attempt with existing email: $email", 'info');
                         } else {
@@ -208,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     // Note: Verification status must be manually approved by admin/staff
                                     // We do NOT auto-verify users even if they upload an ID during registration
                                 } else {
-                                    $message = 'Registration successful, but failed to save your ID document. You can upload it later from your profile.';
+                                    $message = frs_t('register.warning_id_save_failed');
                                     $messageType = 'warning';
                                 }
                             }
@@ -228,9 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                                 $_SESSION['pending_email_verify_user_id'] = $userId;
                                 $_SESSION['pending_email_verify_email'] = $email;
-                                $_SESSION['email_verify_login_message'] = 'Enter the code sent to your email. It is valid for '
-                                    . max(1, (int) ceil(((int) EMAIL_VERIFICATION_CODE_TTL_SECONDS) / 60))
-                                    . ' minutes.';
+                                $_SESSION['email_verify_login_message'] = frs_t('register.verify_email_notice', [
+                                    'minutes' => max(1, (int) ceil(((int) EMAIL_VERIFICATION_CODE_TTL_SECONDS) / 60)),
+                                ]);
 
                                 header('Location: ' . base_path() . '/verify-email');
                                 exit;
@@ -240,11 +240,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Check if the error is due to missing is_verified column
                         $errorMsg = $e->getMessage();
                         if (stripos($errorMsg, 'is_verified') !== false || stripos($errorMsg, 'Unknown column') !== false) {
-                            $message = 'Database migration required. Please contact the administrator or run the migration: database/migration_add_user_verification.sql';
+                            $message = frs_t('register.error_migration');
                             $messageType = 'error';
                             logSecurityEvent('registration_error', "Database migration needed - is_verified column missing: " . $errorMsg, 'error');
                         } else {
-                            $message = 'Registration failed: ' . htmlspecialchars($errorMsg);
+                            $message = frs_t('register.error_failed_prefix') . htmlspecialchars($errorMsg);
                             $messageType = 'error';
                             logSecurityEvent('registration_error', "Database error during registration: " . $errorMsg, 'error');
                         }
@@ -265,13 +265,13 @@ ob_start();
         <?php include __DIR__ . '/../../components/auth_brand_illustration.php'; ?>
         <div class="auth-split-brand-inner">
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
-                <i class="bi bi-arrow-left"></i> Back to website
+                <i class="bi bi-arrow-left"></i> <?= frs_te('register.back_to_website'); ?>
             </a>
             <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
-            <h2>Reserving Spaces,<br>Serving Community.</h2>
-            <p>Join the Barangay Culiat Public Facilities Reservation System. Book courts, halls, and community spaces — made for Culiat residents.</p>
+            <h2><?= frs_te('register.brand_tagline_1'); ?><br><?= frs_te('register.brand_tagline_2'); ?></h2>
+            <p><?= frs_te('register.brand_intro'); ?></p>
             <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
-            <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
+            <p class="auth-split-brand-footer"><?= frs_te('register.brand_footer', ['year' => date('Y')]); ?></p>
         </div>
     </aside>
 
@@ -373,8 +373,8 @@ ob_start();
                     <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="">
                     <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
                 </div>
-                <h1>Create an account</h1>
-                <p class="auth-split-sub">Already have an account? <a href="<?= htmlspecialchars($base); ?>/login">Log in</a></p>
+                <h1><?= frs_te('register.heading'); ?></h1>
+                <p class="auth-split-sub"><?= frs_te('register.have_account'); ?> <a href="<?= htmlspecialchars($base); ?>/login"><?= frs_te('register.login_link'); ?></a></p>
             </div>
 
             <?php if ($message): ?>
@@ -392,28 +392,28 @@ ob_start();
                 <div class="auth-split-form-scroll">
                     <div class="auth-split-form-row">
                         <label>
-                            First name *
+                            <?= frs_te('register.first_name'); ?> *
                             <input name="first_name" type="text" placeholder="Juan" required autofocus value="<?= isset($_POST['first_name']) ? e($_POST['first_name']) : ''; ?>" minlength="2">
                         </label>
                         <label>
-                            Last name *
+                            <?= frs_te('register.last_name'); ?> *
                             <input name="last_name" type="text" placeholder="Dela Cruz" required value="<?= isset($_POST['last_name']) ? e($_POST['last_name']) : ''; ?>" minlength="2">
                         </label>
                     </div>
 
                     <div class="auth-split-form-row">
                         <label>
-                            Middle name
+                            <?= frs_te('register.middle_name'); ?>
                             <input name="middle_name" type="text" placeholder="Santos" value="<?= isset($_POST['middle_name']) ? e($_POST['middle_name']) : ''; ?>">
                         </label>
                         <label>
-                            Suffix
+                            <?= frs_te('register.suffix'); ?>
                             <input name="suffix" type="text" placeholder="Jr., Sr., III" value="<?= isset($_POST['suffix']) ? e($_POST['suffix']) : ''; ?>" maxlength="10">
                         </label>
                     </div>
 
                     <label>
-                        Email address *
+                        <?= frs_te('register.email'); ?> *
                         <div class="auth-split-field">
                             <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
                             <input name="email" type="email" placeholder="official@lgu.gov.ph" required value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
@@ -421,35 +421,35 @@ ob_start();
                     </label>
 
                     <label>
-                        Mobile number
+                        <?= frs_te('register.mobile'); ?>
                         <input name="mobile" type="tel" placeholder="+63 900 000 0000" value="<?= isset($_POST['mobile']) ? e($_POST['mobile']) : ''; ?>">
                     </label>
 
                     <label>
-                        Address *
-                        <input name="address" type="text" placeholder="House/Unit No., Street, Barangay, Quezon City" required minlength="5" value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
-                        <small class="auth-split-hint">Any address within Quezon City. Note: a referral from a Barangay Culiat resident is required when making a reservation.</small>
+                        <?= frs_te('register.address'); ?> *
+                        <input name="address" type="text" placeholder="<?= frs_te('register.address_placeholder'); ?>" required minlength="5" value="<?= isset($_POST['address']) ? e($_POST['address']) : ''; ?>">
+                        <small class="auth-split-hint"><?= frs_te('register.address_hint'); ?></small>
                     </label>
 
                     <label>
-                        Password *
+                        <?= frs_te('register.password'); ?> *
                         <div class="auth-split-field">
                             <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
-                            <input name="password" id="registerPassword" type="password" placeholder="Create a strong password" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
-                            <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="Show password">
+                            <input name="password" id="registerPassword" type="password" placeholder="<?= frs_te('register.password_placeholder'); ?>" required minlength="<?= PASSWORD_MIN_LENGTH; ?>">
+                            <button type="button" class="auth-split-password-toggle" id="toggleRegisterPassword" aria-label="<?= frs_te('register.show_password'); ?>">
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
-                        <span class="auth-split-hint">At least <?= PASSWORD_MIN_LENGTH; ?> characters with uppercase, lowercase, and number.</span>
+                        <span class="auth-split-hint"><?= frs_te('register.password_hint', ['min' => PASSWORD_MIN_LENGTH]); ?></span>
                     </label>
 
                     <div class="auth-split-section">
-                        <p class="auth-split-section-title">Upload Valid ID (Optional)</p>
+                        <p class="auth-split-section-title"><?= frs_te('register.upload_id_title'); ?></p>
                         <span class="auth-split-hint" style="display:block;margin-bottom:0.75rem;line-height:1.5;">
-                            Upload now or later from your profile to enable auto-approval on bookings. PDF, JPG, PNG. Max 5MB.
+                            <?= frs_te('register.upload_id_hint'); ?>
                         </span>
                         <label>
-                            Valid ID
+                            <?= frs_te('register.valid_id'); ?>
                             <input type="file" name="doc_valid_id" accept=".pdf,image/*">
                         </label>
                     </div>
@@ -459,12 +459,12 @@ ob_start();
                             <input type="checkbox" name="accept_terms" required class="auth-split-terms-input">
                             <span class="auth-split-terms-box" aria-hidden="true"></span>
                         </span>
-                        <span>I agree to the <a href="#" id="termsLink">Terms &amp; Conditions</a> and <a href="#" id="privacyLink">Data Privacy Policy</a> of Barangay Culiat CPRFS, including compliance with the Data Privacy Act of 2012 (RA 10173).</span>
+                        <span><?= frs_te('register.terms_agree_prefix'); ?> <a href="#" id="termsLink"><?= frs_te('register.terms_link'); ?></a> <?= frs_te('register.terms_agree_and'); ?> <a href="#" id="privacyLink"><?= frs_te('register.privacy_link'); ?></a> <?= frs_te('register.terms_agree_suffix'); ?></span>
                     </label>
                 </div>
 
-                <button class="btn-primary" type="submit" id="submitBtn">Create account</button>
-                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Securely processed by Barangay Culiat CPRFS</p>
+                <button class="btn-primary" type="submit" id="submitBtn"><?= frs_te('register.submit'); ?></button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> <?= frs_te('register.trust_note'); ?></p>
             </form>
         </div>
     </div>
@@ -475,195 +475,195 @@ ob_start();
     <div class="modal-dialog modal-dialog-scrollable modal-lg terms-modal-dialog terms-modal-content">
             <div class="modal-header" style="border-bottom: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem; flex-shrink: 0;">
                 <h5 class="modal-title" id="termsModalLabel" style="color: #1e3a5f; font-weight: 700; font-size: 1.5rem;">
-                    Terms and Conditions & Data Privacy Policy
+                    <?= frs_te('register.modal_title'); ?>
                 </h5>
-                <button type="button" class="btn-close" aria-label="Close"></button>
+                <button type="button" class="btn-close" aria-label="<?= frs_te('register.modal_close'); ?>"></button>
             </div>
             <div class="modal-body" style="padding: 1.5rem; color: #333; overflow-y: auto; flex: 1; min-height: 0;">
                 <div style="margin-bottom: 2rem;">
-                    <h3 style="color: #1e3a5f; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Terms and Conditions</h3>
+                    <h3 style="color: #1e3a5f; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;"><?= frs_te('register.terms_heading'); ?></h3>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        These Terms and Conditions govern the use of the Barangay Culiat Public Facilities Reservation System. By accessing the portal, citizens, organizations, and partner agencies agree to observe the policies set by the Municipal Facilities Management Office.
+                        <?= frs_te('register.terms_p1'); ?>
                     </p>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        Reservations are considered tentative until a confirmation notice is issued by the LGU. The LGU reserves the right to reassign, reschedule, or decline requests to ensure continuity of essential public services, disaster response operations, and official functions.
+                        <?= frs_te('register.terms_p2'); ?>
                     </p>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        Users shall provide accurate contact information, submit complete supporting documents, and settle applicable fees within the prescribed period. Non-compliance may result in cancellation without prejudice to future bookings.
+                        <?= frs_te('register.terms_p3'); ?>
                     </p>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        Any unauthorized commercial activity, political gathering without clearance, or activity that jeopardizes public safety is strictly prohibited. Damages to facilities shall be charged to the reserving party and may include administrative sanctions.
+                        <?= frs_te('register.terms_p4'); ?>
                     </p>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        By proceeding, you acknowledge that you have read and understood these terms and agree to comply with all LGU directives related to facility utilization.
+                        <?= frs_te('register.terms_p5'); ?>
                     </p>
                 </div>
                 
                 <div style="border-top: 2px solid rgba(0, 0, 0, 0.1); padding-top: 2rem;">
-                    <h3 style="color: #1e3a5f; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Data Privacy Policy</h3>
-                    
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">1. Data Controller</h4>
+                    <h3 style="color: #1e3a5f; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;"><?= frs_te('register.privacy_heading'); ?></h3>
+
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s1_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        The Barangay Culiat Public Facilities Reservation System is operated by the Barangay Culiat Facilities Management Office, Quezon City. We are committed to protecting your personal data in accordance with the <strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong> and its Implementing Rules and Regulations.
+                        <?= frs_te('register.privacy_s1_before'); ?> <strong><?= frs_te('register.privacy_s1_law'); ?></strong> <?= frs_te('register.privacy_s1_after'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">2. Data Protection Officer</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s2_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        For privacy concerns, you may contact our Data Protection Officer:
-                    </p>
-                    <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li>Email: dpo@barangayculiat.gov.ph</li>
-                        <li>Office: Barangay Culiat Facilities Management Office</li>
-                        <li>Contact: Via the Contact page of this portal</li>
-                    </ul>
-
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">3. What Data We Collect</h4>
-                    <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        We collect only the minimum personal data required to process facility reservations:
+                        <?= frs_te('register.privacy_s2_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li><strong>Identity Information</strong>: Name, valid ID (optional)</li>
-                        <li><strong>Contact Information</strong>: Email address, mobile number</li>
-                        <li><strong>Address Information</strong>: Your address (used to recommend nearby facilities; a Barangay Culiat resident referral is required at booking time)</li>
-                        <li><strong>Reservation Details</strong>: Facility, date, time, purpose, number of attendees</li>
+                        <li><?= frs_te('register.privacy_s2_li1'); ?></li>
+                        <li><?= frs_te('register.privacy_s2_li2'); ?></li>
+                        <li><?= frs_te('register.privacy_s2_li3'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">4. Why We Collect Your Data (Legal Basis)</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s3_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        We process your personal data based on:
+                        <?= frs_te('register.privacy_s3_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li><strong>Your consent</strong> when you register and accept this policy</li>
-                        <li><strong>Legitimate government function</strong> to manage public facilities and serve residents</li>
-                        <li><strong>Legal obligation</strong> to maintain records as required by government regulations</li>
+                        <li><strong><?= frs_te('register.privacy_s3_li1_label'); ?></strong>: <?= frs_te('register.privacy_s3_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s3_li2_label'); ?></strong>: <?= frs_te('register.privacy_s3_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s3_li3_label'); ?></strong>: <?= frs_te('register.privacy_s3_li3_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s3_li4_label'); ?></strong>: <?= frs_te('register.privacy_s3_li4_text'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">5. How We Use Your Data</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s4_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        Your information is used solely for:
+                        <?= frs_te('register.privacy_s4_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li>Verifying your identity and residency</li>
-                        <li>Processing and managing facility reservations</li>
-                        <li>Communicating reservation status and updates</li>
-                        <li>Coordinating facility usage and scheduling</li>
-                        <li>Sending official advisories related to your reservations</li>
-                        <li>Improving service delivery through anonymized analytics</li>
+                        <li><strong><?= frs_te('register.privacy_s4_li1_label'); ?></strong> <?= frs_te('register.privacy_s4_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s4_li2_label'); ?></strong> <?= frs_te('register.privacy_s4_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s4_li3_label'); ?></strong> <?= frs_te('register.privacy_s4_li3_text'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">6. Data Sharing and Disclosure</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s5_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        We do <strong>not sell or share</strong> your personal data with third parties, except:
+                        <?= frs_te('register.privacy_s5_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li>When required by law or court order</li>
-                        <li>When necessary to protect public safety or interest</li>
-                        <li>With other LGU offices for official coordination (e.g., disaster response)</li>
-                        <li>With your explicit consent</li>
+                        <li><?= frs_te('register.privacy_s5_li1'); ?></li>
+                        <li><?= frs_te('register.privacy_s5_li2'); ?></li>
+                        <li><?= frs_te('register.privacy_s5_li3'); ?></li>
+                        <li><?= frs_te('register.privacy_s5_li4'); ?></li>
+                        <li><?= frs_te('register.privacy_s5_li5'); ?></li>
+                        <li><?= frs_te('register.privacy_s5_li6'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">7. Data Retention</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s6_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        Personal data is retained for:
+                        <?= frs_te('register.privacy_s6_intro_before'); ?> <strong><?= frs_te('register.privacy_s6_intro_strong'); ?></strong> <?= frs_te('register.privacy_s6_intro_after'); ?>
+                    </p>
+                    <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
+                        <li><?= frs_te('register.privacy_s6_li1'); ?></li>
+                        <li><?= frs_te('register.privacy_s6_li2'); ?></li>
+                        <li><?= frs_te('register.privacy_s6_li3'); ?></li>
+                        <li><?= frs_te('register.privacy_s6_li4'); ?></li>
+                    </ul>
+
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s7_title'); ?></h4>
+                    <p style="line-height: 1.8; margin-bottom: 0.5rem;">
+                        <?= frs_te('register.privacy_s7_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 0.5rem; padding-left: 1.5rem;">
-                        <li><strong>Active accounts</strong>: Duration of account + 3 years after last activity</li>
-                        <li><strong>Reservation records</strong>: 5 years as required by COA regulations</li>
-                        <li><strong>Audit logs</strong>: 2 years for security purposes</li>
+                        <li><strong><?= frs_te('register.privacy_s7_li1_label'); ?></strong>: <?= frs_te('register.privacy_s7_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s7_li2_label'); ?></strong>: <?= frs_te('register.privacy_s7_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s7_li3_label'); ?></strong>: <?= frs_te('register.privacy_s7_li3_text'); ?></li>
                     </ul>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        After retention periods, data is securely deleted or anonymized.
+                        <?= frs_te('register.privacy_s7_after'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">8. Your Rights as a Data Subject</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s8_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        Under the Data Privacy Act, you have the right to:
+                        <?= frs_te('register.privacy_s8_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 0.5rem; padding-left: 1.5rem;">
-                        <li><strong>Access</strong>: Request a copy of your personal data</li>
-                        <li><strong>Rectify</strong>: Correct inaccurate or incomplete information</li>
-                        <li><strong>Erase</strong>: Request deletion of your data (subject to legal retention requirements)</li>
-                        <li><strong>Object</strong>: Object to processing for direct marketing or automated decisions</li>
-                        <li><strong>Data Portability</strong>: Receive your data in a structured format</li>
-                        <li><strong>Withdraw Consent</strong>: Withdraw consent at any time (may affect service availability)</li>
+                        <li><strong><?= frs_te('register.privacy_s8_li1_label'); ?></strong>: <?= frs_te('register.privacy_s8_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s8_li2_label'); ?></strong>: <?= frs_te('register.privacy_s8_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s8_li3_label'); ?></strong>: <?= frs_te('register.privacy_s8_li3_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s8_li4_label'); ?></strong>: <?= frs_te('register.privacy_s8_li4_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s8_li5_label'); ?></strong>: <?= frs_te('register.privacy_s8_li5_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s8_li6_label'); ?></strong>: <?= frs_te('register.privacy_s8_li6_text'); ?></li>
                     </ul>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        To exercise these rights, contact our Data Protection Officer.
+                        <?= frs_te('register.privacy_s8_after'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">9. Security Measures</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s9_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        We implement robust security safeguards:
+                        <?= frs_te('register.privacy_s9_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li><strong>Technical</strong>: Encrypted storage, password hashing, secure connections (HTTPS)</li>
-                        <li><strong>Organizational</strong>: Role-based access control, staff training, audit logs</li>
-                        <li><strong>Physical</strong>: Secure server facilities, restricted access to systems</li>
+                        <li><strong><?= frs_te('register.privacy_s9_li1_label'); ?></strong>: <?= frs_te('register.privacy_s9_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s9_li2_label'); ?></strong>: <?= frs_te('register.privacy_s9_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s9_li3_label'); ?></strong>: <?= frs_te('register.privacy_s9_li3_text'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">10. Automated Decision-Making</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s10_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        This system uses AI-powered features for:
+                        <?= frs_te('register.privacy_s10_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 0.5rem; padding-left: 1.5rem;">
-                        <li>Conflict detection (alerts for double-booking)</li>
-                        <li>Facility recommendations based on your purpose</li>
+                        <li><?= frs_te('register.privacy_s10_li1'); ?></li>
+                        <li><?= frs_te('register.privacy_s10_li2'); ?></li>
                     </ul>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        These are <strong>advisory only</strong>. Final decisions on reservation approval are made by authorized LGU staff.
+                        <?= frs_te('register.privacy_s10_after_before'); ?> <strong><?= frs_te('register.privacy_s10_after_strong'); ?></strong><?= frs_te('register.privacy_s10_after_after'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">11. Data Breach Notification</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s11_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        In the unlikely event of a data breach affecting your personal information, we will:
+                        <?= frs_te('register.privacy_s11_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li>Notify the National Privacy Commission within 72 hours</li>
-                        <li>Notify affected individuals without undue delay</li>
-                        <li>Take immediate steps to contain and remediate the breach</li>
+                        <li><?= frs_te('register.privacy_s11_li1'); ?></li>
+                        <li><?= frs_te('register.privacy_s11_li2'); ?></li>
+                        <li><?= frs_te('register.privacy_s11_li3'); ?></li>
                     </ul>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">12. Cookies and Tracking</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s12_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        This system uses:
+                        <?= frs_te('register.privacy_s12_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 0.5rem; padding-left: 1.5rem;">
-                        <li><strong>Essential cookies</strong>: For authentication and session management (required)</li>
-                        <li><strong>Analytics</strong>: Anonymized usage data to improve services (optional)</li>
+                        <li><strong><?= frs_te('register.privacy_s12_li1_label'); ?></strong>: <?= frs_te('register.privacy_s12_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s12_li2_label'); ?></strong>: <?= frs_te('register.privacy_s12_li2_text'); ?></li>
                     </ul>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        We do not use third-party tracking or advertising cookies.
+                        <?= frs_te('register.privacy_s12_after'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">13. Children's Privacy</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s13_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        This system is intended for users 18 years and older. We do not knowingly collect personal data from minors without parental or guardian consent.
+                        <?= frs_te('register.privacy_s13_p'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">14. Changes to This Policy</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s14_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 1rem;">
-                        We may update this privacy policy to reflect changes in law or practice. Significant changes will be communicated via email or system notification.
+                        <?= frs_te('register.privacy_s14_p'); ?>
                     </p>
 
-                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;">15. Contact Us</h4>
+                    <h4 style="color: #1e3a5f; font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;"><?= frs_te('register.privacy_s15_title'); ?></h4>
                     <p style="line-height: 1.8; margin-bottom: 0.5rem;">
-                        For questions, concerns, or to exercise your data subject rights:
+                        <?= frs_te('register.privacy_s15_intro'); ?>
                     </p>
                     <ul style="line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem;">
-                        <li><strong>Data Protection Officer</strong>: dpo@barangayculiat.gov.ph</li>
-                        <li><strong>Office</strong>: Barangay Culiat Facilities Management Office</li>
-                        <li><strong>National Privacy Commission</strong>: complaints@privacy.gov.ph (for unresolved concerns)</li>
+                        <li><strong><?= frs_te('register.privacy_s15_li1_label'); ?></strong>: <?= frs_te('register.privacy_s15_li1_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s15_li2_label'); ?></strong>: <?= frs_te('register.privacy_s15_li2_text'); ?></li>
+                        <li><strong><?= frs_te('register.privacy_s15_li3_label'); ?></strong>: <?= frs_te('register.privacy_s15_li3_text'); ?></li>
                     </ul>
 
                     <p style="margin-top: 1.5rem; font-size: 0.9rem; opacity: 0.8; line-height: 1.6;">
-                        <strong>Last Updated</strong>: February 1, 2026<br>
-                        <strong>Effective Date</strong>: February 1, 2026
+                        <strong><?= frs_te('register.privacy_last_updated_label'); ?></strong>: <?= frs_te('register.privacy_policy_date'); ?><br>
+                        <strong><?= frs_te('register.privacy_effective_label'); ?></strong>: <?= frs_te('register.privacy_policy_date'); ?>
                     </p>
                 </div>
             </div>
             <div class="modal-footer" style="border-top: 2px solid rgba(0, 0, 0, 0.1); padding: 1.5rem; flex-shrink: 0;">
                 <button type="button" class="btn btn-secondary" id="understandBtn" style="padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; background: #6c757d; border: none; color: #fff; cursor: pointer;">
-                    I Understand
+                    <?= frs_te('register.modal_understand'); ?>
                 </button>
             </div>
         </div>
@@ -925,7 +925,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isHidden = pwdInput.type === 'password';
             pwdInput.type = isHidden ? 'text' : 'password';
             toggleBtn.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            toggleBtn.setAttribute('aria-label', isHidden ? <?= json_encode(frs_t('register.hide_password')); ?> : <?= json_encode(frs_t('register.show_password')); ?>);
         });
     }
     
@@ -934,10 +934,10 @@ document.addEventListener('DOMContentLoaded', function() {
         first_name: {
             validate: (value) => {
                 if (!value || value.trim().length < 2) {
-                    return 'First name must be at least 2 characters';
+                    return <?= json_encode(frs_t('register.js_first_name_min')); ?>;
                 }
                 if (!/^[a-zA-Z\s\-ñÑ]+$/.test(value)) {
-                    return 'First name can only contain letters, spaces, and hyphens';
+                    return <?= json_encode(frs_t('register.js_first_name_chars')); ?>;
                 }
                 return null;
             }
@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', function() {
         middle_name: {
             validate: (value) => {
                 if (value && !/^[a-zA-Z\s\-ñÑ]+$/.test(value)) {
-                    return 'Middle name can only contain letters, spaces, and hyphens';
+                    return <?= json_encode(frs_t('register.js_middle_name_chars')); ?>;
                 }
                 return null;
             }
@@ -953,10 +953,10 @@ document.addEventListener('DOMContentLoaded', function() {
         last_name: {
             validate: (value) => {
                 if (!value || value.trim().length < 2) {
-                    return 'Last name must be at least 2 characters';
+                    return <?= json_encode(frs_t('register.js_last_name_min')); ?>;
                 }
                 if (!/^[a-zA-Z\s\-ñÑ]+$/.test(value)) {
-                    return 'Last name can only contain letters, spaces, and hyphens';
+                    return <?= json_encode(frs_t('register.js_last_name_chars')); ?>;
                 }
                 return null;
             }
@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', function() {
         suffix: {
             validate: (value) => {
                 if (value && !/^[a-zA-Z.\s]+$/.test(value)) {
-                    return 'Suffix can only contain letters, periods, and spaces';
+                    return <?= json_encode(frs_t('register.js_suffix_chars')); ?>;
                 }
                 return null;
             }
@@ -972,11 +972,11 @@ document.addEventListener('DOMContentLoaded', function() {
         email: {
             validate: (value) => {
                 if (!value) {
-                    return 'Email address is required';
+                    return <?= json_encode(frs_t('register.js_email_required')); ?>;
                 }
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(value)) {
-                    return 'Please enter a valid email address (e.g., user@example.com)';
+                    return <?= json_encode(frs_t('register.js_email_invalid')); ?>;
                 }
                 return null;
             }
@@ -989,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const digits = value.replace(/\D/g, '');
                 // 63 + 10 digits, OR 0 + 10 digits, OR bare 9 + 9 digits
                 if (!/^(63\d{10}|0\d{10}|9\d{9})$/.test(digits)) {
-                    return 'Please enter a valid Philippine mobile number (e.g., +63 956 5121 966, 0956 512 1966, or 9565121966)';
+                    return <?= json_encode(frs_t('register.js_mobile_invalid')); ?>;
                 }
                 return null;
             }
@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', function() {
         house_number: {
             validate: (value) => {
                 if (!value || value.trim().length === 0) {
-                    return 'House number is required';
+                    return <?= json_encode(frs_t('register.js_house_number_required')); ?>;
                 }
                 return null;
             }
@@ -1005,16 +1005,16 @@ document.addEventListener('DOMContentLoaded', function() {
         password: {
             validate: (value) => {
                 if (!value || value.length < <?= PASSWORD_MIN_LENGTH; ?>) {
-                    return 'Password must be at least <?= PASSWORD_MIN_LENGTH; ?> characters';
+                    return <?= json_encode(frs_t('register.js_password_min', ['min' => PASSWORD_MIN_LENGTH])); ?>;
                 }
                 if (!/[A-Z]/.test(value)) {
-                    return 'Password must contain at least one uppercase letter';
+                    return <?= json_encode(frs_t('register.js_password_upper')); ?>;
                 }
                 if (!/[a-z]/.test(value)) {
-                    return 'Password must contain at least one lowercase letter';
+                    return <?= json_encode(frs_t('register.js_password_lower')); ?>;
                 }
                 if (!/[0-9]/.test(value)) {
-                    return 'Password must contain at least one number';
+                    return <?= json_encode(frs_t('register.js_password_number')); ?>;
                 }
                 return null;
             }
@@ -1131,12 +1131,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Show general error message
-            alert('Please fix the errors in the form before submitting.');
+            alert(<?= json_encode(frs_t('register.js_fix_errors')); ?>);
         } else {
             const submitBtn = document.getElementById('submitBtn');
             if (submitBtn && !submitBtn.disabled) {
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> Creating account&hellip;';
+                submitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> ' + <?= json_encode(frs_t('register.js_creating_account')); ?>;
             }
         }
     });

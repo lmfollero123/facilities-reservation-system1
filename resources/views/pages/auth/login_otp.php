@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../vendor/autoload.php';
 
-$pageTitle = 'Enter OTP | LGU Facilities Reservation';
+$pageTitle = frs_t('otp.pagetitle');
 $error = '';
 $success = '';
 
@@ -39,13 +39,13 @@ try {
     }
     
     if ($user['status'] !== 'active') {
-        $error = 'Your account is not active.';
+        $error = frs_t('otp.error.inactive');
     }
 
     // Handle form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['otp'])) {
         if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh the page and try again.';
+            $error = frs_t('otp.error.csrf');
             logSecurityEvent('csrf_validation_failed', 'OTP verify form', 'warning');
         }
 
@@ -59,9 +59,9 @@ try {
         }
 
         if (empty($error) && !$otpInput) {
-            $error = 'Please enter the OTP from your email or authenticator app.';
+            $error = frs_t('otp.error.empty');
         } elseif (empty($error) && $user['otp_attempts'] >= 5) {
-            $error = 'Too many incorrect attempts. Please log in again.';
+            $error = frs_t('otp.error.too_many');
         } elseif (empty($error)) {
             $valid = false;
             // 1) If Google Authenticator is enabled, try TOTP first
@@ -94,20 +94,20 @@ try {
                 $hasFallbackChannel = frs_user_email_otp_enabled($user) || frs_user_sms_otp_enabled($user);
                 if (!$hasTotp && !$codeOk) {
                     if ($hasFallbackChannel) {
-                        $error = 'OTP has expired. Please request a new code.';
+                        $error = frs_t('otp.error.expired');
                     } else {
-                        $error = 'Enter the 6-digit code from your authenticator app.';
+                        $error = frs_t('otp.error.enter_authenticator');
                     }
                 } else {
                     if ($codeOk) {
                         $pdo->prepare("UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = ?")->execute([$userId]);
                     }
                     if ($hasTotp && frs_login_otp_recovery_mode_active()) {
-                        $error = 'Incorrect code. Check your email/phone or try your authenticator app again.';
+                        $error = frs_t('otp.error.incorrect_recovery');
                     } elseif ($hasTotp && !$hasFallbackChannel) {
-                        $error = 'Incorrect authenticator code.';
+                        $error = frs_t('otp.error.incorrect_authenticator');
                     } else {
-                        $error = 'Incorrect OTP.';
+                        $error = frs_t('otp.error.incorrect');
                     }
                 }
             }
@@ -135,12 +135,12 @@ try {
     // Lost authenticator — send one-time email OTP even when email OTP is disabled in profile
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['recovery_email'])) {
         if (!frs_login_can_request_totp_recovery($user)) {
-            $error = 'Email recovery is not available for this account.';
+            $error = frs_t('otp.error.email_recovery_unavailable');
         } elseif (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh the page and try again.';
+            $error = frs_t('otp.error.csrf');
             logSecurityEvent('csrf_validation_failed', 'OTP recovery email form', 'warning');
         } elseif (!frs_can_resend_login_otp($pdo, $userId)) {
-            $error = 'Please wait a moment before requesting another code.';
+            $error = frs_t('otp.error.resend_cooldown');
         } elseif (empty($error)) {
             $otp = frs_issue_login_otp_code($pdo, $userId);
             require_once __DIR__ . '/../../../../config/email_templates.php';
@@ -149,7 +149,7 @@ try {
             $_SESSION['login_otp_recovery_mode'] = true;
             $_SESSION['login_otp_email_sent'] = true;
             $_SESSION['login_otp_sms_sent'] = false;
-            $success = 'A recovery code was sent to ' . frs_mask_email_for_display((string) $user['email']) . '.';
+            $success = frs_t('otp.success.recovery_email_sent', ['destination' => frs_mask_email_for_display((string) $user['email'])]);
             logSecurityEvent('login_totp_recovery_otp_sent', 'Recovery email OTP issued (authenticator-only account): ' . ($user['email'] ?? ''), 'warning');
         }
     }
@@ -157,12 +157,12 @@ try {
     // Lost authenticator — send one-time SMS OTP (mirrors the email recovery block above)
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['recovery_sms'])) {
         if (!frs_login_can_request_sms_totp_recovery($user)) {
-            $error = 'SMS recovery is not available for this account.';
+            $error = frs_t('otp.error.sms_recovery_unavailable');
         } elseif (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh the page and try again.';
+            $error = frs_t('otp.error.csrf');
             logSecurityEvent('csrf_validation_failed', 'OTP recovery SMS form', 'warning');
         } elseif (!frs_can_resend_login_otp($pdo, $userId)) {
-            $error = 'Please wait a moment before requesting another code.';
+            $error = frs_t('otp.error.resend_cooldown');
         } elseif (empty($error)) {
             $otp = frs_issue_login_otp_code($pdo, $userId);
             require_once __DIR__ . '/../../../../config/sms_helper.php';
@@ -170,7 +170,7 @@ try {
             $_SESSION['login_otp_recovery_mode'] = true;
             $_SESSION['login_otp_sms_sent'] = true;
             $_SESSION['login_otp_email_sent'] = false;
-            $success = 'A recovery code was sent to your phone.';
+            $success = frs_t('otp.success.recovery_sms_sent');
             logSecurityEvent('login_totp_recovery_otp_sent', 'Recovery SMS OTP issued (authenticator-only account): ' . ($user['email'] ?? ''), 'warning');
         }
     }
@@ -178,14 +178,14 @@ try {
     // Resend email OTP — profile enabled, or active authenticator recovery session
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['resend'])) {
         if (!frs_login_may_verify_email_otp($user)) {
-            $error = 'Email OTP is disabled for your account. Use your authenticator app instead.';
+            $error = frs_t('otp.error.email_otp_disabled');
         } elseif (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh the page and try again.';
+            $error = frs_t('otp.error.csrf');
             logSecurityEvent('csrf_validation_failed', 'OTP resend form', 'warning');
         }
 
         if (empty($error) && !frs_can_resend_login_otp($pdo, $userId)) {
-            $error = 'Please wait a moment before requesting another code.';
+            $error = frs_t('otp.error.resend_cooldown');
         } elseif (empty($error)) {
             $otp = frs_issue_login_otp_code($pdo, $userId);
 
@@ -193,8 +193,8 @@ try {
             $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             sendEmail($user['email'], $user['name'], 'Login Verification Code', $otpBody);
             $success = frs_login_otp_recovery_mode_active() && !frs_user_email_otp_enabled($user)
-                ? 'A new recovery code was sent to your email.'
-                : 'A 6-digit code has been sent to your email.';
+                ? frs_t('otp.success.recovery_email_resent')
+                : frs_t('otp.success.code_sent_email');
             $_SESSION['login_otp_email_sent'] = true;
             $_SESSION['login_otp_sms_sent'] = false;
             if (frs_login_otp_recovery_mode_active()) {
@@ -208,22 +208,22 @@ try {
         $mayUseSms = frs_user_sms_otp_enabled($user)
             || (frs_login_otp_recovery_mode_active() && frs_login_can_request_sms_totp_recovery($user));
         if (!$mayUseSms) {
-            $error = 'SMS OTP is not enabled for your account.';
+            $error = frs_t('otp.error.sms_otp_disabled');
         } elseif (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh the page and try again.';
+            $error = frs_t('otp.error.csrf');
             logSecurityEvent('csrf_validation_failed', 'OTP resend SMS form', 'warning');
         }
 
         if (empty($error) && !frs_can_resend_login_otp($pdo, $userId)) {
-            $error = 'Please wait a moment before requesting another code.';
+            $error = frs_t('otp.error.resend_cooldown');
         } elseif (empty($error)) {
             $otp = frs_issue_login_otp_code($pdo, $userId);
 
             require_once __DIR__ . '/../../../../config/sms_helper.php';
             sendLoginOtpSms((string) $user['mobile'], (string) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
             $success = frs_login_otp_recovery_mode_active() && !frs_user_sms_otp_enabled($user)
-                ? 'A new recovery code was sent to your phone.'
-                : 'A 6-digit code has been sent to your phone.';
+                ? frs_t('otp.success.recovery_sms_resent')
+                : frs_t('otp.success.code_sent_sms');
             $_SESSION['login_otp_sms_sent'] = true;
             $_SESSION['login_otp_email_sent'] = false;
             if (frs_login_otp_recovery_mode_active()) {
@@ -236,7 +236,7 @@ try {
     $stmt->execute([$userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
 } catch (Exception $e) {
-    $error = 'Unable to process OTP right now.';
+    $error = frs_t('otp.error.generic');
 }
 
 if (!isset($user) || !is_array($user)) {
@@ -275,39 +275,41 @@ ob_start();
         <?php
         $sentViaSms = !empty($_SESSION['login_otp_sms_sent']) && empty($_SESSION['login_otp_email_sent']);
         $sentDestination = $sentViaSms ? $maskedUserMobile : $maskedUserEmail;
+        // Same singular/plural condition as before -- only the word is translated.
+        $otpTtlDuration = $loginOtpTtlMinutes . ' ' . ($loginOtpTtlMinutes === 1 ? frs_t('otp.minute_one') : frs_t('otp.minute_many'));
         if ($showEmailOtpCountdown && $emailOtpValid) {
             if ($recoveryMode && !$hasFallbackChannel) {
-                $otpTip = 'Recovery code sent to ' . $sentDestination . '. It expires in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '. You can still use your authenticator app if you regain access.';
+                $otpTip = frs_t('otp.tip.recovery_sent', ['destination' => $sentDestination, 'duration' => $otpTtlDuration]);
             } else {
-                $otpTip = 'We sent a 6-digit code to ' . $sentDestination . '. Codes expire in about ' . $loginOtpTtlMinutes . ' minute' . ($loginOtpTtlMinutes === 1 ? '' : 's') . '.'
-                    . ($hasTotp ? ' You may also use your authenticator app.' : '');
+                $otpTip = frs_t('otp.tip.code_sent', ['destination' => $sentDestination, 'duration' => $otpTtlDuration])
+                    . ($hasTotp ? ' ' . frs_t('otp.tip.also_authenticator') : '');
             }
         } elseif ($hasTotp && !$hasFallbackChannel && !$recoveryMode) {
-            $otpTip = 'Enter the 6-digit code from your authenticator app. If you lost access to the app, use the recovery option below.';
+            $otpTip = frs_t('otp.tip.authenticator_only');
         } elseif ($hasTotp && !$hasFallbackChannel && $recoveryMode) {
-            $otpTip = 'Enter the recovery code from your email or phone, or use your authenticator app if available.';
+            $otpTip = frs_t('otp.tip.recovery_mode');
         } elseif ($hasTotp) {
-            $otpTip = 'Enter the code from your authenticator app, or use an email/SMS code if you received one.';
+            $otpTip = frs_t('otp.tip.mixed');
         } else {
-            $otpTip = 'Enter the 6-digit code we sent you to finish signing in.';
+            $otpTip = frs_t('otp.tip.default');
         }
-        echo frs_heading_with_tip('Enter One-Time Passcode', $otpTip, 'h1');
+        echo frs_heading_with_tip(frs_t('otp.heading'), $otpTip, 'h1');
         ?>
         <?php if ($showEmailOtpCountdown): ?>
             <p id="otpCountdown" style="font-weight:600; margin-top:0.5rem; color:<?= $emailOtpValid ? '#b45309' : '#b23030'; ?>;">
                 <?php if ($emailOtpValid): ?>
-                    Code expires in <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
+                    <?= frs_te('otp.code_expires_in'); ?> <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
                 <?php else: ?>
-                    Code expired. Click "Resend Code" below to get a new one.
+                    <?= frs_te('otp.code_expired_resend'); ?>
                 <?php endif; ?>
             </p>
         <?php elseif ($hasTotp && !$hasFallbackChannel && !$recoveryMode): ?>
             <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
-                Open your authenticator app and enter the current 6-digit code.
+                <?= frs_te('otp.open_authenticator'); ?>
             </p>
         <?php elseif ($recoveryMode && !$hasFallbackChannel): ?>
             <p style="font-weight:600; margin-top:0.5rem; color:#475569; font-size:0.9rem;">
-                Check your email or phone for the recovery code, or use your authenticator app.
+                <?= frs_te('otp.check_email_or_phone'); ?>
             </p>
         <?php endif; ?>
     </div>
@@ -327,7 +329,7 @@ ob_start();
     <form method="POST" class="auth-form" id="otpForm">
         <?= csrf_field(); ?>
         <div style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color:#334155; font-size:0.85rem;">OTP Code</label>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color:#334155; font-size:0.85rem;"><?= frs_te('otp.label.code'); ?></label>
             <div class="otp-input-container" id="otpContainer">
                 <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
                 <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
@@ -339,7 +341,7 @@ ob_start();
             </div>
         </div>
 
-        <button class="btn-primary" type="submit">Verify &amp; Sign In</button>
+        <button class="btn-primary" type="submit"><?= frs_te('otp.submit'); ?></button>
     </form>
 
     <?php $showedAuthenticatorPrompt = false; ?>
@@ -347,7 +349,7 @@ ob_start();
     <form method="POST" id="loginOtpResendForm" style="margin-top:0.75rem; text-align:center;">
         <?= csrf_field(); ?>
         <button class="<?= ($showEmailOtpCountdown && !$emailOtpValid && !$sentViaSms) ? 'btn-primary' : 'btn-outline'; ?>" type="submit" name="resend" value="1" id="loginOtpResendBtn" style="padding:0.45rem 0.75rem;">
-            <?= ($recoveryMode && !$emailOtpEnabled) ? 'Resend recovery code (Email)' : 'Resend Code (Email)'; ?>
+            <?= ($recoveryMode && !$emailOtpEnabled) ? frs_te('otp.resend_recovery_email') : frs_te('otp.resend_email'); ?>
         </button>
     </form>
     <?php elseif ($canRequestRecovery && !$recoveryMode): ?>
@@ -355,14 +357,14 @@ ob_start();
         <?= csrf_field(); ?>
         <?php if (!$showedAuthenticatorPrompt): $showedAuthenticatorPrompt = true; ?>
         <p style="font-size:0.85rem; color:#64748b; margin:0 0 0.5rem;">
-            Can't access your authenticator app?
+            <?= frs_te('otp.cant_access_authenticator'); ?>
         </p>
         <?php endif; ?>
         <button class="btn-outline" type="submit" name="recovery_email" value="1" id="loginOtpRecoveryBtn" style="padding:0.45rem 0.85rem;">
-            Send code via Email
+            <?= frs_te('otp.send_via_email'); ?>
         </button>
         <p style="font-size:0.78rem; color:#94a3b8; margin:0.5rem 0 0;">
-            A one-time code will be sent to <?= htmlspecialchars($maskedUserEmail); ?>.
+            <?= frs_te('otp.code_will_be_sent', ['destination' => $maskedUserEmail]); ?>
         </p>
     </form>
     <?php endif; ?>
@@ -371,7 +373,7 @@ ob_start();
     <form method="POST" id="loginOtpResendSmsForm" style="margin-top:0.75rem; text-align:center;">
         <?= csrf_field(); ?>
         <button class="<?= ($showEmailOtpCountdown && !$emailOtpValid && $sentViaSms) ? 'btn-primary' : 'btn-outline'; ?>" type="submit" name="resend_sms" value="1" id="loginOtpResendSmsBtn" style="padding:0.45rem 0.75rem;">
-            <?= ($recoveryMode && !$smsOtpEnabled) ? 'Resend recovery code (SMS)' : 'Resend Code (SMS)'; ?>
+            <?= ($recoveryMode && !$smsOtpEnabled) ? frs_te('otp.resend_recovery_sms') : frs_te('otp.resend_sms'); ?>
         </button>
     </form>
     <?php elseif ($canRequestSmsRecovery && !$recoveryMode): ?>
@@ -379,20 +381,20 @@ ob_start();
         <?= csrf_field(); ?>
         <?php if (!$showedAuthenticatorPrompt): $showedAuthenticatorPrompt = true; ?>
         <p style="font-size:0.85rem; color:#64748b; margin:0 0 0.5rem;">
-            Can't access your authenticator app?
+            <?= frs_te('otp.cant_access_authenticator'); ?>
         </p>
         <?php endif; ?>
         <button class="btn-outline" type="submit" name="recovery_sms" value="1" id="loginOtpRecoverySmsBtn" style="padding:0.45rem 0.85rem;">
-            Send code via SMS
+            <?= frs_te('otp.send_via_sms'); ?>
         </button>
         <p style="font-size:0.78rem; color:#94a3b8; margin:0.5rem 0 0;">
-            A one-time code will be sent to <?= htmlspecialchars($maskedUserMobile); ?>.
+            <?= frs_te('otp.code_will_be_sent', ['destination' => $maskedUserMobile]); ?>
         </p>
     </form>
     <?php endif; ?>
 
     <div class="auth-footer" style="margin-top:1.5rem; text-align:center; padding-top:1rem; border-top:1px solid #e2e8f0;">
-        <a href="<?= base_path(); ?>/login" style="color:#047857; font-weight:600; text-decoration:none; font-size:0.9rem;">Back to login</a>
+        <a href="<?= base_path(); ?>/login" style="color:#047857; font-weight:600; text-decoration:none; font-size:0.9rem;"><?= frs_te('otp.back_to_login'); ?></a>
     </div>
 </div>
 <?php
@@ -489,16 +491,16 @@ document.addEventListener('DOMContentLoaded', function () {
         function renderCountdown() {
             const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
             const ss = String(remaining % 60).padStart(2, '0');
-            const resendText = resendBtn ? resendBtn.textContent.trim() : 'Resend Code';
+            const resendText = resendBtn ? resendBtn.textContent.trim() : <?= json_encode(frs_t('otp.resend_default')); ?>;
             if (remaining > 0) {
-                countdownEl.textContent = `Code expires in ${mm}:${ss}`;
+                countdownEl.textContent = <?= json_encode(frs_t('otp.code_expires_in')); ?> + ` ${mm}:${ss}`;
                 countdownEl.style.color = '#b45309';
                 if (resendBtn && resendLabels.includes(resendText)) {
                     resendBtn.classList.remove('btn-primary');
                     resendBtn.classList.add('btn-outline');
                 }
             } else {
-                countdownEl.textContent = `Code expired. Click "${resendText}" below to get a new one.`;
+                countdownEl.textContent = <?= json_encode(frs_t('otp.js.code_expired_named')); ?>.replace(':label', resendText);
                 countdownEl.style.color = '#b23030';
                 if (resendBtn && resendLabels.includes(resendText)) {
                     resendBtn.classList.remove('btn-outline');

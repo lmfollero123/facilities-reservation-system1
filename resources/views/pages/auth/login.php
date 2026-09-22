@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/captcha.php';
 
-$pageTitle = 'Login | LGU Facilities Reservation';
+$pageTitle = frs_t('login.pagetitle');
 $error = '';
 $lockNotice = '';
 $next = '';
@@ -27,7 +27,7 @@ if (isset($_GET['next'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify CSRF token
     if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-        $error = 'Invalid security token. Please refresh the page and try again.';
+        $error = frs_t('login.error.csrf');
         logSecurityEvent('csrf_validation_failed', 'Login form', 'warning');
     } else {
         $clientIp = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
@@ -46,11 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Validate email
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
+            $error = frs_t('login.error.invalid_email');
         } else {
             // Check rate limiting (failed attempts only)
             if (!checkLoginRateLimit($email)) {
-                $error = 'Too many login attempts. Please try again in 15 minutes.';
+                $error = frs_t('login.error.rate_limited');
                 logSecurityEvent('rate_limit_exceeded', "Login attempts exceeded for: $email", 'warning');
             } else {
                 try {
@@ -64,15 +64,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($user) {
                         // Admin-locked account
                         if (isset($user['status']) && strtolower($user['status']) === 'locked') {
-                            $error = 'Your account has been locked by an administrator. Please contact support to restore access.';
-                            $lockNotice = 'Account locked by administrator.';
+                            $error = frs_t('login.error.locked_admin');
+                            $lockNotice = frs_t('login.notice.locked_admin');
                             logSecurityEvent('login_attempt_locked_admin', "Attempted login to admin-locked account: $email", 'warning');
                         }
                         // Temporary lock due to rate limits
                         elseif ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
                             $until = date('F j, Y g:i A', strtotime($user['locked_until']));
-                            $lockReason = 'Account locked due to multiple failed login attempts.';
-                            $error = "Your account is temporarily locked until $until. Please contact support if you need it unlocked.";
+                            $lockReason = frs_t('login.notice.locked_failed');
+                            $error = frs_t('login.error.locked_temporary', ['until' => $until]);
                             $lockNotice = $lockReason;
                             logSecurityEvent('login_attempt_locked_account', "Attempted login to locked account: $email", 'warning');
                         } else {
@@ -80,19 +80,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($user && password_verify($password, $user['password_hash'])) {
                                 // Check if account is deactivated
                                 if (strtolower($user['status']) === 'deactivated') {
-                                    $error = 'Your account has been deactivated. To restore access, please contact the LGU IT office.';
+                                    $error = frs_t('login.error.deactivated');
                                     logSecurityEvent('login_attempt_deactivated', "Login attempt to deactivated account: $email", 'info');
                                 }
                                 // Check if account is active
                                 elseif ($user['status'] !== 'active') {
-                                    $error = 'Your account is not active. Please contact an administrator.';
+                                    $error = frs_t('login.error.inactive');
                                     logSecurityEvent('login_attempt_inactive', "Login attempt to inactive account: $email", 'info');
                                 } else {
                                 $emailVerified = isset($user['email_verified']) ? (bool)$user['email_verified'] : true;
                                 if (!$emailVerified) {
                                     $verifyResult = frs_begin_login_email_verification($pdo, $user);
                                     if (!$verifyResult['ok']) {
-                                        $error = $verifyResult['error'] ?? 'Email verification is required before you can sign in.';
+                                        $error = $verifyResult['error'] ?? frs_t('login.error.email_verification_required');
                                     } else {
                                         header('Location: ' . base_path() . '/verify-email');
                                         exit;
@@ -185,8 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 // Lock account after 5 failed attempts for 30 minutes
                                 if ($failedAttempts >= 5) {
                                     $lockUntil = date('Y-m-d H:i:s', time() + 1800); // 30 minutes
-                                    $error = 'Too many failed login attempts. Your account has been locked for 30 minutes.';
-                                    $lockReason = 'Account locked due to multiple failed login attempts.';
+                                    $error = frs_t('login.error.locked_30min');
+                                    $lockReason = frs_t('login.notice.locked_failed');
                                     logSecurityEvent('account_locked', "Account locked due to failed attempts: $email", 'warning');
                                     // Send lock notification email (one-time per lock event)
                                     try {
@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         // ignore email failures here
                                     }
                                 } else {
-                                    $error = 'Invalid email or password.';
+                                    $error = frs_t('login.error.invalid_credentials');
                                 }
                                 
                                 recordLoginRateLimitFailure($email);
@@ -217,14 +217,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } else {
                         // User not found - don't reveal this to prevent email enumeration
-                        $error = 'Invalid email or password.';
+                        $error = frs_t('login.error.invalid_credentials');
                         recordLoginRateLimitFailure($email);
                         frs_login_mark_captcha_required();
                         $loginCaptchaRequired = true;
                         logSecurityEvent('login_attempt_invalid_email', "Login attempt with non-existent email: $email", 'info');
                     }
                 } catch (Exception $e) {
-                    $error = 'Unable to connect. Please try again later.';
+                    $error = frs_t('login.error.connection');
                     logSecurityEvent('login_error', "Database error during login: " . $e->getMessage(), 'error');
                 }
             }
@@ -241,13 +241,13 @@ ob_start();
         <?php include __DIR__ . '/../../components/auth_brand_illustration.php'; ?>
         <div class="auth-split-brand-inner">
             <a href="<?= htmlspecialchars($base); ?>/" class="auth-split-back">
-                <i class="bi bi-arrow-left"></i> Back to website
+                <i class="bi bi-arrow-left"></i> <?= frs_te('login.back_to_website'); ?>
             </a>
             <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="Barangay Culiat CPRFS" class="auth-split-brand-logo">
-            <h2>Magandang Buhay! 👋</h2>
-            <p>Book public facilities online — reserve covered courts, halls, and community spaces without the long lines. Fast, simple, and made for our residents.</p>
+            <h2><?= frs_te('login.brand.greeting'); ?></h2>
+            <p><?= frs_te('login.brand.tagline'); ?></p>
             <?php include __DIR__ . '/../../components/auth_facility_slideshow.php'; ?>
-            <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. All rights reserved.</p>
+            <p class="auth-split-brand-footer">&copy; <?= date('Y'); ?> Barangay Culiat CPRFS. <?= frs_te('login.brand.rights'); ?></p>
         </div>
     </aside>
 
@@ -349,21 +349,21 @@ ob_start();
                     <img src="<?= htmlspecialchars($base); ?>/public/img/brgy-culiat-logo.png" alt="">
                     <span>Barangay Culiat <span style="color:#059669;">CPRFS</span></span>
                 </div>
-                <h1>Welcome Back!</h1>
-                <p class="auth-split-sub">Don&rsquo;t have an account? <a href="<?= htmlspecialchars($base); ?>/register">Create a new account now</a>, it&rsquo;s FREE! Takes less than a minute.</p>
+                <h1><?= frs_te('login.heading'); ?></h1>
+                <p class="auth-split-sub"><?= frs_te('login.no_account'); ?> <a href="<?= htmlspecialchars($base); ?>/register"><?= frs_te('login.create_account'); ?></a><?= frs_te('login.free_suffix'); ?></p>
             </div>
 
             <?php if (isset($_GET['deactivated']) && $_GET['deactivated'] == '1'): ?>
                 <div class="auth-split-alert is-warning" role="alert">
-                    <strong>Account Deactivated</strong>
-                    <p style="margin: 0.35rem 0 0;">Your account has been deactivated. Contact the LGU IT office to restore access.</p>
+                    <strong><?= frs_te('login.alert.deactivated_title'); ?></strong>
+                    <p style="margin: 0.35rem 0 0;"><?= frs_te('login.alert.deactivated_body'); ?></p>
                 </div>
             <?php endif; ?>
 
             <?php if (isset($_GET['timeout']) && $_GET['timeout'] == '1'): ?>
                 <div class="auth-split-alert is-warning" role="alert">
-                    <strong>Session expired</strong>
-                    <p style="margin: 0.35rem 0 0;">You were logged out due to inactivity. Please log in again.</p>
+                    <strong><?= frs_te('login.alert.timeout_title'); ?></strong>
+                    <p style="margin: 0.35rem 0 0;"><?= frs_te('login.alert.timeout_body'); ?></p>
                 </div>
             <?php endif; ?>
 
@@ -374,7 +374,7 @@ ob_start();
                 <?php if ($lockNotice): ?>
                     <div class="auth-split-alert is-warning" role="alert">
                         <?= htmlspecialchars($lockNotice); ?>
-                        Need help? Contact the admin team to review and unlock your account.
+                        <?= frs_te('login.lock_help'); ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -383,13 +383,13 @@ ob_start();
                 <?= csrf_field(); ?>
                 <?php if ($loginCaptchaRequired && frs_turnstile_site_key() !== ''): ?>
                     <div class="auth-split-alert is-warning">
-                        For your security, please complete the verification below after multiple failed sign-in attempts.
+                        <?= frs_te('login.captcha_notice'); ?>
                     </div>
                     <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(frs_turnstile_site_key(), ENT_QUOTES, 'UTF-8'); ?>"></div>
                 <?php endif; ?>
 
                 <label>
-                    Email Address
+                    <?= frs_te('login.label.email'); ?>
                     <div class="auth-split-field">
                         <i class="bi bi-envelope auth-split-field-icon" aria-hidden="true"></i>
                         <input name="email" type="email" placeholder="official@lgu.gov.ph" required autofocus value="<?= isset($_POST['email']) ? e($_POST['email']) : ''; ?>">
@@ -397,22 +397,22 @@ ob_start();
                 </label>
 
                 <label>
-                    Password
+                    <?= frs_te('login.label.password'); ?>
                     <div class="auth-split-field">
                         <i class="bi bi-lock auth-split-field-icon" aria-hidden="true"></i>
-                        <input name="password" id="loginPassword" type="password" placeholder="Enter your password" required>
-                        <button type="button" class="auth-split-password-toggle" id="toggleLoginPassword" aria-label="Show password">
+                        <input name="password" id="loginPassword" type="password" placeholder="<?= frs_te('login.placeholder.password'); ?>" required>
+                        <button type="button" class="auth-split-password-toggle" id="toggleLoginPassword" aria-label="<?= frs_te('login.aria.show_password'); ?>">
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
                 </label>
 
                 <div class="auth-split-forgot">
-                    <a href="<?= htmlspecialchars($base); ?>/forgot-password">Forgot password? Click here</a>
+                    <a href="<?= htmlspecialchars($base); ?>/forgot-password"><?= frs_te('login.forgot_link'); ?></a>
                 </div>
 
-                <button class="btn-primary" type="submit">Login Now</button>
-                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> Protected under the Data Privacy Act of 2012 (RA 10173)</p>
+                <button class="btn-primary" type="submit"><?= frs_te('login.submit'); ?></button>
+                <p class="auth-split-trust"><i class="bi bi-shield-check" aria-hidden="true"></i> <?= frs_te('login.trust'); ?></p>
             </form>
         </div>
     </div>
@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isHidden = pwdInput.type === 'password';
             pwdInput.type = isHidden ? 'text' : 'password';
             toggleBtn.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            toggleBtn.setAttribute('aria-label', isHidden ? <?= json_encode(frs_t('login.aria.hide_password')); ?> : <?= json_encode(frs_t('login.aria.show_password')); ?>);
         });
     }
 
@@ -437,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loginForm.addEventListener('submit', function () {
             if (loginSubmitBtn.disabled) return;
             loginSubmitBtn.disabled = true;
-            loginSubmitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> Signing in&hellip;';
+            loginSubmitBtn.innerHTML = '<span class="auth-split-btn-spinner" aria-hidden="true"></span> ' + <?= json_encode(frs_t('login.signing_in')); ?>;
         });
     }
 });

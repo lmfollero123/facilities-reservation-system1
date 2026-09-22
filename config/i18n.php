@@ -59,9 +59,28 @@ if (!function_exists('frs_load_lang_strings')) {
         if (isset($cache[$locale])) {
             return $cache[$locale];
         }
-        $path = dirname(__DIR__) . "/lang/{$locale}.php";
-        $strings = is_file($path) ? (include $path) : [];
-        return $cache[$locale] = is_array($strings) ? $strings : [];
+
+        // Base file holds shared chrome (nav, sidebar, statuses, buttons).
+        $strings = [];
+        $base = dirname(__DIR__) . "/lang/{$locale}.php";
+        if (is_file($base)) {
+            $loaded = include $base;
+            if (is_array($loaded)) {
+                $strings = $loaded;
+            }
+        }
+
+        // Per-page fragments in lang/{locale}/*.php are merged on top. Split
+        // this way so each page's strings live in their own file instead of
+        // one ever-growing array that every change has to touch.
+        foreach (glob(dirname(__DIR__) . "/lang/{$locale}/*.php") ?: [] as $fragment) {
+            $loaded = include $fragment;
+            if (is_array($loaded)) {
+                $strings = array_merge($strings, $loaded);
+            }
+        }
+
+        return $cache[$locale] = $strings;
     }
 }
 
@@ -80,8 +99,17 @@ if (!function_exists('frs_t')) {
         $text = $strings[$key]
             ?? frs_load_lang_strings(frs_default_locale())[$key]
             ?? $key;
-        foreach ($replace as $name => $value) {
-            $text = str_replace(':' . $name, (string)$value, $text);
+        if ($replace !== []) {
+            $pairs = [];
+            foreach ($replace as $name => $value) {
+                $pairs[':' . $name] = (string)$value;
+            }
+            // strtr() substitutes in a single longest-match pass. A
+            // sequential str_replace() loop would let a short placeholder
+            // corrupt a longer one that starts with it (:to eating the head
+            // of :total), and would re-scan already-substituted values for
+            // further placeholders.
+            $text = strtr($text, $pairs);
         }
         return $text;
     }

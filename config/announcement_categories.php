@@ -81,3 +81,20 @@ if (!function_exists('frs_announcement_fallback_image')) {
         return null;
     }
 }
+
+if (!function_exists('frs_announcement_category_label')) {
+    /**
+     * Human label for an announcement category, translated for the active
+     * locale. The category set is closed (see getAnnouncementCategory), so
+     * an unknown value just falls back to the capitalised raw type.
+     */
+    function frs_announcement_category_label(string $type): string
+    {
+        $type = strtolower(trim($type));
+        $known = ['emergency', 'urgent', 'event', 'health', 'deadline', 'advisory', 'general'];
+        if (!in_array($type, $known, true)) {
+            return ucfirst($type);
+        }
+        return function_exists('frs_t') ? frs_t('category.' . $type) : ucfirst($type);
+    }
+}

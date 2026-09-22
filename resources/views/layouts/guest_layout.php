@@ -64,7 +64,7 @@ if ($isAuthSplitPage) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= htmlspecialchars(frs_current_locale(), ENT_QUOTES, 'UTF-8'); ?>">
 <head>
     <meta charset="UTF-8">
     <script>
@@ -379,7 +379,14 @@ if ($isAuthSplitPage) {
 </main>
 <?php include __DIR__ . '/../components/facility_assistant.php'; ?>
 <?php include __DIR__ . '/../components/footer.php'; ?>
-<script>window.APP_BASE_PATH = "<?= htmlspecialchars($base ?? base_path()); ?>";</script>
+<script>window.APP_BASE_PATH = "<?= htmlspecialchars($base ?? base_path()); ?>";
+// Strings that static .js files render directly. json_encode handles the
+// quoting and escaping, so these are safe to drop straight into JS.
+window.FRS_I18N = <?= json_encode([
+    'contact_sent' => frs_t('contactform.js_sent'),
+    'contact_failed' => frs_t('contactform.js_failed'),
+    'contact_retry' => frs_t('contactform.js_retry'),
+], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;</script>
 <!-- Bootstrap core JS removed — all behaviors migrated to Alpine.js / vanilla JS. Bootstrap CSS remains (styling only) until the CSS migration. -->
 
 <!-- Leaflet JS -->

@@ -327,7 +327,7 @@
                 .then(function (result) {
                     if (result.ok && result.data && result.data.success) {
                         if (feedback) {
-                            feedback.textContent = result.data.message || 'Thank you! Your inquiry has been sent.';
+                            feedback.textContent = result.data.message || (window.FRS_I18N && window.FRS_I18N.contact_sent) || 'Thank you! Your inquiry has been sent.';
                             feedback.className = 'contact-form-feedback is-success';
                         }
                         form.reset();
@@ -341,13 +341,13 @@
                         throw new Error(
                             (result.data && result.data.message)
                                 ? result.data.message
-                                : 'Unable to send your message.'
+                                : ((window.FRS_I18N && window.FRS_I18N.contact_failed) || 'Unable to send your message.')
                         );
                     }
                 })
                 .catch(function (err) {
                     if (feedback) {
-                        feedback.textContent = err.message || 'Unable to send your message. Please try again.';
+                        feedback.textContent = err.message || (window.FRS_I18N && window.FRS_I18N.contact_retry) || 'Unable to send your message. Please try again.';
                         feedback.className = 'contact-form-feedback is-error';
                     }
                 })

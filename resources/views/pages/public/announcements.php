@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../../../config/app.php';
 require_once __DIR__ . '/../../../../config/database.php';
 require_once __DIR__ . '/../../../../config/announcement_categories.php';
 
-$pageTitle = 'Announcements | Barangay Culiat Public Facilities Reservation System';
+$pageTitle = frs_t('announcements.page_title');
 $pdo = db();
 $base = base_path();
 
@@ -70,8 +70,8 @@ $stmt->execute();
 $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $pageHeaderIcon = 'bi-megaphone';
-$pageHeaderTitle = 'Barangay Announcements';
-$pageHeaderTagline = 'Stay updated with our latest barangay events, programs, and notices. Your community, your stories.';
+$pageHeaderTitle = frs_t('announcements.header.title');
+$pageHeaderTagline = frs_t('announcements.header.tagline');
 ob_start();
 ?>
 
@@ -83,10 +83,10 @@ ob_start();
             <form method="GET" class="search-form">
                 <div class="search-input-wrapper">
                     <i class="bi bi-search"></i>
-                    <input type="text" name="search" placeholder="Search announcements..." value="<?= htmlspecialchars($search); ?>" class="search-input">
+                    <input type="text" name="search" placeholder="<?= frs_te('announcements.search.placeholder'); ?>" value="<?= htmlspecialchars($search); ?>" class="search-input">
                 </div>
                 <?php if (!empty($search)): ?>
-                    <a href="<?= $base; ?>/announcements" class="btn-clear-search">Clear</a>
+                    <a href="<?= $base; ?>/announcements" class="btn-clear-search"><?= frs_te('announcements.search.clear'); ?></a>
                 <?php endif; ?>
             </form>
         </div>
@@ -94,14 +94,18 @@ ob_start();
         <!-- Sort Options -->
         <div class="controls-section">
             <div class="sort-wrapper">
-                <label for="sort-select">Sort by:</label>
+                <label for="sort-select"><?= frs_te('announcements.sort.label'); ?></label>
                 <select id="sort-select" name="sort" class="sort-select">
-                    <option value="newest" <?= $sort === 'newest' ? 'selected' : ''; ?>>Newest First</option>
-                    <option value="oldest" <?= $sort === 'oldest' ? 'selected' : ''; ?>>Oldest First</option>
+                    <option value="newest" <?= $sort === 'newest' ? 'selected' : ''; ?>><?= frs_te('announcements.sort.newest'); ?></option>
+                    <option value="oldest" <?= $sort === 'oldest' ? 'selected' : ''; ?>><?= frs_te('announcements.sort.oldest'); ?></option>
                 </select>
             </div>
             <div class="results-count">
-                Showing <?= !empty($announcements) ? (($page - 1) * $perPage) + 1 : 0; ?>–<?= min($page * $perPage, $totalAnnouncements); ?> of <?= $totalAnnouncements; ?> announcements
+                <?= frs_te('announcements.results.count', [
+                    'first' => !empty($announcements) ? (($page - 1) * $perPage) + 1 : 0,
+                    'last' => min($page * $perPage, $totalAnnouncements),
+                    'total' => $totalAnnouncements,
+                ]); ?>
             </div>
         </div>
 
@@ -120,18 +124,18 @@ ob_start();
                         <!-- Category Badge -->
                         <div class="badge-wrapper" style="background-color: <?= $category['bgColor']; ?>;">
                             <span class="badge" style="color: <?= $category['color']; ?>;">
-                                <?= ucfirst($category['type']); ?>
+                                <?= htmlspecialchars(frs_announcement_category_label($category['type']), ENT_QUOTES, 'UTF-8'); ?>
                             </span>
                         </div>
 
                         <!-- Featured Image -->
                         <?php if ($hasImage): ?>
                             <div class="card-image">
-                                <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>">
+                                <img src="<?= htmlspecialchars($base . $item['image_path']); ?>" alt="<?= htmlspecialchars($item['title'] ?? frs_t('announcements.card.fallback_label')); ?>">
                             </div>
                         <?php elseif ($fallbackImage !== null): ?>
                             <div class="card-image">
-                                <img src="<?= htmlspecialchars($base . $fallbackImage); ?>" alt="<?= htmlspecialchars($item['title'] ?? 'Announcement'); ?>">
+                                <img src="<?= htmlspecialchars($base . $fallbackImage); ?>" alt="<?= htmlspecialchars($item['title'] ?? frs_t('announcements.card.fallback_label')); ?>">
                             </div>
                         <?php else: ?>
                             <div class="card-image card-image-placeholder">
@@ -142,7 +146,7 @@ ob_start();
                         <!-- Card Body -->
                         <div class="card-body">
                             <div class="card-header">
-                                <h2 class="card-title"><?= htmlspecialchars($item['title'] ?? 'Announcement'); ?></h2>
+                                <h2 class="card-title"><?= htmlspecialchars($item['title'] ?? frs_t('announcements.card.fallback_label')); ?></h2>
                                 <time class="card-date"><?= $dateFormatted; ?></time>
                             </div>
 
@@ -152,7 +156,7 @@ ob_start();
                             <div class="card-actions">
                                 <?php if ($hasLink): ?>
                                     <a href="<?= htmlspecialchars($item['link']); ?>" class="btn-read-more" target="_blank">
-                                        Learn More <i class="bi bi-arrow-right"></i>
+                                        <?= frs_te('announcements.card.learn_more'); ?> <i class="bi bi-arrow-right"></i>
                                     </a>
                                 <?php endif; ?>
                             </div>
@@ -165,14 +169,14 @@ ob_start();
                     <div class="empty-icon">
                         <i class="bi bi-inbox"></i>
                     </div>
-                    <h3>No Announcements Found</h3>
+                    <h3><?= frs_te('announcements.empty.title'); ?></h3>
                     <p>
                         <?php if (!empty($search)): ?>
-                            We couldn't find any announcements matching "<strong><?= htmlspecialchars($search); ?></strong>"
+                            <?= frs_te('announcements.empty.search_prefix'); ?> "<strong><?= htmlspecialchars($search); ?></strong>"
                             <br><br>
-                            <a href="<?= $base; ?>/announcements" class="btn-reset">View All Announcements</a>
+                            <a href="<?= $base; ?>/announcements" class="btn-reset"><?= frs_te('announcements.empty.view_all'); ?></a>
                         <?php else: ?>
-                            There are currently no announcements to display. Check back soon!
+                            <?= frs_te('announcements.empty.none'); ?>
                         <?php endif; ?>
                     </p>
                 </div>
@@ -181,7 +185,7 @@ ob_start();
 
         <!-- Pagination -->
         <?php if ($totalPages > 1 && !empty($announcements)): ?>
-            <nav class="pagination-wrapper" aria-label="Pagination">
+            <nav class="pagination-wrapper" aria-label="<?= frs_te('announcements.pagination.aria'); ?>">
                 <ul class="pagination">
                     <?php if ($page > 1): ?>
                         <li><a href="?sort=<?= htmlspecialchars($sort); ?>&search=<?= htmlspecialchars($search); ?>&page=1" class="page-link"><i class="bi bi-chevron-double-left"></i></a></li>
@@ -189,7 +193,10 @@ ob_start();
                     <?php endif; ?>
 
                     <li class="page-info">
-                        <span>Page <strong><?= $page; ?></strong> of <strong><?= $totalPages; ?></strong></span>
+                        <span><?= frs_t('announcements.pagination.page_info', [
+                            'current' => '<strong>' . (int)$page . '</strong>',
+                            'total' => '<strong>' . (int)$totalPages . '</strong>',
+                        ]); ?></span>
                     </li>
 
                     <?php if ($page < $totalPages): ?>

@@ -9,14 +9,14 @@ header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    echo json_encode(['success' => false, 'message' => frs_t('contactform.method_not_allowed')]);
     exit;
 }
 
 // Verify CSRF token
 if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Invalid security token. Please refresh the page.']);
+    echo json_encode(['success' => false, 'message' => frs_t('contactform.invalid_token')]);
     exit;
 }
 
@@ -30,14 +30,14 @@ if (!$captcha['ok']) {
 }
 if (!checkRateLimit('contact_form_ip', (string)$clientIp, 3, 300)) {
     http_response_code(429);
-    echo json_encode(['success' => false, 'message' => 'Too many inquiries from your network. Please try again in a few minutes.']);
+    echo json_encode(['success' => false, 'message' => frs_t('contactform.rate_limited_ip')]);
     exit;
 }
 
 // Honeypot field (must stay empty). Do not reveal this check to bots.
 $hpWebsite = trim((string)($_POST['website'] ?? ''));
 if ($hpWebsite !== '') {
-    echo json_encode(['success' => true, 'message' => 'Thank you for your inquiry!']);
+    echo json_encode(['success' => true, 'message' => frs_t('contactform.ack')]);
     exit;
 }
 
@@ -49,16 +49,16 @@ $message = sanitizeInput($_POST['message'] ?? '', 'string');
 // Validation
 $errors = [];
 if (empty($name) || strlen($name) < 2) {
-    $errors[] = 'Please enter your full name.';
+    $errors[] = frs_t('contactform.err_name');
 }
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $errors[] = 'Please enter a valid email address.';
+    $errors[] = frs_t('contactform.err_email');
 }
 if (empty($message) || strlen($message) < 10) {
-    $errors[] = 'Please enter a message (at least 10 characters).';
+    $errors[] = frs_t('contactform.err_message');
 }
 if (!empty($email) && !checkRateLimit('contact_form_email', strtolower($email), 2, 600)) {
-    $errors[] = 'Too many inquiries for this email. Please try again later.';
+    $errors[] = frs_t('contactform.rate_limited_email');
 }
 
 if (!empty($errors)) {
@@ -126,13 +126,13 @@ try {
     
     echo json_encode([
         'success' => true, 
-        'message' => 'Thank you for your inquiry! We will get back to you soon.'
+        'message' => frs_t('contactform.success')
     ]);
     
 } catch (Exception $e) {
     error_log('Contact form error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'An error occurred. Please try again later.']);
+    echo json_encode(['success' => false, 'message' => frs_t('contactform.error_generic')]);
 }
 
 

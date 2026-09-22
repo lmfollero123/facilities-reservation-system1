@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../../../config/mail_helper.php';
 require_once __DIR__ . '/../../../../config/email_templates.php';
 require_once __DIR__ . '/../../../../vendor/autoload.php';
 
-$pageTitle = 'Set Up Two-Factor Authentication | LGU Facilities Reservation';
+$pageTitle = frs_t('twofa.pagetitle');
 $error = '';
 $success = '';
 $view = 'choose';
@@ -51,7 +51,7 @@ try {
             unset($_SESSION['pending_2fa_setup_email_sent'], $_SESSION['pending_2fa_setup_totp_secret']);
             $view = 'choose';
         } else {
-            $error = 'Invalid security token. Please refresh and try again.';
+            $error = frs_t('twofa.error.csrf');
         }
     }
 
@@ -61,14 +61,14 @@ try {
             header('Location: ' . base_path() . '/login');
             exit;
         }
-        $error = 'Invalid security token. Please refresh and try again.';
+        $error = frs_t('twofa.error.csrf');
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email_setup'])) {
         if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh and try again.';
+            $error = frs_t('twofa.error.csrf');
         } elseif (!frs_can_resend_login_otp($pdo, $userId)) {
-            $error = 'Please wait a moment before requesting another code.';
+            $error = frs_t('twofa.error.resend_cooldown');
         } else {
             $otp = frs_issue_login_otp_code($pdo, $userId, getClientIP());
             $otpBody = getOTPEmailTemplate($user['name'], (int) $otp, (int) ceil(LOGIN_OTP_CODE_TTL_SECONDS / 60));
@@ -79,14 +79,14 @@ try {
             }
             $_SESSION['pending_2fa_setup_email_sent'] = true;
             $view = 'email';
-            $success = 'A verification code was sent to ' . htmlspecialchars($userEmail) . '. Enter it below to enable email OTP.';
+            $success = frs_t('twofa.success.code_sent', ['email' => htmlspecialchars($userEmail)]);
             logSecurityEvent('2fa_setup_email_sent', 'Recovery email OTP sent for user id ' . $userId, 'info');
         }
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_email_setup'])) {
         if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh and try again.';
+            $error = frs_t('twofa.error.csrf');
             $view = 'email';
         } else {
             // Combine individual OTP fields if they exist
@@ -102,14 +102,14 @@ try {
             $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
 
             if (($user['otp_attempts'] ?? 0) >= 5) {
-                $error = 'Too many incorrect attempts. Please sign in again.';
+                $error = frs_t('twofa.error.too_many');
                 frs_clear_pending_2fa_setup();
             } elseif ($otpInput === '' || !frs_login_otp_code_is_valid($pdo, $userId)) {
-                $error = 'The code has expired. Request a new verification code.';
+                $error = frs_t('twofa.error.code_expired');
                 $view = 'email';
             } elseif (empty($user['otp_code_hash']) || !password_verify($otpInput, (string) $user['otp_code_hash'])) {
                 $pdo->prepare('UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = ?')->execute([$userId]);
-                $error = 'Incorrect verification code.';
+                $error = frs_t('twofa.error.incorrect_code');
                 $view = 'email';
             } else {
                 $pdo->prepare(
@@ -131,7 +131,7 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_totp_setup'])) {
         if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh and try again.';
+            $error = frs_t('twofa.error.csrf');
         } else {
             try {
                 if (!class_exists('RobThree\Auth\TwoFactorAuth') || !class_exists('RobThree\Auth\Providers\Qr\QRServerProvider')) {
@@ -147,15 +147,15 @@ try {
                 // unreachable on locked-down networks. Never let it block enrollment — fall back to the manual key.
                 try {
                     $totpQrUri = $tfa->getQRCodeImageAsDataUri($user['email'], $secret);
-                    $success = 'Scan the QR code with Google Authenticator (or similar), then enter the 6-digit code to finish.';
+                    $success = frs_t('twofa.success.scan_qr');
                 } catch (Throwable $qrErr) {
                     error_log('2FA QR image unavailable, using manual key: ' . $qrErr->getMessage());
                     $totpQrUri = null;
-                    $success = 'Add this key to your authenticator app ("Enter a setup key"), then enter the 6-digit code to finish.';
+                    $success = frs_t('twofa.success.manual_key');
                 }
             } catch (Throwable $e) {
                 error_log('2FA setup TOTP start error: ' . $e->getMessage());
-                $error = 'Could not start authenticator setup. Try email OTP instead.';
+                $error = frs_t('twofa.error.totp_start_failed');
             }
         }
     }
@@ -163,9 +163,9 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_totp_setup'])) {
         $view = 'totp';
         if (!isset($_POST[CSRF_TOKEN_NAME]) || !verifyCSRFToken($_POST[CSRF_TOKEN_NAME])) {
-            $error = 'Invalid security token. Please refresh and try again.';
+            $error = frs_t('twofa.error.csrf');
         } elseif (empty($_SESSION['pending_2fa_setup_totp_secret'])) {
-            $error = 'Authenticator setup expired. Please start again.';
+            $error = frs_t('twofa.error.totp_expired');
             $view = 'choose';
         } else {
             // Combine individual TOTP fields if they exist
@@ -194,7 +194,7 @@ try {
                     logSecurityEvent('login_success', 'User logged in after 2FA authenticator setup: ' . $userEmail, 'info');
                     frs_redirect_after_login();
                 } else {
-                    $error = 'Invalid authenticator code. Check the app and try again.';
+                    $error = frs_t('twofa.error.invalid_totp');
                     $totpSecretDisplay = $_SESSION['pending_2fa_setup_totp_secret'];
                     if (class_exists('RobThree\Auth\TwoFactorAuth') && class_exists('RobThree\Auth\Providers\Qr\QRServerProvider')) {
                         $qrProvider = new \RobThree\Auth\Providers\Qr\QRServerProvider();
@@ -204,7 +204,7 @@ try {
                 }
             } catch (Throwable $e) {
                 error_log('2FA setup TOTP verify error: ' . $e->getMessage());
-                $error = 'Could not verify authenticator code. Please try again.';
+                $error = frs_t('twofa.error.totp_verify_failed');
             }
         }
     }
@@ -231,7 +231,7 @@ try {
     $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: $user;
 } catch (Throwable $e) {
     error_log('login_setup_2fa error: ' . $e->getMessage());
-    $error = 'Unable to complete security setup right now. Please try again.';
+    $error = frs_t('twofa.error.generic');
 }
 
 $loginOtpTtlMinutes = max(1, (int) ceil(((int) LOGIN_OTP_CODE_TTL_SECONDS) / 60));
@@ -245,12 +245,12 @@ ob_start();
         <div class="auth-header">
             <div class="auth-icon">🛡️</div>
             <?= frs_heading_with_tip(
-                'Set Up Two-Factor Authentication',
-                'Admin and Staff accounts must have email OTP or Google Authenticator enabled. Choose one method below to restore access.',
+                frs_t('twofa.heading'),
+                frs_t('twofa.heading_tip'),
                 'h1'
             ); ?>
             <p style="color:#64748b; font-size:0.92rem; margin-top:0.75rem;">
-                Signed in as <strong><?= htmlspecialchars($userName); ?></strong>
+                <?= frs_te('twofa.signed_in_as'); ?> <strong><?= htmlspecialchars($userName); ?></strong>
                 (<span style="word-break:break-all;"><?= htmlspecialchars($userEmail); ?></span>)
             </p>
         </div>
@@ -269,38 +269,38 @@ ob_start();
         <?php if ($view === 'choose'): ?>
             <div style="display:grid; gap:1rem; margin-bottom:1.25rem;">
                 <div style="border:1px solid #e5e7eb;border-radius:12px;padding:1rem;background:#f8fafc;">
-                    <h2 style="margin:0 0 0.35rem;font-size:1rem;color:#1e3a5f;">Email OTP</h2>
+                    <h2 style="margin:0 0 0.35rem;font-size:1rem;color:#1e3a5f;"><?= frs_te('twofa.email_otp.title'); ?></h2>
                     <p style="margin:0 0 0.85rem;color:#64748b;font-size:0.9rem;line-height:1.5;">
-                        Receive a 6-digit code by email each time you sign in. We will send a verification code to confirm it is you.
+                        <?= frs_te('twofa.email_otp.desc'); ?>
                     </p>
                     <form method="POST">
                         <?= csrf_field(); ?>
-                        <button type="submit" name="send_email_setup" value="1" class="btn-primary" style="width:100%;">Enable Email OTP</button>
+                        <button type="submit" name="send_email_setup" value="1" class="btn-primary" style="width:100%;"><?= frs_te('twofa.email_otp.button'); ?></button>
                     </form>
                 </div>
                 <div style="border:1px solid #e5e7eb;border-radius:12px;padding:1rem;">
-                    <h2 style="margin:0 0 0.35rem;font-size:1rem;color:#1e3a5f;">Google Authenticator</h2>
+                    <h2 style="margin:0 0 0.35rem;font-size:1rem;color:#1e3a5f;"><?= frs_te('twofa.totp.title'); ?></h2>
                     <p style="margin:0 0 0.85rem;color:#64748b;font-size:0.9rem;line-height:1.5;">
-                        Use an authenticator app for login codes. You will scan a QR code and confirm with a 6-digit code.
+                        <?= frs_te('twofa.totp.desc'); ?>
                     </p>
                     <form method="POST">
                         <?= csrf_field(); ?>
-                        <button type="submit" name="start_totp_setup" value="1" class="btn-outline" style="width:100%;">Set Up Authenticator</button>
+                        <button type="submit" name="start_totp_setup" value="1" class="btn-outline" style="width:100%;"><?= frs_te('twofa.totp.button'); ?></button>
                     </form>
                 </div>
             </div>
         <?php elseif ($view === 'email'): ?>
             <?php if ($emailOtpValid): ?>
                 <p id="setupOtpCountdown" style="font-weight:600;margin:0 0 1rem;color:#b45309;font-size:0.9rem;">
-                    Code expires in <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
+                    <?= frs_te('twofa.code_expires_in'); ?> <?= sprintf('%02d:%02d', intdiv($otpRemainingSeconds, 60), $otpRemainingSeconds % 60); ?>
                 </p>
             <?php else: ?>
-                <p style="margin:0 0 1rem;color:#b23030;font-size:0.9rem;">Code expired. Request a new verification code.</p>
+                <p style="margin:0 0 1rem;color:#b23030;font-size:0.9rem;"><?= frs_te('twofa.code_expired'); ?></p>
             <?php endif; ?>
             <form method="POST" class="auth-form" id="emailOtpForm">
                 <?= csrf_field(); ?>
                 <div style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Verification code</label>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;"><?= frs_te('twofa.label.verification_code'); ?></label>
                     <div class="otp-input-container" id="emailOtpContainer">
                         <input type="text" name="otp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
                         <input type="text" name="otp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
@@ -311,34 +311,34 @@ ob_start();
                         <input type="hidden" name="otp" id="emailOtpCombined" value="">
                     </div>
                 </div>
-                <button class="btn-primary" type="submit" name="verify_email_setup" value="1">Verify and Sign In</button>
+                <button class="btn-primary" type="submit" name="verify_email_setup" value="1"><?= frs_te('twofa.submit_verify'); ?></button>
             </form>
             <form method="POST" style="margin-top:0.75rem;">
                 <?= csrf_field(); ?>
-                <button type="submit" name="send_email_setup" value="1" class="btn-outline" style="width:100%;">Resend Code</button>
+                <button type="submit" name="send_email_setup" value="1" class="btn-outline" style="width:100%;"><?= frs_te('twofa.resend'); ?></button>
             </form>
             <form method="POST" style="margin-top:1rem;text-align:center;">
                 <?= csrf_field(); ?>
                 <button type="submit" name="back_to_choose" value="1" style="background:none;border:none;color:#2864ef;font-size:0.88rem;cursor:pointer;text-decoration:underline;">
-                    Choose a different method
+                    <?= frs_te('twofa.choose_different'); ?>
                 </button>
             </form>
         <?php elseif ($view === 'totp'): ?>
             <?php if ($totpQrUri): ?>
             <div style="text-align:center;margin-bottom:1rem;">
-                <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="Authenticator QR code" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:0.5rem;background:#fff;">
+                <img src="<?= htmlspecialchars($totpQrUri); ?>" alt="<?= frs_te('twofa.qr_alt'); ?>" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;padding:0.5rem;background:#fff;">
             </div>
             <?php endif; ?>
             <?php if ($totpSecretDisplay): ?>
                 <p style="font-size:0.82rem;color:#64748b;word-break:break-all;margin:0 0 1rem;">
-                    <?php if (!$totpQrUri): ?><strong>Can&rsquo;t show a scannable code on this network.</strong> In your authenticator app choose <em>&ldquo;Enter a setup key&rdquo;</em> and type:<br><?php else: ?>Manual entry key: <?php endif; ?>
+                    <?php if (!$totpQrUri): ?><strong><?= frs_te('twofa.qr_unavailable'); ?></strong> <?= frs_te('twofa.qr_choose_prefix'); ?> <em>&ldquo;<?= frs_te('twofa.qr_setup_key'); ?>&rdquo;</em> <?= frs_te('twofa.qr_type_suffix'); ?><br><?php else: ?><?= frs_te('twofa.manual_key_label'); ?> <?php endif; ?>
                     <code><?= htmlspecialchars($totpSecretDisplay); ?></code>
                 </p>
             <?php endif; ?>
             <form method="POST" class="auth-form" id="totpForm">
                 <?= csrf_field(); ?>
                 <div style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Authenticator code</label>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;"><?= frs_te('twofa.label.authenticator_code'); ?></label>
                     <div class="otp-input-container" id="totpContainer">
                         <input type="text" name="totp_1" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
                         <input type="text" name="totp_2" class="otp-input" inputmode="numeric" pattern="[0-9]" maxlength="1" required autocomplete="one-time-code">
@@ -349,12 +349,12 @@ ob_start();
                         <input type="hidden" name="totp_code" id="totpCombined" value="">
                     </div>
                 </div>
-                <button class="btn-primary" type="submit" name="verify_totp_setup" value="1">Verify and Sign In</button>
+                <button class="btn-primary" type="submit" name="verify_totp_setup" value="1"><?= frs_te('twofa.submit_verify'); ?></button>
             </form>
             <form method="POST" style="margin-top:1rem;text-align:center;">
                 <?= csrf_field(); ?>
                 <button type="submit" name="back_to_choose" value="1" style="background:none;border:none;color:#2864ef;font-size:0.88rem;cursor:pointer;text-decoration:underline;">
-                    Choose a different method
+                    <?= frs_te('twofa.choose_different'); ?>
                 </button>
             </form>
         <?php endif; ?>
@@ -362,7 +362,7 @@ ob_start();
         <form method="POST" style="margin-top:1.25rem;text-align:center;">
             <?= csrf_field(); ?>
             <button type="submit" name="cancel_setup" value="1" style="background:none;border:none;color:#64748b;font-size:0.88rem;cursor:pointer;text-decoration:underline;">
-                Back to sign in
+                <?= frs_te('twofa.back_to_signin'); ?>
             </button>
         </form>
     </div>
@@ -516,14 +516,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const timer = setInterval(function () {
         remaining--;
         if (remaining <= 0) {
-            countdownEl.textContent = 'Code expired. Click "Resend Code" to get a new one.';
+            countdownEl.textContent = <?= json_encode(frs_t('twofa.js.code_expired')); ?>;
             countdownEl.style.color = '#b23030';
             clearInterval(timer);
             return;
         }
         const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
         const ss = String(remaining % 60).padStart(2, '0');
-        countdownEl.textContent = 'Code expires in ' + mm + ':' + ss;
+        countdownEl.textContent = <?= json_encode(frs_t('twofa.code_expires_in')); ?> + ' ' + mm + ':' + ss;
     }, 1000);
 });
 </script>

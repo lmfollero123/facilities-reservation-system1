@@ -117,4 +117,13 @@ return [
     'common.status' => 'Katayuan',
     'common.actions' => 'Mga Aksyon',
     'common.facility' => 'Pasilidad',
+
+    // Announcement category badges (config/announcement_categories.php)
+    'category.emergency' => 'Emerhensiya',
+    'category.urgent' => 'Agaran',
+    'category.event' => 'Kaganapan',
+    'category.health' => 'Kalusugan',
+    'category.deadline' => 'Deadline',
+    'category.advisory' => 'Abiso',
+    'category.general' => 'Pangkalahatan',
 ];
